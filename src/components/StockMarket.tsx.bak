@@ -1,0 +1,711 @@
+import { useState, useRef, useEffect, useCallback, useMemo } from 'react';
+import type { Stock, Mothership } from '@/types/game';
+import { TrendingUp, TrendingDown, Search, Lock, Clock, ArrowLeft } from 'lucide-react';
+
+interface StockMarketProps {
+  stocks: Stock[];
+  ship: Mothership;
+  shipIndex: number;
+  currentTurn: number;
+  onBuy: (shipIndex: number, stockId: string, qty: number) => { error: string | null };
+  onSell: (shipIndex: number, stockId: string, qty: number) => { error: string | null; profit?: number; profitRate?: number };
+}
+
+const SECTOR_COLORS: Record<string, string> = {
+  '能源': 'bg-orange-900/30 text-orange-400 border-orange-700/40',
+  '科技': 'bg-cyan-900/30 text-cyan-400 border-cyan-700/40',
+  '军工': 'bg-red-900/30 text-red-400 border-red-700/40',
+  '生物': 'bg-green-900/30 text-green-400 border-green-700/40',
+  '医疗': 'bg-emerald-900/30 text-emerald-400 border-emerald-700/40',
+  '金融': 'bg-yellow-900/30 text-yellow-400 border-yellow-700/40',
+  '资源': 'bg-amber-900/30 text-amber-400 border-amber-700/40',
+  '科研教育': 'bg-purple-900/30 text-purple-400 border-purple-700/40',
+  '基建设施': 'bg-indigo-900/30 text-indigo-400 border-indigo-700/40',
+  '娱乐服务': 'bg-pink-900/30 text-pink-400 border-pink-700/40',
+};
+
+export default function StockMarket({ stocks, ship, shipIndex, currentTurn, onBuy, onSell }: StockMarketProps) {
+  const [search, setSearch] = useState('');
+  const [selectedStock, setSelectedStock] = useState<Stock | null>(null);
+  const [activeSector, setActiveSector] = useState<string>('全部');
+  const [tradeQty, setTradeQty] = useState(1);
+  const [tradeMode, setTradeMode] = useState<'buy' | 'sell'>('buy');
+  const [message, setMessage] = useState('');
+  const [messageType, setMessageType] = useState<'success' | 'error' | 'profit' | 'loss'>('success');
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+
+  const sectors = useMemo(() => {
+    const set = new Set(stocks.map((s) => s.sector));
+    return ['全部', '持有', ...Array.from(set).sort()];
+  }, [stocks]);
+
+  const holdings = ship?.stockHoldings || {};
+
+  const filteredStocks = useMemo(() => {
+    let result = stocks;
+    if (activeSector === '持有') {
+      result = result.filter((s) => (holdings[s.id] || 0) > 0);
+    } else if (activeSector !== '全部') {
+      result = result.filter((s) => s.sector === activeSector);
+    }
+    if (search.trim()) {
+      const q = search.toLowerCase();
+      result = result.filter((s) => s.name.toLowerCase().includes(q) || s.sector.toLowerCase().includes(q));
+    }
+    return result;
+  }, [stocks, activeSector, search, holdings]);
+
+  const drawChart = useCallback(() => {
+    if (!selectedStock || !canvasRef.current) return;
+    const canvas = canvasRef.current;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+    const prices = selectedStock.prices.slice(-30);
+    const w = canvas.width;
+    const h = canvas.height;
+    const padding = 20;
+    ctx.clearRect(0, 0, w, h);
+    if (prices.length < 2) return;
+    const min = Math.min(...prices) * 0.95;
+    const max = Math.max(...prices) * 1.05;
+    const range = max - min || 1;
+    const getX = (i: number) => padding + (i / (prices.length - 1)) * (w - padding * 2);
+    const getY = (p: number) => h - padding - ((p - min) / range) * (h - padding * 2);
+    ctx.strokeStyle = '#1e293b';
+    ctx.lineWidth = 1;
+    for (let i = 0; i <= 4; i++) {
+      const y = padding + (i / 4) * (h - padding * 2);
+      ctx.beginPath();
+      ctx.moveTo(padding, y);
+      ctx.lineTo(w - padding, y);
+      ctx.stroke();
+    }
+    const isUp = prices[prices.length - 1] >= prices[0];
+    ctx.strokeStyle = isUp ? '#22d3ee' : '#f87171';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    prices.forEach((p, i) => {
+      if (i === 0) ctx.moveTo(getX(i), getY(p));
+      else ctx.lineTo(getX(i), getY(p));
+    });
+    ctx.stroke();
+    const gradient = ctx.createLinearGradient(0, padding, 0, h - padding);
+    gradient.addColorStop(0, isUp ? 'rgba(34,211,238,0.15)' : 'rgba(248,113,113,0.15)');
+    gradient.addColorStop(1, 'rgba(0,0,0,0)');
+    ctx.fillStyle = gradient;
+    ctx.beginPath();
+    ctx.moveTo(getX(0), h - padding);
+    prices.forEach((p, i) => ctx.lineTo(getX(i), getY(p)));
+    ctx.lineTo(getX(prices.length - 1), h - padding);
+    ctx.closePath();
+    ctx.fill();
+    prices.forEach((p, i) => {
+      ctx.fillStyle = i === prices.length - 1 ? (isUp ? '#22d3ee' : '#f87171') : '#475569';
+      ctx.beginPath();
+      ctx.arc(getX(i), getY(p), i === prices.length - 1 ? 4 : 2, 0, Math.PI * 2);
+      ctx.fill();
+    });
+    ctx.fillStyle = '#94a3b8';
+    ctx.font = '11px sans-serif';
+    ctx.textAlign = 'right';
+    ctx.fillText(`当前: ${prices[prices.length - 1]}`, w - padding, 14);
+  }, [selectedStock]);
+
+  useEffect(() => {
+    drawChart();
+  }, [drawChart]);
+
+  const handleTrade = () => {
+    if (!selectedStock || tradeQty <= 0) return;
+    setMessage('');
+    if (tradeMode === 'buy') {
+      const result = onBuy(shipIndex, selectedStock.id, tradeQty);
+      if (result.error) {
+        setMessage(result.error);
+        setMessageType('error');
+      } else {
+        const totalCost = Math.round(selectedStock.currentPrice * tradeQty * 1.03);
+        setMessage(`成功买入 ${tradeQty} 股 ${selectedStock.name}，总花费 ${totalCost.toLocaleString()} 金币（含手续费）`);
+        setMessageType('success');
+      }
+    } else {
+      const result = onSell(shipIndex, selectedStock.id, tradeQty);
+      if (result.error) {
+        setMessage(result.error);
+        setMessageType('error');
+      } else if (result.profit !== undefined) {
+        const revenue = Math.round(selectedStock.currentPrice * tradeQty * 0.97);
+        if (result.profit > 0) {
+          setMessage(`成功卖出 ${tradeQty} 股 ${selectedStock.name}，收入 ${revenue.toLocaleString()} 金币，盈利 +${result.profit.toLocaleString()} 金币（+${result.profitRate}%）`);
+          setMessageType('profit');
+        } else if (result.profit < 0) {
+          setMessage(`成功卖出 ${tradeQty} 股 ${selectedStock.name}，收入 ${revenue.toLocaleString()} 金币，亏损 ${result.profit.toLocaleString()} 金币（${result.profitRate}%）`);
+          setMessageType('loss');
+        } else {
+          setMessage(`成功卖出 ${tradeQty} 股 ${selectedStock.name}，收入 ${revenue.toLocaleString()} 金币，持平`);
+          setMessageType('success');
+        }
+      }
+    }
+    setTimeout(() => setMessage(''), 5000);
+  };
+
+  const costs = ship?.stockCosts || {};
+  const buyTurns = ship?.stockBuyTurn || {};
+
+  const getCooldownStatus = (stockId: string): { cooling: boolean; buyTurn?: number } => {
+    const bt = buyTurns[stockId];
+    if (bt !== undefined && currentTurn <= bt) {
+      return { cooling: true, buyTurn: bt };
+    }
+    return { cooling: false };
+  };
+
+  // 移动端选中某支股票后显示交易面板
+  const [mobileTradeStock, setMobileTradeStock] = useState<Stock | null>(null);
+
+  return (
+    <div>
+      <h2 className="text-xl md:text-2xl font-bold text-white mb-3 md:mb-4">银河股票交易所</h2>
+
+      {/* 冻结提示 */}
+      {false && (
+        <div className="mb-3 md:mb-4 bg-red-900/20 border border-red-700/50 rounded-lg px-3 py-2 md:px-4 md:py-3 flex items-center gap-2 text-red-400 text-sm">
+          <Lock size={16} />
+          <span className="font-bold">股市交易已冻结（下回合自动恢复）</span>
+        </div>
+      )}
+
+      {/* ========== 移动端：全屏交易面板 ========== */}
+      {mobileTradeStock && (
+        <div className="md:hidden fixed inset-0 bg-slate-950 z-50 p-4 overflow-auto">
+          <button
+            onClick={() => setMobileTradeStock(null)}
+            className="mb-4 flex items-center gap-1 text-sm text-cyan-400"
+          >
+            <ArrowLeft size={18} /> 返回列表
+          </button>
+          <MobileTradePanel
+            stock={mobileTradeStock}
+            ship={ship}
+            shipIndex={shipIndex}
+            currentTurn={currentTurn}
+            onBuy={onBuy}
+            onSell={onSell}
+          />
+        </div>
+      )}
+
+      <div className="flex flex-col md:flex-row gap-3 md:gap-4">
+        {/* 股票列表 */}
+        <div className="flex-1 min-w-0">
+          {/* 搜索 */}
+          <div className="relative mb-3">
+            <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
+            <input
+              type="text"
+              placeholder="搜索股票名称..."
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="w-full bg-slate-900/60 border border-slate-700 rounded-lg pl-9 pr-4 py-2 text-sm text-slate-200 placeholder-slate-600 focus:outline-none focus:border-cyan-500"
+            />
+          </div>
+
+          {/* 板块筛选 - 横向滚动 */}
+          <div className="flex gap-1.5 mb-3 overflow-x-auto pb-1 scrollbar-hide">
+            {sectors.map((sector) => (
+              <button
+                key={sector}
+                onClick={() => { setActiveSector(sector); setSelectedStock(null); }}
+                className={`flex-shrink-0 px-2.5 py-1 rounded-md text-xs font-bold border transition-all ${
+                  activeSector === sector
+                    ? 'bg-cyan-600/30 text-cyan-400 border-cyan-500/60'
+                    : 'bg-slate-800 text-slate-400 border-slate-700 hover:border-slate-500'
+                }`}
+              >
+                {sector}
+                {sector !== '全部' && (
+                  <span className="ml-1 text-slate-500">
+                    ({sector === '持有' ? Object.values(holdings).filter((v) => v > 0).length : stocks.filter((s) => s.sector === sector).length})
+                  </span>
+                )}
+              </button>
+            ))}
+          </div>
+
+          {/* ===== 桌面端：表格 ===== */}
+          <div className="hidden md:block bg-slate-900/60 border border-slate-700 rounded-xl overflow-hidden">
+            <table className="w-full text-sm">
+              <thead className="bg-slate-800/80 text-slate-400">
+                <tr>
+                  <th className="px-3 py-2 text-left">名称</th>
+                  <th className="px-3 py-2 text-left">板块</th>
+                  <th className="px-3 py-2 text-right">价格</th>
+                  <th className="px-3 py-2 text-right">涨跌</th>
+                  <th className="px-3 py-2 text-right">持仓</th>
+                  <th className="px-3 py-2 text-center">状态</th>
+                </tr>
+              </thead>
+              <tbody>
+                {filteredStocks.map((stock) => {
+                  const prevPrice = stock.prices[stock.prices.length - 2] || stock.currentPrice;
+                  const change = ((stock.currentPrice - prevPrice) / prevPrice) * 100;
+                  const hold = holdings[stock.id] || 0;
+                  const isSelected = selectedStock?.id === stock.id;
+                  const cd = getCooldownStatus(stock.id);
+                  const sectorColor = SECTOR_COLORS[stock.sector] || 'bg-slate-800 text-slate-400 border-slate-700';
+                  return (
+                    <tr
+                      key={stock.id}
+                      className={`border-t border-slate-800 cursor-pointer transition-colors ${
+                        isSelected ? 'bg-cyan-950/30' : 'hover:bg-slate-800/50'
+                      }`}
+                      onClick={() => setSelectedStock(stock)}
+                    >
+                      <td className="px-3 py-2">
+                        <div className="font-medium text-slate-200">{stock.name}</div>
+                      </td>
+                      <td className="px-3 py-2">
+                        <span className={`text-xs px-2 py-0.5 rounded border ${sectorColor}`}>{stock.sector}</span>
+                      </td>
+                      <td className="px-3 py-2 text-right font-mono text-slate-200">{stock.currentPrice}</td>
+                      <td className="px-3 py-2 text-right">
+                        <span className={`inline-flex items-center gap-1 text-sm ${change >= 0 ? 'text-cyan-400' : 'text-red-400'}`}>
+                          {change >= 0 ? <TrendingUp size={14} /> : <TrendingDown size={14} />}
+                          {change >= 0 ? '+' : ''}{change.toFixed(1)}%
+                        </span>
+                      </td>
+                      <td className="px-3 py-2 text-right font-mono">
+                        {hold > 0 ? <span className="text-yellow-400">{hold}</span> : <span className="text-slate-600">-</span>}
+                      </td>
+                      <td className="px-3 py-2 text-center">
+                        {cd.cooling ? (
+                          <span className="inline-flex items-center gap-1 text-xs text-orange-400">
+                            <Clock size={14} /> 冷却
+                          </span>
+                        ) : hold > 0 ? (
+                          <span className="text-[10px] text-green-400">可卖</span>
+                        ) : (
+                          <span className="text-[10px] text-slate-600">-</span>
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+            {filteredStocks.length === 0 && (
+              <div className="p-6 text-center text-slate-500 text-sm">没有匹配的股票</div>
+            )}
+          </div>
+
+          {/* ===== 移动端：卡片列表 ===== */}
+          <div className="md:hidden space-y-2">
+            {filteredStocks.map((stock) => {
+              const prevPrice = stock.prices[stock.prices.length - 2] || stock.currentPrice;
+              const change = ((stock.currentPrice - prevPrice) / prevPrice) * 100;
+              const hold = holdings[stock.id] || 0;
+              const cd = getCooldownStatus(stock.id);
+              const sectorColor = SECTOR_COLORS[stock.sector] || 'bg-slate-800 text-slate-400 border-slate-700';
+              return (
+                <button
+                  key={stock.id}
+                  onClick={() => {
+                    setSelectedStock(stock);
+                    setMobileTradeStock(stock);
+                  }}
+                  className="w-full text-left bg-slate-900/60 border border-slate-700 rounded-xl p-3 flex items-center gap-3 active:bg-slate-800/60"
+                >
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 mb-1">
+                      <span className="font-medium text-slate-200 text-sm truncate">{stock.name}</span>
+                      <span className={`flex-shrink-0 text-[10px] px-1.5 py-0.5 rounded border ${sectorColor}`}>{stock.sector}</span>
+                    </div>
+                    <div className="flex items-center gap-3 text-xs">
+                      <span className="font-mono text-slate-200">{stock.currentPrice}</span>
+                      <span className={`inline-flex items-center gap-0.5 ${change >= 0 ? 'text-cyan-400' : 'text-red-400'}`}>
+                        {change >= 0 ? <TrendingUp size={12} /> : <TrendingDown size={12} />}
+                        {change >= 0 ? '+' : ''}{change.toFixed(1)}%
+                      </span>
+                      {hold > 0 && <span className="text-yellow-400">持仓 {hold}</span>}
+                      {cd.cooling && <span className="text-orange-400 flex items-center gap-0.5"><Clock size={10} />冷却</span>}
+                    </div>
+                  </div>
+                  <TrendingUp size={16} className="text-slate-600 flex-shrink-0" />
+                </button>
+              );
+            })}
+            {filteredStocks.length === 0 && (
+              <div className="p-6 text-center text-slate-500 text-sm">没有匹配的股票</div>
+            )}
+          </div>
+        </div>
+
+        {/* ===== 桌面端：右侧交易面板 ===== */}
+        <div className="hidden md:block w-80 flex-shrink-0">
+          {selectedStock ? (
+            <TradeDetailPanel
+              stock={selectedStock}
+              ship={ship}
+              tradeQty={tradeQty}
+              tradeMode={tradeMode}
+              message={message}
+              messageType={messageType}
+              canvasRef={canvasRef}
+              holdings={holdings}
+              costs={costs}
+              buyTurns={buyTurns}
+              getCooldownStatus={getCooldownStatus}
+              setTradeMode={setTradeMode}
+              setTradeQty={setTradeQty}
+              handleTrade={handleTrade}
+            />
+          ) : (
+            <div className="bg-slate-900/60 border border-slate-700 rounded-xl p-8 text-center text-slate-500">
+              选择一支股票查看详情并进行交易
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ==================== 移动端全屏交易面板 ====================
+function MobileTradePanel({
+  stock,
+  onShip,
+  shipIndex,
+  currentTurn,
+  onBuy,
+  onSell,
+}: {
+  stock: Stock;
+  ship: Mothership;
+  shipIndex: number;
+  currentTurn: number;
+  onBuy: (shipIndex: number, stockId: string, qty: number) => { error: string | null };
+  onSell: (shipIndex: number, stockId: string, qty: number) => { error: string | null; profit?: number; profitRate?: number };
+}) {
+  const [tradeQty, setTradeQty] = useState(1);
+  const [tradeMode, setTradeMode] = useState<'buy' | 'sell'>('buy');
+  const [message, setMessage] = useState('');
+  const [messageType, setMessageType] = useState<'success' | 'error' | 'profit' | 'loss'>('success');
+  const mobileCanvasRef = useRef<HTMLCanvasElement>(null);
+
+  // 移动端折线图绘制
+  useEffect(() => {
+    const canvas = mobileCanvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+    const prices = stock.prices.slice(-30);
+    const w = canvas.width;
+    const h = canvas.height;
+    const padding = 16;
+    ctx.clearRect(0, 0, w, h);
+    if (prices.length < 2) return;
+    const min = Math.min(...prices) * 0.95;
+    const max = Math.max(...prices) * 1.05;
+    const range = max - min || 1;
+    const getX = (i: number) => padding + (i / (prices.length - 1)) * (w - padding * 2);
+    const getY = (p: number) => h - padding - ((p - min) / range) * (h - padding * 2);
+    // 网格线
+    ctx.strokeStyle = '#1e293b';
+    ctx.lineWidth = 1;
+    for (let i = 0; i <= 3; i++) {
+      const y = padding + (i / 3) * (h - padding * 2);
+      ctx.beginPath();
+      ctx.moveTo(padding, y);
+      ctx.lineTo(w - padding, y);
+      ctx.stroke();
+    }
+    // 折线
+    const isUp = prices[prices.length - 1] >= prices[0];
+    ctx.strokeStyle = isUp ? '#22d3ee' : '#f87171';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    prices.forEach((p, i) => {
+      if (i === 0) ctx.moveTo(getX(i), getY(p));
+      else ctx.lineTo(getX(i), getY(p));
+    });
+    ctx.stroke();
+    // 渐变填充
+    const gradient = ctx.createLinearGradient(0, padding, 0, h - padding);
+    gradient.addColorStop(0, isUp ? 'rgba(34,211,238,0.12)' : 'rgba(248,113,113,0.12)');
+    gradient.addColorStop(1, 'rgba(0,0,0,0)');
+    ctx.fillStyle = gradient;
+    ctx.beginPath();
+    ctx.moveTo(getX(0), h - padding);
+    prices.forEach((p, i) => ctx.lineTo(getX(i), getY(p)));
+    ctx.lineTo(getX(prices.length - 1), h - padding);
+    ctx.closePath();
+    ctx.fill();
+    // 当前价格标签
+    ctx.fillStyle = isUp ? '#22d3ee' : '#f87171';
+    ctx.font = 'bold 12px sans-serif';
+    ctx.textAlign = 'right';
+    ctx.fillText(`${prices[prices.length - 1]}`, w - padding, padding - 2);
+  }, [stock]);
+
+  const holdings = ship?.stockHoldings || {};
+  const costs = ship?.stockCosts || {};
+  const buyTurns = ship?.stockBuyTurn || {};
+  const cd = buyTurns[stock.id] !== undefined && currentTurn <= buyTurns[stock.id];
+
+  const handleTrade = () => {
+    if (tradeQty <= 0) return;
+    setMessage('');
+    if (tradeMode === 'buy') {
+      const result = onBuy(shipIndex, stock.id, tradeQty);
+      if (result.error) { setMessage(result.error); setMessageType('error'); }
+      else {
+        const totalCost = Math.round(stock.currentPrice * tradeQty * 1.03);
+        setMessage(`成功买入 ${tradeQty} 股，总花费 ${totalCost.toLocaleString()} 金币`);
+        setMessageType('success');
+      }
+    } else {
+      const result = onSell(shipIndex, stock.id, tradeQty);
+      if (result.error) { setMessage(result.error); setMessageType('error'); }
+      else if (result.profit !== undefined) {
+        const revenue = Math.round(stock.currentPrice * tradeQty * 0.97);
+        if (result.profit > 0) { setMessage(`卖出收入 ${revenue.toLocaleString()} 金币，盈利 +${result.profit.toLocaleString()}`); setMessageType('profit'); }
+        else if (result.profit < 0) { setMessage(`卖出收入 ${revenue.toLocaleString()} 金币，亏损 ${result.profit.toLocaleString()}`); setMessageType('loss'); }
+        else { setMessage(`卖出收入 ${revenue.toLocaleString()} 金币，持平`); setMessageType('success'); }
+      }
+    }
+    setTimeout(() => setMessage(''), 5000);
+  };
+
+  const sectorColor = SECTOR_COLORS[stock.sector] || 'bg-slate-800 text-slate-400 border-slate-700';
+
+  return (
+    <div>
+      <div className="flex items-center gap-2 mb-4">
+        <h3 className="text-xl font-bold text-white">{stock.name}</h3>
+        <span className={`text-xs px-2 py-0.5 rounded border ${sectorColor}`}>{stock.sector}</span>
+      </div>
+      <p className="text-xs text-slate-500 mb-4">{stock.description}</p>
+
+      {/* 移动端折线图 */}
+      <canvas
+        ref={mobileCanvasRef}
+        width={340}
+        height={160}
+        className="w-full rounded-lg bg-slate-950 mb-4"
+      />
+
+      <div className="flex justify-between text-sm mb-4">
+        <span className="text-slate-400">当前价格</span>
+        <span className="text-xl font-bold text-cyan-400">{stock.currentPrice} 金币</span>
+      </div>
+
+      {/* 持仓信息 */}
+      <div className="bg-slate-800/60 rounded-lg p-3 mb-4 text-sm space-y-1">
+        <div className="flex justify-between">
+          <span className="text-slate-400">持仓</span>
+          <span className="text-yellow-400 font-bold">{holdings[stock.id] || 0} 股</span>
+        </div>
+        {holdings[stock.id] > 0 && costs[stock.id] && (
+          <>
+            <div className="flex justify-between">
+              <span className="text-slate-400">成本</span>
+              <span className="text-slate-300">{costs[stock.id].toFixed(1)} 金币/股</span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-slate-400">盈亏预估</span>
+              <span className={stock.currentPrice > costs[stock.id] ? 'text-cyan-400 font-bold' : 'text-red-400 font-bold'}>
+                {stock.currentPrice > costs[stock.id] ? '+' : ''}{(((stock.currentPrice - costs[stock.id]) / costs[stock.id]) * 100).toFixed(1)}%
+                <span className="text-slate-500 font-normal ml-1">({stock.currentPrice > costs[stock.id] ? '+' : ''}{(stock.currentPrice - costs[stock.id]).toFixed(0)}/股)</span>
+              </span>
+            </div>
+            {cd && (
+              <div className="text-orange-400 text-xs flex items-center gap-1">
+                <Clock size={12} /> 第{(buyTurns[stock.id] || 0) + 1}回合后可卖出
+              </div>
+            )}
+          </>
+        )}
+      </div>
+
+      {/* 买卖切换 */}
+      <div className="flex mb-3 bg-slate-800 rounded-lg p-1">
+        <button onClick={() => setTradeMode('buy')} className={`flex-1 py-2 text-sm font-bold rounded transition-colors ${tradeMode === 'buy' ? 'bg-cyan-600 text-white' : 'text-slate-400'}`}>买入</button>
+        <button onClick={() => setTradeMode('sell')} className={`flex-1 py-2 text-sm font-bold rounded transition-colors ${tradeMode === 'sell' ? 'bg-red-600 text-white' : 'text-slate-400'}`}>卖出</button>
+      </div>
+
+      {/* 数量输入 */}
+      <div className="mb-3">
+        <input
+          type="text"
+          inputMode="numeric"
+          pattern="[0-9]*"
+          value={tradeQty}
+          onChange={(e) => { const v = e.target.value.replace(/[^0-9]/g, ''); if (v === '') { setTradeQty(0); return; } setTradeQty(parseInt(v)); }}
+          disabled={false}
+          className="w-full bg-slate-800 border border-slate-600 rounded-lg px-3 py-2.5 text-sm text-slate-200 focus:outline-none focus:border-cyan-500 disabled:opacity-50"
+        />
+        <div className="text-xs text-slate-500 mt-1">
+          {tradeMode === 'buy'
+            ? `需要: ${Math.round(stock.currentPrice * tradeQty * 1.03).toLocaleString()} 金币（含3%手续费）`
+            : `收入: ${Math.round(stock.currentPrice * tradeQty * 0.97).toLocaleString()} 金币（含3%手续费）`
+          }
+        </div>
+      </div>
+
+      <button
+        onClick={handleTrade}
+        disabled={false}
+        className={`w-full py-3 rounded-lg font-bold transition-colors disabled:opacity-50 ${
+          tradeMode === 'buy' ? 'bg-cyan-600 hover:bg-cyan-500 text-white' : 'bg-red-600 hover:bg-red-500 text-white'
+        }`}
+      >
+        {false ? '交易已冻结' : `${tradeMode === 'buy' ? '买入' : '卖出'} ${tradeQty} 股`}
+      </button>
+
+      {message && (
+        <p className={`mt-3 text-sm text-center ${
+          messageType === 'error' ? 'text-red-400' : messageType === 'profit' ? 'text-cyan-400' : messageType === 'loss' ? 'text-red-400' : 'text-green-400'
+        }`}>{message}</p>
+      )}
+    </div>
+  );
+}
+
+// ==================== 桌面端交易面板 ====================
+function TradeDetailPanel({
+  stock,
+  tradeQty,
+  tradeMode,
+  message,
+  messageType,
+  canvasRef,
+  holdings,
+  costs,
+  buyTurns,
+  getCooldownStatus,
+  setTradeMode,
+  setTradeQty,
+  handleTrade,
+}: {
+  stock: Stock;
+  tradeQty: number;
+  tradeMode: 'buy' | 'sell';
+  message: string;
+  messageType: string;
+  canvasRef: React.RefObject<HTMLCanvasElement | null>;
+  holdings: Record<string, number>;
+  costs: Record<string, number>;
+  buyTurns: Record<string, number>;
+  getCooldownStatus: (stockId: string) => { cooling: boolean; buyTurn?: number };
+  setTradeMode: (mode: 'buy' | 'sell') => void;
+  setTradeQty: (qty: number) => void;
+  handleTrade: () => void;
+}) {
+  const sectorColor = SECTOR_COLORS[stock.sector] || 'bg-slate-800 text-slate-400 border-slate-700';
+  const cd = getCooldownStatus(stock.id);
+
+  return (
+    <div className="bg-slate-900/60 border border-slate-700 rounded-xl p-4">
+      <div className="flex items-center gap-2 mb-1">
+        <h3 className="text-lg font-bold text-slate-100">{stock.name}</h3>
+        <span className={`text-[10px] px-1.5 py-0.5 rounded border ${sectorColor}`}>{stock.sector}</span>
+      </div>
+      <p className="text-xs text-slate-500 mb-3">{stock.description}</p>
+
+      <canvas ref={canvasRef} width={280} height={140} className="w-full rounded-lg bg-slate-950 mb-4" />
+
+      <div className="flex justify-between text-sm mb-3">
+        <span className="text-slate-400">当前价格</span>
+        <span className="text-xl font-bold text-cyan-400">{stock.currentPrice} 金币</span>
+      </div>
+      <div className="flex justify-between text-sm mb-3">
+        <span className="text-slate-400">手续费</span>
+        <span className="text-slate-300">固定3%（买入x1.03 / 卖出x0.97）</span>
+      </div>
+
+      <div className="text-sm mb-3 space-y-1">
+        <div className="flex justify-between">
+          <span className="text-slate-400">当前持仓</span>
+          <span className="text-yellow-400 font-bold">{holdings[stock.id] || 0} 股</span>
+        </div>
+        {holdings[stock.id] > 0 && costs[stock.id] && (
+          <>
+            <div className="flex justify-between">
+              <span className="text-slate-400">买入成本</span>
+              <span className="text-slate-300">{costs[stock.id].toFixed(1)} 金币/股</span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-slate-400">盈亏预估</span>
+              <span className={stock.currentPrice > costs[stock.id] ? 'text-cyan-400' : 'text-red-400'}>
+                {stock.currentPrice > costs[stock.id] ? '+' : ''}{(((stock.currentPrice - costs[stock.id]) / costs[stock.id]) * 100).toFixed(1)}%
+              </span>
+            </div>
+            {cd.cooling && (
+              <div className="flex justify-between text-orange-400">
+                <span className="flex items-center gap-1"><Clock size={12} />冷却中</span>
+                <span>第{(buyTurns[stock.id] || 0) + 1}回合后可卖</span>
+              </div>
+            )}
+          </>
+        )}
+      </div>
+
+      <div className="flex mb-3 bg-slate-800 rounded-lg p-1">
+        <button onClick={() => setTradeMode('buy')} className={`flex-1 py-1.5 text-sm font-bold rounded transition-colors ${tradeMode === 'buy' ? 'bg-cyan-600 text-white' : 'text-slate-400 hover:text-slate-200'}`}>买入</button>
+        <button onClick={() => setTradeMode('sell')} className={`flex-1 py-1.5 text-sm font-bold rounded transition-colors ${tradeMode === 'sell' ? 'bg-red-600 text-white' : 'text-slate-400 hover:text-slate-200'}`}>卖出</button>
+      </div>
+
+      <div className="mb-3">
+        <input
+          type="text"
+          inputMode="numeric"
+          pattern="[0-9]*"
+          value={tradeQty}
+          onChange={(e) => { const v = e.target.value.replace(/[^0-9]/g, ''); if (v === '') { setTradeQty(0); return; } setTradeQty(parseInt(v)); }}
+          disabled={false}
+          className="w-full bg-slate-800 border border-slate-600 rounded-lg px-3 py-2 text-sm text-slate-200 focus:outline-none focus:border-cyan-500 disabled:opacity-50"
+        />
+        <div className="text-xs text-slate-500 mt-1">
+          {tradeMode === 'buy'
+            ? `需要: ${Math.round(stock.currentPrice * tradeQty * 1.03).toLocaleString()} 金币（含3%手续费）`
+            : `收入: ${Math.round(stock.currentPrice * tradeQty * 0.97).toLocaleString()} 金币（含3%手续费）`
+          }
+        </div>
+        {tradeMode === 'sell' && holdings[stock.id] > 0 && costs[stock.id] && (
+          <div className="mt-2 bg-slate-800/60 rounded-lg p-2">
+            {(() => {
+              const avgCost = costs[stock.id];
+              const sellP = stock.currentPrice;
+              const grossRevenue = Math.round(sellP * tradeQty * 0.97);
+              const costBasis = Math.round(avgCost * tradeQty);
+              const profit = grossRevenue - costBasis;
+              const profitRate = costBasis > 0 ? Math.round((profit / costBasis) * 10000) / 100 : 0;
+              return (
+                <div className="text-xs">
+                  <div className="flex justify-between mb-0.5"><span className="text-slate-500">卖出收入（x0.97）</span><span className="text-slate-300">{grossRevenue.toLocaleString()} 金</span></div>
+                  <div className="flex justify-between mb-0.5"><span className="text-slate-500">成本基准</span><span className="text-slate-300">{costBasis.toLocaleString()} 金</span></div>
+                  <div className="flex justify-between"><span className="text-slate-500">预估盈亏</span><span className={`font-bold ${profit >= 0 ? 'text-green-400' : 'text-red-400'}`}>{profit >= 0 ? '+' : ''}{profit.toLocaleString()} ({profit >= 0 ? '+' : ''}{profitRate}%)</span></div>
+                </div>
+              );
+            })()}
+          </div>
+        )}
+      </div>
+
+      <button
+        onClick={handleTrade}
+        disabled={false}
+        className={`w-full py-2.5 rounded-lg font-bold transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
+          tradeMode === 'buy' ? 'bg-cyan-600 hover:bg-cyan-500 text-white' : 'bg-red-600 hover:bg-red-500 text-white'
+        }`}
+      >
+        {false ? <span className="flex items-center justify-center gap-2"><Lock size={14} /> 交易已冻结</span> : `${tradeMode === 'buy' ? '买入' : '卖出'} ${tradeQty} 股`}
+      </button>
+
+      {message && (
+        <p className={`mt-2 text-sm text-center ${messageType === 'error' ? 'text-red-400' : messageType === 'profit' ? 'text-cyan-400' : messageType === 'loss' ? 'text-red-400' : 'text-green-400'}`}>{message}</p>
+      )}
+    </div>
+  );
+}
