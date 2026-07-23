@@ -27,7 +27,7 @@ export interface TradeStatus {
 }
 
 // 贸易政策类型
-export type TradePolicy = 'free_trade' | 'normal' | 'tax_hike' | 'sanctions' | 'boom';
+export type TradePolicy = 'embargo' | 'black_market' | 'tariff_wall' | 'trade_dispute' | 'normal' | 'regional_mutual' | 'free_trade' | 'trade_frenzy' | 'golden_age' | 'stellar_boom';
 
 export interface PolicyEffect {
   name: string;

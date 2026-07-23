@@ -384,6 +384,12 @@ export function useTurn(
               const factionName = FACTIONS.find((f) => f.id === fid)?.name || '未知';
               s.goldLog = [{ turn: prev.turn, amount: income, reason: `「${factionName}」投资收益`, balanceAfter: s.gold }, ...s.goldLog].slice(0, 200);
             }
+            // 档位6自动补给：每5回合自动获得该势力特产×3
+            if (tier >= 6 && prev.turn % 5 === 0) {
+              s.tradeStatus = { ...s.tradeStatus };
+              s.tradeStatus.inventory = { ...s.tradeStatus.inventory };
+              s.tradeStatus.inventory[fid] = (s.tradeStatus.inventory[fid] || 0) + 3;
+            }
           }
 
           // 贷款还款：到期一次性还清（金币允许变负）

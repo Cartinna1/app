@@ -136,28 +136,40 @@ export default function TradePanel({ factions, ship, factionPrices, factionSellM
           )}
         </div>
         {/* 贸易政策横幅 */}
-        <div className={`rounded-lg px-3 py-2 flex items-center gap-2 ${
-          factionPolicy.type === 'boom' ? 'bg-green-900/30 border border-green-700/40' :
-          factionPolicy.type === 'free_trade' ? 'bg-blue-900/30 border border-blue-700/40' :
-          factionPolicy.type === 'tax_hike' ? 'bg-orange-900/30 border border-orange-700/40' :
-          factionPolicy.type === 'sanctions' ? 'bg-red-900/30 border border-red-700/40' :
-          'bg-slate-800/40 border border-slate-700/40'
-        }`}>
-          {factionPolicy.type === 'normal' ? <Globe size={14} className="text-slate-400" /> : <AlertTriangle size={14} className={
-            factionPolicy.type === 'boom' ? 'text-green-400' : factionPolicy.type === 'free_trade' ? 'text-blue-400' :
-            factionPolicy.type === 'tax_hike' ? 'text-orange-400' : 'text-red-400'
-          } />}
-          <div>
-            <span className={`text-xs font-semibold ${
-              factionPolicy.type === 'boom' ? 'text-green-400' : factionPolicy.type === 'free_trade' ? 'text-blue-400' :
-              factionPolicy.type === 'tax_hike' ? 'text-orange-400' : factionPolicy.type === 'sanctions' ? 'text-red-400' : 'text-slate-400'
-            }`}>{factionPolicy.effect.name}</span>
-            <span className="text-xs text-slate-500 ml-2">{factionPolicy.effect.description}</span>
-            <span className={`text-xs font-bold ml-2 ${factionPolicy.effect.multiplier >= 1 ? 'text-green-400' : 'text-red-400'}`}>
-              {factionPolicy.effect.multiplier >= 1 ? '+' : ''}{Math.round((factionPolicy.effect.multiplier - 1) * 100)}%
-            </span>
-            <span className="text-xs text-slate-600 ml-2">(剩余 {policyRemainingTurns} 回合)</span>
-          </div>
+        {(() => {
+          const m = factionPolicy.effect.multiplier;
+          const bgColor = m <= 0.55 ? 'bg-red-900/30 border border-red-700/40' :
+                          m <= 0.70 ? 'bg-orange-900/30 border border-orange-700/40' :
+                          m < 0.90  ? 'bg-amber-900/30 border border-amber-700/40' :
+                          m < 1.00  ? 'bg-yellow-900/30 border border-yellow-700/40' :
+                          m === 1.00 ? 'bg-slate-800/40 border border-slate-700/40' :
+                          m <= 1.20 ? 'bg-blue-900/30 border border-blue-700/40' :
+                          m <= 1.35 ? 'bg-green-900/30 border border-green-700/40' :
+                          m <= 1.55 ? 'bg-emerald-900/30 border border-emerald-700/40' :
+                          'bg-amber-900/40 border border-amber-600/50';
+          const textColor = m <= 0.55 ? 'text-red-400' :
+                            m <= 0.70 ? 'text-orange-400' :
+                            m < 0.90  ? 'text-amber-400' :
+                            m < 1.00  ? 'text-yellow-400' :
+                            m === 1.00 ? 'text-slate-400' :
+                            m <= 1.20 ? 'text-blue-400' :
+                            m <= 1.35 ? 'text-green-400' :
+                            m <= 1.55 ? 'text-emerald-400' :
+                            'text-amber-300';
+          return (
+            <div className={`rounded-lg px-3 py-2 flex items-center gap-2 ${bgColor}`}>
+              {m === 1.00 ? <Globe size={14} className="text-slate-400" /> : <AlertTriangle size={14} className={textColor} />}
+              <div>
+                <span className={`text-xs font-semibold ${textColor}`}>{factionPolicy.effect.name}</span>
+                <span className="text-xs text-slate-500 ml-2">{factionPolicy.effect.description}</span>
+                <span className={`text-xs font-bold ml-2 ${m >= 1 ? 'text-green-400' : 'text-red-400'}`}>
+                  {m >= 1 ? '+' : ''}{Math.round((m - 1) * 100)}%
+                </span>
+                <span className="text-xs text-slate-600 ml-2">(剩余 {policyRemainingTurns} 回合)</span>
+              </div>
+            </div>
+          );
+          })()}
         </div>
       </div>
 
@@ -339,21 +351,21 @@ export default function TradePanel({ factions, ship, factionPrices, factionSellM
           <div className="bg-slate-900/60 border border-slate-700 rounded-xl p-5">
             <h3 className="text-lg font-bold text-slate-200 mb-4 flex items-center gap-2"><BarChart3 size={18} className="text-blue-400" /> 投资 {currentFaction?.name}</h3>
             <div className="mb-4">
-              <div className="flex justify-between text-xs text-slate-400 mb-1"><span>当前投资：{(currentFs?.invested || 0).toLocaleString()} / 50,000</span><span>{Math.round(((currentFs?.invested || 0) / 50000) * 100)}%</span></div>
-              <div className="w-full bg-slate-700 rounded-full h-2.5"><div className="h-2.5 rounded-full bg-blue-500 transition-all" style={{ width: `${Math.min(100, ((currentFs?.invested || 0) / 50000) * 100)}%` }} /></div>
+              <div className="flex justify-between text-xs text-slate-400 mb-1"><span>当前投资：{(currentFs?.invested || 0).toLocaleString()} / 80,000</span><span>{Math.round(((currentFs?.invested || 0) / 80000) * 100)}%</span></div>
+              <div className="w-full bg-slate-700 rounded-full h-2.5"><div className="h-2.5 rounded-full bg-blue-500 transition-all" style={{ width: `${Math.min(100, ((currentFs?.invested || 0) / 80000) * 100)}%` }} /></div>
             </div>
             <div className="mb-4 space-y-1.5">
-              {[{ pct: 20, t: 1, l: '购买优惠10%' }, { pct: 40, t: 2, l: '购买优惠20%' }, { pct: 60, t: 3, l: '购买优惠20% + 每回合≤800金币' }, { pct: 80, t: 4, l: '购买优惠25% + 每回合≤1300金币' }, { pct: 100, t: 5, l: '购买优惠30% + 每回合≤2000金币' }].map((item) => (
+              {[{ pct: 12.5, t: 1, l: '购买优惠10%' }, { pct: 25, t: 2, l: '购买优惠20%' }, { pct: 37.5, t: 3, l: '购买优惠20% + 每回合≤800金币' }, { pct: 50, t: 4, l: '购买优惠25% + 每回合≤1300金币' }, { pct: 62.5, t: 5, l: '购买优惠30% + 每回合≤2000金币' }, { pct: 100, t: 6, l: '购买优惠38% + 每回合≤4500金币 + 每5回合特产x3' }].map((item) => (
                 <div key={item.t} className={`flex items-center gap-2 text-xs rounded-lg px-3 py-2 ${currentTier >= item.t ? 'bg-blue-900/30 border border-blue-700/30' : 'bg-slate-800/40 text-slate-500'}`}>
                   <div className={`w-2 h-2 rounded-full ${currentTier >= item.t ? 'bg-blue-400' : 'bg-slate-600'}`} /><span className={currentTier >= item.t ? 'text-blue-400 font-bold' : ''}>{item.pct}%</span><span>{item.l}</span>{currentTier >= item.t && <span className="ml-auto text-green-400">已激活</span>}
                 </div>
               ))}
             </div>
-            {currentFs && currentFs.invested >= 50000 ? <div className="text-center text-sm text-green-400 bg-green-900/20 rounded-lg py-3">投资已满额（50,000金币），享受最高BUFF！</div> : (
+            {currentFs && currentFs.invested >= 80000 ? <div className="text-center text-sm text-green-400 bg-green-900/20 rounded-lg py-3">投资已满额（80,000金币），享受最高BUFF！</div> : (
               <>
                 <div className="flex items-center gap-2 mb-3">
-                  <input type="text" inputMode="numeric" pattern="[0-9]*" value={investAmount} onChange={(e) => setInvestAmount(e.target.value.replace(/[^0-9]/g, ''))} placeholder={`1 - ${50000 - (currentFs?.invested || 0)}`} className="flex-1 bg-slate-800 border border-slate-600 rounded-lg px-3 py-2 text-sm text-slate-200 placeholder-slate-600" />
-                  <button onClick={() => setInvestAmount(Math.min(ship.gold, 50000 - (currentFs?.invested || 0)).toString())} className="px-3 py-2 bg-slate-700 hover:bg-slate-600 rounded-lg text-xs text-slate-300">全部</button>
+                  <input type="text" inputMode="numeric" pattern="[0-9]*" value={investAmount} onChange={(e) => setInvestAmount(e.target.value.replace(/[^0-9]/g, ''))} placeholder={`1 - ${80000 - (currentFs?.invested || 0)}`} className="flex-1 bg-slate-800 border border-slate-600 rounded-lg px-3 py-2 text-sm text-slate-200 placeholder-slate-600" />
+                  <button onClick={() => setInvestAmount(Math.min(ship.gold, 80000 - (currentFs?.invested || 0)).toString())} className="px-3 py-2 bg-slate-700 hover:bg-slate-600 rounded-lg text-xs text-slate-300">全部</button>
                 </div>
                 <button onClick={handleInvest} disabled={!investAmount || parseInt(investAmount) <= 0 || ship.gold <= 0} className="w-full py-2.5 bg-blue-700 hover:bg-blue-600 disabled:bg-slate-700 disabled:text-slate-500 rounded-lg font-bold text-white transition-colors flex items-center justify-center gap-2"><Coins size={16} /> 投资</button>
               </>

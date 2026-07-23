@@ -42,21 +42,31 @@ export function getTravelTurns(fromId: string, toId: string): number {
 // ==================== 贸易政策系统 ====================
 
 export const POLICY_EFFECTS: Record<TradePolicy, PolicyEffect> = {
-  free_trade: { name: '自由贸易协定', description: '全星系关税减免，出口收益+12%', multiplier: 1.12 },
-  normal: { name: '正常贸易', description: '市场平稳，无特殊影响', multiplier: 1.0 },
-  tax_hike: { name: '关税上涨', description: '星际关税大幅提高，出口收益-18%', multiplier: 0.82 },
-  sanctions: { name: '贸易制裁', description: '部分航线被封锁，出口收益-28%', multiplier: 0.72 },
-  boom: { name: '市场繁荣', description: '星际贸易空前繁荣，出口收益+20%', multiplier: 1.20 },
+  embargo:         { name: '全面禁运',     description: '多方势力封锁航线，出口极其艰难',         multiplier: 0.45 },
+  black_market:    { name: '银河黑市',     description: '走私猖獗挤兑正规渠道，价格受到打压',     multiplier: 0.55 },
+  tariff_wall:     { name: '关税壁垒',     description: '星际关税大幅提高，出口收益锐减',         multiplier: 0.68 },
+  trade_dispute:   { name: '贸易争端',     description: '星际间贸易摩擦加剧，出口略受影响',       multiplier: 0.82 },
+  normal:          { name: '正常贸易',     description: '市场平稳，无特殊影响',                   multiplier: 1.00 },
+  regional_mutual: { name: '区域互惠',     description: '区域贸易协定生效，出口略有提振',         multiplier: 1.15 },
+  free_trade:      { name: '自由贸易',     description: '全星系关税减免，出口收益大幅提升',       multiplier: 1.28 },
+  trade_frenzy:    { name: '贸易狂潮',     description: '星际商贸空前活跃，价格一路上扬',         multiplier: 1.42 },
+  golden_age:      { name: '黄金时代',     description: '各大势力抢购物资，出口利润暴涨',         multiplier: 1.60 },
+  stellar_boom:    { name: '星际繁荣',     description: '千年一遇的星际贸易盛世，价格达巅峰！',   multiplier: 1.75 },
 };
 
 // 按概率随机选择政策
 export function rollPolicy(): TradePolicy {
   const r = Math.random();
-  if (r < 0.18) return 'free_trade';   // 18%
-  if (r < 0.55) return 'normal';        // 37%
-  if (r < 0.78) return 'tax_hike';      // 23%
-  if (r < 0.92) return 'sanctions';     // 14%
-  return 'boom';                         // 8%
+  if (r < 0.03) return 'embargo';          // 3%
+  if (r < 0.05) return 'black_market';     // 2%
+  if (r < 0.15) return 'tariff_wall';      // 10%
+  if (r < 0.32) return 'trade_dispute';    // 17%
+  if (r < 0.62) return 'normal';           // 30%
+  if (r < 0.77) return 'regional_mutual';  // 15%
+  if (r < 0.89) return 'free_trade';       // 12%
+  if (r < 0.96) return 'trade_frenzy';     // 7%
+  if (r < 0.99) return 'golden_age';       // 3%
+  return 'stellar_boom';                    // 1%
 }
 
 // ==================== 价格系统 ====================
@@ -112,17 +122,19 @@ export function getSellPrice(
 // ==================== 投资系统 ====================
 
 export function getInvestmentTier(invested: number): number {
-  const pct = invested / 50000;
-  if (pct >= 1) return 5;
-  if (pct >= 0.8) return 4;
-  if (pct >= 0.6) return 3;
-  if (pct >= 0.4) return 2;
-  if (pct >= 0.2) return 1;
+  const pct = invested / 80000;
+  if (pct >= 1) return 6;
+  if (pct >= 0.625) return 5;
+  if (pct >= 0.5) return 4;
+  if (pct >= 0.375) return 3;
+  if (pct >= 0.25) return 2;
+  if (pct >= 0.125) return 1;
   return 0;
 }
 
 export function getDiscountRate(tier: number): number {
   switch (tier) {
+    case 6: return 0.38;
     case 5: return 0.30;
     case 4: return 0.25;
     case 3: return 0.20;
@@ -134,6 +146,7 @@ export function getDiscountRate(tier: number): number {
 
 export function getIncomeCap(tier: number): number {
   switch (tier) {
+    case 6: return 4500;
     case 5: return 2000;
     case 4: return 1300;
     case 3: return 800;
@@ -143,6 +156,7 @@ export function getIncomeCap(tier: number): number {
 
 export function getBuffDescription(tier: number): string {
   switch (tier) {
+    case 6: return '购买优惠38% + 每回合≤4500金币收益 + 每5回合自动补给特产x3';
     case 5: return '购买优惠30% + 每回合≤2000金币收益';
     case 4: return '购买优惠25% + 每回合≤1300金币收益';
     case 3: return '购买优惠20% + 每回合≤800金币收益';

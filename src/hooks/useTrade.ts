@@ -158,9 +158,9 @@ export function useTrade(
           if (s.gold < amount) { result = { success: false, message: '金币不足' }; return prev; }
           const factionId = s.tradeStatus.currentFactionId;
           const fs = s.tradeStatus.factionStates[factionId] || { factionId, invested: 0, investmentTier: 0 };
-          const newInvested = Math.min(50000, fs.invested + amount);
+          const newInvested = Math.min(80000, fs.invested + amount);
           const actualAmount = newInvested - fs.invested;
-          if (actualAmount <= 0) { result = { success: false, message: '投资已达上限（50000金币）' }; return prev; }
+          if (actualAmount <= 0) { result = { success: false, message: '投资已达上限（80000金币）' }; return prev; }
           s.gold -= actualAmount;
           const investFactionName = FACTIONS.find((f) => f.id === factionId)?.name || '未知';
           s.goldLog = [{ turn: prev.turn, amount: -actualAmount, reason: `投资「${investFactionName}」建设`, balanceAfter: s.gold }, ...s.goldLog].slice(0, 200);
