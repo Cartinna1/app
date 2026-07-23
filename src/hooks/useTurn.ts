@@ -355,8 +355,16 @@ export function useTurn(
           s.products = [...s.products];
           completed.forEach((task) => {
             const recipe = RECIPES.find((r) => r.id === task.productId);
-            const mCost = recipe ? recipe.inputs.reduce((sum, inp) => { const m = mats.find((mm) => mm.id === inp.materialId); return sum + (m ? m.currentPrice * inp.amount : 0); }, 0) : 0;
-            s.products.push({ productId: task.productId, expiresAt: prev.turn + 3, materialCost: mCost });
+            // 食物配方：直接加到食物库存
+            if (recipe?.foodYield) {
+              s.food += recipe.foodYield;
+              if (s.food >= 0 && s.famineTimer > 0 && !s.isRebellion) {
+                s.famineTimer = 0;
+              }
+            } else {
+              const mCost = recipe ? recipe.inputs.reduce((sum, inp) => { const m = mats.find((mm) => mm.id === inp.materialId); return sum + (m ? m.currentPrice * inp.amount : 0); }, 0) : 0;
+              s.products.push({ productId: task.productId, expiresAt: prev.turn + 3, materialCost: mCost });
+            }
           });
           s.products = s.products.filter((p) => p.expiresAt > prev.turn);
 

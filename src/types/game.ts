@@ -62,6 +62,7 @@ export interface Recipe {
   description: string;
   inputs: { materialId: string; amount: number }[];
   productionTurns: number;
+  foodYield?: number; // 食物配方：完成后直接获得食物而非产品
 }
 
 export interface Product {

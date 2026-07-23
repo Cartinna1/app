@@ -1,7 +1,7 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import type { Mothership, RawMaterial } from '@/types/game';
 import { RECIPES } from '@/data/gameData';
-import { Factory, Check, AlertCircle, Clock } from 'lucide-react';
+import { Factory, Check, AlertCircle, Clock, Wheat } from 'lucide-react';
 
 interface ProductionPanelProps {
   ship: Mothership;
@@ -13,6 +13,7 @@ interface ProductionPanelProps {
 export default function ProductionPanel({ ship, shipIndex, materials: _materials, onStartProduction }: ProductionPanelProps) {
   void _materials;
   const [messages, setMessages] = useState<Record<string, string>>({});
+  const [filterTurn, setFilterTurn] = useState<number | 'all'>('all');
 
   const matNames: Record<string, string> = {
     carbon: '碳块',
@@ -30,14 +31,28 @@ export default function ProductionPanel({ ship, shipIndex, materials: _materials
     });
   };
 
-  // 按可生产性排序：可生产的在前面
-  const sortedRecipes = [...RECIPES].sort((a, b) => {
-    const aOk = canProduce(a);
-    const bOk = canProduce(b);
-    if (aOk && !bOk) return -1;
-    if (!aOk && bOk) return 1;
-    return 0;
-  });
+  // 按回合筛选 + 可生产性排序
+  const filteredRecipes = useMemo(() => {
+    let list = [...RECIPES];
+    if (filterTurn !== 'all') {
+      list = list.filter((r) => r.productionTurns === filterTurn);
+    }
+    list.sort((a, b) => {
+      const aOk = canProduce(a);
+      const bOk = canProduce(b);
+      if (aOk && !bOk) return -1;
+      if (!aOk && bOk) return 1;
+      return 0;
+    });
+    return list;
+  }, [filterTurn]);
+
+  const turnTabs = [
+    { value: 'all' as const, label: '全部' },
+    { value: 1 as const, label: '1回合' },
+    { value: 2 as const, label: '2回合' },
+    { value: 3 as const, label: '3回合' },
+  ];
 
   const handleProduce = (recipe: typeof RECIPES[0]) => {
     const result = onStartProduction(shipIndex, recipe.id);
@@ -118,28 +133,54 @@ export default function ProductionPanel({ ship, shipIndex, materials: _materials
         </div>
       )}
 
-      {/* 配方列表 - 可生产的置顶 */}
+      {/* 配方列表 */}
       <h3 className="text-lg font-bold text-slate-200 mb-3">
         <Check size={18} className="inline mr-2" />
         生产配方
         <span className="text-sm text-slate-500 font-normal ml-2">(原料充足的显示在前面)</span>
       </h3>
+
+      {/* 回合筛选标签 */}
+      <div className="flex gap-1.5 mb-4">
+        {turnTabs.map((tab) => (
+          <button
+            key={String(tab.value)}
+            onClick={() => setFilterTurn(tab.value)}
+            className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+              filterTurn === tab.value
+                ? 'bg-cyan-600 text-white'
+                : 'bg-slate-800/60 text-slate-400 hover:bg-slate-700 hover:text-slate-200'
+            }`}
+          >
+            {tab.label}
+          </button>
+        ))}
+      </div>
+
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 md:gap-4">
-        {sortedRecipes.map((recipe) => {
+        {filteredRecipes.map((recipe) => {
           const ok = canProduce(recipe);
           const msg = messages[recipe.id] || '';
           const t = turns(recipe);
+          const isFood = !!recipe.foodYield;
 
           return (
             <div
               key={recipe.id}
-              className={`bg-slate-900/60 border rounded-xl p-3 md:p-4 ${ok ? 'border-green-700/40' : 'border-slate-800 opacity-60'}`}
+              className={`bg-slate-900/60 border rounded-xl p-3 md:p-4 transition-all ${
+                isFood
+                  ? ok ? 'border-amber-700/50' : 'border-slate-800 opacity-60'
+                  : ok ? 'border-green-700/40' : 'border-slate-800 opacity-60'
+              }`}
             >
               <div className="flex items-center justify-between mb-2">
                 <div className="flex items-center gap-2">
-                  <h4 className="font-bold text-slate-100">{recipe.productName}</h4>
+                  {isFood && <Wheat size={16} className="text-amber-400" />}
+                  <h4 className={`font-bold ${isFood ? 'text-amber-300' : 'text-slate-100'}`}>{recipe.productName}</h4>
                   {ok && (
-                    <span className="text-[10px] bg-green-900/30 text-green-400 px-1.5 py-0.5 rounded border border-green-700/30">
+                    <span className={`text-[10px] px-1.5 py-0.5 rounded border ${
+                      isFood ? 'bg-amber-900/30 text-amber-400 border-amber-700/30' : 'bg-green-900/30 text-green-400 border-green-700/30'
+                    }`}>
                       可生产
                     </span>
                   )}
@@ -160,6 +201,14 @@ export default function ProductionPanel({ ship, shipIndex, materials: _materials
                 </div>
               </div>
               <p className="text-xs text-slate-500 mb-3">{recipe.description}</p>
+
+              {isFood && (
+                <div className="mb-3">
+                  <span className="text-xs text-amber-400 font-bold bg-amber-900/20 border border-amber-700/30 rounded px-2 py-1">
+                    <Wheat size={12} className="inline mr-1" />产出: {recipe.foodYield} 食物
+                  </span>
+                </div>
+              )}
 
               <div className="mb-3">
                 <p className="text-xs text-slate-500 mb-1">所需原料:</p>
@@ -192,7 +241,11 @@ export default function ProductionPanel({ ship, shipIndex, materials: _materials
               <button
                 onClick={() => handleProduce(recipe)}
                 disabled={!ok}
-                className="w-full py-2 bg-indigo-600 hover:bg-indigo-500 disabled:bg-slate-700 disabled:text-slate-500 rounded-lg font-bold text-white text-sm transition-colors"
+                className={`w-full py-2 rounded-lg font-bold text-white text-sm transition-colors ${
+                  isFood
+                    ? 'bg-amber-700 hover:bg-amber-600 disabled:bg-slate-700 disabled:text-slate-500'
+                    : 'bg-indigo-600 hover:bg-indigo-500 disabled:bg-slate-700 disabled:text-slate-500'
+                }`}
               >
                 {t <= 0 ? '立即生产' : '开始生产'}
               </button>

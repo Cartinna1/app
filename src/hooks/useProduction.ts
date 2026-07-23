@@ -63,7 +63,15 @@ export function useProduction(
           }, 0);
           const turns = Math.max(0, recipe.productionTurns - ship.productionSpeedBonus);
           if (turns <= 0) {
-            ship.products = [...ship.products, { productId: recipeId, expiresAt: prev.turn + 3, materialCost: matCost }];
+            // 食物配方：立即完成时直接加食物
+            if (recipe.foodYield) {
+              ship.food += recipe.foodYield;
+              if (ship.food >= 0 && ship.famineTimer > 0 && !ship.isRebellion) {
+                ship.famineTimer = 0;
+              }
+            } else {
+              ship.products = [...ship.products, { productId: recipeId, expiresAt: prev.turn + 3, materialCost: matCost }];
+            }
           } else {
             ship.productionQueue = [...ship.productionQueue, { id: `${recipeId}_${Date.now()}_${Math.random()}`, productId: recipeId, remainingTurns: turns, createTurn: prev.turn }];
           }

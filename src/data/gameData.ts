@@ -371,6 +371,9 @@ export const RECIPES: Recipe[] = [
   { id: 'p13', productName: '时间减缓场', description: '局部时间流速控制装置', inputs: [{ materialId: 'dark_matter', amount: 2 }, { materialId: 'quantum', amount: 3 }], productionTurns: 3 },
   { id: 'p20', productName: '相位护盾发生器', description: '可穿透实体物质的相位偏移护盾', inputs: [{ materialId: 'dark_matter', amount: 2 }, { materialId: 'quantum', amount: 2 }, { materialId: 'gold_ore', amount: 1 }], productionTurns: 3 },
   { id: 'p23', productName: '灵能增幅器', description: '增强灵能者精神力量的装置', inputs: [{ materialId: 'quantum', amount: 2 }, { materialId: 'dark_matter', amount: 1 }, { materialId: 'silicon', amount: 2 }], productionTurns: 2 },
+  // ===== 食物配方 =====
+  { id: 'f01', productName: '合成营养块', description: '用基础原料合成的船员口粮，维持舰船日常消耗', inputs: [{ materialId: 'carbon', amount: 3 }, { materialId: 'oil', amount: 2 }], productionTurns: 2, foodYield: 20 },
+  { id: 'f02', productName: '高级营养液', description: '富含量子微粒的高效营养液，一滴抵三餐', inputs: [{ materialId: 'carbon', amount: 5 }, { materialId: 'oil', amount: 3 }, { materialId: 'quantum', amount: 1 }], productionTurns: 3, foodYield: 40 },
 ];
 
 // 产品售价波动范围（每个产品独立）
