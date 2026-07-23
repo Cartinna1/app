@@ -170,7 +170,6 @@ export default function TradePanel({ factions, ship, factionPrices, factionSellM
             </div>
           );
           })()}
-        </div>
       </div>
 
       {/* 子标签页 - 移动端横向滚动 */}
