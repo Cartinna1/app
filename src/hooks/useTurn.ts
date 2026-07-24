@@ -363,7 +363,8 @@ export function useTurn(
               }
             } else {
               const mCost = recipe ? recipe.inputs.reduce((sum, inp) => { const m = mats.find((mm) => mm.id === inp.materialId); return sum + (m ? m.currentPrice * inp.amount : 0); }, 0) : 0;
-              s.products.push({ productId: task.productId, expiresAt: prev.turn + 3, materialCost: mCost });
+              const expiryBonus = s.installedModuleIds.includes('reserve_bay') ? 3 : 0;
+              s.products.push({ productId: task.productId, expiresAt: prev.turn + 3 + expiryBonus, materialCost: mCost });
             }
           });
           s.products = s.products.filter((p) => p.expiresAt > prev.turn);

@@ -94,7 +94,9 @@ export function useTrade(
           const sellPrice = getSellPrice(factionId, prev.factionPrices, prev.factionSellMultipliers);
           // 反垄断法案遗物：特产卖出+10%
           const relicBonus = s.relics.some((r) => r.id === 'r_014') ? 1.1 : 1;
-          const totalRevenue = Math.round(sellPrice * quantity * relicBonus);
+          // 贸易枢纽协议：特产卖出+15%
+          const tradeHubBonus = s.installedModuleIds.includes('trade_hub') ? 1.15 : 1;
+          const totalRevenue = Math.round(sellPrice * quantity * relicBonus * tradeHubBonus);
           s.gold += totalRevenue;
           if (s.bankrupt && s.gold > 0) s.bankrupt = false;
           s.goldLog = [{ turn: prev.turn, amount: totalRevenue, reason: `卖出特产「${faction.specialtyName}」x${quantity}`, balanceAfter: s.gold }, ...s.goldLog].slice(0, 200);

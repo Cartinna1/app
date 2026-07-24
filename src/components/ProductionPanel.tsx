@@ -13,7 +13,7 @@ interface ProductionPanelProps {
 export default function ProductionPanel({ ship, shipIndex, materials: _materials, onStartProduction }: ProductionPanelProps) {
   void _materials;
   const [messages, setMessages] = useState<Record<string, string>>({});
-  const [filterTurn, setFilterTurn] = useState<number | 'all'>('all');
+  const [filterTurn, setFilterTurn] = useState<number>(1);
 
   const matNames: Record<string, string> = {
     carbon: '碳块',
@@ -34,9 +34,7 @@ export default function ProductionPanel({ ship, shipIndex, materials: _materials
   // 按回合筛选 + 可生产性排序
   const filteredRecipes = useMemo(() => {
     let list = [...RECIPES];
-    if (filterTurn !== 'all') {
-      list = list.filter((r) => r.productionTurns === filterTurn);
-    }
+    list = list.filter((r) => r.productionTurns === filterTurn);
     list.sort((a, b) => {
       const aOk = canProduce(a);
       const bOk = canProduce(b);
@@ -48,7 +46,6 @@ export default function ProductionPanel({ ship, shipIndex, materials: _materials
   }, [filterTurn]);
 
   const turnTabs = [
-    { value: 'all' as const, label: '全部' },
     { value: 1 as const, label: '1回合' },
     { value: 2 as const, label: '2回合' },
     { value: 3 as const, label: '3回合' },

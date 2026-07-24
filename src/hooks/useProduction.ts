@@ -22,7 +22,8 @@ export function useProduction(
           if (!mat) return prev;
 
           const relicDiscount = ship.relics.some((r) => r.id === '100004' || r.id === 'r_004') ? 0.1 : 0;
-          const cost = Math.round(mat.currentPrice * quantity * (1 - ship.materialPriceDiscount - relicDiscount));
+          const tradeHubDiscount = ship.installedModuleIds.includes('trade_hub') ? 0.08 : 0;
+          const cost = Math.round(mat.currentPrice * quantity * (1 - ship.materialPriceDiscount - relicDiscount - tradeHubDiscount));
           if (ship.gold < cost) return prev;
 
           ship.gold -= cost;
@@ -61,7 +62,8 @@ export function useProduction(
             const m = prev.materials.find((mm) => mm.id === inp.materialId);
             return sum + (m ? m.currentPrice * inp.amount : 0);
           }, 0);
-          const turns = Math.max(0, recipe.productionTurns - ship.productionSpeedBonus);
+          const engineerAiBonus = ship.installedModuleIds.includes('engineer_ai') ? 1 : 0;
+          const turns = Math.max(0, recipe.productionTurns - ship.productionSpeedBonus - engineerAiBonus);
           if (turns <= 0) {
             // 食物配方：立即完成时直接加食物
             if (recipe.foodYield) {
@@ -70,7 +72,8 @@ export function useProduction(
                 ship.famineTimer = 0;
               }
             } else {
-              ship.products = [...ship.products, { productId: recipeId, expiresAt: prev.turn + 3, materialCost: matCost }];
+              const expiryBonus = ship.installedModuleIds.includes('reserve_bay') ? 3 : 0;
+              ship.products = [...ship.products, { productId: recipeId, expiresAt: prev.turn + 3 + expiryBonus, materialCost: matCost }];
             }
           } else {
             ship.productionQueue = [...ship.productionQueue, { id: `${recipeId}_${Date.now()}_${Math.random()}`, productId: recipeId, remainingTurns: turns, createTurn: prev.turn }];
