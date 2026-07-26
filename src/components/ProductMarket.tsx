@@ -2,7 +2,7 @@ import { useState, useMemo } from 'react';
 import type { Mothership, Product, StardustMarket } from '@/types/game';
 import { INITIAL_PRODUCTS, RECIPES } from '@/data/gameData';
 import { getRelicById } from '@/data/relics';
-import { ShoppingCart, AlertTriangle, TrendingUp, TrendingDown, Package, Sparkles, Gem, Coins, Wheat, RefreshCw, Zap } from 'lucide-react';
+import { ShoppingCart, AlertTriangle, TrendingUp, TrendingDown, Package, Sparkles, Gem, Coins, RefreshCw, Zap } from 'lucide-react';
 
 interface ProductMarketProps {
   ship: Mothership;
