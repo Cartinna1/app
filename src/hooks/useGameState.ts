@@ -11,6 +11,7 @@ import { useTurn } from './useTurn';
 import { useRedeem } from './useRedeem';
 import { useModule } from './useModule';
 import { getRelicById } from '@/data/relics';
+import { rollPolicy, POLICY_EFFECTS } from '@/data/factions';
 
 /**
  * 游戏主 Hook —— 整合所有子 Hook，对外保持接口兼容
@@ -154,6 +155,144 @@ export function useGameState() {
     [gameState.ships, dispatch]
   );
 
+  // 星尘购买随机原料（2星尘→10个随机原料）
+  const buyRandomMats = useCallback(
+    (): { success: boolean; message: string } => {
+      const ship = gameState.ships[0];
+      if (!ship) return { success: false, message: '舰队不存在' };
+      if (ship.stardust < 2) return { success: false, message: '星尘不足（需要2星尘）' };
+      const matIds = ['carbon', 'gold_ore', 'oil', 'dark_matter', 'silicon', 'quantum'];
+      const matNames: Record<string, string> = { carbon: '碳块', gold_ore: '黄金', oil: '石油', dark_matter: '暗物质', silicon: '硅片', quantum: '量子簇' };
+      let result = { success: false, message: '' };
+      dispatch({
+        type: 'FUNCTIONAL_UPDATE',
+        updater: (prev) => {
+          const ships = [...prev.ships];
+          const s = { ...ships[0] };
+          s.stardust -= 2;
+          s.materials = { ...s.materials };
+          const drops: string[] = [];
+          for (let i = 0; i < 10; i++) {
+            const mat = matIds[Math.floor(Math.random() * matIds.length)];
+            s.materials[mat] = (s.materials[mat] || 0) + 1;
+            drops.push(matNames[mat]);
+          }
+          result = { success: true, message: `获得原料：${[...new Set(drops)].map((m) => `${m}×${drops.filter((d) => d === m).length}`).join('、')}` };
+          ships[0] = s;
+          return { ...prev, ships };
+        },
+      });
+      return result;
+    },
+    [gameState.ships, dispatch]
+  );
+
+  // 星尘购买产品售价加成（5回合）
+  const buySellBonus = useCallback(
+    (turns: number, bonus: number, stardustCost: number): { success: boolean; message: string } => {
+      const ship = gameState.ships[0];
+      if (!ship) return { success: false, message: '舰队不存在' };
+      if (ship.stardust < stardustCost) return { success: false, message: `星尘不足（需要${stardustCost}星尘）` };
+      let result = { success: false, message: '' };
+      dispatch({
+        type: 'FUNCTIONAL_UPDATE',
+        updater: (prev) => {
+          const ships = [...prev.ships];
+          const s = { ...ships[0] };
+          s.stardust -= stardustCost;
+          s.sellBonuses = [...(s.sellBonuses || []), { bonus, remainingTurns: turns, source: '星尘集市' }];
+          result = { success: true, message: `产品售价+${bonus}%，持续${turns}回合！` };
+          ships[0] = s;
+          return { ...prev, ships };
+        },
+      });
+      return result;
+    },
+    [gameState.ships, dispatch]
+  );
+
+  // 星尘兑换金币（1星尘→5000金币）
+  const buyGoldWithStardust = useCallback(
+    (): { success: boolean; message: string } => {
+      const ship = gameState.ships[0];
+      if (!ship) return { success: false, message: '舰队不存在' };
+      if (ship.stardust < 1) return { success: false, message: '星尘不足（需要1星尘）' };
+      let result = { success: false, message: '' };
+      dispatch({
+        type: 'FUNCTIONAL_UPDATE',
+        updater: (prev) => {
+          const ships = [...prev.ships];
+          const s = { ...ships[0] };
+          s.stardust -= 1;
+          s.gold += 5000;
+          if (s.bankrupt && s.gold > 0) s.bankrupt = false;
+          s.goldLog = [{ turn: prev.turn, amount: 5000, reason: '星尘集市兑换金币', balanceAfter: s.gold }, ...s.goldLog].slice(0, 200);
+          result = { success: true, message: '兑换成功，获得5000金币！' };
+          ships[0] = s;
+          return { ...prev, ships };
+        },
+      });
+      return result;
+    },
+    [gameState.ships, dispatch]
+  );
+
+  // 星尘强制刷新贸易政策
+  const rerollPolicy = useCallback(
+    (): { success: boolean; message: string } => {
+      const ship = gameState.ships[0];
+      if (!ship) return { success: false, message: '舰队不存在' };
+      if (ship.stardust < 1) return { success: false, message: '星尘不足（需要1星尘）' };
+      let result = { success: false, message: '' };
+      dispatch({
+        type: 'FUNCTIONAL_UPDATE',
+        updater: (prev) => {
+          const ships = [...prev.ships];
+          const s = { ...ships[0] };
+          s.stardust -= 1;
+          const newType = rollPolicy();
+          const newEffect = POLICY_EFFECTS[newType];
+          const newRemaining = Math.floor(Math.random() * 3) + 3;
+          result = { success: true, message: `已强制刷新贸易政策！当前：「${newEffect.name}」（持续${newRemaining}回合）` };
+          ships[0] = s;
+          return {
+            ...prev,
+            ships,
+            factionPolicy: { type: newType, effect: newEffect },
+            policyRemainingTurns: newRemaining,
+          };
+        },
+      });
+      return result;
+    },
+    [gameState.ships, dispatch]
+  );
+
+  // 星尘购买食物（1星尘→20食物）
+  const buyFoodWithStardust = useCallback(
+    (qty: number): { success: boolean; message: string } => {
+      const ship = gameState.ships[0];
+      if (!ship) return { success: false, message: '舰队不存在' };
+      if (ship.stardust < qty) return { success: false, message: `星尘不足（需要${qty}星尘）` };
+      let result = { success: false, message: '' };
+      dispatch({
+        type: 'FUNCTIONAL_UPDATE',
+        updater: (prev) => {
+          const ships = [...prev.ships];
+          const s = { ...ships[0] };
+          s.stardust -= qty;
+          s.food += qty * 20;
+          if (s.food >= 0 && s.famineTimer > 0 && !s.isRebellion) s.famineTimer = 0;
+          result = { success: true, message: `花费${qty}星尘购买了${qty * 20}个食物` };
+          ships[0] = s;
+          return { ...prev, ships };
+        },
+      });
+      return result;
+    },
+    [gameState.ships, dispatch]
+  );
+
   // 纯函数：计算总资产（不触发更新，按需计算）
   const getShipTotalAssets = useCallback(
     (ship: Mothership): number => {
@@ -231,6 +370,11 @@ export function useGameState() {
 
     // 星尘集市
     buyRelic,
+    buyRandomMats,
+    buySellBonus,
+    buyGoldWithStardust,
+    rerollPolicy,
+    buyFoodWithStardust,
 
     // 兑换码
     redeemCode,

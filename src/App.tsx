@@ -34,6 +34,11 @@ function App() {
     buyAlloy,
     buyFood,
     buyRelic,
+    buyRandomMats,
+    buySellBonus,
+    buyGoldWithStardust,
+    rerollPolicy,
+    buyFoodWithStardust,
     redeemCode,
     hasSave,
     loadSave,
@@ -93,6 +98,11 @@ function App() {
       onBuyAlloy={buyAlloy}
       onBuyFood={buyFood}
       onBuyRelic={buyRelic}
+      onBuyRandomMats={buyRandomMats}
+      onBuySellBonus={buySellBonus}
+      onBuyGoldWithStardust={buyGoldWithStardust}
+      onRerollPolicy={rerollPolicy}
+      onBuyFoodWithStardust={buyFoodWithStardust}
       onRedeemCode={redeemCode}
       onExportSave={() => exportSave(gameState.ships, gameState.turn)}
       onImportSave={importSave}

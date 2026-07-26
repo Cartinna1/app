@@ -2,7 +2,7 @@ import { useState, useMemo } from 'react';
 import type { Mothership, Product, StardustMarket } from '@/types/game';
 import { INITIAL_PRODUCTS, RECIPES } from '@/data/gameData';
 import { getRelicById } from '@/data/relics';
-import { ShoppingCart, AlertTriangle, TrendingUp, TrendingDown, Package, Sparkles, Gem, Coins } from 'lucide-react';
+import { ShoppingCart, AlertTriangle, TrendingUp, TrendingDown, Package, Sparkles, Gem, Coins, Wheat, RefreshCw, Zap } from 'lucide-react';
 
 interface ProductMarketProps {
   ship: Mothership;
@@ -12,6 +12,11 @@ interface ProductMarketProps {
   stardustMarket: StardustMarket;
   onSellQty: (shipIndex: number, productId: string, qty?: number) => { totalRevenue: number; count: number; avgMatCost: number; unitPrice: number } | null;
   onBuyRelic: (relicId: string) => { success: boolean; message: string };
+  onBuyRandomMats?: () => { success: boolean; message: string };
+  onBuySellBonus?: (turns: number, bonus: number, stardustCost: number) => { success: boolean; message: string };
+  onBuyGoldWithStardust?: () => { success: boolean; message: string };
+  onRerollPolicy?: () => { success: boolean; message: string };
+  onBuyFoodWithStardust?: (qty: number) => { success: boolean; message: string };
   onBuyAlloy?: (type: 'gold' | 'stardust', qty: number) => boolean;
   onBuyFood?: (type: 'gold' | 'alloy', qty: number) => boolean;
 }
@@ -27,12 +32,15 @@ interface ProductGroup {
   productionTurns: number;
 }
 
-export default function ProductMarket({ ship, shipIndex, products, materials, stardustMarket, onSellQty, onBuyRelic, onBuyAlloy, onBuyFood }: ProductMarketProps) {
+export default function ProductMarket({ ship, shipIndex, products, materials, stardustMarket, onSellQty, onBuyRelic, onBuyRandomMats, onBuySellBonus, onBuyGoldWithStardust, onRerollPolicy, onBuyFoodWithStardust, onBuyAlloy, onBuyFood }: ProductMarketProps) {
   const [quantities, setQuantities] = useState<Record<string, number>>({});
   const [messages, setMessages] = useState<Record<string, string>>({});
   const [msgTypes, setMsgTypes] = useState<Record<string, 'success' | 'error'>>({});
   const [relicMessage, setRelicMessage] = useState('');
   const [relicMsgType, setRelicMsgType] = useState<'success' | 'error'>('success');
+  const [shopMessage, setShopMessage] = useState('');
+  const [shopMsgType, setShopMsgType] = useState<'success' | 'error'>('success');
+  const [stardustFoodQty, setStardustFoodQty] = useState(1);
   const [goldAlloyQty, setGoldAlloyQty] = useState(1);
   const [stardustAlloyQty, setStardustAlloyQty] = useState(1);
   const [alloyMessage, setAlloyMessage] = useState('');
@@ -204,6 +212,47 @@ export default function ProductMarket({ ship, shipIndex, products, materials, st
     setRelicMessage(res.message);
     setRelicMsgType(res.success ? 'success' : 'error');
     setTimeout(() => setRelicMessage(''), 6000);
+  };
+
+  // 星尘商店通用消息处理
+  const showShopMsg = (msg: string, type: 'success' | 'error') => {
+    setShopMessage(msg);
+    setShopMsgType(type);
+    setTimeout(() => setShopMessage(''), 4000);
+  };
+
+  const handleBuyRandomMats = () => {
+    if (!onBuyRandomMats) return;
+    const res = onBuyRandomMats();
+    showShopMsg(res.message, res.success ? 'success' : 'error');
+  };
+
+  const handleBuySellBonus = (turns: number, bonus: number, cost: number) => {
+    if (!onBuySellBonus) return;
+    const res = onBuySellBonus(turns, bonus, cost);
+    showShopMsg(res.message, res.success ? 'success' : 'error');
+  };
+
+  const handleBuyGoldWithStardust = () => {
+    if (!onBuyGoldWithStardust) return;
+    const res = onBuyGoldWithStardust();
+    showShopMsg(res.message, res.success ? 'success' : 'error');
+  };
+
+  const handleRerollPolicy = () => {
+    if (!onRerollPolicy) return;
+    const res = onRerollPolicy();
+    showShopMsg(res.message, res.success ? 'success' : 'error');
+  };
+
+  const handleBuyFoodWithStardust = () => {
+    if (!onBuyFoodWithStardust) return;
+    if (ship.stardust < stardustFoodQty) {
+      showShopMsg(`星尘不足（需要${stardustFoodQty}星尘）`, 'error');
+      return;
+    }
+    const res = onBuyFoodWithStardust(stardustFoodQty);
+    showShopMsg(res.message, res.success ? 'success' : 'error');
   };
 
   // 当前可售的遗物
@@ -452,9 +501,9 @@ export default function ProductMarket({ ship, shipIndex, products, materials, st
           <Package size={20} className="text-green-400" />
           食物补给
         </h3>
-        <p className="text-xs md:text-sm text-slate-400 mb-3">用金币或合金购买食物。</p>
+        <p className="text-xs md:text-sm text-slate-400 mb-3">用资源换取食物。</p>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-3">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-3">
           {/* 金币购买 */}
           <div className="bg-slate-800/60 border border-slate-700 rounded-xl p-4">
             <div className="flex items-center justify-between mb-2">
@@ -516,6 +565,37 @@ export default function ProductMarket({ ship, shipIndex, products, materials, st
               <span>获得: {alloyFoodQty * 2}食物</span>
             </div>
           </div>
+
+          {/* 星尘购买 */}
+          <div className="bg-slate-800/60 border border-purple-700/40 rounded-xl p-4">
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-sm text-purple-400 font-bold">1星尘 → 20食物</span>
+            </div>
+            <div className="flex items-center gap-2 mb-2">
+              <input
+                type="number"
+                min={1}
+                value={stardustFoodQty}
+                onChange={(e) => setStardustFoodQty(Math.max(1, parseInt(e.target.value) || 1))}
+                className="w-16 bg-slate-800 border border-slate-600 rounded-lg px-2 py-1.5 text-sm text-slate-200 text-center focus:outline-none focus:border-green-500"
+              />
+              <button
+                onClick={handleBuyFoodWithStardust}
+                disabled={ship.stardust < stardustFoodQty}
+                className={`flex-1 py-1.5 rounded-lg text-xs font-bold transition-colors ${
+                  ship.stardust >= stardustFoodQty
+                    ? 'bg-purple-600 hover:bg-purple-500 text-white'
+                    : 'bg-slate-700 text-slate-500 cursor-not-allowed'
+                }`}
+              >
+                星尘兑换
+              </button>
+            </div>
+            <div className="flex justify-between text-xs text-slate-500">
+              <span>花费: {stardustFoodQty}星尘</span>
+              <span>获得: {stardustFoodQty * 20}食物</span>
+            </div>
+          </div>
         </div>
 
         {/* 食物购买消息 */}
@@ -545,6 +625,123 @@ export default function ProductMarket({ ship, shipIndex, products, materials, st
             <span className="text-sm text-purple-300">你的星尘</span>
           </div>
           <span className="text-lg font-bold text-purple-300">{ship.stardust}</span>
+        </div>
+
+        {/* 星尘商店消息 */}
+        {shopMessage && (
+          <div className={`mb-3 p-3 rounded-lg text-sm text-center ${
+            shopMsgType === 'success'
+              ? 'bg-green-900/20 border border-green-700/50 text-green-400'
+              : 'bg-red-900/20 border border-red-700/50 text-red-400'
+          }`}>
+            {shopMessage}
+          </div>
+        )}
+
+        {/* 星尘加成商店 */}
+        <div className="mb-4">
+          <h4 className="text-sm font-bold text-purple-400 mb-2 flex items-center gap-2">
+            <Zap size={14} /> 星尘加成
+          </h4>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+            {/* 随机10原料 */}
+            <button
+              onClick={handleBuyRandomMats}
+              disabled={ship.stardust < 2}
+              className={`text-left rounded-lg border p-2.5 transition-all ${
+                ship.stardust >= 2
+                  ? 'bg-slate-800/60 border-slate-700 hover:border-amber-500 cursor-pointer'
+                  : 'bg-slate-800/30 border-slate-800 opacity-50 cursor-not-allowed'
+              }`}
+            >
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Package size={14} className="text-amber-400" />
+                  <span className="text-xs text-slate-200 font-bold">随机10个原料</span>
+                </div>
+                <span className="text-xs text-purple-400 font-bold">2星尘</span>
+              </div>
+            </button>
+
+            {/* 售价+10% 5回合 */}
+            <button
+              onClick={() => handleBuySellBonus(5, 10, 1)}
+              disabled={ship.stardust < 1}
+              className={`text-left rounded-lg border p-2.5 transition-all ${
+                ship.stardust >= 1
+                  ? 'bg-slate-800/60 border-slate-700 hover:border-green-500 cursor-pointer'
+                  : 'bg-slate-800/30 border-slate-800 opacity-50 cursor-not-allowed'
+              }`}
+            >
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <TrendingUp size={14} className="text-green-400" />
+                  <span className="text-xs text-slate-200 font-bold">产品售价+10%</span>
+                  <span className="text-[10px] text-slate-500">(5回合)</span>
+                </div>
+                <span className="text-xs text-purple-400 font-bold">1星尘</span>
+              </div>
+            </button>
+
+            {/* 售价+25% 5回合 */}
+            <button
+              onClick={() => handleBuySellBonus(5, 25, 2)}
+              disabled={ship.stardust < 2}
+              className={`text-left rounded-lg border p-2.5 transition-all ${
+                ship.stardust >= 2
+                  ? 'bg-slate-800/60 border-slate-700 hover:border-emerald-500 cursor-pointer'
+                  : 'bg-slate-800/30 border-slate-800 opacity-50 cursor-not-allowed'
+              }`}
+            >
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <TrendingUp size={14} className="text-emerald-400" />
+                  <span className="text-xs text-slate-200 font-bold">产品售价+25%</span>
+                  <span className="text-[10px] text-slate-500">(5回合)</span>
+                </div>
+                <span className="text-xs text-purple-400 font-bold">2星尘</span>
+              </div>
+            </button>
+
+            {/* 兑换5000金币 */}
+            <button
+              onClick={handleBuyGoldWithStardust}
+              disabled={ship.stardust < 1}
+              className={`text-left rounded-lg border p-2.5 transition-all ${
+                ship.stardust >= 1
+                  ? 'bg-slate-800/60 border-slate-700 hover:border-yellow-500 cursor-pointer'
+                  : 'bg-slate-800/30 border-slate-800 opacity-50 cursor-not-allowed'
+              }`}
+            >
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Coins size={14} className="text-yellow-400" />
+                  <span className="text-xs text-slate-200 font-bold">兑换5000金币</span>
+                </div>
+                <span className="text-xs text-purple-400 font-bold">1星尘</span>
+              </div>
+            </button>
+
+            {/* 强制刷新贸易政策 */}
+            <button
+              onClick={handleRerollPolicy}
+              disabled={ship.stardust < 1}
+              className={`text-left rounded-lg border p-2.5 transition-all md:col-span-2 ${
+                ship.stardust >= 1
+                  ? 'bg-slate-800/60 border-slate-700 hover:border-blue-500 cursor-pointer'
+                  : 'bg-slate-800/30 border-slate-800 opacity-50 cursor-not-allowed'
+              }`}
+            >
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <RefreshCw size={14} className="text-blue-400" />
+                  <span className="text-xs text-slate-200 font-bold">强制刷新贸易政策</span>
+                  <span className="text-[10px] text-slate-500">(立即生效)</span>
+                </div>
+                <span className="text-xs text-purple-400 font-bold">1星尘</span>
+              </div>
+            </button>
+          </div>
         </div>
 
         {/* 当前遗物 */}

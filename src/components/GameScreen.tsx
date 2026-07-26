@@ -65,6 +65,11 @@ interface GameScreenProps {
   onBuyAlloy: (type: 'gold' | 'stardust', qty: number) => boolean;
   onBuyFood: (type: 'gold' | 'alloy', qty: number) => boolean;
   onBuyRelic: (relicId: string) => { success: boolean; message: string };
+  onBuyRandomMats: () => { success: boolean; message: string };
+  onBuySellBonus: (turns: number, bonus: number, stardustCost: number) => { success: boolean; message: string };
+  onBuyGoldWithStardust: () => { success: boolean; message: string };
+  onRerollPolicy: () => { success: boolean; message: string };
+  onBuyFoodWithStardust: (qty: number) => { success: boolean; message: string };
   onRedeemCode: (shipIndex: number, code: string) => { success: boolean; message: string };
   onExportSave: () => boolean;
   onImportSave: (file: File) => Promise<boolean>;
@@ -117,6 +122,11 @@ export default function GameScreen({
   onBuyAlloy,
   onBuyFood,
   onBuyRelic,
+  onBuyRandomMats,
+  onBuySellBonus,
+  onBuyGoldWithStardust,
+  onRerollPolicy,
+  onBuyFoodWithStardust,
   onRedeemCode,
   onExportSave,
   onImportSave,
@@ -316,6 +326,11 @@ export default function GameScreen({
               stardustMarket={gameState.stardustMarket}
               onSellQty={onSellProductQty}
               onBuyRelic={onBuyRelic}
+              onBuyRandomMats={onBuyRandomMats}
+              onBuySellBonus={onBuySellBonus}
+              onBuyGoldWithStardust={onBuyGoldWithStardust}
+              onRerollPolicy={onRerollPolicy}
+              onBuyFoodWithStardust={onBuyFoodWithStardust}
               onBuyAlloy={onBuyAlloy}
               onBuyFood={onBuyFood}
             />
