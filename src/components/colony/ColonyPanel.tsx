@@ -626,7 +626,7 @@ export default function ColonyPanel(props: ColonyPanelProps) {
                         const bids = Object.keys(lv1);
                         if (bids.includes('ALL')) skillDesc = '所有建筑产出+'+lv1.ALL+'%';
                         else if (bids.includes('ALL_MATERIAL')) skillDesc = '所有原料产出+'+lv1.ALL_MATERIAL+'%';
-                        else skillDesc = bids.slice(0,3).map(b=>b+'+'+lv1[b]+'%').join(', ')+(bids.length>3?'等':'');
+                        else skillDesc = bids.slice(0,3).map(b=>{const bd=getBuildingDef(b);return (bd?.name||b)+'+'+lv1[b]+'%'}).join(', ')+(bids.length>3?'等':'');
                       }
                       if (ex1.researchPerTurn) skillDesc += ' | 研究+'+ex1.researchPerTurn[0]+'-'+ex1.researchPerTurn[1]+'/回合';
                       if (ex1.foodConsumptionDelta) skillDesc += ' | 食物消耗'+ex1.foodConsumptionDelta;
@@ -667,7 +667,7 @@ export default function ColonyPanel(props: ColonyPanelProps) {
                       const bids = Object.keys(currBonuses);
                       if (bids.includes('ALL')) skillText = `所有建筑产出+${currBonuses.ALL}%`;
                       else if (bids.includes('ALL_MATERIAL')) skillText = `所有原料产出+${currBonuses.ALL_MATERIAL}%`;
-                      else skillText = bids.map(b=>`${b}+${currBonuses[b]}%`).join(', ');
+                      else skillText = bids.map(b=>{const bd=getBuildingDef(b);return (bd?.name||b)+'+'+currBonuses[b]+'%'}).join(', ');
                     }
                     const parts: string[] = [];
                     if (currExtras.researchPerTurn) parts.push(`研究+${currExtras.researchPerTurn[0]}-${currExtras.researchPerTurn[1]}/回合`);

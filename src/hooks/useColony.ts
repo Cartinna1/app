@@ -314,6 +314,11 @@ export function useColony(
   const recruitLeader = useCallback((leaderId: string): { success: boolean; message: string } => {
     const ld = getLeaderDef(leaderId);
     if (!ld) return { success: false, message: '领袖不存在' };
+    // 检查是否已拥有该领袖
+    const colony2 = gameState.ships[0].colony;
+    if (colony2?.leaders?.some((l) => l.id === leaderId)) {
+      return { success: false, message: '该领袖已招募' };
+    }
     let result = { success: false, message: '' };
     dispatch({
       type: 'FUNCTIONAL_UPDATE',
@@ -492,7 +497,14 @@ export function processColonyTurn(ship: Mothership, _turn: number): void {
       output = (def.popFactor || 0) * effPop;
       if (planetDef?.buffs.researchMult) output = Math.ceil(output * planetDef.buffs.researchMult);
       const hasB26 = colony.buildings.some((b) => b.active && b.defId === 'B26');
-      if (hasB26) output = Math.ceil(output * 1.5);
+      // B26倍率（含领袖L11加成）
+      let b26Mult = 1.5;
+      for (const l of colony.leaders) {
+        const ld = getLeaderDef(l.id);
+        const bm = ld?.levelExtras[l.level - 1]?.b26Mult;
+        if (bm && bm > b26Mult) b26Mult = bm;
+      }
+      if (hasB26) output = Math.ceil(output * b26Mult);
       output = Math.ceil(output * (1 + lb));
       totalRP += output;
     }
