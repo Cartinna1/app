@@ -370,7 +370,7 @@ export default function ColonyPanel(props: ColonyPanelProps) {
           <div className="bg-slate-900/60 border border-slate-700 rounded-xl p-4">
             <h4 className="font-bold text-slate-200 mb-3">分配人口到建筑</h4>
             <p className="text-xs text-slate-400 mb-2">空闲人口: <span className="text-cyan-400 font-bold">{colony.population.available}</span></p>
-            {liveBuildings.filter((b) => {
+            {liveBuildings.filter((inst) => {
               const def = getBuildingDef(inst.defId);
               return def && def.maxPop > 0;
             }).map((inst) => {
