@@ -557,7 +557,7 @@ export default function ColonyPanel(props: ColonyPanelProps) {
             })}
           </div>
         </div>
-      );})()}
+      )}
 
       {/* ===== 科研 ===== */}
       {tab === 'research' && colony.techState && (
