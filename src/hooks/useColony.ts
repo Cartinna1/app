@@ -3,6 +3,7 @@ import type { GameState, Mothership } from '@/types/game';
 import type { Colony, PlanetTypeId, BuildingInstance } from '@/types/colony';
 import { ALL_PLANETS } from '@/data/colony/planets';
 import { getBuildingDef } from '@/data/colony/buildings';
+import { getTechById } from '@/data/colony/techs';
 
 const UNLOCK_COST = 30000;
 
@@ -69,6 +70,7 @@ export function useColony(
           planetName: name,
           buildings,
           population: { total: initialPop, available: initialPop, cap: initialCap },
+          techState: { researched: [], currentResearch: null, currentProgress: 0, researchPoints: 500 },
         };
         ships[0] = s;
         result = { success: true, message: `成功在「${planetDef.name}」建立殖民地「${name}」！` };
@@ -144,6 +146,9 @@ export function useColony(
           result = { success: false, message: `金币不足（需要${actualGoldCost.toLocaleString()}金��）` };
           return prev;
         }
+        if (def.costAlloy && s.alloy < Math.ceil(def.costAlloy * costMult)) {
+          result = { success: false, message: '合金不足' }; return prev;
+        }
         if (def.costMaterials) {
           for (const [matId, amt] of Object.entries(def.costMaterials)) {
             const actualMatAmt = Math.ceil(amt * costMult);
@@ -154,6 +159,7 @@ export function useColony(
           }
         }
         s.gold -= actualGoldCost;
+        if (def.costAlloy) s.alloy -= Math.ceil(def.costAlloy * costMult);
         if (def.costMaterials) {
           s.materials = { ...s.materials };
           for (const [matId, amt] of Object.entries(def.costMaterials)) {
@@ -265,9 +271,35 @@ export function useColony(
     return result;
   }, [dispatch]);
 
+  /** 开始研究科技 */
+  const startResearch = useCallback((techId: string): { success: boolean; message: string } => {
+    const tech = getTechById(techId);
+    if (!tech) return { success: false, message: '科技不���在' };
+    let result = { success: false, message: '' };
+    dispatch({
+      type: 'FUNCTIONAL_UPDATE',
+      updater: (prev) => {
+        const ships = [...prev.ships];
+        const s = { ...ships[0] };
+        if (!s.colony || s.colony.phase !== 'active') { result = { success: false, message: '殖民地未激活' }; return prev; }
+        if (!s.colony.techState) { result = { success: false, message: '科技系统未就绪' }; return prev; }
+        if (s.colony.techState.currentResearch) { result = { success: false, message: '已经在研究一项科技' }; return prev; }
+        if (s.colony.techState.researched.includes(techId)) { result = { success: false, message: '该科技已研究完成' }; return prev; }
+        if (s.colony.techState.researchPoints < tech.costRP) { result = { success: false, message: `科研点数不足（需要${tech.costRP}）` }; return prev; }
+        s.colony.techState.researchPoints -= tech.costRP;
+        s.colony.techState.currentResearch = techId;
+        s.colony.techState.currentProgress = 0;
+        result = { success: true, message: `开始研究「${tech.name}」（需要${tech.researchTurns}回合）` };
+        ships[0] = s;
+        return { ...prev, ships };
+      },
+    });
+    return result;
+  }, [dispatch]);
+
   return {
     unlockColony, selectPlanet, rescrollPlanets, generateScoutingPool,
-    buildColonyBuilding, recruitPop, assignPop,
+    buildColonyBuilding, recruitPop, assignPop, startResearch,
   };
 }
 
@@ -309,9 +341,7 @@ export function processColonyTurn(ship: Mothership, _turn: number): void {
   }
 
   // 建筑产出计算
-  let totalFood = 0;
-  let totalAlloy = 0;
-  let totalGold = 0;
+  let totalFood = 0, totalAlloy = 0, totalGold = 0, totalStardust = 0, totalRP = 0;
 
   for (const inst of colony.buildings) {
     if (!inst.active || inst.assignedPop <= 0) continue;
@@ -327,19 +357,41 @@ export function processColonyTurn(ship: Mothership, _turn: number): void {
       output = (def.baseOutput || 0) + (def.popFactor || 0) * inst.assignedPop;
       if (planetDef?.buffs.alloyMult) output = Math.ceil(output * planetDef.buffs.alloyMult);
       totalAlloy += output;
+    } else if (def.outputType === 'stardust') {
+      output = (def.baseOutput || 0) + (def.popFactor || 0) * inst.assignedPop;
+      if (planetDef?.buffs.stardustMult) output = Math.ceil(output * planetDef.buffs.stardustMult);
+      totalStardust += output;
     } else if (def.outputType === 'gold') {
-      const mn = def.goldOutputMin || 0;
-      const mx = def.goldOutputMax || 0;
-      output = Math.floor(Math.random() * (mx - mn + 1)) + mn;
+      output = Math.floor(Math.random() * ((def.goldOutputMax || 0) - (def.goldOutputMin || 0) + 1)) + (def.goldOutputMin || 0);
       totalGold += output;
+    } else if (def.outputType === 'material' && def.outputMaterialId) {
+      output = (def.popFactor || 0) * inst.assignedPop;
+      const matMult = planetDef?.buffs.materialMults?.[def.outputMaterialId] || 1;
+      output = Math.ceil(output * matMult);
+      ship.materials = { ...(ship.materials || {}), [def.outputMaterialId]: ((ship.materials || {})[def.outputMaterialId] || 0) + output };
+    } else if (def.outputType === 'research') {
+      output = (def.popFactor || 0) * inst.assignedPop;
+      if (planetDef?.buffs.researchMult) output = Math.ceil(output * planetDef.buffs.researchMult);
+      // 量子实验室倍率
+      const hasB26 = colony.buildings.some((b) => b.active && b.defId === 'B26');
+      if (hasB26) output = Math.ceil(output * 1.5);
+      totalRP += output;
     }
   }
 
   ship.food += totalFood;
   ship.alloy += totalAlloy;
+  ship.stardust += totalStardust;
   if (totalGold > 0) {
     ship.gold += totalGold;
     ship.goldLog = [{ turn: _turn, amount: totalGold, reason: `殖民地「${colony.planetName}」贸易收入`, balanceAfter: ship.gold }, ...(ship.goldLog || [])].slice(0, 200);
+  }
+
+  // B28 克隆中心：每2回合免费1人口
+  const b28 = colony.buildings.find((b) => b.active && b.defId === 'B28' && b.assignedPop > 0);
+  if (b28 && _turn % 2 === 0 && colony.population.total < colony.population.cap) {
+    colony.population.total += 1;
+    colony.population.available += 1;
   }
 
   // 人口食物消耗
@@ -349,7 +401,20 @@ export function processColonyTurn(ship: Mothership, _turn: number): void {
 
   // 人口上限重新计算
   colony.population.cap = calcPopCap(colony);
-}
+
+  // 科研处理
+  if (colony.techState) {
+    colony.techState.researchPoints += totalRP;
+    if (colony.techState.currentResearch) {
+      colony.techState.currentProgress += 1;
+      const tech = getTechById(colony.techState.currentResearch);
+      if (tech && colony.techState.currentProgress >= tech.researchTurns) {
+        colony.techState.researched = [...colony.techState.researched, colony.techState.currentResearch];
+        colony.techState.currentResearch = null;
+        colony.techState.currentProgress = 0;
+      }
+    }
+  }
 
 function calcPopCap(colony: Colony): number {
   let cap = 5;
@@ -358,6 +423,7 @@ function calcPopCap(colony: Colony): number {
   for (const inst of colony.buildings) {
     if (!inst.active) continue;
     if (inst.defId === 'B1') cap += 5;
+    if (inst.defId === 'B2') cap += 20;
   }
   return cap;
 }

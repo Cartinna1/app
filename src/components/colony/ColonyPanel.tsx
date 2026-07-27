@@ -3,7 +3,9 @@ import type { Mothership } from '@/types/game';
 import type { PlanetTypeId, PlanetDef } from '@/types/colony';
 import { PHASE_1_BUILDINGS, getBuildingDef } from '@/data/colony/buildings';
 import { getPlanetById } from '@/data/colony/planets';
-import { Home, Users, Wrench, Play, Plus, Minus, UserPlus } from 'lucide-react';
+import { getBuildableBuildings, getBuildingDef } from '@/data/colony/buildings';
+import { getTechById, getAvailableTechs } from '@/data/colony/techs';
+import { Home, Users, Wrench, Play, Plus, Minus, UserPlus, FlaskConical, Lock } from 'lucide-react';
 
 // ==================== 辅助函数 ====================
 
@@ -77,12 +79,13 @@ interface ColonyPanelProps {
   onBuild: (defId: string) => { success: boolean; message: string };
   onRecruitPop: (amount: number) => { success: boolean; message: string };
   onAssignPop: (buildingUid: string, count: number) => { success: boolean; message: string };
+  onStartResearch: (techId: string) => { success: boolean; message: string };
 }
 
-type ColonyTab = 'overview' | 'buildings' | 'population';
+type ColonyTab = 'overview' | 'buildings' | 'population' | 'research';
 
 export default function ColonyPanel(props: ColonyPanelProps) {
-  const { ship, onUnlockColony, onSelectPlanet, onRescrollPlanets, generateScoutingPool, onBuild, onRecruitPop, onAssignPop } = props;
+  const { ship, onUnlockColony, onSelectPlanet, onRescrollPlanets, generateScoutingPool, onBuild, onRecruitPop, onAssignPop, onStartResearch } = props;
   const colony = ship.colony;
   const [tab, setTab] = useState<ColonyTab>('overview');
   const [message, setMessage] = useState('');
@@ -207,6 +210,7 @@ export default function ColonyPanel(props: ColonyPanelProps) {
     { id: 'overview', label: '总览', icon: Home },
     { id: 'buildings', label: '建筑', icon: Wrench },
     { id: 'population', label: '人口', icon: Users },
+    { id: 'research', label: '科研', icon: FlaskConical },
   ];
 
   return (
@@ -312,7 +316,7 @@ export default function ColonyPanel(props: ColonyPanelProps) {
           {/* 可建造列表 */}
           <div>
             <h4 className="text-sm font-bold text-cyan-400 mb-2">建造新建筑</h4>
-            {PHASE_1_BUILDINGS.map((def) => {
+            {getBuildableBuildings(colony.techState?.researched || []).map((def) => {
               const count = colony.buildings.filter((b) => b.defId === def.id).length;
               const limited = !!(def.maxCount && count >= def.maxCount);
               return (
@@ -422,6 +426,60 @@ export default function ColonyPanel(props: ColonyPanelProps) {
               );
             })}
           </div>
+        </div>
+      )}
+
+      {/* ===== 科研 ===== */}
+      {tab === 'research' && colony.techState && (
+        <div className="space-y-4">
+          <div className="bg-slate-900/60 border border-slate-700 rounded-xl p-4">
+            <h4 className="font-bold text-slate-200 mb-2">科研点数: {colony.techState.researchPoints}</h4>
+            {colony.techState.currentResearch ? (() => {
+              const ct = getTechById(colony.techState.currentResearch);
+              return (
+                <div className="bg-yellow-900/20 border border-yellow-700/40 rounded-lg p-3">
+                  <p className="text-sm text-yellow-400 font-bold">研究中: {ct?.name}</p>
+                  <p className="text-xs text-slate-400">{ct?.description}</p>
+                  <p className="text-xs text-yellow-400 mt-1">进度: {colony.techState.currentProgress}/{ct?.researchTurns} 回合</p>
+                </div>
+              );
+            })() : <p className="text-xs text-slate-500">尚未选择研究项目 | 每回合产出科研点数无法显示的不会在此显示</p>}
+          </div>
+          {!colony.techState.currentResearch && (() => {
+            const available = getAvailableTechs(colony.techState!.researched);
+            const shuffled = [...available].sort(() => Math.random() - 0.5).slice(0, 2);
+            return (
+            <div>
+              <h4 className="text-sm font-bold text-purple-400 mb-2">可选科技</h4>
+              <div className="space-y-2">
+                {shuffled.map((tech) => (
+                  <div key={tech.id} className={`bg-slate-900/60 border rounded-lg p-3 flex justify-between items-center ${colony.techState!.researchPoints >= tech.costRP ? 'border-purple-700/40' : 'border-slate-800 opacity-50'}`}>
+                    <div>
+                      <span className="text-sm text-purple-300 font-bold">{tech.name}</span>
+                      <span className="text-xs text-slate-500 ml-2">{tech.researchTurns}回合 | {tech.costRP}点</span>
+                      <p className="text-xs text-slate-400 mt-1">{tech.description}</p>
+                      {tech.unlocksBuilding && <span className="text-[10px] text-cyan-400">解锁: {getBuildingDef(tech.unlocksBuilding)?.name || ''}</span>}
+                    </div>
+                    <button onClick={() => { const r = onStartResearch(tech.id); showMsg(r.message, r.success ? 'success' : 'error'); }}
+                      disabled={colony.techState!.researchPoints < tech.costRP}
+                      className="px-3 py-1.5 bg-purple-700 hover:bg-purple-600 disabled:bg-slate-700 rounded text-xs font-bold text-white">研究</button>
+                  </div>
+                ))}
+              </div>
+            </div>
+            );
+          })()}
+          {colony.techState.researched.length > 0 && (
+            <div>
+              <h4 className="text-sm font-bold text-green-400 mb-2">已完成 ({colony.techState.researched.length})</h4>
+              <div className="flex flex-wrap gap-1.5">
+                {colony.techState.researched.map((tid) => {
+                  const t = getTechById(tid);
+                  return <span key={tid} className="text-[10px] bg-green-900/20 text-green-400 border border-green-700/30 px-2 py-1 rounded">{t?.name || tid}</span>;
+                })}
+              </div>
+            </div>
+          )}
         </div>
       )}
     </div>

@@ -74,6 +74,7 @@ interface GameScreenProps {
   onBuildColonyBuilding: (defId: string) => { success: boolean; message: string };
   onRecruitPop: (amount: number) => { success: boolean; message: string };
   onAssignPop: (buildingUid: string, count: number) => { success: boolean; message: string };
+  onStartResearch: (techId: string) => { success: boolean; message: string };
   onBuyAlloy: (type: 'gold' | 'stardust', qty: number) => boolean;
   onBuyFood: (type: 'gold' | 'alloy', qty: number) => boolean;
   onBuyRelic: (relicId: string) => { success: boolean; message: string };
@@ -139,6 +140,7 @@ export default function GameScreen({
   onBuildColonyBuilding,
   onRecruitPop,
   onAssignPop,
+  onStartResearch,
   onBuyAlloy,
   onBuyFood,
   onBuyRelic,
@@ -405,6 +407,7 @@ export default function GameScreen({
               onBuild={onBuildColonyBuilding}
               onRecruitPop={onRecruitPop}
               onAssignPop={onAssignPop}
+              onStartResearch={onStartResearch}
             />
           )}
           {activeTab === 'redeem' && (

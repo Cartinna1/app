@@ -38,6 +38,7 @@ function App() {
     buildColonyBuilding,
     recruitPop,
     assignPop,
+    startResearch,
     buyAlloy,
     buyFood,
     buyRelic,
@@ -109,6 +110,7 @@ function App() {
       onBuildColonyBuilding={buildColonyBuilding}
       onRecruitPop={recruitPop}
       onAssignPop={assignPop}
+      onStartResearch={startResearch}
       onBuyAlloy={buyAlloy}
       onBuyFood={buyFood}
       onBuyRelic={buyRelic}

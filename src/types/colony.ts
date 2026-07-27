@@ -61,6 +61,7 @@ export interface BuildingDef {
   description: string;
   category: BuildingCategory;
   costGold: number;
+  costAlloy?: number;          // 合金成本
   costMaterials?: Record<string, number>;  // 原料成本
   buildTurns: number;
   maxCount?: number;         // 建造数量上限（undefined=无限制）
@@ -96,6 +97,26 @@ export interface Population {
   cap: number;               // 人口上限
 }
 
+// ==================== 科技 ====================
+
+export interface ResearchTech {
+  id: string;
+  name: string;
+  description: string;
+  costRP: number;
+  researchTurns: number;
+  prerequisites: string[];
+  unlocksBuilding?: string;
+  leaderCapBonus?: number;
+}
+
+export interface TechState {
+  researched: string[];
+  currentResearch: string | null;
+  currentProgress: number;
+  researchPoints: number;
+}
+
 // ==================== 殖民地 ====================
 
 export type ColonyPhase =
@@ -111,7 +132,8 @@ export interface Colony {
   planetName: string;           // 玩家命名的星球名
   buildings: BuildingInstance[];
   population: Population;
-  scoutingPool?: PlanetTypeId[]; // 可选择的星球池（3个）
+  techState?: TechState;           // 科技状态（Phase 2）
+  scoutingPool?: PlanetTypeId[];   // 可选择的星球池（3个）
 }
 
 // ==================== 帮助函数 ====================
