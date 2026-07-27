@@ -485,7 +485,7 @@ export default function ColonyPanel(props: ColonyPanelProps) {
             })}
           </div>
         </div>
-      )}
+      );})()}
 
       {/* ===== 人口 ===== */}
       {tab === 'population' && (
