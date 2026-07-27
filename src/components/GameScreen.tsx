@@ -575,6 +575,11 @@ function OverviewTab({
         else crewFoodCost = t;
         const preserve = ship.relics.some((r) => r.id === 'r_007') ? 0.5 : 0;
         const actualCrewCost = Math.floor(crewFoodCost * (1 - preserve));
+        // 母舰模块食物产出
+        let modFood = 0;
+        if (ship.installedModuleIds.includes('bio_kitchen')) modFood += 15;
+        if (ship.installedModuleIds.includes('nano_farm')) modFood += 30;
+        if (ship.installedModuleIds.includes('sixth_farm')) modFood += 60;
         // 殖民地数据
         let colFood = 0, colAlloy = 0, colStardust = 0, colGold = 0, colFoodCost = 0;
         if (ship.colony?.phase === 'active') {
@@ -596,9 +601,9 @@ function OverviewTab({
           <div className="mb-4 bg-slate-900/60 border border-slate-700 rounded-xl p-3 md:p-4">
             <h3 className="text-xs text-amber-400 font-bold mb-3">资源收支</h3>
             <div className="grid grid-cols-2 gap-2 text-[10px] md:text-xs">
-              <div><span className="text-slate-500">食物总产出:</span> <span className="text-green-400 font-bold">+{colFood}{colFood>0?' (殖民地)':''}</span></div>
+              <div><span className="text-slate-500">食物总产出:</span> <span className="text-green-400 font-bold">+{colFood+modFood}{modFood>0&&colFood>0?` (模块${modFood}+殖民${colFood})`:modFood>0?` (模块${modFood})`:colFood>0?` (殖民地${colFood})`:''}</span></div>
               <div><span className="text-slate-500">食物总消耗:</span> <span className="text-red-400 font-bold">-{actualCrewCost+colFoodCost}{colFoodCost>0?` (船员${actualCrewCost}+殖民${colFoodCost})`:` (船员)`}</span></div>
-              <div><span className="text-slate-500">食物净增减:</span> <span className={(colFood - actualCrewCost - colFoodCost) >= 0 ? 'text-green-400 font-bold' : 'text-red-400 font-bold'}>{colFood - actualCrewCost - colFoodCost >= 0 ? '+' : ''}{colFood - actualCrewCost - colFoodCost}</span></div>
+              <div><span className="text-slate-500">食物净增减:</span> <span className={(colFood+modFood - actualCrewCost - colFoodCost) >= 0 ? 'text-green-400 font-bold' : 'text-red-400 font-bold'}>{colFood+modFood - actualCrewCost - colFoodCost >= 0 ? '+' : ''}{colFood+modFood - actualCrewCost - colFoodCost}</span></div>
               <div><span className="text-slate-500">当前食物:</span> <span className={ship.food >= 0 ? 'text-green-400 font-bold' : 'text-red-400 font-bold'}>{ship.food}</span></div>
               {colAlloy > 0 && <div><span className="text-slate-500">合金产出:</span> <span className="text-slate-300 font-bold">+{colAlloy} (殖民地)</span></div>}
               {colStardust > 0 && <div><span className="text-slate-500">星尘产出:</span> <span className="text-purple-400 font-bold">+{colStardust} (殖民地)</span></div>}

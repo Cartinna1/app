@@ -375,10 +375,10 @@ export default function ColonyPanel(props: ColonyPanelProps) {
           {/* 可建造列表 */}
           <div>
             <h4 className="text-sm font-bold text-cyan-400 mb-2">建造新建筑</h4>
-            <div className="flex flex-wrap gap-1 mb-2">
+            <div className="flex flex-wrap gap-1 mb-3">
               {['all','housing','food','alloy','stardust','trade','material','functional'].map((cat) => (
                 <button key={cat} onClick={() => setBuildCatFilter(cat)}
-                  className={`px-2 py-0.5 rounded text-xs font-bold transition-colors ${buildCatFilter === cat ? 'bg-cyan-600 text-white' : 'bg-slate-800/60 text-slate-400 hover:bg-slate-700'}`}>
+                  className={`px-2.5 py-1 rounded-lg text-sm font-bold transition-colors ${buildCatFilter === cat ? 'bg-cyan-600 text-white' : 'bg-slate-700/80 text-slate-400 hover:bg-slate-600'}`}>
                   {cat === 'all' ? '全部' : (CAT_LABELS[cat] || cat)}
                 </button>
               ))}
