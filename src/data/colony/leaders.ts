@@ -27,6 +27,7 @@ export interface LeaderExtraEffects {
   randomMatsPerTurn: number;               // 随机原料/回合
   darkMatterPerTurn: number;               // 暗物质/回合
   quantumPerTurn: number;                  // 量子簇/回合
+  b26Mult?: number;                        // B26量子实验室倍率替代
   stardustPerTurn: number;                 // 星尘/回合
 }
 
