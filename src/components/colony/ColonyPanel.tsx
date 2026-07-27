@@ -303,7 +303,6 @@ export default function ColonyPanel(props: ColonyPanelProps) {
                       mats[d.outputMaterialId] = (mats[d.outputMaterialId]||0) + Math.ceil((d.popFactor||0)*inst.assignedPop*mm);
                     }
                   }
-                  const mns = { carbon:'碳块', gold_ore:'黄金', oil:'石油', dark_matter:'暗物质', silicon:'硅片', quantum:'量子簇' };
                   return <>
                     {f > 0 && <span className="text-green-400">食物 +{f}</span>}
                     {a > 0 && <span className="text-slate-300">合金 +{a}</span>}
