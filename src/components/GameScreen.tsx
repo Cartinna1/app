@@ -417,6 +417,7 @@ export default function GameScreen({
               onRecruitLeader={onRecruitLeader}
               onUpgradeLeader={onUpgradeLeader}
               onRollAndRecruit={onRollAndRecruit}
+              onClearRecruitPool={onClearRecruitPool}
             />
           )}
           {activeTab === 'redeem' && (

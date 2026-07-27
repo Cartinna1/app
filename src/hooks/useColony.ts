@@ -353,27 +353,38 @@ export function useColony(
     return result;
   }, [dispatch]);
 
-  /** 领袖招募：扣星尘+返回3个领袖选项 */
-  const rollAndRecruit = useCallback((): { success: boolean; message: string; leaders?: any[] } => {
-    let result: any = { success: false, message: '', leaders: null };
+  /** 领袖招募：扣星尘+生成选项存入 colony.recruitPool */
+  const rollAndRecruit = useCallback(() => {
     dispatch({
       type: 'FUNCTIONAL_UPDATE',
       updater: (prev) => {
-        const s = { ...prev.ships[0] };
-        if (s.stardust < 10) { result = { success: false, message: '星尘不足' }; return prev; }
+        const ships = [...prev.ships]; const s = { ...ships[0] };
+        if (!s.colony || s.stardust < 10) return prev;
+        if (s.colony.leaders.length >= s.colony.leaderCap) return prev;
         s.stardust -= 10;
-        const ships = [...prev.ships]; ships[0] = s;
-        result = { success: true, message: '', leaders: rollLeaders(3) };
-        return { ...prev, ships };
+        s.colony = { ...s.colony, recruitPool: rollLeaders(3) };
+        ships[0] = s; return { ...prev, ships };
       },
     });
-    return result;
+  }, [dispatch]);
+
+  /** 清空招募池 */
+  const clearRecruitPool = useCallback(() => {
+    dispatch({
+      type: 'FUNCTIONAL_UPDATE',
+      updater: (prev) => {
+        if (!prev.ships[0].colony) return prev;
+        const ships = [...prev.ships]; const s = { ...ships[0] };
+        s.colony = { ...s.colony!, recruitPool: undefined };
+        ships[0] = s; return { ...prev, ships };
+      },
+    });
   }, [dispatch]);
 
   return {
     unlockColony, selectPlanet, rescrollPlanets, generateScoutingPool,
     buildColonyBuilding, recruitPop, assignPop, startResearch,
-    recruitLeader, upgradeLeader, rollAndRecruit,
+    recruitLeader, upgradeLeader, rollAndRecruit, clearRecruitPool,
   };
 }
 

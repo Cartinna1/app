@@ -146,6 +146,7 @@ export interface Colony {
   leaders: ColonyLeader[];           // 已招募的领袖
   leaderCap: number;                 // 领袖上限（基础3）
   scoutingPool?: PlanetTypeId[];     // 可选择的星球池（3个）
+  recruitPool?: any[];               // 招募池（领袖选项，暂存）
 }
 
 // ==================== 帮助函数 ====================

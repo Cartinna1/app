@@ -1,6 +1,5 @@
 import { useState, useMemo, useEffect } from 'react';
 import type { Mothership } from '@/types/game';
-import { rollLeaders } from '@/data/colony/leaders';
 import type { PlanetTypeId, PlanetDef } from '@/types/colony';
 import { getBuildableBuildings, getBuildingDef } from '@/data/colony/buildings';
 import { getPlanetById } from '@/data/colony/planets';
@@ -97,13 +96,14 @@ interface ColonyPanelProps {
   onStartResearch: (techId: string) => { success: boolean; message: string };
   onRecruitLeader: (leaderId: string) => { success: boolean; message: string };
   onUpgradeLeader: (leaderIndex: number) => { success: boolean; message: string };
-  onRollAndRecruit: () => { success: boolean; message: string; leaders?: any[] };
+  onRollAndRecruit: () => void;
+  onClearRecruitPool: () => void;
 }
 
 type ColonyTab = 'overview' | 'buildings' | 'population' | 'research' | 'leaders';
 
 export default function ColonyPanel(props: ColonyPanelProps) {
-  const { ship, onUnlockColony, onSelectPlanet, onRescrollPlanets, generateScoutingPool, onBuild, onRecruitPop, onAssignPop, onStartResearch, onRecruitLeader, onUpgradeLeader, onRollAndRecruit } = props;
+  const { ship, onUnlockColony, onSelectPlanet, onRescrollPlanets, generateScoutingPool, onBuild, onRecruitPop, onAssignPop, onStartResearch, onRecruitLeader, onUpgradeLeader, onRollAndRecruit, onClearRecruitPool } = props;
   const colony = ship.colony;
   const [tab, setTab] = useState<ColonyTab>('overview');
   const [message, setMessage] = useState('');
@@ -113,7 +113,6 @@ export default function ColonyPanel(props: ColonyPanelProps) {
   const [scoutPool, setScoutPool] = useState<PlanetTypeId[] | null>(null);
   const [buildCatFilter, setBuildCatFilter] = useState<string>('all');
   const [popCatFilter, setPopCatFilter] = useState<string>('all');
-  const [leaderOptions, setLeaderOptions] = useState<ReturnType<typeof rollLeaders> | null>(null);
 
   const showMsg = (m: string, t: 'success' | 'error') => { setMessage(m); setMsgType(t); setTimeout(() => setMessage(''), 4000); };
 
@@ -610,20 +609,15 @@ export default function ColonyPanel(props: ColonyPanelProps) {
               <div className="bg-slate-900/60 border border-slate-700 rounded-xl p-4">
                 <h4 className="font-bold text-slate-200 mb-2">招募领袖 (10星尘/次)</h4>
                 <p className="text-sm text-slate-400 mb-3">当前: {colony.leaders.length}/{colony.leaderCap}</p>
-                {!leaderOptions ? (
-                  <button onClick={() => {
-                    if (ship.stardust < 10) { showMsg('星尘不足', 'error'); return; }
-                    if (colony.leaders.length >= colony.leaderCap) { showMsg('领袖已满', 'error'); return; }
-                    const r = onRollAndRecruit();
-                    if (!r.success) { showMsg(r.message, 'error'); return; }
-                    if (r.leaders) setLeaderOptions(r.leaders);
-                  }} disabled={ship.stardust < 10 || colony.leaders.length >= colony.leaderCap}
+                {!colony.recruitPool ? (
+                  <button onClick={() => { onRollAndRecruit(); }}
+                    disabled={ship.stardust < 10 || colony.leaders.length >= colony.leaderCap}
                     className="px-4 py-2 bg-purple-700 hover:bg-purple-600 disabled:bg-slate-700 rounded-lg text-sm font-bold text-white">
                     {colony.leaders.length >= colony.leaderCap ? '已满' : '开始招募'}
                   </button>
                 ) : (
                   <div className="space-y-2">
-                    {leaderOptions.map((ld, i) => {
+                    {colony.recruitPool.map((ld, i) => {
                       const rc = ld.rarity==='SSR'?'text-amber-400':ld.rarity==='SR'?'text-purple-400':'text-blue-400';
                       const lv1 = ld.levelBonuses[0] || {};
                       const ex1 = ld.levelExtras[0] || {};
@@ -648,17 +642,13 @@ export default function ColonyPanel(props: ColonyPanelProps) {
                             {skillDesc && <span className="text-sm text-slate-500 ml-2">- {skillDesc}</span>}
                             <p className="text-sm text-slate-400 mt-1">{ld.description}</p>
                           </div>
-                          <button onClick={() => {const r=onRecruitLeader(ld.id);showMsg(r.message,r.success?'success':'error');if(r.success)setLeaderOptions(null);}}
+                          <button onClick={() => {const r=onRecruitLeader(ld.id);showMsg(r.message,r.success?'success':'error');if(r.success)onClearRecruitPool();}}
                             className="px-3 py-1.5 bg-purple-700 hover:bg-purple-600 rounded text-sm font-bold flex-shrink-0">招募</button>
                         </div>
                       );
                     })}
-                    <button onClick={() => {
-                      if (colony.leaders.length >= colony.leaderCap) { showMsg('领袖已满', 'error'); return; }
-                      const r = onRollAndRecruit();
-                      if (!r.success) { showMsg(r.message, 'error'); return; }
-                      if (r.leaders) setLeaderOptions(r.leaders);
-                    }} disabled={ship.stardust < 10 || colony.leaders.length >= colony.leaderCap}
+                    <button onClick={() => { onRollAndRecruit(); }}
+                      disabled={ship.stardust < 10 || colony.leaders.length >= colony.leaderCap}
                       className="text-sm text-purple-400 hover:text-purple-300 disabled:text-slate-600">换一批 (10星尘)</button>
                   </div>
                 )}
