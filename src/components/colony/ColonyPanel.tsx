@@ -301,6 +301,18 @@ export default function ColonyPanel(props: ColonyPanelProps) {
               <div className="flex flex-wrap gap-x-3 gap-y-1 text-sm">
                 {(() => {
                   const pod = planet?.buffs;
+                  // 领袖加成映射
+                  const omMap: Record<string, number> = {};
+                  let omAll = 0, omMat = 0;
+                  for (const l of colony.leaders || []) {
+                    const ld = getLeaderDef(l.id);
+                    const bonuses = ld?.levelBonuses[l.level-1] || {};
+                    for (const [bid, b] of Object.entries(bonuses)) {
+                      if (bid === 'ALL') omAll += b;
+                      else if (bid === 'ALL_MATERIAL') omMat += b;
+                      else omMap[bid] = (omMap[bid] || 0) + b;
+                    }
+                  }
                   let f = 0, a = 0, s = 0, g = 0, rp = 0;
                   const mats: Record<string, number> = {};
                   for (const inst of liveBuildings) {
@@ -308,7 +320,7 @@ export default function ColonyPanel(props: ColonyPanelProps) {
                     const d = getBuildingDef(inst.defId);
                     if (!d) continue;
                     const base = (d.baseOutput||0)+(d.popFactor||0)*inst.assignedPop;
-                    const lb = ((mlMap[inst.defId]||0)+(d.category==='material'?mlMat:0)+mlAll)/100;
+                    const lb = ((omMap[inst.defId]||0)+(d.category==='material'?omMat:0)+omAll)/100;
                     if (d.outputType === 'food') { const pm = pod?.foodMult ? (pod.foodMult-1) : 0; f += Math.ceil(base*(1+pm+lb)); }
                     else if (d.outputType === 'alloy') { const pm = pod?.alloyMult ? (pod.alloyMult-1) : 0; a += Math.ceil(base*(1+pm+lb)); }
                     else if (d.outputType === 'stardust') { const pm = pod?.stardustMult ? (pod.stardustMult-1) : 0; s += Math.ceil(base*(1+pm+lb)); }
