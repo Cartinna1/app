@@ -127,8 +127,6 @@ export default function ColonyPanel(props: ColonyPanelProps) {
   // 提前计算活跃建筑的合并视图（必须在条件 return 之前，hooks 顺序不能变）
   const liveBuildings = useMemo(() => (colony?.buildings || []).filter((b) => b.active), [colony?.buildings]);
   const pendingBuildings = useMemo(() => (colony?.buildings || []).filter((b) => !b.active), [colony?.buildings]);
-  const liveBuildings = useMemo(() => (colony?.buildings || []).filter((b) => b.active), [colony?.buildings]);
-  const pendingBuildings = useMemo(() => (colony?.buildings || []).filter((b) => !b.active), [colony?.buildings]);
   const groupedLive = useMemo(() => {
     const map = new Map<string, { defId: string; count: number; uids: string[]; totalPop: number }>();
     for (const inst of liveBuildings) {
@@ -312,7 +310,7 @@ export default function ColonyPanel(props: ColonyPanelProps) {
                     {s > 0 && <span className="text-purple-400">星尘 +{s}</span>}
                     {g > 0 && <span className="text-yellow-400">金币 +{g}</span>}
                     {rp > 0 && <span className="text-cyan-400">科研 +{rp}</span>}
-                    {Object.entries(mats).map(([k,v]) => <span key={k} className="text-amber-400">{mns[k]||k} +{v}</span>)}
+                    {Object.entries(mats).map(([k,v]) => <span key={k} className="text-amber-400">{(MAT_NAMES as Record<string,string>)[k]||k} +{v}</span>)}
                   </>;
                 })()}
               </div>
@@ -470,8 +468,6 @@ export default function ColonyPanel(props: ColonyPanelProps) {
               const totalMax = def.maxPop * g.count;
               const isFixed = def.minPop === def.maxPop;
               const currentTotal = g.totalPop;
-              // 合并后的最小人口（每个至少minPop）
-              const mergedMin = 0;
               return (
                 <div key={g.defId} className="flex items-center justify-between bg-slate-800/60 rounded-lg p-3 mb-2">
                   <div>
