@@ -471,6 +471,8 @@ export const REDEEM_CODES: Record<string, number> = {
   '377425': 10000, '624987': 10000,
   // DEBUG测试码
   'DEBUG1125': 500000,
+  // 特殊资源码
+  'DEBUG1126': -1, // 特殊处理：1000星尘+5000合金
 };
 
 export function getRedeemCodeList(): string[] {

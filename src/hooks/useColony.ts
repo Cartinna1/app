@@ -542,7 +542,8 @@ export function processColonyTurn(ship: Mothership, _turn: number): void {
     colony.techState.researchPoints += totalRP;
     colony.techState.researchSeed = (colony.techState.researchSeed || 0) + 1; // 每回合刷新可选科技
     if (colony.techState.currentResearch) {
-      colony.techState.currentProgress += 1;
+      const polarBonus = (planetDef && planetDef.id === 'polar') ? 1 : 0;
+      colony.techState.currentProgress += 1 + polarBonus;
       const tech = getTechById(colony.techState.currentResearch);
       if (tech && colony.techState.currentProgress >= tech.researchTurns) {
         colony.techState.researched = [...colony.techState.researched, colony.techState.currentResearch];
@@ -559,7 +560,7 @@ function calcPopCap(colony: Colony): number {
   if (planetDef?.buffs.initialPopCap) cap = planetDef.buffs.initialPopCap;
   for (const inst of colony.buildings) {
     if (!inst.active) continue;
-    if (inst.defId === 'B1') cap += 5;
+    if (inst.defId === 'B1') cap += 5 + (colony.planetType === 'ruin' ? 3 : 0);
     if (inst.defId === 'B2') cap += 20;
   }
   // 领袖人口上限加成

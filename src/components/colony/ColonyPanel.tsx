@@ -387,7 +387,7 @@ export default function ColonyPanel(props: ColonyPanelProps) {
                 return (
                   <div key={inst.uid} className="bg-slate-900/60 border border-yellow-700/40 rounded-lg p-3 mb-2 flex justify-between items-center">
                     <div><span className="text-sm text-yellow-300 font-bold">{def.name}</span></div>
-                    <span className="text-sm text-yellow-400">{inst.buildProgress}/{def.buildTurns} 回合</span>
+                    <span className="text-sm text-yellow-400">{inst.buildProgress}/{Math.max(1, def.buildTurns + (planet?.buffs.buildTurnDelta || 0))} 回合</span>
                   </div>
                 );
               })}
