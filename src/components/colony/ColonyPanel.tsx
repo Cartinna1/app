@@ -5,7 +5,7 @@ import { getBuildableBuildings, getBuildingDef } from '@/data/colony/buildings';
 import { getPlanetById } from '@/data/colony/planets';
 import { getTechById, getAvailableTechs } from '@/data/colony/techs';
 import { rollLeaders, getLeaderDef } from '@/data/colony/leaders';
-import { Home, Users, Wrench, Play, UserPlus, FlaskConical, Crown, Star } from 'lucide-react';
+import { Home, Users, Wrench, Play, UserPlus, FlaskConical, Crown } from 'lucide-react';
 
 // ==================== 辅助函数 ====================
 

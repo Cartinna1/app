@@ -4,7 +4,7 @@ import type { Colony, PlanetTypeId, BuildingInstance } from '@/types/colony';
 import { ALL_PLANETS } from '@/data/colony/planets';
 import { getBuildingDef } from '@/data/colony/buildings';
 import { getTechById } from '@/data/colony/techs';
-import { getLeaderDef, type LeaderDef, type LeaderExtraEffects } from '@/data/colony/leaders';
+import { getLeaderDef } from '@/data/colony/leaders';
 
 const UNLOCK_COST = 30000;
 
@@ -26,7 +26,7 @@ export function useColony(
         const s = { ...ships[0] };
         s.gold -= UNLOCK_COST;
         s.goldLog = [{ turn: prev.turn, amount: -UNLOCK_COST, reason: '组建远征军探索殖民', balanceAfter: s.gold }, ...s.goldLog].slice(0, 200);
-        s.colony = { phase: 'scouting', scoutTurnsRemaining: 2, planetType: null, planetName: '', buildings: [], population: { total: 0, available: 0, cap: 5 } };
+        s.colony = { phase: 'scouting', scoutTurnsRemaining: 2, planetType: null, planetName: '', buildings: [], population: { total: 0, available: 0, cap: 5 }, leaders: [], leaderCap: 3 };
         ships[0] = s;
         return { ...prev, ships };
       },
@@ -322,8 +322,8 @@ export function useColony(
         if (!s.colony || s.colony.phase !== 'active') { result={success:false,message:'殖民地未激活'}; return prev; }
         const hasB27 = s.colony.buildings.some((b) => b.active && b.defId === 'B27');
         if (!hasB27) { result={success:false,message:'需建造星河议政厅(B27)'}; return prev; }
-        if (s.colony.leaders.length >= s.colony.leaderCap) { result={success:false,message:'领袖数量已达上限'}; return prev; }
-        const planetDef = s.colony.planetType ? ALL_PLANETS.find((p)=>p.id===s.colony.planetType) : null;
+        if (s.colony!.leaders.length >= s.colony!.leaderCap) { result={success:false,message:'领袖数量已达上限'}; return prev; }
+        const planetDef = s.colony!.planetType ? ALL_PLANETS.find((p)=>p.id===s.colony!.planetType) : null;
         const baseCost = 10;
         const extraCost = planetDef?.buffs.leaderCostDelta || 0;
         const leaderCostReduction = s.colony.leaders.reduce((sum, l) => { const d=getLeaderDef(l.id); return sum + ((d?.levelExtras?.[l.level-1]?.leaderCostReduction)||0); }, 0);

@@ -1,5 +1,3 @@
-import type { ColonyLeader } from '@/types/colony';
-
 /** 领袖效果：产出加成 (buildingId → bonus%) */
 type BonusMap = Record<string, number>;
 
