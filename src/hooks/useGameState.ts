@@ -10,6 +10,7 @@ import { useSave } from './useSave';
 import { useTurn } from './useTurn';
 import { useRedeem } from './useRedeem';
 import { useModule } from './useModule';
+import { useColony } from './useColony';
 import { getRelicById } from '@/data/relics';
 import { rollPolicy, POLICY_EFFECTS } from '@/data/factions';
 
@@ -35,6 +36,7 @@ export function useGameState() {
   const { autoSave, hasSave, loadSave, exportSave, importSave, resetGame } = useSave(dispatch);
   const { redeemCode } = useRedeem(gameState, dispatch);
   const { installModule, useManualModule } = useModule(gameState, dispatch);
+  const { unlockColony, selectPlanet, rescrollPlanets, generateScoutingPool, buildColonyBuilding, recruitPop, assignPop } = useColony(gameState, dispatch);
   const { nextTurn, fluctuatePrices } = useTurn(gameState, dispatch, autoSave);
 
   // 初始化游戏（选择单舰队）
@@ -382,6 +384,15 @@ export function useGameState() {
     // 母舰改造
     installModule,
     useManualModule,
+
+    // 星际殖民
+    unlockColony,
+    selectPlanet,
+    rescrollPlanets,
+    generateScoutingPool,
+    buildColonyBuilding,
+    recruitPop,
+    assignPop,
 
     // 存档
     autoSave,

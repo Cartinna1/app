@@ -188,6 +188,7 @@ export interface Mothership {
   eventProcessedThisTurn?: boolean;
   tradeStatus: TradeStatus;
   goldLog: GoldLogEntry[];
+  colony?: import('./colony').Colony; // 星际殖民（Phase 1）
 }
 
 // ==================== 选择分支事件系统（三级嵌套） ====================

@@ -23,6 +23,7 @@ import {
   Wrench,
   Flame,
   Swords,
+  Home,
 } from 'lucide-react';
 import StockMarket from './StockMarket';
 import MaterialMarket from './MaterialMarket';
@@ -36,6 +37,7 @@ import TradePanel from './TradePanel';
 import { getInvestmentTier, getBuffDescription } from '@/data/factions';
 import GoldLogViewer from './GoldLogViewer';
 import ModulePanel from './ModulePanel';
+import ColonyPanel from './colony/ColonyPanel';
 
 interface GameScreenProps {
   gameState: GameState;
@@ -62,6 +64,13 @@ interface GameScreenProps {
   onGatherIntel: () => { success: boolean; message: string; goldChange: number };
   onInstallModule: (moduleId: string) => { success: boolean; message: string };
   onUseManualModule: (moduleId: string) => { success: boolean; message: string };
+  onUnlockColony: () => { success: boolean; message: string };
+  onSelectPlanet: (planetId: string, name: string) => { success: boolean; message: string };
+  onRescrollPlanets: () => { success: boolean; message: string };
+  generateScoutingPool: () => string[];
+  onBuildColonyBuilding: (defId: string) => { success: boolean; message: string };
+  onRecruitPop: (amount: number) => { success: boolean; message: string };
+  onAssignPop: (buildingUid: string, count: number) => { success: boolean; message: string };
   onBuyAlloy: (type: 'gold' | 'stardust', qty: number) => boolean;
   onBuyFood: (type: 'gold' | 'alloy', qty: number) => boolean;
   onBuyRelic: (relicId: string) => { success: boolean; message: string };
@@ -77,7 +86,7 @@ interface GameScreenProps {
   getShipTotalAssets: (ship: GameState['ships'][0]) => number;
 }
 
-type TabId = 'overview' | 'stocks' | 'materials' | 'production' | 'products' | 'events' | 'loan' | 'trade' | 'module' | 'redeem' | 'goldlog' | 'save';
+type TabId = 'overview' | 'stocks' | 'materials' | 'production' | 'products' | 'events' | 'loan' | 'trade' | 'colony' | 'module' | 'redeem' | 'goldlog' | 'save';
 
 const tabs: { id: TabId; label: string; shortLabel: string; icon: React.ElementType }[] = [
   { id: 'overview', label: '总览', shortLabel: '总览', icon: LayoutDashboard },
@@ -88,6 +97,7 @@ const tabs: { id: TabId; label: string; shortLabel: string; icon: React.ElementT
   { id: 'events', label: '事件', shortLabel: '事件', icon: Sparkles },
   { id: 'loan', label: '贷款', shortLabel: '贷款', icon: Banknote },
   { id: 'trade', label: '贸易', shortLabel: '贸易', icon: Globe },
+  { id: 'colony', label: '殖民', shortLabel: '殖民', icon: Home },
   { id: 'module', label: '改造', shortLabel: '改造', icon: Wrench },
   { id: 'redeem', label: '兑换', shortLabel: '兑换', icon: Gift },
   { id: 'goldlog', label: '日志', shortLabel: '日志', icon: Receipt },
@@ -119,6 +129,13 @@ export default function GameScreen({
   onGatherIntel,
   onInstallModule,
   onUseManualModule,
+  onUnlockColony,
+  onSelectPlanet,
+  onRescrollPlanets,
+  generateScoutingPool,
+  onBuildColonyBuilding,
+  onRecruitPop,
+  onAssignPop,
   onBuyAlloy,
   onBuyFood,
   onBuyRelic,
@@ -373,6 +390,19 @@ export default function GameScreen({
               onExplore={onExploreFaction}
               onInvest={onInvestFaction}
               onGatherIntel={onGatherIntel}
+            />
+          )}
+          {activeTab === 'colony' && currentShip && (
+            <ColonyPanel
+              ship={currentShip}
+              gameState={gameState}
+              onUnlockColony={onUnlockColony}
+              onSelectPlanet={onSelectPlanet}
+              onRescrollPlanets={onRescrollPlanets}
+              generateScoutingPool={generateScoutingPool}
+              onBuild={onBuildColonyBuilding}
+              onRecruitPop={onRecruitPop}
+              onAssignPop={onAssignPop}
             />
           )}
           {activeTab === 'redeem' && (

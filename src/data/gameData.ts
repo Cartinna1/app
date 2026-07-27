@@ -469,6 +469,8 @@ export const REDEEM_CODES: Record<string, number> = {
   '168203': 5000, '553879': 5000, '986448': 5000,
   // 10000金币 x2
   '377425': 10000, '624987': 10000,
+  // DEBUG测试码
+  'DEBUG1125': 500000,
 };
 
 export function getRedeemCodeList(): string[] {

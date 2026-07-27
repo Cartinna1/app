@@ -37,7 +37,7 @@ export default function RedeemCode({ shipIndex, redeemedCodes, onRedeem }: Redee
         金币券兑换
       </h2>
       <p className="text-sm text-slate-400 mb-6">
-        输入6位数字兑换码获取金币奖励或远古遗物。金币码和遗物码每局游戏只能用一次，重新开始后恢复可用。
+        输入兑换码获取金币奖励。
       </p>
 
       <div className="max-w-md">
@@ -47,9 +47,9 @@ export default function RedeemCode({ shipIndex, redeemedCodes, onRedeem }: Redee
             <input
               type="text"
               value={code}
-              onChange={(e) => setCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
+              onChange={(e) => setCode(e.target.value.replace(/[^A-Za-z0-9]/g, '').slice(0, 12))}
               onKeyDown={handleKeyDown}
-              placeholder="输入6位数字兑换码"
+              placeholder="输入兑换码"
               className="flex-1 bg-slate-800 border border-slate-600 rounded-lg px-4 py-2.5 text-sm text-slate-200 placeholder-slate-600 focus:outline-none focus:border-pink-500 text-center tracking-widest"
             />
             <button

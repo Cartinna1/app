@@ -4,6 +4,7 @@ import { RECIPES, MAT_MAX_UP, PRODUCT_PRICE_LIMITS } from '@/data/gameData';
 import { FACTIONS, getInvestmentTier, getIncomeCap, rollPolicy, POLICY_EFFECTS, refreshFactionPrices, calculateSellMultipliers } from '@/data/factions';
 import { rollRelic } from '@/data/relics';
 import { rng } from '@/utils/prng';
+import { processColonyTurn } from './useColony';
 
 // 板块列表（用于生成板块风气）
 const SECTORS = ['能源', '科技', '军工', '生物', '医疗', '金融', '资源', '科研教育', '基建设施', '娱乐服务'];
@@ -425,6 +426,9 @@ export function useTurn(
 
           return s;
         });
+
+        // 殖民地回合处理
+        ships.forEach((s) => processColonyTurn(s, prev.turn + 1));
 
         // 更新贸易政策
         let newPolicyType = prev.factionPolicy.type;

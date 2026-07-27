@@ -31,6 +31,13 @@ function App() {
     gatherIntel,
     installModule,
     useManualModule,
+    unlockColony,
+    selectPlanet,
+    rescrollPlanets,
+    generateScoutingPool,
+    buildColonyBuilding,
+    recruitPop,
+    assignPop,
     buyAlloy,
     buyFood,
     buyRelic,
@@ -95,6 +102,13 @@ function App() {
       onGatherIntel={() => gatherIntel(0)}
       onInstallModule={(moduleId) => installModule(0, moduleId)}
       onUseManualModule={(moduleId) => useManualModule(0, moduleId)}
+      onUnlockColony={unlockColony}
+      onSelectPlanet={selectPlanet}
+      onRescrollPlanets={rescrollPlanets}
+      generateScoutingPool={generateScoutingPool}
+      onBuildColonyBuilding={buildColonyBuilding}
+      onRecruitPop={recruitPop}
+      onAssignPop={assignPop}
       onBuyAlloy={buyAlloy}
       onBuyFood={buyFood}
       onBuyRelic={buyRelic}
