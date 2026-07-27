@@ -143,7 +143,7 @@ export function useColony(
 
         // 资源校验
         if (s.gold < actualGoldCost) {
-          result = { success: false, message: `金币不足（需要${actualGoldCost.toLocaleString()}金��）` };
+          result = { success: false, message: `金币不足（需要${actualGoldCost.toLocaleString()}金币）` };
           return prev;
         }
         if (def.costAlloy && s.alloy < Math.ceil(def.costAlloy * costMult)) {
@@ -274,7 +274,7 @@ export function useColony(
   /** 开始研究科技 */
   const startResearch = useCallback((techId: string): { success: boolean; message: string } => {
     const tech = getTechById(techId);
-    if (!tech) return { success: false, message: '科技不���在' };
+    if (!tech) return { success: false, message: '科技不存在' };
     let result = { success: false, message: '' };
     dispatch({
       type: 'FUNCTIONAL_UPDATE',

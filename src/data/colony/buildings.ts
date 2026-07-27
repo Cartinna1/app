@@ -7,13 +7,13 @@ export const FULL_BUILDINGS: BuildingDef[] = [
   { id: 'B2', name: '穹顶都市', description: '巨型穹顶覆盖的完整社区，含内部生态循环。殖民地的骄傲。', category: 'housing', costGold: 15000, costMaterials: { silicon: 30 }, buildTurns: 3, minPop: 0, maxPop: 0, requiresTech: 'T1' },
 
   // ===== 食物生产 =====
-  { id: 'B3', name: '气雾栽培舱', description: '悬浮在雾化营养液��的作物矩阵，利用大气氮氧循环种植，是殖民地的第一口粮仓。', category: 'food', costGold: 500, costMaterials: { carbon: 80 }, buildTurns: 2, minPop: 1, maxPop: 5, outputType: 'food', baseOutput: 6, popFactor: 3 },
+  { id: 'B3', name: '气雾栽培舱', description: '悬浮在雾化营养液中的作物矩阵，利用大气氮氧循环种植，是殖民地的第一口粮仓。', category: 'food', costGold: 500, costMaterials: { carbon: 80 }, buildTurns: 2, minPop: 1, maxPop: 5, outputType: 'food', baseOutput: 6, popFactor: 3 },
   { id: 'B4', name: '蛋白质重组塔', description: '高塔内亿万纳米机器将碳基原料重组为美味蛋白，一条生产线可养活一个城镇。', category: 'food', costGold: 0, costMaterials: { carbon: 200, quantum: 10 }, buildTurns: 3, minPop: 2, maxPop: 7, outputType: 'food', baseOutput: 15, popFactor: 3, requiresTech: 'T2' },
   { id: 'B5', name: '生态穹顶', description: '全封闭的微型世界，拥有自循环大气与模拟季节，是荒芜星球上的翡翠。', category: 'food', costGold: 0, costMaterials: { carbon: 500, quantum: 5, dark_matter: 5 }, buildTurns: 4, minPop: 3, maxPop: 10, outputType: 'food', baseOutput: 25, popFactor: 4, requiresTech: 'T3' },
 
   // ===== 合金生产 =====
   { id: 'B6', name: '电弧熔炼炉', description: '通过可控电弧将原矿瞬间熔化，提纯出高强度结构金属，熔炉的蓝光彻夜不息。', category: 'alloy', costGold: 1000, costMaterials: { silicon: 40 }, buildTurns: 2, minPop: 1, maxPop: 3, outputType: 'alloy', baseOutput: 1, popFactor: 1 },
-  { id: 'B7', name: '纳米铸��阵列', description: '数万枚微型机械在真空中编织金属晶格，每件成品都拥有完美分子排列。', category: 'alloy', costGold: 5000, costMaterials: { silicon: 100 }, buildTurns: 3, minPop: 2, maxPop: 4, outputType: 'alloy', baseOutput: 2, popFactor: 1, requiresTech: 'T4' },
+  { id: 'B7', name: '纳米铸造阵列', description: '数万枚微型机械在真空中编织金属晶格，每件成品都拥有完美分子排列。', category: 'alloy', costGold: 5000, costMaterials: { silicon: 100 }, buildTurns: 3, minPop: 2, maxPop: 4, outputType: 'alloy', baseOutput: 2, popFactor: 1, requiresTech: 'T4' },
   { id: 'B8', name: '星核熔炉', description: '利用微型人造奇点产生的极端重力与温度，将物质直接压锻为恒星合金。', category: 'alloy', costGold: 10000, costMaterials: { dark_matter: 10, silicon: 150 }, buildTurns: 5, minPop: 3, maxPop: 8, outputType: 'alloy', baseOutput: 3, popFactor: 2, requiresTech: 'T5' },
 
   // ===== 星尘生产 =====

@@ -7,7 +7,7 @@ export const ALL_TECHS: ResearchTech[] = [
     costRP: 300, researchTurns: 2, prerequisites: [] },
   // ===== T2 碳基重组法则 =====
   { id: 'T2', name: '碳基重组法则', unlocksBuilding: 'B4',
-    description: '"蛋白质不再是生长出来的，而是��计算出来的。"纳米机械将碳基原料重组为美味高能蛋白质。',
+    description: '"蛋白质不再是生长出来的，而是被计算出来的。"纳米机械将碳基原料重组为美味高能蛋白质。',
     costRP: 360, researchTurns: 2, prerequisites: [] },
   // ===== T3 盖亚蓝图 =====
   { id: 'T3', name: '盖亚蓝图', unlocksBuilding: 'B5',
@@ -39,7 +39,7 @@ export const ALL_TECHS: ResearchTech[] = [
     costRP: 490, researchTurns: 3, prerequisites: [] },
   // ===== T10 行星声波共振勘探理论 =====
   { id: 'T10', name: '行星声波共振勘探理论', unlocksBuilding: 'B14',
-    description: '"我们用声音去触碰大地深处的心��。"声波共振定位贵金属矿脉。',
+    description: '"我们用声音去触碰大地深处的心跳。"声波共振定位贵金属矿脉。',
     costRP: 900, researchTurns: 2, prerequisites: ['T11'] },
   // ===== T11 大气碳循环解析模型 =====
   { id: 'T11', name: '大气碳循环解析模型', unlocksBuilding: 'B15',
@@ -79,11 +79,11 @@ export const ALL_TECHS: ResearchTech[] = [
     costRP: 2200, researchTurns: 3, prerequisites: ['T13'] },
   // ===== T20 单原子精度制造协议 =====
   { id: 'T20', name: '单原子精度制造协议', unlocksBuilding: 'B24',
-    description: '"���美的世界，从一个完美的原子开始。"原子级硅晶圆制造自动化协议。',
+    description: '"完美的世界，从一个完美的原子开始。"原子级硅晶圆制造自动化协议。',
     costRP: 1250, researchTurns: 3, prerequisites: ['T14'] },
   // ===== T21 实用量子力学体系 =====
   { id: 'T21', name: '实用量子力学体系', unlocksBuilding: 'B26',
-    description: '"在这里，现实只是一条可以被重写��代码。"量子实验室配备了超低温量子比特阵列。',
+    description: '"在这里，现实只是一条可以被重写的代码。"量子实验室配备了超低温量子比特阵列。',
     costRP: 2700, researchTurns: 3, prerequisites: ['T12'] },
   // ===== T22 加速表型复制协议 =====
   { id: 'T22', name: '加速表型复制协议', unlocksBuilding: 'B28',

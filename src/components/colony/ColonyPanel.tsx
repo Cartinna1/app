@@ -106,6 +106,7 @@ export default function ColonyPanel(props: ColonyPanelProps) {
   const [recruitQty, setRecruitQty] = useState(1);
   const [planetName, setPlanetName] = useState('');
   const [scoutPool, setScoutPool] = useState<PlanetTypeId[] | null>(null);
+  const [buildCatFilter, setBuildCatFilter] = useState<string>('all');
 
   const showMsg = (m: string, t: 'success' | 'error') => { setMessage(m); setMsgType(t); setTimeout(() => setMessage(''), 4000); };
 
@@ -195,7 +196,7 @@ export default function ColonyPanel(props: ColonyPanelProps) {
                 <p className="text-xs text-slate-400 mb-3">{p.description}</p>
                 <div className="space-y-1 mb-4">
                   {buffs.map((bf, i) => (
-                    <p key={i} className="text-[10px]">
+                    <p key={i} className="text-xs">
                       <span className={bf.color + ' font-bold'}>{bf.name}</span>
                       <span className="text-slate-500 ml-1">{bf.desc}</span>
                     </p>
@@ -268,15 +269,15 @@ export default function ColonyPanel(props: ColonyPanelProps) {
           )}
           <div className="grid grid-cols-3 gap-3">
             <div className="bg-slate-900/60 border border-slate-700 rounded-xl p-3 text-center">
-              <p className="text-[10px] text-slate-500">已建���</p>
+              <p className="text-xs text-slate-500">已建成</p>
               <p className="text-lg font-bold text-cyan-400">{liveBuildings.length}</p>
             </div>
             <div className="bg-slate-900/60 border border-slate-700 rounded-xl p-3 text-center">
-              <p className="text-[10px] text-slate-500">建造中</p>
+              <p className="text-xs text-slate-500">建造中</p>
               <p className="text-lg font-bold text-yellow-400">{pendingBuildings.length}</p>
             </div>
             <div className="bg-slate-900/60 border border-slate-700 rounded-xl p-3 text-center">
-              <p className="text-[10px] text-slate-500">人口���限</p>
+              <p className="text-xs text-slate-500">人口上限</p>
               <p className="text-lg font-bold text-purple-400">{colony.population.cap}</p>
             </div>
           </div>
@@ -284,7 +285,7 @@ export default function ColonyPanel(props: ColonyPanelProps) {
           {liveBuildings.length > 0 && (
             <div className="bg-slate-900/60 border border-slate-700 rounded-xl p-3">
               <h4 className="text-xs font-bold text-slate-400 mb-2">每回合产出</h4>
-              <div className="flex flex-wrap gap-x-3 gap-y-1 text-[10px]">
+              <div className="flex flex-wrap gap-x-3 gap-y-1 text-xs">
                 {(() => {
                   const pod = planet?.buffs;
                   let f = 0, a = 0, s = 0, g = 0, rp = 0;
@@ -313,7 +314,7 @@ export default function ColonyPanel(props: ColonyPanelProps) {
                   </>;
                 })()}
               </div>
-              <div className="text-[10px] text-red-400 mt-1">
+              <div className="text-xs text-red-400 mt-1">
                 食物消耗: -{colony.population.total * (3 + (planet?.buffs.foodConsumptionDelta || 0))}
               </div>
             </div>
@@ -374,16 +375,24 @@ export default function ColonyPanel(props: ColonyPanelProps) {
           {/* 可建造列表 */}
           <div>
             <h4 className="text-sm font-bold text-cyan-400 mb-2">建造新建筑</h4>
-            {getBuildableBuildings(colony.techState?.researched || []).map((def) => {
+            <div className="flex flex-wrap gap-1 mb-2">
+              {['all','housing','food','alloy','stardust','trade','material','functional'].map((cat) => (
+                <button key={cat} onClick={() => setBuildCatFilter(cat)}
+                  className={`px-2 py-0.5 rounded text-xs font-bold transition-colors ${buildCatFilter === cat ? 'bg-cyan-600 text-white' : 'bg-slate-800/60 text-slate-400 hover:bg-slate-700'}`}>
+                  {cat === 'all' ? '全部' : (CAT_LABELS[cat] || cat)}
+                </button>
+              ))}
+            </div>
+            {getBuildableBuildings(colony.techState?.researched || []).filter((d) => buildCatFilter === 'all' || d.category === buildCatFilter).map((def) => {
               const count = colony.buildings.filter((b) => b.defId === def.id).length;
               const limited = !!(def.maxCount && count >= def.maxCount);
               return (
                 <div key={def.id} className={`bg-slate-900/60 border rounded-lg p-3 mb-2 ${limited ? 'opacity-50 border-slate-800' : 'border-slate-700'}`}>
                   <div className="flex justify-between items-start mb-2">
                     <div>
-                      <span className={`text-[10px] ${CAT_COLORS[def.category] || 'text-slate-500'} px-1.5 py-0.5 rounded mr-1`}>{CAT_LABELS[def.category] || def.category}</span>
+                      <span className={`text-xs ${CAT_COLORS[def.category] || 'text-slate-500'} px-1.5 py-0.5 rounded mr-1`}>{CAT_LABELS[def.category] || def.category}</span>
                       <span className="text-sm text-slate-200 font-bold">{def.name}</span>
-                      <span className="text-[10px] text-cyan-400 ml-2">{getOutputDesc(def)}</span>
+                      <span className="text-xs text-cyan-400 ml-2">{getOutputDesc(def)}</span>
                     </div>
                     <button onClick={() => { const r = onBuild(def.id); showMsg(r.message, r.success ? 'success' : 'error'); }}
                       disabled={limited}
@@ -391,8 +400,8 @@ export default function ColonyPanel(props: ColonyPanelProps) {
                       {limited ? '已达上限' : '建造'}
                     </button>
                   </div>
-                  <p className="text-[10px] text-slate-500 mb-1">{def.description}</p>
-                  <div className="flex flex-wrap gap-x-3 gap-y-0.5 text-[10px]">
+                  <p className="text-xs text-slate-500 mb-1">{def.description}</p>
+                  <div className="flex flex-wrap gap-x-3 gap-y-0.5 text-xs">
                     {(() => {
                       const costMult = planet?.buffs.buildCostMult || 1;
                       const actualGoldCost = Math.ceil(def.costGold * costMult);
@@ -473,13 +482,11 @@ export default function ColonyPanel(props: ColonyPanelProps) {
                     <span className="text-sm text-slate-200">{def.name}</span>
                     {g.count > 1 && <span className="text-xs text-slate-500 ml-1">×{g.count}</span>}
                     <span className="text-xs text-slate-500 ml-2">(0-{totalMax}人)</span>
-                    <span className="text-[10px] text-cyan-400 ml-2">{getOutputDesc(def)}</span>
+                    <span className="text-xs text-cyan-400 ml-2">{getOutputDesc(def)}</span>
                   </div>
                   {isFixed ? (
                     <button onClick={() => {
-                      const target = g.count * def.maxPop;
-                      // 逐个建筑分配
-                      let remaining = target - currentTotal;
+                      let remaining = g.count * def.maxPop - currentTotal;
                       for (const uid of g.uids) {
                         if (remaining <= 0) break;
                         const inst = liveBuildings.find((b) => b.uid === uid);
@@ -489,41 +496,43 @@ export default function ColonyPanel(props: ColonyPanelProps) {
                           remaining -= add;
                         }
                       }
-                      showMsg(`已分配人口到${g.count}座${def.name}`, 'success');
+                      showMsg(`入驻完成`, 'success');
                     }} disabled={currentTotal >= totalMax}
                       className={`px-3 py-1.5 rounded text-xs font-bold ${currentTotal >= totalMax ? 'bg-green-700 text-green-300' : 'bg-cyan-700 text-white'}`}>
-                      {currentTotal >= totalMax ? `已满` : `全部入驻 (${totalMax}人)`}
+                      {currentTotal >= totalMax ? `已满 (${totalMax}人)` : `入驻 ${totalMax}人`}
                     </button>
                   ) : (
                     <div className="flex items-center gap-1">
-                      <button onClick={() => {
-                        // 减人口：从最后有人的建筑减
-                        let remaining = 1;
-                        for (let j = g.uids.length - 1; j >= 0 && remaining > 0; j--) {
-                          const uid = g.uids[j];
-                          const inst = liveBuildings.find((b) => b.uid === uid);
-                          if (inst && inst.assignedPop > 0) {
-                            const sub = Math.min(remaining, inst.assignedPop);
-                            onAssignPop(uid, inst.assignedPop - sub);
-                            remaining -= sub;
+                      <input type="number" min={0} max={totalMax} value={currentTotal}
+                        onChange={(e) => {
+                          const target = Math.max(0, Math.min(totalMax, parseInt(e.target.value) || 0));
+                          let delta = target - currentTotal;
+                          if (delta > 0) {
+                            for (const uid of g.uids) {
+                              if (delta <= 0) break;
+                              const inst = liveBuildings.find((b) => b.uid === uid);
+                              if (inst && inst.assignedPop < def.maxPop) {
+                                const add = Math.min(delta, def.maxPop - inst.assignedPop);
+                                onAssignPop(uid, inst.assignedPop + add);
+                                delta -= add;
+                              }
+                            }
+                          } else if (delta < 0) {
+                            delta = -delta;
+                            for (let j = g.uids.length - 1; j >= 0 && delta > 0; j--) {
+                              const uid = g.uids[j];
+                              const inst = liveBuildings.find((b) => b.uid === uid);
+                              if (inst && inst.assignedPop > 0) {
+                                const sub = Math.min(delta, inst.assignedPop);
+                                onAssignPop(uid, inst.assignedPop - sub);
+                                delta -= sub;
+                              }
+                            }
                           }
-                        }
-                      }} disabled={currentTotal <= 0}
-                        className="w-7 h-7 rounded bg-slate-700 hover:bg-slate-600 flex items-center justify-center"><Minus size={12} /></button>
-                      <span className="w-8 text-center text-sm text-cyan-400 font-bold">{currentTotal}</span>
-                      <button onClick={() => {
-                        let remaining = 1;
-                        for (const uid of g.uids) {
-                          if (remaining <= 0) break;
-                          const inst = liveBuildings.find((b) => b.uid === uid);
-                          if (inst && inst.assignedPop < def.maxPop) {
-                            const add = Math.min(remaining, def.maxPop - inst.assignedPop);
-                            onAssignPop(uid, inst.assignedPop + add);
-                            remaining -= add;
-                          }
-                        }
-                      }} disabled={currentTotal >= totalMax || colony.population.available < 1}
-                        className="w-7 h-7 rounded bg-slate-700 hover:bg-slate-600 flex items-center justify-center"><Plus size={12} /></button>
+                        }}
+                        className="w-14 bg-slate-800 border border-slate-600 rounded px-2 py-1 text-xs text-cyan-400 text-center font-bold"
+                      />
+                      <span className="text-xs text-slate-500">/ {totalMax}</span>
                     </div>
                   )}
                 </div>
@@ -559,7 +568,8 @@ export default function ColonyPanel(props: ColonyPanelProps) {
                       <span className="text-sm text-purple-300 font-bold">{tech.name}</span>
                       <span className="text-xs text-slate-500 ml-2">{tech.researchTurns}回合 | {tech.costRP}点</span>
                       <p className="text-xs text-slate-400 mt-1">{tech.description}</p>
-                      {tech.unlocksBuilding && <span className="text-[10px] text-cyan-400">解锁: {getBuildingDef(tech.unlocksBuilding)?.name || ''}</span>}
+                      {tech.unlocksBuilding && <span className="text-xs text-cyan-400">解锁建筑: {getBuildingDef(tech.unlocksBuilding)?.name || ''}</span>}
+                      {tech.leaderCapBonus && <span className="text-xs text-amber-400 ml-2">领袖上限 +{tech.leaderCapBonus}</span>}
                     </div>
                     <button onClick={() => { const r = onStartResearch(tech.id); showMsg(r.message, r.success ? 'success' : 'error'); }}
                       disabled={colony.techState!.researchPoints < tech.costRP}
@@ -576,7 +586,7 @@ export default function ColonyPanel(props: ColonyPanelProps) {
                 {colony.techState.researched.map((tid) => {
                   const t = getTechById(tid);
                   const info = t ? (t.unlocksBuilding ? `解锁 ${getBuildingDef(t.unlocksBuilding)?.name || ''}` : t.leaderCapBonus ? `领袖上限+${t.leaderCapBonus}` : '') : '';
-                  return <div key={tid} className="text-[10px] bg-green-900/20 text-green-400 border border-green-700/30 px-2 py-1 rounded">
+                  return <div key={tid} className="text-xs bg-green-900/20 text-green-400 border border-green-700/30 px-2 py-1 rounded">
                     <span className="font-bold">{t?.name || tid}</span>
                     {info && <span className="text-green-600 ml-1">- {info}</span>}
                   </div>;
