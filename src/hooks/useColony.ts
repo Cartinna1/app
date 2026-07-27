@@ -415,6 +415,7 @@ export function processColonyTurn(ship: Mothership, _turn: number): void {
       }
     }
   }
+}
 
 function calcPopCap(colony: Colony): number {
   let cap = 5;
