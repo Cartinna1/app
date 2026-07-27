@@ -77,7 +77,7 @@ interface GameScreenProps {
   onStartResearch: (techId: string) => { success: boolean; message: string };
   onRecruitLeader: (leaderId: string) => { success: boolean; message: string };
   onUpgradeLeader: (leaderIndex: number) => { success: boolean; message: string };
-  onRollAndRecruit: () => { success: boolean; message: string };
+  onRollAndRecruit: () => { success: boolean; message: string; leaders?: any[] };
   onBuyAlloy: (type: 'gold' | 'stardust', qty: number) => boolean;
   onBuyFood: (type: 'gold' | 'alloy', qty: number) => boolean;
   onBuyRelic: (relicId: string) => { success: boolean; message: string };

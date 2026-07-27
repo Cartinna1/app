@@ -1,5 +1,6 @@
 import { useState, useMemo, useEffect } from 'react';
 import type { Mothership } from '@/types/game';
+import { rollLeaders } from '@/data/colony/leaders';
 import type { PlanetTypeId, PlanetDef } from '@/types/colony';
 import { getBuildableBuildings, getBuildingDef } from '@/data/colony/buildings';
 import { getPlanetById } from '@/data/colony/planets';
@@ -96,7 +97,7 @@ interface ColonyPanelProps {
   onStartResearch: (techId: string) => { success: boolean; message: string };
   onRecruitLeader: (leaderId: string) => { success: boolean; message: string };
   onUpgradeLeader: (leaderIndex: number) => { success: boolean; message: string };
-  onRollAndRecruit: () => { success: boolean; message: string };
+  onRollAndRecruit: () => { success: boolean; message: string; leaders?: any[] };
 }
 
 type ColonyTab = 'overview' | 'buildings' | 'population' | 'research' | 'leaders';
@@ -620,19 +621,38 @@ export default function ColonyPanel(props: ColonyPanelProps) {
                     className="px-4 py-2 bg-purple-700 hover:bg-purple-600 disabled:bg-slate-700 rounded-lg text-sm font-bold text-white">
                     {colony.leaders.length >= colony.leaderCap ? '已满' : '开始招募'}
                   </button>
-                ) : (() => { console.log('leaderOptions set:', leaderOptions?.length, leaderOptions); return (
+                ) : (
                   <div className="space-y-2">
-                    <div className="bg-green-800 border border-green-500 rounded-lg p-4 text-white font-bold text-lg">TEST - LEADER OPTIONS SHOWN ({leaderOptions.length} leaders)</div>
-                    {leaderOptions.map((ld, i) => (
+                    {leaderOptions.map((ld, i) => {
+                      const rc = ld.rarity==='SSR'?'text-amber-400':ld.rarity==='SR'?'text-purple-400':'text-blue-400';
+                      const lv1 = ld.levelBonuses[0] || {};
+                      const ex1 = ld.levelExtras[0] || {};
+                      let skillDesc = '';
+                      if (Object.keys(lv1).length>0) {
+                        const bids = Object.keys(lv1);
+                        if (bids.includes('ALL')) skillDesc = '所有建筑产出+'+lv1.ALL+'%';
+                        else if (bids.includes('ALL_MATERIAL')) skillDesc = '所有原料产出+'+lv1.ALL_MATERIAL+'%';
+                        else skillDesc = bids.slice(0,3).map(b=>b+'+'+lv1[b]+'%').join(', ')+(bids.length>3?'等':'');
+                      }
+                      if (ex1.researchPerTurn) skillDesc += ' | 研究+'+ex1.researchPerTurn[0]+'-'+ex1.researchPerTurn[1]+'/回合';
+                      if (ex1.foodConsumptionDelta) skillDesc += ' | 食物消耗'+ex1.foodConsumptionDelta;
+                      if (ex1.freePopEveryTurns) skillDesc += ' | 每'+ex1.freePopEveryTurns+'回合免费1人口';
+                      if (ex1.populationCapBonus) skillDesc += ' | 人口上限+'+ex1.populationCapBonus;
+                      if (ex1.leaderCapBonus) skillDesc += ' | 领袖上限+'+ex1.leaderCapBonus;
+                      return (
                         <div key={i} className="bg-slate-800/60 border border-slate-700 rounded-lg p-3 flex justify-between items-center">
-                          <div>
-                            <span className="text-sm text-slate-200 font-bold">{ld.name} ({ld.rarity})</span>
-                            <span className="text-sm text-slate-400 ml-2">· {ld.abilityName}</span>
+                          <div className="flex-1 mr-2">
+                            <span className={`text-sm font-bold ${rc}`}>{ld.rarity}级</span>
+                            <span className="text-sm text-slate-200 font-bold ml-2">{ld.name}</span>
+                            <span className="text-sm text-amber-400 ml-2">· {ld.abilityName}</span>
+                            {skillDesc && <span className="text-sm text-slate-500 ml-2">- {skillDesc}</span>}
+                            <p className="text-sm text-slate-400 mt-1">{ld.description}</p>
                           </div>
                           <button onClick={() => {const r=onRecruitLeader(ld.id);showMsg(r.message,r.success?'success':'error');if(r.success)setLeaderOptions(null);}}
-                            className="px-3 py-1.5 bg-purple-700 hover:bg-purple-600 rounded text-sm font-bold">招募</button>
+                            className="px-3 py-1.5 bg-purple-700 hover:bg-purple-600 rounded text-sm font-bold flex-shrink-0">招募</button>
                         </div>
-                    ))}
+                      );
+                    })}
                     <button onClick={() => {
                       if (colony.leaders.length >= colony.leaderCap) { showMsg('领袖已满', 'error'); return; }
                       const r = onRollAndRecruit();
@@ -641,7 +661,7 @@ export default function ColonyPanel(props: ColonyPanelProps) {
                     }} disabled={ship.stardust < 10 || colony.leaders.length >= colony.leaderCap}
                       className="text-sm text-purple-400 hover:text-purple-300 disabled:text-slate-600">换一批 (10星尘)</button>
                   </div>
-                );})()}
+                )}
               </div>
               {/* 已有领袖 */}
               {colony.leaders.length > 0 && (

@@ -4,8 +4,7 @@ import type { Colony, PlanetTypeId, BuildingInstance } from '@/types/colony';
 import { ALL_PLANETS } from '@/data/colony/planets';
 import { getBuildingDef } from '@/data/colony/buildings';
 import { getTechById } from '@/data/colony/techs';
-import { getLeaderDef } from '@/data/colony/leaders';
-import { rollLeaders } from '@/data/colony/leaders';
+import { getLeaderDef, rollLeaders } from '@/data/colony/leaders';
 
 const UNLOCK_COST = 30000;
 
@@ -364,8 +363,7 @@ export function useColony(
         if (s.stardust < 10) { result = { success: false, message: '星尘不足' }; return prev; }
         s.stardust -= 10;
         const ships = [...prev.ships]; ships[0] = s;
-        const { rollLeaders: rl } = require('@/data/colony/leaders');
-        result = { success: true, message: '', leaders: rl(3) };
+        result = { success: true, message: '', leaders: rollLeaders(3) };
         return { ...prev, ships };
       },
     });
