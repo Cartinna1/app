@@ -133,7 +133,7 @@ export function useColony(
           }
         }
         // 星球BUFF
-        const planetDef2 = s.colony.planetType ? ALL_PLANETS.find((p) => p.id === s.colony.planetType) : null;
+        const planetDef2 = s.colony!.planetType ? ALL_PLANETS.find((p) => p.id === s.colony!.planetType) : null;
         const costMult = planetDef2?.buffs.buildCostMult || 1;
         const turnDelta = planetDef2?.buffs.buildTurnDelta || 0;
         const actualGoldCost = Math.ceil(def.costGold * costMult);
@@ -309,7 +309,6 @@ export function processColonyTurn(ship: Mothership, _turn: number): void {
   }
 
   // 建筑产出计算
-  const planetDef = colony.planetType ? ALL_PLANETS.find((p) => p.id === colony.planetType) : null;
   let totalFood = 0;
   let totalAlloy = 0;
   let totalGold = 0;
