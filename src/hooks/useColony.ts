@@ -1,6 +1,6 @@
 import { useCallback } from 'react';
 import type { GameState, Mothership } from '@/types/game';
-import type { Colony, PlanetTypeId } from '@/types/colony';
+import type { Colony, PlanetTypeId, BuildingInstance } from '@/types/colony';
 import { ALL_PLANETS } from '@/data/colony/planets';
 import { getBuildingDef } from '@/data/colony/buildings';
 
