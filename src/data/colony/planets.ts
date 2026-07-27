@@ -13,7 +13,7 @@ export const ALL_PLANETS: PlanetDef[] = [
   },
   {
     id: 'ocean',
-    name: '海洋星��',
+    name: '海洋星球',
     description: '一颗被无垠海洋包裹的蓝色宝石。氮氧大气层，洋面覆盖率97%。陆地仅存在于少数火山岛链和珊瑚环礁。',
     buffs: {
       foodMult: 1.80, // 食物+80%

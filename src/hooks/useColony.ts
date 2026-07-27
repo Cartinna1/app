@@ -283,6 +283,7 @@ export function processColonyTurn(ship: Mothership, _turn: number): void {
   if (colony.phase !== 'active') return;
 
   // 建筑建造进度推进
+  let buildingChanged = false;
   for (const inst of colony.buildings) {
     if (inst.active) continue;
     const def = getBuildingDef(inst.defId);
@@ -290,14 +291,19 @@ export function processColonyTurn(ship: Mothership, _turn: number): void {
     inst.buildProgress += 1;
     if (inst.buildProgress >= def.buildTurns) {
       inst.active = true;
-      // 居住类建筑建成时增加人口上限（由 getColonyPopCap 重新计算）
     }
+    buildingChanged = true;
+  }
+  // 强制刷新数组引用（确保 UI 能检测到 active 变化）
+  if (buildingChanged) {
+    colony.buildings = [...colony.buildings];
   }
 
   // 建筑产出计算
   const planetDef = colony.planetType ? ALL_PLANETS.find((p) => p.id === colony.planetType) : null;
   let totalFood = 0;
   let totalAlloy = 0;
+  let totalGold = 0;
 
   for (const inst of colony.buildings) {
     if (!inst.active || inst.assignedPop <= 0) continue;
@@ -317,12 +323,16 @@ export function processColonyTurn(ship: Mothership, _turn: number): void {
       const mn = def.goldOutputMin || 0;
       const mx = def.goldOutputMax || 0;
       output = Math.floor(Math.random() * (mx - mn + 1)) + mn;
-      ship.gold += output;
+      totalGold += output;
     }
   }
 
   ship.food += totalFood;
   ship.alloy += totalAlloy;
+  if (totalGold > 0) {
+    ship.gold += totalGold;
+    ship.goldLog = [{ turn: _turn, amount: totalGold, reason: `殖民地「${colony.planetName}」贸易收入`, balanceAfter: ship.gold }, ...(ship.goldLog || [])].slice(0, 200);
+  }
 
   // 人口食物消耗
   const foodPerPop = 3 + (planetDef?.buffs.foodConsumptionDelta || 0);

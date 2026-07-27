@@ -562,6 +562,30 @@ function OverviewTab({
         )}
       </div>
 
+      {/* 本体食物消耗 */}
+      {(() => {
+        const t = gameState.turn;
+        let foodCost: number;
+        if (t <= 5) foodCost = 1;
+        else if (t <= 10) foodCost = 3;
+        else if (t <= 15) foodCost = 7;
+        else if (t <= 20) foodCost = 15;
+        else if (t <= 25) foodCost = 23;
+        else if (t <= 30) foodCost = 26;
+        else foodCost = t;
+        const preserve = ship.relics.some((r) => r.id === 'r_007') ? 0.5 : 0;
+        const actual = Math.floor(foodCost * (1 - preserve));
+        return (
+          <div className="mb-4 bg-slate-900/60 border border-slate-700 rounded-xl p-3 md:p-4">
+            <h3 className="text-xs text-amber-400 font-bold mb-2">舰队维生</h3>
+            <div className="grid grid-cols-2 gap-2 text-xs">
+              <div><span className="text-slate-500">船员食物消耗:</span> <span className="text-red-400 font-bold">-{actual}/回合</span></div>
+              <div><span className="text-slate-500">当前食物存量:</span> <span className={ship.food >= 0 ? 'text-green-400 font-bold' : 'text-red-400 font-bold'}>{ship.food}</span></div>
+            </div>
+          </div>
+        );
+      })()}
+
       {/* 殖民地收支（如果已激活） */}
       {ship.colony && ship.colony.phase === 'active' && (() => {
         const colony = ship.colony;
