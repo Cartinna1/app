@@ -133,19 +133,8 @@ export default function ColonyPanel(props: ColonyPanelProps) {
   }, [colony?.techState?.researched, colony?.techState?.currentResearch, colony?.techState?.researchSeed]);
 
   // 提前计算活跃建筑的合并视图（必须在条件 return 之前，hooks 顺序不能变）
-  const liveBuildings = useMemo(() => (colony?.buildings || []).filter((b) => b.active), [colony?.buildings]);
-  const pendingBuildings = useMemo(() => (colony?.buildings || []).filter((b) => !b.active), [colony?.buildings]);
-  const groupedLive = useMemo(() => {
-    const map = new Map<string, { defId: string; count: number; uids: string[]; totalPop: number }>();
-    for (const inst of liveBuildings) {
-      const entry = map.get(inst.defId) || { defId: inst.defId, count: 0, uids: [], totalPop: 0 };
-      entry.count += 1;
-      entry.uids.push(inst.uid);
-      entry.totalPop += inst.assignedPop;
-      map.set(inst.defId, entry);
-    }
-    return Array.from(map.values());
-  }, [liveBuildings]);
+  const liveBuildings = useMemo(() => (colony?.buildings || []).filter((b: any) => b.active), [colony?.buildings]);
+  const pendingBuildings = useMemo(() => (colony?.buildings || []).filter((b: any) => !b.active), [colony?.buildings]);
 
   // 计算每个建筑的显示编号（同类建筑按索引01/02...）
   const buildingNumbers = useMemo(() => {
@@ -352,8 +341,8 @@ export default function ColonyPanel(props: ColonyPanelProps) {
           {/* 已建成（合并同类） */}
           <div>
             <h4 className="text-sm font-bold text-green-400 mb-2">已建成</h4>
-            {colony.buildings.filter((b: any) => b.active).length === 0 && <p className="text-slate-500 text-sm">暂无已建成建筑</p>}
-            {colony.buildings.filter((b: any) => b.active).map((inst: any) => {
+            {liveBuildings.length === 0 && <p className="text-slate-500 text-sm">暂无已建成建筑</p>}
+            {liveBuildings.map((inst: any) => {
               const def = getBuildingDef(inst.defId);
               if (!def) return (
                 <div key={inst.uid} className="bg-slate-900/60 border border-purple-700/40 rounded-lg p-3 mb-2 flex justify-between items-center">

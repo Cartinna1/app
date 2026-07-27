@@ -41,6 +41,7 @@ import ModulePanel from './ModulePanel';
 import ColonyPanel from './colony/ColonyPanel';
 import { getBuildingDef } from '@/data/colony/buildings';
 import { getPlanetById } from '@/data/colony/planets';
+import { getLeaderDef } from '@/data/colony/leaders';
 
 interface GameScreenProps {
   gameState: GameState;
@@ -151,7 +152,6 @@ export default function GameScreen({
   onRollAndRecruit,
             onCancelBuilding,
             onDemolishBuilding,
-  onClearRecruitPool,
   onBuyAlloy,
   onBuyFood,
   onBuyRelic,
@@ -424,7 +424,6 @@ export default function GameScreen({
               onRollAndRecruit={onRollAndRecruit}
               onCancelBuilding={onCancelBuilding}
               onDemolishBuilding={onDemolishBuilding}
-              onClearRecruitPool={onClearRecruitPool}
             />
           )}
           {activeTab === 'redeem' && (
@@ -607,7 +606,7 @@ function OverviewTab({
           let lAll = 0, lMat = 0;
           for (const l of c.leaders || []) {
             const ld = getLeaderDef(l.id);
-            const bonuses = ld?.levelBonuses[l.level-1] || {};
+            const bonuses = (ld?.levelBonuses[l.level-1] || {}) as Record<string, number>;
             for (const [bid, b] of Object.entries(bonuses)) {
               if (bid === 'ALL') lAll += b;
               else if (bid === 'ALL_MATERIAL') lMat += b;
