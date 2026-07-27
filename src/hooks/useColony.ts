@@ -136,7 +136,7 @@ export function useColony(
             if (l.id === 'L12' && l.level >= 2) effMaxCount += 1;
           }
         }
-        if (effMaxCount) {
+        if (effMaxCount != null) {
           const count = s.colony.buildings.filter((b) => b.defId === defId).length;
           if (count >= effMaxCount) {
             result = { success: false, message: `「${def.name}」建造数量已达上限(${effMaxCount})` };
