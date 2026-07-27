@@ -311,6 +311,15 @@ export function useColony(
   }, [dispatch]);
 
   /** 招募领袖 */
+  const recruitLeader = useCallback((leaderId: string): { success: boolean; message: string } => {
+    const ld = getLeaderDef(leaderId);
+    if (!ld) return { success: false, message: '领袖不存在' };
+    let result = { success: false, message: '' };
+    dispatch({
+      type: 'FUNCTIONAL_UPDATE',
+      updater: (prev) => {
+        const ships = [...prev.ships]; const s = { ...ships[0] };
+        if (!s.colony || s.colony.phase !== 'active') { result={success:false,message:'殖民地未激活'}; return prev; }
         const hasB27 = s.colony.buildings.some((b) => b.active && b.defId === 'B27');
         if (!hasB27) { result={success:false,message:'需建造星河议政厅(B27)'}; return prev; }
         if (s.colony!.leaders.length >= s.colony!.leaderCap) { result={success:false,message:'领袖数量已达上限'}; return prev; }

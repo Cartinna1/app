@@ -669,24 +669,52 @@ export default function ColonyPanel(props: ColonyPanelProps) {
               {colony.leaders.length > 0 && (
                 <div className="bg-slate-900/60 border border-slate-700 rounded-xl p-4">
                   <h4 className="font-bold text-slate-200 mb-2">我的领袖</h4>
-                  {colony.leaders.map((l, i) => (
-                    <div key={i} className="bg-slate-800/60 border border-slate-700 rounded-lg p-3 mb-2 flex justify-between items-center">
-                      <div>
-                        <span className={`text-sm font-bold ${l.rarity==='SSR'?'text-amber-400':l.rarity==='SR'?'text-purple-400':'text-blue-400'}`}>{l.rarity} Lv{l.level}</span>
-                        <span className="text-sm text-slate-200 font-bold ml-2">{l.name} · {l.abilityName}</span>
+                  {colony.leaders.map((l, i) => {
+                    const ld = getLeaderDef(l.id);
+                    if (!ld) return null;
+                    const currBonuses = ld.levelBonuses[l.level-1] || {};
+                    const currExtras = ld.levelExtras[l.level-1] || {};
+                    let skillText = '';
+                    if (Object.keys(currBonuses).length>0) {
+                      const bids = Object.keys(currBonuses);
+                      if (bids.includes('ALL')) skillText = `所有建筑产出+${currBonuses.ALL}%`;
+                      else if (bids.includes('ALL_MATERIAL')) skillText = `所有原料产出+${currBonuses.ALL_MATERIAL}%`;
+                      else skillText = bids.map(b=>`${b}+${currBonuses[b]}%`).join(', ');
+                    }
+                    const parts: string[] = [];
+                    if (currExtras.researchPerTurn) parts.push(`研究+${currExtras.researchPerTurn[0]}-${currExtras.researchPerTurn[1]}/回合`);
+                    if (currExtras.foodConsumptionDelta) parts.push(`食物消耗${currExtras.foodConsumptionDelta}`);
+                    if (currExtras.populationCapBonus) parts.push(`人口上限+${currExtras.populationCapBonus}`);
+                    if (currExtras.freePopEveryTurns) parts.push(`每${currExtras.freePopEveryTurns}回合免费1人口`);
+                    if (currExtras.stardustPerTurn) parts.push(`星尘+${currExtras.stardustPerTurn}/回合`);
+                    if (currExtras.darkMatterPerTurn) parts.push(`暗物质+${currExtras.darkMatterPerTurn}/回合`);
+                    if (currExtras.quantumPerTurn) parts.push(`量子簇+${currExtras.quantumPerTurn}/回合`);
+                    if (currExtras.leaderCapBonus) parts.push(`领袖上限+${currExtras.leaderCapBonus}`);
+                    if (currExtras.buildCostReduction) parts.push(`造价-${currExtras.buildCostReduction}%`);
+                    return (
+                    <div key={i} className="bg-slate-800/60 border border-slate-700 rounded-lg p-3 mb-2">
+                      <div className="flex justify-between items-start mb-1">
+                        <div className="flex-1">
+                          <span className={`text-sm font-bold ${l.rarity==='SSR'?'text-amber-400':l.rarity==='SR'?'text-purple-400':'text-blue-400'}`}>{l.rarity} Lv{l.level}</span>
+                          <span className="text-sm text-slate-200 font-bold ml-2">{l.name}</span>
+                          <span className="text-sm text-amber-400 ml-2">· {l.abilityName}</span>
+                          <span className="text-sm text-slate-600 ml-2">- {skillText}{parts.length>0?' | '+parts.join(' | '):''}</span>
+                        </div>
+                        {l.level < 3 && (
+                          <button onClick={() => {
+                            const cost = l.level===1?20:45;
+                            if (ship.stardust<cost) { showMsg('星尘不足', 'error'); return; }
+                            const r=onUpgradeLeader(i); showMsg(r.message,r.success?'success':'error');
+                          }} disabled={ship.stardust<(l.level===1?20:45)}
+                            className="px-3 py-1.5 bg-yellow-700 hover:bg-yellow-600 disabled:bg-slate-700 rounded text-sm font-bold ml-2 flex-shrink-0">
+                            升级({l.level===1?20:45}星尘)
+                          </button>
+                        )}
                       </div>
-                      {l.level < 3 && (
-                        <button onClick={() => {
-                          const cost = l.level===1?20:45;
-                          if (ship.stardust<cost) { showMsg(`星尘不足`, 'error'); return; }
-                          const r=onUpgradeLeader(i); showMsg(r.message,r.success?'success':'error');
-                        }} disabled={ship.stardust < (l.level===1?20:45)}
-                          className="px-3 py-1.5 bg-yellow-700 hover:bg-yellow-600 disabled:bg-slate-700 rounded text-sm font-bold">
-                          升级({l.level===1?20:45}星尘)
-                        </button>
-                      )}
+                      <p className="text-sm text-slate-400">{ld.description}</p>
                     </div>
-                  ))}
+                    );
+                  })}
                 </div>
               )}
             </>
