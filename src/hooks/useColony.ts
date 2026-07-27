@@ -180,7 +180,13 @@ export function useColony(
           result = { success: false, message: '殖民地未激活' };
           return prev;
         }
-        const cost = 2000 * amount;
+        const baseCost = 2000;
+        const planetDelta = (() => {
+          if (!s.colony?.planetType) return 0;
+          const pd = ALL_PLANETS.find((p) => p.id === s.colony!.planetType);
+          return pd?.buffs.recruitCostDelta || 0;
+        })();
+        const cost = (baseCost + planetDelta) * amount;
         if (s.gold < cost) {
           result = { success: false, message: `金币不足（需要${cost.toLocaleString()}金币）` };
           return prev;

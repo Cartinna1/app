@@ -39,6 +39,8 @@ import { getInvestmentTier, getBuffDescription } from '@/data/factions';
 import GoldLogViewer from './GoldLogViewer';
 import ModulePanel from './ModulePanel';
 import ColonyPanel from './colony/ColonyPanel';
+import { getBuildingDef } from '@/data/colony/buildings';
+import { getPlanetById } from '@/data/colony/planets';
 
 interface GameScreenProps {
   gameState: GameState;
@@ -559,6 +561,44 @@ function OverviewTab({
           </div>
         )}
       </div>
+
+      {/* 殖民地收支（如果已激活） */}
+      {ship.colony && ship.colony.phase === 'active' && (() => {
+        const colony = ship.colony;
+        const planetDef = colony.planetType ? getPlanetById(colony.planetType) : undefined;
+        let colFood = 0, colAlloy = 0, colGold = 0;
+        for (const inst of colony.buildings) {
+          if (!inst.active || inst.assignedPop <= 0) continue;
+          const def = getBuildingDef(inst.defId);
+          if (!def || !def.outputType) continue;
+          if (def.outputType === 'food') {
+            let o = (def.baseOutput || 0) + (def.popFactor || 0) * inst.assignedPop;
+            if (planetDef?.buffs.foodMult) o = Math.ceil(o * planetDef.buffs.foodMult);
+            colFood += o;
+          } else if (def.outputType === 'alloy') {
+            let o = (def.baseOutput || 0) + (def.popFactor || 0) * inst.assignedPop;
+            if (planetDef?.buffs.alloyMult) o = Math.ceil(o * planetDef.buffs.alloyMult);
+            colAlloy += o;
+          } else if (def.outputType === 'gold') {
+            const mn = def.goldOutputMin || 0, mx = def.goldOutputMax || 0;
+            colGold += Math.floor((mn + mx) / 2);
+          }
+        }
+        const foodPerPop = 3 + (planetDef?.buffs.foodConsumptionDelta || 0);
+        const colFoodCost = colony.population.total * foodPerPop;
+        return (
+          <div className="mb-4 bg-cyan-900/20 border border-cyan-700/30 rounded-xl p-3 md:p-4">
+            <h3 className="text-xs text-cyan-400 font-bold mb-2">殖民地「{colony.planetName}」收支</h3>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-xs">
+              <div><span className="text-slate-500">食物产出:</span> <span className="text-green-400 font-bold">+{colFood}</span></div>
+              <div><span className="text-slate-500">食物消耗:</span> <span className="text-red-400 font-bold">-{colFoodCost}</span></div>
+              <div><span className="text-slate-500">合金产出:</span> <span className="text-slate-300 font-bold">+{colAlloy}</span></div>
+              <div><span className="text-slate-500">金币产出:</span> <span className="text-yellow-400 font-bold">+{colGold}</span></div>
+            </div>
+            <div className="text-[10px] text-slate-500 mt-1">人口 {colony.population.total}/{colony.population.cap} | 空闲 {colony.population.available}</div>
+          </div>
+        );
+      })()}
 
       {/* 情报提示 */}
       {(ship.stockTipThisTurn || ship.matTipThisTurn || allianceActive) && (

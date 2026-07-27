@@ -428,7 +428,11 @@ export function useTurn(
         });
 
         // 殖民地回合处理
-        ships.forEach((s) => processColonyTurn(s, prev.turn + 1));
+        ships.forEach((s) => {
+          processColonyTurn(s, prev.turn + 1);
+          // 殖民地产出可能恢复食物，清除饥荒
+          if (s.food >= 0 && s.famineTimer > 0 && !s.isRebellion) s.famineTimer = 0;
+        });
 
         // 更新贸易政策
         let newPolicyType = prev.factionPolicy.type;

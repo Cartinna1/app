@@ -27,7 +27,7 @@ export const PHASE_1_BUILDINGS: BuildingDef[] = [
     maxPop: 5,
     outputType: 'food',
     baseOutput: 6,
-    popFactor: 2,
+    popFactor: 3,
   },
 
   // ===== 合金生产 =====

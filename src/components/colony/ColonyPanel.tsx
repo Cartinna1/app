@@ -1,9 +1,73 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import type { Mothership } from '@/types/game';
-import type { PlanetTypeId } from '@/types/colony';
+import type { PlanetTypeId, PlanetDef } from '@/types/colony';
 import { PHASE_1_BUILDINGS, getBuildingDef } from '@/data/colony/buildings';
 import { getPlanetById } from '@/data/colony/planets';
-import { Home, Users, Wrench, Play, Plus, Minus } from 'lucide-react';
+import { Home, Users, Wrench, Play, Plus, Minus, UserPlus } from 'lucide-react';
+
+// ==================== 辅助函数 ====================
+
+const MAT_NAMES: Record<string, string> = {
+  carbon: '碳块', gold_ore: '黄金', oil: '石油',
+  dark_matter: '暗物质', silicon: '硅片', quantum: '量子簇',
+};
+
+function matLabel(id: string): string { return MAT_NAMES[id] || id; }
+
+function getBuffList(planet: PlanetDef): { name: string; desc: string; color: string }[] {
+  const b = planet.buffs;
+  const list: { name: string; desc: string; color: string }[] = [];
+  // 按照文档中的 BUFF 名称
+  if (planet.id === 'desert') {
+    list.push({ name: '烈日熔炉', desc: '电弧熔炼炉/星核熔炉产量+40%', color: 'text-orange-400' });
+    list.push({ name: '硅砂富矿', desc: '硅片产量+30%', color: 'text-blue-400' });
+    list.push({ name: '水源匮乏', desc: '食物产量-25%', color: 'text-red-400' });
+  } else if (planet.id === 'ocean') {
+    list.push({ name: '海洋丰收', desc: '食物产量+80%', color: 'text-green-400' });
+    list.push({ name: '陆地稀缺', desc: '建筑各项成本+10%', color: 'text-amber-400' });
+  } else if (planet.id === 'polar') {
+    list.push({ name: '低温超导', desc: '科技研究速度减1回合', color: 'text-blue-400' });
+    list.push({ name: '极光捕尘', desc: '星尘产量+30%', color: 'text-purple-400' });
+    list.push({ name: '严寒维生', desc: '每个人口食物消耗+1', color: 'text-red-400' });
+    list.push({ name: '冻土施工', desc: '建筑建造回合+1', color: 'text-amber-400' });
+  } else if (planet.id === 'arid') {
+    list.push({ name: '贵金属富集', desc: '黄金/合金产量+60%', color: 'text-yellow-400' });
+    list.push({ name: '植被贫瘠', desc: '食物产量-40%', color: 'text-red-400' });
+  } else if (planet.id === 'terran') {
+    list.push({ name: '宜居典范', desc: '人口初始上限10，自带3人口', color: 'text-green-400' });
+  } else if (planet.id === 'alpine') {
+    list.push({ name: '稀薄大气观测', desc: '研究实验室科研点数+80%', color: 'text-purple-400' });
+    list.push({ name: '山体矿脉', desc: '碳块+30%/黄金+20%', color: 'text-yellow-400' });
+    list.push({ name: '地形障碍', desc: '建筑成本+20%', color: 'text-amber-400' });
+  } else if (planet.id === 'savannah') {
+    list.push({ name: '平原劲风', desc: '石油产量+80%', color: 'text-amber-400' });
+    list.push({ name: '游牧智慧', desc: '领袖招募费用-1星尘', color: 'text-purple-400' });
+    list.push({ name: '旱季缺水', desc: '食物产量-20%', color: 'text-red-400' });
+  } else if (planet.id === 'tropical') {
+    list.push({ name: '丛林沃土', desc: '食物+60%/碳块+100%', color: 'text-green-400' });
+    list.push({ name: '暴雨侵蚀', desc: '建筑成本+10%', color: 'text-amber-400' });
+  } else if (planet.id === 'tundra') {
+    list.push({ name: '冻土封存', desc: '量子簇/暗物质+40%', color: 'text-purple-400' });
+    list.push({ name: '缓慢启动', desc: '招募人口需2700金币', color: 'text-red-400' });
+  } else if (planet.id === 'ruin') {
+    list.push({ name: '远古档案', desc: '初始拥有一座纳米铸造阵列', color: 'text-cyan-400' });
+    list.push({ name: '全息残响', desc: '居住舱人口上限+3', color: 'text-slate-400' });
+  }
+  return list;
+}
+
+function getOutputDesc(def: ReturnType<typeof getBuildingDef>): string {
+  if (!def) return '';
+  if (def.outputType === 'food') return `产食物: ${def.baseOutput}+入驻×${def.popFactor}/回合`;
+  if (def.outputType === 'alloy') return `产合金: ${def.baseOutput}+入驻×${def.popFactor}/回合`;
+  if (def.outputType === 'gold') return `产金币: ${def.goldOutputMin}-${def.goldOutputMax}/回合`;
+  if (def.outputType === 'stardust') return `产星尘`;
+  if (def.outputType === 'research') return '产科研点';
+  if (def.category === 'housing') return `人口上限+5`;
+  return '';
+}
+
+// ==================== 组件 ====================
 
 interface ColonyPanelProps {
   ship: Mothership;
@@ -16,7 +80,7 @@ interface ColonyPanelProps {
   onAssignPop: (buildingUid: string, count: number) => { success: boolean; message: string };
 }
 
-type ColonyTab = 'overview' | 'buildings' | 'population' | 'scout';
+type ColonyTab = 'overview' | 'buildings' | 'population';
 
 export default function ColonyPanel(props: ColonyPanelProps) {
   const { ship, onUnlockColony, onSelectPlanet, onRescrollPlanets, generateScoutingPool, onBuild, onRecruitPop, onAssignPop } = props;
@@ -43,9 +107,7 @@ export default function ColonyPanel(props: ColonyPanelProps) {
             onClick={() => { const r = onUnlockColony(); showMsg(r.message, r.success ? 'success' : 'error'); }}
             disabled={ship.gold < 30000}
             className={`px-6 py-2.5 rounded-lg font-bold text-sm transition-colors ${ship.gold >= 30000 ? 'bg-cyan-600 hover:bg-cyan-500 text-white' : 'bg-slate-700 text-slate-500 cursor-not-allowed'}`}
-          >
-            {ship.gold >= 30000 ? '组建远征军 (30,000金币)' : '金币不足 (30,000)'}
-          </button>
+          >{ship.gold >= 30000 ? '组建远征军 (30,000金币)' : '金币不足 (30,000)'}</button>
         </div>
         {message && <div className={`p-3 rounded-lg text-sm text-center ${msgType === 'success' ? 'bg-green-900/20 border border-green-700/50 text-green-400' : 'bg-red-900/20 border border-red-700/50 text-red-400'}`}>{message}</div>}
       </div>
@@ -61,7 +123,6 @@ export default function ColonyPanel(props: ColonyPanelProps) {
           <Play size={48} className="mx-auto mb-3 text-cyan-400" />
           <p className="text-cyan-400 font-bold text-lg mb-2">远征军航行中</p>
           <p className="text-slate-300 text-sm">预计 {colony.scoutTurnsRemaining} 回合后抵达目标星系</p>
-          <p className="text-slate-500 text-xs mt-2">届时将提供 3 颗候选星球供选择。</p>
         </div>
       </div>
     );
@@ -69,11 +130,7 @@ export default function ColonyPanel(props: ColonyPanelProps) {
 
   // ===== 选择星球 =====
   if (colony.phase === 'selecting') {
-    if (!scoutPool) {
-      const pool = generateScoutingPool();
-      setScoutPool(pool);
-      return null;
-    }
+    if (!scoutPool) { const pool = generateScoutingPool(); setScoutPool(pool); return null; }
     return (
       <div className="space-y-4">
         <h2 className="text-xl font-bold text-white">选择殖民星球</h2>
@@ -82,25 +139,28 @@ export default function ColonyPanel(props: ColonyPanelProps) {
           {scoutPool.map((pid) => {
             const p = getPlanetById(pid);
             if (!p) return null;
+            const buffs = getBuffList(p);
             return (
-              <div key={pid} className="bg-slate-900/60 border border-slate-700 rounded-xl p-4">
+              <div key={pid} className="bg-slate-900/60 border border-slate-700 rounded-xl overflow-hidden">
+                <div className="h-28 bg-slate-800 overflow-hidden">
+                  <img src={`/planets/${pid}.png`} alt={p.name} className="w-full h-full object-cover" />
+                </div>
+                <div className="p-4">
                 <h4 className="font-bold text-slate-100 mb-2">{p.name}</h4>
                 <p className="text-xs text-slate-400 mb-3">{p.description}</p>
-                <div className="text-[10px] text-slate-500 space-y-1 mb-4">
-                  {p.buffs.foodMult && <p>食物产量 ×{p.buffs.foodMult}</p>}
-                  {p.buffs.alloyMult && <p>合金产量 ×{p.buffs.alloyMult}</p>}
-                  {p.buffs.stardustMult && <p>星尘产量 ×{p.buffs.stardustMult}</p>}
-                  {p.buffs.buildCostMult && <p>建造成本 ×{p.buffs.buildCostMult}</p>}
-                  {p.buffs.initialPopCap && <p>初始人口上限 {p.buffs.initialPopCap}</p>}
-                  {p.buffs.specialEffects?.map((e, i) => <p key={i}>{e}</p>)}
+                <div className="space-y-1 mb-4">
+                  {buffs.map((bf, i) => (
+                    <p key={i} className="text-[10px]">
+                      <span className={bf.color + ' font-bold'}>{bf.name}</span>
+                      <span className="text-slate-500 ml-1">{bf.desc}</span>
+                    </p>
+                  ))}
                 </div>
                 <button onClick={() => {
                   if (!planetName) { showMsg('请先输入星球名称', 'error'); return; }
-                  const r = onSelectPlanet(pid, planetName);
-                  showMsg(r.message, r.success ? 'success' : 'error');
-                }} className="w-full py-2 bg-cyan-700 hover:bg-cyan-600 rounded-lg text-sm font-bold text-white">
-                  殖民此星球
-                </button>
+                  const r = onSelectPlanet(pid, planetName); showMsg(r.message, r.success ? 'success' : 'error');
+                }} className="w-full py-2 bg-cyan-700 hover:bg-cyan-600 rounded-lg text-sm font-bold text-white">殖民此星球</button>
+                </div>
               </div>
             );
           })}
@@ -110,9 +170,7 @@ export default function ColonyPanel(props: ColonyPanelProps) {
             className="flex-1 bg-slate-800 border border-slate-600 rounded-lg px-3 py-2 text-sm text-slate-200" />
           <button onClick={() => { const r = onRescrollPlanets(); showMsg(r.message, r.success ? 'success' : 'error'); setScoutPool(null); }}
             disabled={ship.gold < 30000}
-            className="px-4 py-2 bg-slate-700 hover:bg-slate-600 disabled:opacity-50 rounded-lg text-sm text-slate-200">
-            重新探索 (30,000G)
-          </button>
+            className="px-4 py-2 bg-slate-700 hover:bg-slate-600 disabled:opacity-50 rounded-lg text-sm text-slate-200">重新探索 (30,000G)</button>
         </div>
         {message && <div className={`p-3 rounded-lg text-sm text-center ${msgType === 'success' ? 'bg-green-900/20 border border-green-700/50 text-green-400' : 'bg-red-900/20 border border-red-700/50 text-red-400'}`}>{message}</div>}
       </div>
@@ -121,8 +179,22 @@ export default function ColonyPanel(props: ColonyPanelProps) {
 
   // ===== 殖民运行中 =====
   const planet = colony.planetType ? getPlanetById(colony.planetType) : null;
+  const planetBuffs = planet ? getBuffList(planet) : [];
   const liveBuildings = colony.buildings.filter((b) => b.active);
   const pendingBuildings = colony.buildings.filter((b) => !b.active);
+
+  // 合并同类已建成建筑
+  const groupedLive = useMemo(() => {
+    const map = new Map<string, { defId: string; count: number; uids: string[]; totalPop: number }>();
+    for (const inst of liveBuildings) {
+      const entry = map.get(inst.defId) || { defId: inst.defId, count: 0, uids: [], totalPop: 0 };
+      entry.count += 1;
+      entry.uids.push(inst.uid);
+      entry.totalPop += inst.assignedPop;
+      map.set(inst.defId, entry);
+    }
+    return Array.from(map.values());
+  }, [liveBuildings]);
 
   const tabs: { id: ColonyTab; label: string; icon: React.ElementType }[] = [
     { id: 'overview', label: '总览', icon: Home },
@@ -138,12 +210,9 @@ export default function ColonyPanel(props: ColonyPanelProps) {
       <div className="flex gap-1.5 mb-3">
         {tabs.map((t) => {
           const Icon = t.icon;
-          return (
-            <button key={t.id} onClick={() => setTab(t.id)}
-              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 ${tab === t.id ? 'bg-cyan-600 text-white' : 'bg-slate-800/60 text-slate-400 hover:bg-slate-700'}`}>
-              <Icon size={14} />{t.label}
-            </button>
-          );
+          return (<button key={t.id} onClick={() => setTab(t.id)}
+            className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 ${tab === t.id ? 'bg-cyan-600 text-white' : 'bg-slate-800/60 text-slate-400 hover:bg-slate-700'}`}>
+            <Icon size={14} />{t.label}</button>);
         })}
       </div>
 
@@ -155,24 +224,29 @@ export default function ColonyPanel(props: ColonyPanelProps) {
           {planet && (
             <div className="bg-slate-900/60 border border-slate-700 rounded-xl p-4">
               <h4 className="font-bold text-slate-200 mb-1">{planet.name}</h4>
-              <p className="text-xs text-slate-400">{planet.description}</p>
-              <div className="mt-2 flex flex-wrap gap-2 text-[10px]">
-                {planet.buffs.foodMult && <span className="bg-green-900/30 text-green-400 px-1.5 py-0.5 rounded">食物 ×{planet.buffs.foodMult}</span>}
-                {planet.buffs.alloyMult && <span className="bg-slate-700/50 text-slate-300 px-1.5 py-0.5 rounded">合金 ×{planet.buffs.alloyMult}</span>}
-                {planet.buffs.buildCostMult && <span className="bg-amber-900/30 text-amber-400 px-1.5 py-0.5 rounded">造价 ×{planet.buffs.buildCostMult}</span>}
-                {planet.buffs.foodConsumptionDelta && <span className="bg-red-900/30 text-red-400 px-1.5 py-0.5 rounded">食物消耗 +{planet.buffs.foodConsumptionDelta}</span>}
-                {planet.buffs.specialEffects?.map((e, i) => <span key={i} className="bg-purple-900/30 text-purple-400 px-1.5 py-0.5 rounded">{e}</span>)}
+              <p className="text-xs text-slate-400 mb-3">{planet.description}</p>
+              <div className="space-y-1">
+                {planetBuffs.map((bf, i) => (
+                  <p key={i} className="text-xs">
+                    <span className={bf.color + ' font-bold'}>{bf.name}</span>
+                    <span className="text-slate-400 ml-2">{bf.desc}</span>
+                  </p>
+                ))}
               </div>
             </div>
           )}
-          <div className="grid grid-cols-2 gap-3">
-            <div className="bg-slate-900/60 border border-slate-700 rounded-xl p-3">
-              <p className="text-xs text-slate-500">已建成建筑</p>
+          <div className="grid grid-cols-3 gap-3">
+            <div className="bg-slate-900/60 border border-slate-700 rounded-xl p-3 text-center">
+              <p className="text-[10px] text-slate-500">已建成</p>
               <p className="text-lg font-bold text-cyan-400">{liveBuildings.length}</p>
             </div>
-            <div className="bg-slate-900/60 border border-slate-700 rounded-xl p-3">
-              <p className="text-xs text-slate-500">建造中</p>
+            <div className="bg-slate-900/60 border border-slate-700 rounded-xl p-3 text-center">
+              <p className="text-[10px] text-slate-500">建造中</p>
               <p className="text-lg font-bold text-yellow-400">{pendingBuildings.length}</p>
+            </div>
+            <div className="bg-slate-900/60 border border-slate-700 rounded-xl p-3 text-center">
+              <p className="text-[10px] text-slate-500">人口上限</p>
+              <p className="text-lg font-bold text-purple-400">{colony.population.cap}</p>
             </div>
           </div>
         </div>
@@ -181,6 +255,36 @@ export default function ColonyPanel(props: ColonyPanelProps) {
       {/* ===== 建筑 ===== */}
       {tab === 'buildings' && (
         <div className="space-y-3">
+          {/* 已建成（合并同类） */}
+          <div>
+            <h4 className="text-sm font-bold text-green-400 mb-2">已建成</h4>
+            {groupedLive.length === 0 && <p className="text-slate-500 text-sm">暂无已建成建筑</p>}
+            {groupedLive.map((g) => {
+              const def = getBuildingDef(g.defId);
+              // B7 不在 Phase 1 定义中，跳过
+              if (!def) {
+                return (
+                  <div key={g.defId} className="bg-slate-900/60 border border-purple-700/40 rounded-lg p-3 mb-2">
+                    <span className="text-sm text-purple-300 font-bold">纳米铸造阵列 (B7)</span>
+                    <span className="text-xs text-slate-500 ml-2">×{g.count} | 此阶段暂未实现功能</span>
+                  </div>
+                );
+              }
+              const maxLabel = def.maxPop > 0 ? ` | 入驻人口: ${g.totalPop} | 产出: ${getOutputDesc(def)}` : ` | ${getOutputDesc(def)}`;
+              return (
+                <div key={g.defId} className="bg-slate-900/60 border border-green-700/40 rounded-lg p-3 mb-2">
+                  <div className="flex justify-between items-center">
+                    <div>
+                      <span className="text-sm text-green-300 font-bold">{def.name}</span>
+                      {g.count > 1 && <span className="text-xs text-slate-500 ml-1">×{g.count}</span>}
+                      <span className="text-xs text-slate-500 ml-2">{maxLabel}</span>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+
           {/* 建造中 */}
           {pendingBuildings.length > 0 && (
             <div>
@@ -190,38 +294,13 @@ export default function ColonyPanel(props: ColonyPanelProps) {
                 if (!def) return null;
                 return (
                   <div key={inst.uid} className="bg-slate-900/60 border border-yellow-700/40 rounded-lg p-3 mb-2 flex justify-between items-center">
-                    <div>
-                      <span className="text-sm text-yellow-300 font-bold">{def.name}</span>
-                      <span className="text-xs text-slate-500 ml-2">{def.description}</span>
-                    </div>
+                    <div><span className="text-sm text-yellow-300 font-bold">{def.name}</span></div>
                     <span className="text-xs text-yellow-400">{inst.buildProgress}/{def.buildTurns} 回合</span>
                   </div>
                 );
               })}
             </div>
           )}
-
-          {/* 已建成 */}
-          <div>
-            <h4 className="text-sm font-bold text-green-400 mb-2">已建成</h4>
-            {liveBuildings.length === 0 && <p className="text-slate-500 text-sm">暂无已建成建筑</p>}
-            {liveBuildings.map((inst) => {
-              const def = getBuildingDef(inst.defId);
-              if (!def) return null;
-              const maxLabel = inst.defId === 'B1' ? '' : ` | 人口: ${inst.assignedPop}/${def.maxPop}`;
-              return (
-                <div key={inst.uid} className="bg-slate-900/60 border border-green-700/40 rounded-lg p-3 mb-2">
-                  <div className="flex justify-between items-center">
-                    <div>
-                      <span className="text-sm text-green-300 font-bold">{def.name}</span>
-                      <span className="text-xs text-slate-500 ml-2">{def.description}{maxLabel}</span>
-                    </div>
-                    <span className="text-[10px] text-slate-500">#{inst.defId}</span>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
 
           {/* 可建造列表 */}
           <div>
@@ -230,22 +309,39 @@ export default function ColonyPanel(props: ColonyPanelProps) {
               const count = colony.buildings.filter((b) => b.defId === def.id).length;
               const limited = !!(def.maxCount && count >= def.maxCount);
               return (
-                <div key={def.id} className={`bg-slate-900/60 border rounded-lg p-3 mb-2 flex justify-between items-center ${limited ? 'opacity-50 border-slate-800' : 'border-slate-700'}`}>
-                  <div>
-                    <span className="text-sm text-slate-200 font-bold">{def.name}</span>
-                    <span className="text-xs text-slate-500 ml-2">{def.description}</span>
-                    <div className="text-[10px] text-slate-500 mt-1">
-                      金币: {def.costGold.toLocaleString()}
-                      {def.costMaterials && Object.entries(def.costMaterials).map(([k, v]) => <span key={k} className="ml-1">| {k}: {v}</span>)}
-                      <span className="ml-1">| {def.buildTurns}回合</span>
-                      {def.maxCount && <span className="ml-1">| 上限: {def.maxCount}</span>}
+                <div key={def.id} className={`bg-slate-900/60 border rounded-lg p-3 mb-2 ${limited ? 'opacity-50 border-slate-800' : 'border-slate-700'}`}>
+                  <div className="flex justify-between items-start mb-2">
+                    <div>
+                      <span className="text-sm text-slate-200 font-bold">{def.name}</span>
+                      <span className="text-[10px] text-cyan-400 ml-2">{getOutputDesc(def)}</span>
                     </div>
+                    <button onClick={() => { const r = onBuild(def.id); showMsg(r.message, r.success ? 'success' : 'error'); }}
+                      disabled={limited}
+                      className="px-3 py-1.5 bg-cyan-700 hover:bg-cyan-600 disabled:bg-slate-700 disabled:text-slate-500 rounded text-xs font-bold text-white">
+                      {limited ? '已达上限' : '建造'}
+                    </button>
                   </div>
-                  <button onClick={() => { const r = onBuild(def.id); showMsg(r.message, r.success ? 'success' : 'error'); }}
-                    disabled={limited}
-                    className="px-3 py-1.5 bg-cyan-700 hover:bg-cyan-600 disabled:bg-slate-700 disabled:text-slate-500 rounded text-xs font-bold text-white">
-                    {limited ? '已达上限' : '建造'}
-                  </button>
+                  <p className="text-[10px] text-slate-500 mb-1">{def.description}</p>
+                  <div className="flex flex-wrap gap-x-3 gap-y-0.5 text-[10px]">
+                    {/* 金币成本 */}
+                    <span className={ship.gold >= def.costGold ? 'text-yellow-400' : 'text-red-400'}>
+                      金币 {def.costGold.toLocaleString()}{!ship.gold || ship.gold < def.costGold ? ' (不足)' : ''}
+                    </span>
+                    {/* 原料成本 */}
+                    {def.costMaterials && Object.entries(def.costMaterials).map(([matId, amt]) => {
+                      const have = ship.materials[matId] || 0;
+                      const enough = have >= amt;
+                      return (
+                        <span key={matId} className={enough ? 'text-slate-400' : 'text-red-400'}>
+                          {matLabel(matId)} {have}/{amt}{!enough ? ' (不足)' : ''}
+                        </span>
+                      );
+                    })}
+                    <span className="text-slate-600">| {def.buildTurns}回合</span>
+                    {def.maxCount && <span className="text-slate-600">| 上限{def.maxCount} (已建{count})</span>}
+                    {!def.maxCount && <span className="text-slate-600">| 已建{count}座</span>}
+                    {def.minPop > 0 && <span className="text-slate-600">| 需要{def.minPop}-{def.maxPop}人入驻</span>}
+                  </div>
                 </div>
               );
             })}
@@ -257,8 +353,8 @@ export default function ColonyPanel(props: ColonyPanelProps) {
       {tab === 'population' && (
         <div className="space-y-4">
           <div className="bg-slate-900/60 border border-slate-700 rounded-xl p-4">
-            <h4 className="font-bold text-slate-200 mb-3">招募人口</h4>
-            <p className="text-xs text-slate-400 mb-2">每人口花费 2,000 金币，每回合最多 5 人，当前上限 {colony.population.cap}</p>
+            <h4 className="font-bold text-slate-200 mb-3 flex items-center gap-2"><UserPlus size={16} className="text-green-400" />招募人口</h4>
+            <p className="text-xs text-slate-400 mb-2">每人口花费 {(planet?.buffs.recruitCostDelta ? 2000 + planet.buffs.recruitCostDelta : 2000).toLocaleString()} 金币，每回合最多 5 人，当前上限 {colony.population.cap}</p>
             <div className="flex gap-2">
               <input type="number" min={1} max={5} value={recruitQty}
                 onChange={(e) => setRecruitQty(Math.min(5, Math.max(1, parseInt(e.target.value) || 1)))}
@@ -266,7 +362,7 @@ export default function ColonyPanel(props: ColonyPanelProps) {
               <button onClick={() => { const r = onRecruitPop(recruitQty); showMsg(r.message, r.success ? 'success' : 'error'); }}
                 disabled={ship.gold < 2000 * recruitQty || colony.population.total >= colony.population.cap}
                 className="px-4 py-1.5 bg-green-700 hover:bg-green-600 disabled:bg-slate-700 disabled:text-slate-500 rounded text-sm font-bold text-white">
-                招募 ({2000 * recruitQty}G)
+                招募 ({(2000 * recruitQty).toLocaleString()}G)
               </button>
             </div>
           </div>
@@ -274,26 +370,36 @@ export default function ColonyPanel(props: ColonyPanelProps) {
           {/* 人口分配 */}
           <div className="bg-slate-900/60 border border-slate-700 rounded-xl p-4">
             <h4 className="font-bold text-slate-200 mb-3">分配人口到建筑</h4>
-            <p className="text-xs text-slate-400 mb-2">空闲人口: {colony.population.available}</p>
+            <p className="text-xs text-slate-400 mb-2">空闲人口: <span className="text-cyan-400 font-bold">{colony.population.available}</span></p>
             {liveBuildings.filter((b) => {
               const def = getBuildingDef(b.defId);
               return def && def.maxPop > 0;
             }).map((inst) => {
-              const def = getBuildingDef(inst.defId);
+              const def = getBuildingDef(b.defId);
               if (!def) return null;
+              const isFixed = def.minPop === def.maxPop;
               return (
                 <div key={inst.uid} className="flex items-center justify-between bg-slate-800/60 rounded-lg p-3 mb-2">
                   <div>
                     <span className="text-sm text-slate-200">{def.name}</span>
                     <span className="text-xs text-slate-500 ml-2">({def.minPop}-{def.maxPop}人)</span>
+                    <span className="text-[10px] text-cyan-400 ml-2">{getOutputDesc(def)}</span>
                   </div>
-                  <div className="flex items-center gap-1">
-                    <button onClick={() => { const r = onAssignPop(inst.uid, Math.max(def.minPop, inst.assignedPop - 1)); showMsg(r.message, r.success ? 'success' : 'error'); }}
-                      className="w-7 h-7 rounded bg-slate-700 hover:bg-slate-600 flex items-center justify-center"><Minus size={12} className="text-slate-300" /></button>
-                    <span className="w-8 text-center text-sm text-cyan-400 font-bold">{inst.assignedPop}</span>
-                    <button onClick={() => { const r = onAssignPop(inst.uid, Math.min(def.maxPop, inst.assignedPop + 1)); showMsg(r.message, r.success ? 'success' : 'error'); }}
-                      className="w-7 h-7 rounded bg-slate-700 hover:bg-slate-600 flex items-center justify-center"><Plus size={12} className="text-slate-300" /></button>
-                  </div>
+                  {isFixed ? (
+                    <button onClick={() => { const r = onAssignPop(inst.uid, def.maxPop); showMsg(r.message, r.success ? 'success' : 'error'); }}
+                      disabled={inst.assignedPop >= def.maxPop}
+                      className={`px-3 py-1.5 rounded text-xs font-bold transition-colors ${inst.assignedPop >= def.maxPop ? 'bg-green-700 text-green-300' : 'bg-cyan-700 hover:bg-cyan-600 text-white'}`}>
+                      {inst.assignedPop >= def.maxPop ? `已满 (${def.maxPop}人)` : `入驻 ${def.maxPop}人`}
+                    </button>
+                  ) : (
+                    <div className="flex items-center gap-1">
+                      <button onClick={() => { const r = onAssignPop(inst.uid, Math.max(def.minPop, inst.assignedPop - 1)); showMsg(r.message, r.success ? 'success' : 'error'); }}
+                        className="w-7 h-7 rounded bg-slate-700 hover:bg-slate-600 flex items-center justify-center"><Minus size={12} className="text-slate-300" /></button>
+                      <span className="w-8 text-center text-sm text-cyan-400 font-bold">{inst.assignedPop}</span>
+                      <button onClick={() => { const r = onAssignPop(inst.uid, Math.min(def.maxPop, inst.assignedPop + 1)); showMsg(r.message, r.success ? 'success' : 'error'); }}
+                        className="w-7 h-7 rounded bg-slate-700 hover:bg-slate-600 flex items-center justify-center"><Plus size={12} className="text-slate-300" /></button>
+                    </div>
+                  )}
                 </div>
               );
             })}
