@@ -316,6 +316,7 @@ export function useColony(
     const ld = getLeaderDef(leaderId);
     if (!ld) return { success: false, message: '领袖不存在' };
     const col = gameState.ships[0].colony;
+    console.log('recruitLeader: col active?', col?.phase, 'leaderCap', col?.leaderCap, 'leaders count', col?.leaders?.length);
     if (!col || col.phase !== 'active') return { success: false, message: '殖民地未激活' };
     const hasB27 = col.buildings.some((b) => b.active && b.defId === 'B27');
     if (!hasB27) return { success: false, message: '需建造星河议政厅(B27)' };

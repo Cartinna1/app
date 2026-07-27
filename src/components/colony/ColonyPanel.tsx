@@ -610,7 +610,7 @@ export default function ColonyPanel(props: ColonyPanelProps) {
                 <h4 className="font-bold text-slate-200 mb-2">招募领袖 (10星尘/次)</h4>
                 <p className="text-sm text-slate-400 mb-3">当前: {colony.leaders.length}/{colony.leaderCap}</p>
                 {!colony.recruitPool ? (
-                  <button onClick={() => { onRollAndRecruit(); }}
+                  <button onClick={() => { console.log('开始招募 clicked'); onRollAndRecruit(); }}
                     disabled={ship.stardust < 10 || colony.leaders.length >= colony.leaderCap}
                     className="px-4 py-2 bg-purple-700 hover:bg-purple-600 disabled:bg-slate-700 rounded-lg text-sm font-bold text-white">
                     {colony.leaders.length >= colony.leaderCap ? '已满' : '开始招募'}
@@ -642,7 +642,7 @@ export default function ColonyPanel(props: ColonyPanelProps) {
                             {skillDesc && <span className="text-sm text-slate-500 ml-2">- {skillDesc}</span>}
                             <p className="text-sm text-slate-400 mt-1">{ld.description}</p>
                           </div>
-                          <button onClick={() => {const r=onRecruitLeader(ld.id);showMsg(r.message,r.success?'success':'error');if(r.success)onClearRecruitPool();}}
+                          <button onClick={() => {console.log('recruit clicked',ld.id);const r=onRecruitLeader(ld.id);console.log('recruit result',r);showMsg(r.message,r.success?'success':'error');if(r.success)onClearRecruitPool();}}
                             className="px-3 py-1.5 bg-purple-700 hover:bg-purple-600 rounded text-sm font-bold flex-shrink-0">招募</button>
                         </div>
                       );
