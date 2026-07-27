@@ -94,7 +94,7 @@ interface ColonyPanelProps {
   onRecruitPop: (amount: number) => { success: boolean; message: string };
   onAssignPop: (buildingUid: string, count: number) => { success: boolean; message: string };
   onStartResearch: (techId: string) => { success: boolean; message: string };
-  onRecruitLeader: (leaderId: string) => { success: boolean; message: string };
+  onRecruitLeader: (leaderId: string) => void;
   onUpgradeLeader: (leaderIndex: number) => { success: boolean; message: string };
   onRollAndRecruit: () => void;
   onClearRecruitPool: () => void;
@@ -642,7 +642,7 @@ export default function ColonyPanel(props: ColonyPanelProps) {
                             {skillDesc && <span className="text-sm text-slate-500 ml-2">- {skillDesc}</span>}
                             <p className="text-sm text-slate-400 mt-1">{ld.description}</p>
                           </div>
-                          <button onClick={() => {console.log('recruit clicked',ld.id);const r=onRecruitLeader(ld.id);console.log('recruit result',r);showMsg(r.message,r.success?'success':'error');if(r.success)onClearRecruitPool();}}
+                          <button onClick={() => { onRecruitLeader(ld.id); showMsg('招募成功！', 'success'); }}
                             className="px-3 py-1.5 bg-purple-700 hover:bg-purple-600 rounded text-sm font-bold flex-shrink-0">招募</button>
                         </div>
                       );

@@ -311,27 +311,26 @@ export function useColony(
     return result;
   }, [dispatch]);
 
-  /** 招募领袖 */
-  const recruitLeader = useCallback((leaderId: string): { success: boolean; message: string } => {
-    const ld = getLeaderDef(leaderId);
-    if (!ld) return { success: false, message: '领袖不存在' };
-    const col = gameState.ships[0].colony;
-    console.log('recruitLeader: col active?', col?.phase, 'leaderCap', col?.leaderCap, 'leaders count', col?.leaders?.length);
-    if (!col || col.phase !== 'active') return { success: false, message: '殖民地未激活' };
-    const hasB27 = col.buildings.some((b) => b.active && b.defId === 'B27');
-    if (!hasB27) return { success: false, message: '需建造星河议政厅(B27)' };
-    if (col.leaders.some((l) => l.id === leaderId)) return { success: false, message: '该领袖已招募' };
-    if (col.leaders.length >= col.leaderCap) return { success: false, message: '领袖数量已达上限' };
+  /** 招募领袖（添加+清池合一） */
+  const recruitLeader = useCallback((leaderId: string) => {
     dispatch({
       type: 'FUNCTIONAL_UPDATE',
       updater: (prev) => {
         const ships = [...prev.ships]; const s = { ...ships[0] };
-        s.colony!.leaders = [...s.colony!.leaders, { id: ld.id, name: ld.name, rarity: ld.rarity, description: ld.description, abilityName: ld.abilityName, level: 1 }];
+        if (!s.colony || s.colony.phase !== 'active') return prev;
+        const ld = getLeaderDef(leaderId);
+        if (!ld) return prev;
+        if (s.colony.leaders.some(l => l.id === leaderId)) return prev;
+        if (s.colony.leaders.length >= s.colony.leaderCap) return prev;
+        s.colony = {
+          ...s.colony,
+          leaders: [...s.colony.leaders, { id: ld.id, name: ld.name, rarity: ld.rarity, description: ld.description, abilityName: ld.abilityName, level: 1 }],
+          recruitPool: undefined,
+        };
         ships[0] = s; return { ...prev, ships };
       },
     });
-    return { success: true, message: `招募「${ld.name}」(${ld.rarity})` };
-  }, [dispatch, gameState]);
+  }, [dispatch]);
 
   /** 领袖升级 */
   const upgradeLeader = useCallback((leaderIndex: number): { success: boolean; message: string } => {

@@ -75,7 +75,7 @@ interface GameScreenProps {
   onRecruitPop: (amount: number) => { success: boolean; message: string };
   onAssignPop: (buildingUid: string, count: number) => { success: boolean; message: string };
   onStartResearch: (techId: string) => { success: boolean; message: string };
-  onRecruitLeader: (leaderId: string) => { success: boolean; message: string };
+  onRecruitLeader: (leaderId: string) => void;
   onUpgradeLeader: (leaderIndex: number) => { success: boolean; message: string };
   onRollAndRecruit: () => void;
   onClearRecruitPool: () => void;
