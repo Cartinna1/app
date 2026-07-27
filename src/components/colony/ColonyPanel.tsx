@@ -114,6 +114,7 @@ export default function ColonyPanel(props: ColonyPanelProps) {
   const [scoutPool, setScoutPool] = useState<PlanetTypeId[] | null>(null);
   const [buildCatFilter, setBuildCatFilter] = useState<string>('all');
   const [popCatFilter, setPopCatFilter] = useState<string>('all');
+  const [liveBuildFilter, setLiveBuildFilter] = useState<string>('housing'); // 已建成建筑筛选：默认显示居住
 
   const showMsg = (m: string, t: 'success' | 'error') => { setMessage(m); setMsgType(t); setTimeout(() => setMessage(''), 4000); };
 
@@ -427,7 +428,22 @@ export default function ColonyPanel(props: ColonyPanelProps) {
           <div>
             <h4 className="text-sm font-bold text-green-400 mb-2">已建成</h4>
             {liveBuildings.length === 0 && <p className="text-slate-500 text-sm">暂无已建成建筑</p>}
-            {liveBuildings.map((inst: any) => {
+            {/* 类型筛选标签（可点击） */}
+            {liveBuildings.length > 0 && (
+              <div className="flex flex-wrap gap-1 mb-3">
+                {['housing','food','alloy','stardust','trade','material','functional'].map((cat) => (
+                  <button key={cat} onClick={() => setLiveBuildFilter(cat)}
+                    className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-colors ${liveBuildFilter === cat ? 'bg-green-600 text-white' : 'bg-slate-700/80 text-slate-400 hover:bg-slate-600'}`}>
+                    {CAT_LABELS[cat] || cat}
+                    <span className="ml-1 opacity-60">({liveBuildings.filter((b:any) => { const d=getBuildingDef(b.defId); return d?.category === cat; }).length})</span>
+                  </button>
+                ))}
+              </div>
+            )}
+            {liveBuildings.filter((b:any) => { const d=getBuildingDef(b.defId); return d?.category === liveBuildFilter; }).length === 0 && liveBuildings.length > 0 && (
+              <p className="text-slate-500 text-sm mb-2">暂无「{CAT_LABELS[liveBuildFilter] || liveBuildFilter}」类型建筑</p>
+            )}
+            {liveBuildings.filter((b:any) => { const d=getBuildingDef(b.defId); return d?.category === liveBuildFilter; }).map((inst: any) => {
               const def = getBuildingDef(inst.defId);
               if (!def) return (
                 <div key={inst.uid} className="bg-slate-900/60 border border-purple-700/40 rounded-lg p-3 mb-2 flex justify-between items-center">
@@ -436,10 +452,7 @@ export default function ColonyPanel(props: ColonyPanelProps) {
                 </div>
               );
               const maxLabel = def.maxPop > 0 ? `入驻 ${inst.assignedPop}/${def.maxPop}` : `入驻 ${inst.assignedPop}`;
-              // 类型标签颜色
-              const tc: Record<string,string> = { housing:'bg-blue-700', food:'bg-green-700', alloy:'bg-slate-600', stardust:'bg-purple-700', trade:'bg-amber-700', material:'bg-orange-700', functional:'bg-cyan-700' };
-              const tl: Record<string,string> = { housing:'居住', food:'食物', alloy:'合金', stardust:'星尘', trade:'贸易', material:'原料', functional:'功能' };
-              const catTag = (def.category && tl[def.category]) ? <span className={`text-xs ${tc[def.category]||'bg-slate-600'} text-white px-1.5 py-0.5 rounded mr-1`}>{tl[def.category]}</span> : null;
+              const catTag = <span className={`text-xs ${CAT_COLORS[def.category] || 'bg-slate-600 text-white'} px-1.5 py-0.5 rounded mr-1`}>{CAT_LABELS[def.category] || def.category}</span>;
               // 计算该建筑实际产出（用有效人口）
               let liveOut = '';
               if (inst.assignedPop > 0 && def.outputType) {
