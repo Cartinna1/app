@@ -313,9 +313,9 @@ export default function ColonyPanel(props: ColonyPanelProps) {
             const matLines: { k: string; v: number; detail: string }[] = [];
             const MAT_CN: Record<string, string> = { oil:'石油', gold_ore:'金矿', carbon:'碳块', dark_matter:'暗物质', quantum:'量子簇', silicon:'硅片' };
             for (const inst of liveBuildings) {
-              if (inst.assignedPop <= 0) continue;
               const d = getBuildingDef(inst.defId);
               if (!d) continue;
+              if (inst.assignedPop < d.minPop) continue;
               // 有效人口（含领袖槽位扩展）
               let efm = d.maxPop;
               for (const l of colony.leaders || []) {
@@ -451,11 +451,11 @@ export default function ColonyPanel(props: ColonyPanelProps) {
                   <button onClick={() => onDemolishBuilding(inst.uid)} className="px-2 py-1 bg-red-700 hover:bg-red-600 rounded text-xs font-bold">拆除</button>
                 </div>
               );
-              const maxLabel = def.maxPop > 0 ? `入驻 ${inst.assignedPop}/${def.maxPop}` : `入驻 ${inst.assignedPop}`;
+              const maxLabel = def.maxPop > 0 ? `入驻 ${inst.assignedPop}/${def.maxPop}${def.minPop > 0 ? ` (最小${def.minPop}人)` : ''}` : `入驻 ${inst.assignedPop}`;
               const catTag = <span className={`text-xs ${CAT_COLORS[def.category] || 'bg-slate-600 text-white'} px-1.5 py-0.5 rounded mr-1`}>{CAT_LABELS[def.category] || def.category}</span>;
               // 计算该建筑实际产出（用有效人口）
               let liveOut = '';
-              if (inst.assignedPop > 0 && def.outputType) {
+              if (inst.assignedPop >= def.minPop && def.outputType) {
                 let efm = def.maxPop;
                 for (const l of colony.leaders || []) {
                   const ex = getLeaderDef(l.id)?.levelExtras[l.level-1];
@@ -485,7 +485,10 @@ export default function ColonyPanel(props: ColonyPanelProps) {
                     <span className="text-sm text-green-300 font-bold">{def.name}</span>
                     <span className="text-sm text-slate-500 ml-2">{maxLabel}</span>
                     {liveOut && <span className="text-sm text-cyan-400 ml-2">{liveOut}</span>}
-                    {!liveOut && <span className="text-sm text-slate-600 ml-2">{getOutputDesc(def)}</span>}
+                    {!liveOut && def.minPop > 0 && inst.assignedPop > 0 && inst.assignedPop < def.minPop && (
+                      <span className="text-sm text-red-400 ml-2">⚠ 人口不足（需≥{def.minPop}人）</span>
+                    )}
+                    {!liveOut && !(def.minPop > 0 && inst.assignedPop > 0 && inst.assignedPop < def.minPop) && <span className="text-sm text-slate-600 ml-2">{getOutputDesc(def)}</span>}
                   </div>
                   <button onClick={() => { onDemolishBuilding(inst.uid); showMsg(`已拆除「${def.name}」`, 'success'); }}
                     className="px-2 py-1 bg-red-700 hover:bg-red-600 rounded text-xs font-bold flex-shrink-0 ml-3">拆除</button>
@@ -640,12 +643,13 @@ export default function ColonyPanel(props: ColonyPanelProps) {
                   <div>
                     <span className={`text-sm ${CAT_COLORS[def.category] || 'text-slate-500'} px-1 py-0.5 rounded mr-1`}>{CAT_LABELS[def.category]}</span>
                     <span className="text-sm text-slate-200">{def.name}{num}</span>
-                    <span className="text-sm text-slate-500 ml-2">(0-{effMax}人{extended ? <span className="text-amber-400"> 领袖+{(effMax-def.maxPop)}</span> : ''})</span>
+                    <span className="text-sm text-slate-500 ml-2">({def.minPop > 0 ? `${def.minPop}-` : '0-'}{effMax}人{extended ? <span className="text-amber-400"> 领袖+{(effMax-def.maxPop)}</span> : ''})</span>
                   </div>
                   <div className="flex items-center gap-1">
                     <input type="number" min={0} max={effMax} value={inst.assignedPop}
                       onChange={(e) => {
-                        const v = Math.max(0, Math.min(effMax, parseInt(e.target.value) || 0));
+                        let v = Math.max(0, Math.min(effMax, parseInt(e.target.value) || 0));
+                        if (v > 0 && v < def.minPop) v = def.minPop;
                         onAssignPop(inst.uid, v);
                       }}
                       className="w-14 bg-slate-800 border border-slate-600 rounded px-2 py-1 text-sm text-cyan-400 text-center font-bold"

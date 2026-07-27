@@ -297,6 +297,11 @@ export function useColony(
           result = { success: false, message: `入驻人口需在0-${effMax}之间` };
           return prev;
         }
+        // 最小入驻人口约束：B9/B10/B11/B12/B26 等建筑必须满足 minPop
+        if (count > 0 && count < def.minPop) {
+          result = { success: false, message: `「${def.name}」最少需要${def.minPop}人才能运作（当前分配${count}人不足）` };
+          return prev;
+        }
         s.colony = {
           ...s.colony,
           population: {
@@ -512,7 +517,7 @@ export function processColonyTurn(ship: Mothership, _turn: number): void {
   let totalFood = 0, totalAlloy = 0, totalGold = 0, totalStardust = 0, totalRP = 0;
 
   for (const inst of colony.buildings) {
-    if (!inst.active || inst.assignedPop <= 0) continue;
+    if (!inst.active || inst.assignedPop < def.minPop) continue;
     const def = getBuildingDef(inst.defId);
     if (!def || !def.outputType) continue;
 
