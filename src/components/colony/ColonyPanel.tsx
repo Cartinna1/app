@@ -753,8 +753,14 @@ export default function ColonyPanel(props: ColonyPanelProps) {
                       if (ex1.populationCapBonus) skillDesc += ' | 人口上限+'+ex1.populationCapBonus;
                       if (ex1.leaderCapBonus) skillDesc += ' | 领袖上限+'+ex1.leaderCapBonus;
                       return (
-                        <div key={i} className="bg-slate-800/60 border border-slate-700 rounded-lg p-3 flex justify-between items-center">
-                          <div className="flex-1 mr-2">
+                        <div key={i} className="bg-slate-800/60 border border-slate-700 rounded-lg p-3 flex justify-between items-center gap-3">
+                          <img
+                            src={`/leaders/${ld.id}.png`}
+                            alt={ld.name}
+                            onError={(e) => { (e.target as HTMLImageElement).style.display='none'; }}
+                            className={`w-16 h-16 rounded-lg object-cover flex-shrink-0 border-2 ${ld.rarity==='SSR'?'border-amber-400 shadow-[0_0_10px_rgba(251,191,36,0.6)]':ld.rarity==='SR'?'border-purple-400':'border-blue-400'}`}
+                          />
+                          <div className="flex-1 mr-2 min-w-0">
                             <span className={`text-sm font-bold ${rc}`}>{ld.rarity}级</span>
                             <span className="text-sm text-slate-200 font-bold ml-2">{ld.name}</span>
                             <span className="text-sm text-amber-400 ml-2">· {ld.abilityName}</span>
@@ -799,7 +805,14 @@ export default function ColonyPanel(props: ColonyPanelProps) {
                     if (currExtras.leaderCapBonus) parts.push(`领袖上限+${currExtras.leaderCapBonus}`);
                     if (currExtras.buildCostReduction) parts.push(`造价-${currExtras.buildCostReduction}%`);
                     return (
-                    <div key={i} className="bg-slate-800/60 border border-slate-700 rounded-lg p-3 mb-2">
+                    <div key={i} className="bg-slate-800/60 border border-slate-700 rounded-lg p-3 mb-2 flex gap-3 items-start">
+                      <img
+                        src={`/leaders/${ld.id}.png`}
+                        alt={ld.name}
+                        onError={(e) => { (e.target as HTMLImageElement).style.display='none'; }}
+                        className={`w-16 h-16 rounded-lg object-cover flex-shrink-0 border-2 ${l.rarity==='SSR'?'border-amber-400 shadow-[0_0_10px_rgba(251,191,36,0.6)]':l.rarity==='SR'?'border-purple-400':'border-blue-400'}`}
+                      />
+                      <div className="flex-1 min-w-0">
                       <div className="flex justify-between items-start mb-1">
                         <div className="flex-1">
                           <span className={`text-sm font-bold ${l.rarity==='SSR'?'text-amber-400':l.rarity==='SR'?'text-purple-400':'text-blue-400'}`}>{l.rarity} Lv{l.level}</span>
@@ -819,6 +832,7 @@ export default function ColonyPanel(props: ColonyPanelProps) {
                         )}
                       </div>
                       <p className="text-sm text-slate-400">{ld.description}</p>
+                      </div>
                     </div>
                     );
                   })}
