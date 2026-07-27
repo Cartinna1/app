@@ -77,6 +77,7 @@ interface GameScreenProps {
   onStartResearch: (techId: string) => { success: boolean; message: string };
   onRecruitLeader: (leaderId: string) => { success: boolean; message: string };
   onUpgradeLeader: (leaderIndex: number) => { success: boolean; message: string };
+  onChargeLeaderRoll: () => { success: boolean; message: string };
   onBuyAlloy: (type: 'gold' | 'stardust', qty: number) => boolean;
   onBuyFood: (type: 'gold' | 'alloy', qty: number) => boolean;
   onBuyRelic: (relicId: string) => { success: boolean; message: string };
@@ -145,6 +146,7 @@ export default function GameScreen({
   onStartResearch,
   onRecruitLeader,
   onUpgradeLeader,
+  onChargeLeaderRoll,
   onBuyAlloy,
   onBuyFood,
   onBuyRelic,
@@ -414,6 +416,7 @@ export default function GameScreen({
               onStartResearch={onStartResearch}
               onRecruitLeader={onRecruitLeader}
               onUpgradeLeader={onUpgradeLeader}
+              onChargeLeaderRoll={onChargeLeaderRoll}
             />
           )}
           {activeTab === 'redeem' && (

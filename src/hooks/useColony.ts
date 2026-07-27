@@ -311,25 +311,9 @@ export function useColony(
   }, [dispatch]);
 
   /** 招募领袖 */
-  const recruitLeader = useCallback((leaderId: string): { success: boolean; message: string } => {
-    const ld = getLeaderDef(leaderId);
-    if (!ld) return { success: false, message: '领袖不存在' };
-    let result = { success: false, message: '' };
-    dispatch({
-      type: 'FUNCTIONAL_UPDATE',
-      updater: (prev) => {
-        const ships = [...prev.ships]; const s = { ...ships[0] };
-        if (!s.colony || s.colony.phase !== 'active') { result={success:false,message:'殖民地未激活'}; return prev; }
         const hasB27 = s.colony.buildings.some((b) => b.active && b.defId === 'B27');
         if (!hasB27) { result={success:false,message:'需建造星河议政厅(B27)'}; return prev; }
         if (s.colony!.leaders.length >= s.colony!.leaderCap) { result={success:false,message:'领袖数量已达上限'}; return prev; }
-        const planetDef = s.colony!.planetType ? ALL_PLANETS.find((p)=>p.id===s.colony!.planetType) : null;
-        const baseCost = 10;
-        const extraCost = planetDef?.buffs.leaderCostDelta || 0;
-        const leaderCostReduction = s.colony.leaders.reduce((sum, l) => { const d=getLeaderDef(l.id); return sum + ((d?.levelExtras?.[l.level-1]?.leaderCostReduction)||0); }, 0);
-        const cost = Math.max(1, baseCost + extraCost - leaderCostReduction);
-        if (s.stardust < cost) { result={success:false,message:`星尘不足(需要${cost})`}; return prev; }
-        s.stardust -= cost;
         s.colony.leaders = [...s.colony.leaders, { id: ld.id, name: ld.name, rarity: ld.rarity, description: ld.description, abilityName: ld.abilityName, level: 1 }];
         result = { success: true, message: `招募领袖「${ld.name}」(R=${ld.rarity})！` };
         ships[0] = s; return { ...prev, ships };
@@ -360,10 +344,26 @@ export function useColony(
     return result;
   }, [dispatch]);
 
+  /** 扣领袖招募费用 */
+  const chargeLeaderRoll = useCallback((): { success: boolean; message: string } => {
+    let result = { success: false, message: '' };
+    dispatch({
+      type: 'FUNCTIONAL_UPDATE',
+      updater: (prev) => {
+        const ships = [...prev.ships]; const s = { ...ships[0] };
+        if (s.stardust < 10) { result = { success: false, message: '星尘不足' }; return prev; }
+        s.stardust -= 10;
+        result = { success: true, message: '扣10星尘' };
+        ships[0] = s; return { ...prev, ships };
+      },
+    });
+    return result;
+  }, [dispatch]);
+
   return {
     unlockColony, selectPlanet, rescrollPlanets, generateScoutingPool,
     buildColonyBuilding, recruitPop, assignPop, startResearch,
-    recruitLeader, upgradeLeader,
+    recruitLeader, upgradeLeader, chargeLeaderRoll,
   };
 }
 
