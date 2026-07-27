@@ -330,21 +330,32 @@ export default function ColonyPanel(props: ColonyPanelProps) {
                   </div>
                   <p className="text-[10px] text-slate-500 mb-1">{def.description}</p>
                   <div className="flex flex-wrap gap-x-3 gap-y-0.5 text-[10px]">
-                    {/* 金币成本 */}
-                    <span className={ship.gold >= def.costGold ? 'text-yellow-400' : 'text-red-400'}>
-                      金币 {def.costGold.toLocaleString()}{!ship.gold || ship.gold < def.costGold ? ' (不足)' : ''}
+                    {(() => {
+                      const costMult = planet?.buffs.buildCostMult || 1;
+                      const actualGoldCost = Math.ceil(def.costGold * costMult);
+                      return (
+                    <span className={ship.gold >= actualGoldCost ? 'text-yellow-400' : 'text-red-400'}>
+                      金币 {actualGoldCost.toLocaleString()}{costMult !== 1 ? <span className="text-slate-600"> (基础{def.costGold.toLocaleString()} ×{costMult})</span> : ''}{!ship.gold || ship.gold < actualGoldCost ? ' (不足)' : ''}
                     </span>
+                      );
+                    })()}
                     {/* 原料成本 */}
                     {def.costMaterials && Object.entries(def.costMaterials).map(([matId, amt]) => {
+                      const costMult = planet?.buffs.buildCostMult || 1;
+                      const actualAmt = Math.ceil(amt * costMult);
                       const have = ship.materials[matId] || 0;
-                      const enough = have >= amt;
+                      const enough = have >= actualAmt;
                       return (
                         <span key={matId} className={enough ? 'text-slate-400' : 'text-red-400'}>
-                          {matLabel(matId)} {have}/{amt}{!enough ? ' (不足)' : ''}
+                          {matLabel(matId)} {have}/{actualAmt}{costMult !== 1 ? <span className="text-slate-600"> ({amt}×{costMult})</span> : ''}{!enough ? ' (不足)' : ''}
                         </span>
                       );
                     })}
-                    <span className="text-slate-600">| {def.buildTurns}回合</span>
+                    {(() => {
+                      const td = planet?.buffs.buildTurnDelta || 0;
+                      const actualTurns = Math.max(1, def.buildTurns + td);
+                      return <span className="text-slate-600">| {actualTurns}回合{td !== 0 ? <span className="text-slate-600"> ({def.buildTurns}+{td})</span> : ''}</span>;
+                    })()}
                     {def.maxCount && <span className="text-slate-600">| 上限{def.maxCount} (已建{count})</span>}
                     {!def.maxCount && <span className="text-slate-600">| 已建{count}座</span>}
                     {def.minPop > 0 && <span className="text-slate-600">| 需要{def.minPop}-{def.maxPop}人入驻</span>}

@@ -132,25 +132,32 @@ export function useColony(
             return prev;
           }
         }
+        // 星球BUFF
+        const planetDef2 = s.colony.planetType ? ALL_PLANETS.find((p) => p.id === s.colony.planetType) : null;
+        const costMult = planetDef2?.buffs.buildCostMult || 1;
+        const turnDelta = planetDef2?.buffs.buildTurnDelta || 0;
+        const actualGoldCost = Math.ceil(def.costGold * costMult);
+        const actualBuildTurns = Math.max(1, def.buildTurns + turnDelta);
+
         // 资源校验
-        if (s.gold < def.costGold) {
-          result = { success: false, message: `金币不足（需要${def.costGold.toLocaleString()}金币）` };
+        if (s.gold < actualGoldCost) {
+          result = { success: false, message: `金币不足（需要${actualGoldCost.toLocaleString()}金��）` };
           return prev;
         }
         if (def.costMaterials) {
           for (const [matId, amt] of Object.entries(def.costMaterials)) {
-            if ((s.materials[matId] || 0) < amt) {
-              result = { success: false, message: `原料不足（需要${amt}个${matId}）` };
+            const actualMatAmt = Math.ceil(amt * costMult);
+            if ((s.materials[matId] || 0) < actualMatAmt) {
+              result = { success: false, message: `原料不足（需要${actualMatAmt}个${matId}）` };
               return prev;
             }
           }
         }
-        // 扣资源
-        s.gold -= def.costGold;
+        s.gold -= actualGoldCost;
         if (def.costMaterials) {
           s.materials = { ...s.materials };
           for (const [matId, amt] of Object.entries(def.costMaterials)) {
-            s.materials[matId] = (s.materials[matId] || 0) - amt;
+            s.materials[matId] = (s.materials[matId] || 0) - Math.ceil(amt * costMult);
           }
         }
         const uid = `${defId}_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
@@ -158,7 +165,7 @@ export function useColony(
           defId, uid, assignedPop: 0,
           buildProgress: 0, active: false,
         }];
-        result = { success: true, message: `开始建造「${def.name}」` };
+        result = { success: true, message: `开始建造「${def.name}」（${actualBuildTurns}回合）` };
         ships[0] = s;
         return { ...prev, ships };
       },
@@ -283,13 +290,15 @@ export function processColonyTurn(ship: Mothership, _turn: number): void {
   if (colony.phase !== 'active') return;
 
   // 建筑建造进度推进
+  const planetDef = colony.planetType ? ALL_PLANETS.find((p) => p.id === colony.planetType) : null;
+  const turnDelta = planetDef?.buffs.buildTurnDelta || 0;
   let buildingChanged = false;
   for (const inst of colony.buildings) {
     if (inst.active) continue;
     const def = getBuildingDef(inst.defId);
     if (!def) continue;
     inst.buildProgress += 1;
-    if (inst.buildProgress >= def.buildTurns) {
+    if (inst.buildProgress >= def.buildTurns + turnDelta) {
       inst.active = true;
     }
     buildingChanged = true;
