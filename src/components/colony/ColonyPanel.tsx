@@ -4,7 +4,7 @@ import type { PlanetTypeId, PlanetDef } from '@/types/colony';
 import { getBuildableBuildings, getBuildingDef } from '@/data/colony/buildings';
 import { getPlanetById } from '@/data/colony/planets';
 import { getTechById, getAvailableTechs } from '@/data/colony/techs';
-import { Home, Users, Wrench, Play, Plus, Minus, UserPlus, FlaskConical } from 'lucide-react';
+import { Home, Users, Wrench, Play, UserPlus, FlaskConical } from 'lucide-react';
 
 // ==================== 辅助函数 ====================
 
