@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import type { Mothership } from '@/types/game';
 import type { PlanetTypeId, PlanetDef } from '@/types/colony';
 import { PHASE_1_BUILDINGS, getBuildingDef } from '@/data/colony/buildings';
@@ -93,6 +93,29 @@ export default function ColonyPanel(props: ColonyPanelProps) {
 
   const showMsg = (m: string, t: 'success' | 'error') => { setMessage(m); setMsgType(t); setTimeout(() => setMessage(''), 4000); };
 
+  // 离开选择星球阶段时清理状态
+  useEffect(() => {
+    if (!colony || colony.phase !== 'selecting') {
+      setScoutPool(null);
+      setPlanetName('');
+    }
+  }, [colony?.phase]);
+
+  // 提前计算活跃建筑的合并视图（必须在条件 return 之前，hooks 顺序不能变）
+  const liveBuildings = useMemo(() => (colony?.buildings || []).filter((b) => b.active), [colony?.buildings]);
+  const pendingBuildings = useMemo(() => (colony?.buildings || []).filter((b) => !b.active), [colony?.buildings]);
+  const groupedLive = useMemo(() => {
+    const map = new Map<string, { defId: string; count: number; uids: string[]; totalPop: number }>();
+    for (const inst of liveBuildings) {
+      const entry = map.get(inst.defId) || { defId: inst.defId, count: 0, uids: [], totalPop: 0 };
+      entry.count += 1;
+      entry.uids.push(inst.uid);
+      entry.totalPop += inst.assignedPop;
+      map.set(inst.defId, entry);
+    }
+    return Array.from(map.values());
+  }, [liveBuildings]);
+
   // ===== 未解锁 =====
   if (!colony || colony.phase === 'inactive') {
     return (
@@ -179,21 +202,6 @@ export default function ColonyPanel(props: ColonyPanelProps) {
   // ===== 殖民运行中 =====
   const planet = colony.planetType ? getPlanetById(colony.planetType) : null;
   const planetBuffs = planet ? getBuffList(planet) : [];
-  const liveBuildings = colony.buildings.filter((b) => b.active);
-  const pendingBuildings = colony.buildings.filter((b) => !b.active);
-
-  // 合并同类已建成建筑
-  const groupedLive = useMemo(() => {
-    const map = new Map<string, { defId: string; count: number; uids: string[]; totalPop: number }>();
-    for (const inst of liveBuildings) {
-      const entry = map.get(inst.defId) || { defId: inst.defId, count: 0, uids: [], totalPop: 0 };
-      entry.count += 1;
-      entry.uids.push(inst.uid);
-      entry.totalPop += inst.assignedPop;
-      map.set(inst.defId, entry);
-    }
-    return Array.from(map.values());
-  }, [liveBuildings]);
 
   const tabs: { id: ColonyTab; label: string; icon: React.ElementType }[] = [
     { id: 'overview', label: '总览', icon: Home },
