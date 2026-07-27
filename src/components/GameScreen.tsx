@@ -597,7 +597,8 @@ function OverviewTab({
         if (ship.installedModuleIds.includes('nano_farm')) modFood += 30;
         if (ship.installedModuleIds.includes('sixth_farm')) modFood += 60;
         // 殖民地数据
-        let colFood = 0, colAlloy = 0, colStardust = 0, colGold = 0, colFoodCost = 0;
+        let colFood = 0, colAlloy = 0, colStardust = 0, colGold = 0, colFoodCost = 0, colRP = 0;
+        const colMats: Record<string, number> = {};
         if (ship.colony?.phase === 'active') {
           const c = ship.colony;
           const pd = c.planetType ? getPlanetById(c.planetType) : undefined;
@@ -617,13 +618,31 @@ function OverviewTab({
             if (!inst.active || inst.assignedPop <= 0) continue;
             const d = getBuildingDef(inst.defId);
             if (!d || !d.outputType) continue;
-            let o = 0;
             const lb = ((lbMap[inst.defId]||0)+(d.category==='material'?lMat:0)+lAll)/100;
-            if (d.outputType === 'food') { o=(d.baseOutput||0)+(d.popFactor||0)*inst.assignedPop; if(pd?.buffs.foodMult)o=Math.ceil(o*pd.buffs.foodMult); colFood+=Math.ceil(o*(1+lb)); }
-            else if (d.outputType === 'alloy') { o=(d.baseOutput||0)+(d.popFactor||0)*inst.assignedPop; if(pd?.buffs.alloyMult)o=Math.ceil(o*pd.buffs.alloyMult); colAlloy+=Math.ceil(o*(1+lb)); }
-            else if (d.outputType === 'stardust') { o=(d.baseOutput||0)+(d.popFactor||0)*inst.assignedPop; if(pd?.buffs.stardustMult)o=Math.ceil(o*pd.buffs.stardustMult); colStardust+=Math.ceil(o*(1+lb)); }
-            else if (d.outputType === 'gold') { o=Math.floor(((d.goldOutputMin||0)+(d.goldOutputMax||0))/2); colGold+=Math.ceil(o*(1+lb)); }
+            const base = (d.baseOutput||0)+(d.popFactor||0)*inst.assignedPop;
+            if (d.outputType === 'food') { const pm = pd?.buffs.foodMult ? (pd.buffs.foodMult-1) : 0; colFood += Math.ceil(base*(1+pm+lb)); }
+            else if (d.outputType === 'alloy') { const pm = pd?.buffs.alloyMult ? (pd.buffs.alloyMult-1) : 0; colAlloy += Math.ceil(base*(1+pm+lb)); }
+            else if (d.outputType === 'stardust') { const pm = pd?.buffs.stardustMult ? (pd.buffs.stardustMult-1) : 0; colStardust += Math.ceil(base*(1+pm+lb)); }
+            else if (d.outputType === 'gold') { const o = Math.floor(((d.goldOutputMin||0)+(d.goldOutputMax||0))/2); colGold += Math.ceil(o*(1+lb)); }
+            else if (d.outputType === 'research') { colRP += Math.ceil(base*(1+lb)); }
+            else if (d.outputType === 'material' && d.outputMaterialId) {
+              const pm = pd?.buffs.materialMults?.[d.outputMaterialId] ? (pd.buffs.materialMults[d.outputMaterialId]-1) : 0;
+              colMats[d.outputMaterialId] = (colMats[d.outputMaterialId]||0) + Math.ceil(base*(1+pm+lb));
+            }
           }
+          // 领袖特殊效果
+          let lRP = 0, lDM = 0, lQ = 0, lSD = 0;
+          for (const l of c.leaders || []) {
+            const ex = getLeaderDef(l.id)?.levelExtras[l.level-1];
+            if (ex?.researchPerTurn) lRP += Math.floor((ex.researchPerTurn[0]+ex.researchPerTurn[1])/2);
+            if (ex?.darkMatterPerTurn) lDM += ex.darkMatterPerTurn;
+            if (ex?.quantumPerTurn) lQ += ex.quantumPerTurn;
+            if (ex?.stardustPerTurn) lSD += ex.stardustPerTurn;
+          }
+          colRP += lRP;
+          colStardust += lSD;
+          if (lDM>0) colMats['dark_matter'] = (colMats['dark_matter']||0) + lDM;
+          if (lQ>0) colMats['quantum'] = (colMats['quantum']||0) + lQ;
           // 食物消耗含领袖减免
           let fpp = 3 + (pd?.buffs.foodConsumptionDelta || 0);
           for (const l of c.leaders || []) fpp += (getLeaderDef(l.id)?.levelExtras[l.level-1]?.foodConsumptionDelta || 0);
@@ -640,6 +659,8 @@ function OverviewTab({
               {colAlloy > 0 && <div><span className="text-slate-500">合金产出:</span> <span className="text-slate-300 font-bold">+{colAlloy} (殖民地)</span></div>}
               {colStardust > 0 && <div><span className="text-slate-500">星尘产出:</span> <span className="text-purple-400 font-bold">+{colStardust} (殖民地)</span></div>}
               {colGold > 0 && <div><span className="text-slate-500">金币产出:</span> <span className="text-yellow-400 font-bold">+{colGold} (殖民地)</span></div>}
+              {colRP > 0 && <div><span className="text-slate-500">科研产出:</span> <span className="text-cyan-400 font-bold">+{colRP} (殖民地)</span></div>}
+              {Object.entries(colMats).map(([k,v]) => v>0 && <div key={k}><span className="text-slate-500">{k}:</span> <span className="text-amber-400 font-bold">+{v} (殖民地)</span></div>)}
             </div>
           </div>
         );

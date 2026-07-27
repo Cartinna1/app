@@ -527,41 +527,43 @@ export function processColonyTurn(ship: Mothership, _turn: number): void {
     const lb = (leaderBonusMap[inst.defId] || 0) / 100;
     let output = 0;
     if (def.outputType === 'food') {
-      output = (def.baseOutput || 0) + (def.popFactor || 0) * effPop;
-      if (planetDef?.buffs.foodMult) output = Math.ceil(output * planetDef.buffs.foodMult);
-      output = Math.ceil(output * (1 + lb));
+      const base = (def.baseOutput || 0) + (def.popFactor || 0) * effPop;
+      const pm = planetDef?.buffs.foodMult ? (planetDef.buffs.foodMult - 1) : 0;
+      output = Math.ceil(base * (1 + pm + lb));
       totalFood += output;
     } else if (def.outputType === 'alloy') {
-      output = (def.baseOutput || 0) + (def.popFactor || 0) * effPop;
-      if (planetDef?.buffs.alloyMult) output = Math.ceil(output * planetDef.buffs.alloyMult);
-      output = Math.ceil(output * (1 + lb));
+      const base = (def.baseOutput || 0) + (def.popFactor || 0) * effPop;
+      const pm = planetDef?.buffs.alloyMult ? (planetDef.buffs.alloyMult - 1) : 0;
+      output = Math.ceil(base * (1 + pm + lb));
       totalAlloy += output;
     } else if (def.outputType === 'stardust') {
-      output = (def.baseOutput || 0) + (def.popFactor || 0) * effPop;
-      if (planetDef?.buffs.stardustMult) output = Math.ceil(output * planetDef.buffs.stardustMult);
-      output = Math.ceil(output * (1 + lb));
+      const base = (def.baseOutput || 0) + (def.popFactor || 0) * effPop;
+      const pm = planetDef?.buffs.stardustMult ? (planetDef.buffs.stardustMult - 1) : 0;
+      output = Math.ceil(base * (1 + pm + lb));
       totalStardust += output;
     } else if (def.outputType === 'gold') {
       output = Math.floor(Math.random() * ((def.goldOutputMax || 0) - (def.goldOutputMin || 0) + 1)) + (def.goldOutputMin || 0);
       output = Math.ceil(output * (1 + lb));
       totalGold += output;
     } else if (def.outputType === 'material' && def.outputMaterialId) {
-      output = (def.popFactor || 0) * effPop;
-      const matMult = planetDef?.buffs.materialMults?.[def.outputMaterialId] || 1;
-      output = Math.ceil(output * matMult * (1 + lb));
+      const base = (def.popFactor || 0) * effPop;
+      const matMult = planetDef?.buffs.materialMults?.[def.outputMaterialId];
+      const pm = matMult ? (matMult - 1) : 0;
+      output = Math.ceil(base * (1 + pm + lb));
       ship.materials = { ...(ship.materials || {}), [def.outputMaterialId]: ((ship.materials || {})[def.outputMaterialId] || 0) + output };
     } else if (def.outputType === 'research') {
-      output = (def.popFactor || 0) * effPop;
-      if (planetDef?.buffs.researchMult) output = Math.ceil(output * planetDef.buffs.researchMult);
+      const base = (def.popFactor || 0) * effPop;
+      const pm = planetDef?.buffs.researchMult ? (planetDef.buffs.researchMult - 1) : 0;
+      let b26Bonus = 0;
       const hasB26 = colony.buildings.some((b) => b.active && b.defId === 'B26');
-      // B26倍率（含领袖L11加成）
-      let b26Mult = 1.5;
-      for (const l of colony.leaders) {
-        const ld = getLeaderDef(l.id);
-        const bm = ld?.levelExtras[l.level - 1]?.b26Mult;
-        if (bm && bm > b26Mult) b26Mult = bm;
+      if (hasB26) {
+        b26Bonus = 0.5; // B26默认+50%
+        for (const l of colony.leaders) {
+          const bm = getLeaderDef(l.id)?.levelExtras[l.level - 1]?.b26Mult;
+          if (bm) b26Bonus = Math.max(b26Bonus, bm - 1);
+        }
       }
-      if (hasB26) output = Math.ceil(output * b26Mult);
+      output = Math.ceil(base * (1 + pm + lb + b26Bonus));
       output = Math.ceil(output * (1 + lb));
       totalRP += output;
     }

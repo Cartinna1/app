@@ -307,14 +307,16 @@ export default function ColonyPanel(props: ColonyPanelProps) {
                     if (inst.assignedPop <= 0) continue;
                     const d = getBuildingDef(inst.defId);
                     if (!d) continue;
-                    if (d.outputType === 'food') { f += Math.ceil(((d.baseOutput||0)+(d.popFactor||0)*inst.assignedPop)*(pod?.foodMult||1)); }
-                    else if (d.outputType === 'alloy') { a += Math.ceil(((d.baseOutput||0)+(d.popFactor||0)*inst.assignedPop)*(pod?.alloyMult||1)); }
-                    else if (d.outputType === 'stardust') { s += Math.ceil(((d.baseOutput||0)+(d.popFactor||0)*inst.assignedPop)*(pod?.stardustMult||1)); }
-                    else if (d.outputType === 'gold') { g += Math.floor(((d.goldOutputMin||0)+(d.goldOutputMax||0))/2); }
-                    else if (d.outputType === 'research') { rp += (d.popFactor||0)*inst.assignedPop; }
+                    const base = (d.baseOutput||0)+(d.popFactor||0)*inst.assignedPop;
+                    const lb = ((mlMap[inst.defId]||0)+(d.category==='material'?mlMat:0)+mlAll)/100;
+                    if (d.outputType === 'food') { const pm = pod?.foodMult ? (pod.foodMult-1) : 0; f += Math.ceil(base*(1+pm+lb)); }
+                    else if (d.outputType === 'alloy') { const pm = pod?.alloyMult ? (pod.alloyMult-1) : 0; a += Math.ceil(base*(1+pm+lb)); }
+                    else if (d.outputType === 'stardust') { const pm = pod?.stardustMult ? (pod.stardustMult-1) : 0; s += Math.ceil(base*(1+pm+lb)); }
+                    else if (d.outputType === 'gold') { const o = Math.floor(((d.goldOutputMin||0)+(d.goldOutputMax||0))/2); g += Math.ceil(o*(1+lb)); }
+                    else if (d.outputType === 'research') { rp += Math.ceil(base*(1+lb)); }
                     else if (d.outputType === 'material' && d.outputMaterialId) { 
-                      const mm = pod?.materialMults?.[d.outputMaterialId] || 1;
-                      mats[d.outputMaterialId] = (mats[d.outputMaterialId]||0) + Math.ceil((d.popFactor||0)*inst.assignedPop*mm);
+                      const pm = pod?.materialMults?.[d.outputMaterialId] ? (pod.materialMults[d.outputMaterialId]-1) : 0;
+                      mats[d.outputMaterialId] = (mats[d.outputMaterialId]||0) + Math.ceil(base*(1+pm+lb));
                     }
                   }
                   return <>
@@ -328,7 +330,7 @@ export default function ColonyPanel(props: ColonyPanelProps) {
                 })()}
               </div>
               <div className="text-sm text-red-400 mt-1">
-                食物消耗: -{colony.population.total * (3 + (planet?.buffs.foodConsumptionDelta || 0))}
+                {(() => { let fp=3+(planet?.buffs.foodConsumptionDelta||0); for(const l of colony.leaders||[]){fp+=(getLeaderDef(l.id)?.levelExtras[l.level-1]?.foodConsumptionDelta||0);} return `食物消耗: -${colony.population.total * Math.max(1, fp)}`; })()}
               </div>
             </div>
           )}
@@ -336,7 +338,20 @@ export default function ColonyPanel(props: ColonyPanelProps) {
       )}
 
       {/* ===== 建筑 ===== */}
-      {tab === 'buildings' && (
+      {tab === 'buildings' && (() => {
+        // 领袖加成映射（加算用）
+        const mlMap: Record<string, number> = {};
+        let mlAll = 0, mlMat = 0;
+        for (const l of colony.leaders || []) {
+          const ld = getLeaderDef(l.id);
+          const bonuses = ld?.levelBonuses[l.level-1] || {};
+          for (const [bid, b] of Object.entries(bonuses)) {
+            if (bid === 'ALL') mlAll += b;
+            else if (bid === 'ALL_MATERIAL') mlMat += b;
+            else mlMap[bid] = (mlMap[bid] || 0) + b;
+          }
+        }
+        return (
         <div className="space-y-3">
           {/* 已建成（合并同类） */}
           <div>
@@ -351,11 +366,26 @@ export default function ColonyPanel(props: ColonyPanelProps) {
                 </div>
               );
               const maxLabel = def.maxPop > 0 ? `入驻 ${inst.assignedPop}/${def.maxPop}` : `入驻 ${inst.assignedPop}`;
+              // 计算该建筑实际产出
+              let liveOut = '';
+              if (inst.assignedPop > 0 && def.outputType) {
+                const b = (def.baseOutput||0)+(def.popFactor||0)*inst.assignedPop;
+                const lb = ((mlMap[inst.defId]||0)+(def.category==='material'?mlMat:0)+mlAll)/100;
+                let v=0, un='';
+                if (def.outputType === 'food') { const pm = planet?.buffs.foodMult ? (planet.buffs.foodMult-1) : 0; v=Math.ceil(b*(1+pm+lb)); un='食物'; }
+                else if (def.outputType === 'alloy') { const pm = planet?.buffs.alloyMult ? (planet.buffs.alloyMult-1) : 0; v=Math.ceil(b*(1+pm+lb)); un='合金'; }
+                else if (def.outputType === 'stardust') { const pm = planet?.buffs.stardustMult ? (planet.buffs.stardustMult-1) : 0; v=Math.ceil(b*(1+pm+lb)); un='星尘'; }
+                else if (def.outputType === 'gold') { v=Math.ceil(Math.floor(((def.goldOutputMin||0)+(def.goldOutputMax||0))/2)*(1+lb)); un='金币'; }
+                else if (def.outputType === 'research') { v=Math.ceil(b*(1+lb)); un='科研'; }
+                if (v>0) liveOut = `产出: ${v} ${un}/回合`;
+              }
               return (
                 <div key={inst.uid} className="bg-slate-900/60 border border-green-700/40 rounded-lg p-3 mb-2 flex justify-between items-center">
                   <div>
                     <span className="text-sm text-green-300 font-bold">{def.name}</span>
-                    <span className="text-sm text-slate-500 ml-2">{maxLabel} | {getOutputDesc(def)}</span>
+                    <span className="text-sm text-slate-500 ml-2">{maxLabel}</span>
+                    {liveOut && <span className="text-sm text-cyan-400 ml-2">{liveOut}</span>}
+                    {!liveOut && <span className="text-sm text-slate-600 ml-2">{getOutputDesc(def)}</span>}
                   </div>
                   <button onClick={() => { onDemolishBuilding(inst.uid); showMsg(`已拆除「${def.name}」`, 'success'); }}
                     className="px-2 py-1 bg-red-700 hover:bg-red-600 rounded text-xs font-bold flex-shrink-0 ml-3">拆除</button>
@@ -527,7 +557,7 @@ export default function ColonyPanel(props: ColonyPanelProps) {
             })}
           </div>
         </div>
-      )}
+      );})()}
 
       {/* ===== 科研 ===== */}
       {tab === 'research' && colony.techState && (
