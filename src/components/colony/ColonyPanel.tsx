@@ -339,7 +339,7 @@ export default function ColonyPanel(props: ColonyPanelProps) {
                 if (lb>0) parts.push(`领袖+${Math.round(lb*100)}%`);
                 bonusLines.push({ label: '合金', value: v, detail: parts.join(' ') });
               } else if (d.outputType === 'stardust') {
-                const pm = pod?.buffs.stardustMult ? (pod.buffs.stardustMult-1) : 0;
+                const pm = pod?.stardustMult ? (pod.stardustMult-1) : 0;
                 const v = Math.ceil(base*(1+pm+lb));
                 const parts: string[] = [`${d.name}:${base}`];
                 if (pod?.stardustMult) parts.push(`星球${pod.stardustMult>1?'+':''}${Math.round(pm*100)}%`);
