@@ -36,8 +36,7 @@ export function useGameState() {
   const { autoSave, hasSave, loadSave, exportSave, importSave, resetGame } = useSave(dispatch);
   const { redeemCode } = useRedeem(gameState, dispatch);
   const { installModule, useManualModule } = useModule(gameState, dispatch);
-  const { unlockColony, selectPlanet, rescrollPlanets, generateScoutingPool, buildColonyBuilding, recruitPop, assignPop, startResearch, recruitLeader, upgradeLeader, rollAndRecruit,
-    clearRecruitPool, clearRecruitPool } = useColony(gameState, dispatch);
+  const { unlockColony, selectPlanet, rescrollPlanets, generateScoutingPool, buildColonyBuilding, recruitPop, assignPop, startResearch, recruitLeader, upgradeLeader, rollAndRecruit, clearRecruitPool } = useColony(gameState, dispatch);
   const { nextTurn, fluctuatePrices } = useTurn(gameState, dispatch, autoSave);
 
   // 初始化游戏（选择单舰队）

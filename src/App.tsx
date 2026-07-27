@@ -118,6 +118,7 @@ function App() {
       onRecruitLeader={recruitLeader}
       onUpgradeLeader={upgradeLeader}
       onRollAndRecruit={rollAndRecruit}
+      onClearRecruitPool={clearRecruitPool}
       onBuyAlloy={buyAlloy}
       onBuyFood={buyFood}
       onBuyRelic={buyRelic}
