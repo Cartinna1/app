@@ -1,11 +1,10 @@
 import { useState, useMemo, useEffect } from 'react';
 import type { Mothership } from '@/types/game';
 import type { PlanetTypeId, PlanetDef } from '@/types/colony';
-import { PHASE_1_BUILDINGS, getBuildingDef } from '@/data/colony/buildings';
-import { getPlanetById } from '@/data/colony/planets';
 import { getBuildableBuildings, getBuildingDef } from '@/data/colony/buildings';
+import { getPlanetById } from '@/data/colony/planets';
 import { getTechById, getAvailableTechs } from '@/data/colony/techs';
-import { Home, Users, Wrench, Play, Plus, Minus, UserPlus, FlaskConical, Lock } from 'lucide-react';
+import { Home, Users, Wrench, Play, Plus, Minus, UserPlus, FlaskConical } from 'lucide-react';
 
 // ==================== 辅助函数 ====================
 
