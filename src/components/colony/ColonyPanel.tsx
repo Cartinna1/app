@@ -1,13 +1,12 @@
 import { useState } from 'react';
-import type { Mothership, GameState } from '@/types/game';
-import type { BuildingInstance, PlanetTypeId } from '@/types/colony';
+import type { Mothership } from '@/types/game';
+import type { PlanetTypeId } from '@/types/colony';
 import { PHASE_1_BUILDINGS, getBuildingDef } from '@/data/colony/buildings';
 import { getPlanetById } from '@/data/colony/planets';
-import { Home, Wheat, Cog, Coins, Users, Wrench, Play, Plus, Minus } from 'lucide-react';
+import { Home, Users, Wrench, Play, Plus, Minus } from 'lucide-react';
 
 interface ColonyPanelProps {
   ship: Mothership;
-  gameState: GameState;
   onUnlockColony: () => { success: boolean; message: string };
   onSelectPlanet: (planetId: PlanetTypeId, name: string) => { success: boolean; message: string };
   onRescrollPlanets: () => { success: boolean; message: string };
@@ -20,7 +19,7 @@ interface ColonyPanelProps {
 type ColonyTab = 'overview' | 'buildings' | 'population' | 'scout';
 
 export default function ColonyPanel(props: ColonyPanelProps) {
-  const { ship, gameState, onUnlockColony, onSelectPlanet, onRescrollPlanets, generateScoutingPool, onBuild, onRecruitPop, onAssignPop } = props;
+  const { ship, onUnlockColony, onSelectPlanet, onRescrollPlanets, generateScoutingPool, onBuild, onRecruitPop, onAssignPop } = props;
   const colony = ship.colony;
   const [tab, setTab] = useState<ColonyTab>('overview');
   const [message, setMessage] = useState('');
@@ -229,7 +228,7 @@ export default function ColonyPanel(props: ColonyPanelProps) {
             <h4 className="text-sm font-bold text-cyan-400 mb-2">建造新建筑</h4>
             {PHASE_1_BUILDINGS.map((def) => {
               const count = colony.buildings.filter((b) => b.defId === def.id).length;
-              const limited = def.maxCount && count >= def.maxCount;
+              const limited = !!(def.maxCount && count >= def.maxCount);
               return (
                 <div key={def.id} className={`bg-slate-900/60 border rounded-lg p-3 mb-2 flex justify-between items-center ${limited ? 'opacity-50 border-slate-800' : 'border-slate-700'}`}>
                   <div>

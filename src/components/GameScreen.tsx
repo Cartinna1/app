@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import type { GameState, EventOption, ResourceChange, ChoiceEvent } from '@/types/game';
 import type { DodgeReason } from '@/hooks/useEvent';
+import type { PlanetTypeId } from '@/types/colony';
 import {
   LayoutDashboard,
   TrendingUp,
@@ -65,9 +66,9 @@ interface GameScreenProps {
   onInstallModule: (moduleId: string) => { success: boolean; message: string };
   onUseManualModule: (moduleId: string) => { success: boolean; message: string };
   onUnlockColony: () => { success: boolean; message: string };
-  onSelectPlanet: (planetId: string, name: string) => { success: boolean; message: string };
+  onSelectPlanet: (planetId: PlanetTypeId, name: string) => { success: boolean; message: string };
   onRescrollPlanets: () => { success: boolean; message: string };
-  generateScoutingPool: () => string[];
+  generateScoutingPool: () => PlanetTypeId[];
   onBuildColonyBuilding: (defId: string) => { success: boolean; message: string };
   onRecruitPop: (amount: number) => { success: boolean; message: string };
   onAssignPop: (buildingUid: string, count: number) => { success: boolean; message: string };
@@ -395,7 +396,6 @@ export default function GameScreen({
           {activeTab === 'colony' && currentShip && (
             <ColonyPanel
               ship={currentShip}
-              gameState={gameState}
               onUnlockColony={onUnlockColony}
               onSelectPlanet={onSelectPlanet}
               onRescrollPlanets={onRescrollPlanets}

@@ -6,7 +6,7 @@ export type PlanetTypeId =
   | 'tundra' | 'ruin';
 
 export interface PlanetBuff {
-  description: string;
+  description?: string;
   /** 建筑产量倍率 (buildingId → multiplier)，1.0=无变化 */
   buildingOutputMults?: Record<string, number>;
   /** 食物建筑产量倍率（快捷方式，自动匹配B3/B4/B5） */

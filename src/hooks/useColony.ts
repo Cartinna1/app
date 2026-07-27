@@ -1,8 +1,8 @@
 import { useCallback } from 'react';
 import type { GameState, Mothership } from '@/types/game';
-import type { Colony, PlanetTypeId, BuildingInstance } from '@/types/colony';
+import type { Colony, PlanetTypeId } from '@/types/colony';
 import { ALL_PLANETS } from '@/data/colony/planets';
-import { PHASE_1_BUILDINGS, getBuildingDef } from '@/data/colony/buildings';
+import { getBuildingDef } from '@/data/colony/buildings';
 
 const UNLOCK_COST = 30000;
 
@@ -261,7 +261,7 @@ export function useColony(
 // ==================== 回合处理辅助函数 ====================
 
 /** 处理殖民地每个回合的推进（在 useTurn 中调用） */
-export function processColonyTurn(ship: Mothership, turn: number): void {
+export function processColonyTurn(ship: Mothership, _turn: number): void {
   const colony = ship.colony;
   if (!colony || colony.phase === 'inactive') return;
 
