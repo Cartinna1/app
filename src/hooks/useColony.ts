@@ -517,9 +517,9 @@ export function processColonyTurn(ship: Mothership, _turn: number): void {
   let totalFood = 0, totalAlloy = 0, totalGold = 0, totalStardust = 0, totalRP = 0;
 
   for (const inst of colony.buildings) {
-    if (!inst.active || inst.assignedPop < def.minPop) continue;
     const def = getBuildingDef(inst.defId);
     if (!def || !def.outputType) continue;
+    if (!inst.active || inst.assignedPop < def.minPop) continue;
 
     // 领袖指定建筑人口槽位扩展
     let effMaxPop = def.maxPop;
