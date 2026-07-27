@@ -4,7 +4,8 @@ import type { PlanetTypeId, PlanetDef } from '@/types/colony';
 import { getBuildableBuildings, getBuildingDef } from '@/data/colony/buildings';
 import { getPlanetById } from '@/data/colony/planets';
 import { getTechById, getAvailableTechs } from '@/data/colony/techs';
-import { Home, Users, Wrench, Play, UserPlus, FlaskConical } from 'lucide-react';
+import { rollLeaders, getLeaderDef } from '@/data/colony/leaders';
+import { Home, Users, Wrench, Play, UserPlus, FlaskConical, Crown, Star } from 'lucide-react';
 
 // ==================== 辅助函数 ====================
 
@@ -93,12 +94,14 @@ interface ColonyPanelProps {
   onRecruitPop: (amount: number) => { success: boolean; message: string };
   onAssignPop: (buildingUid: string, count: number) => { success: boolean; message: string };
   onStartResearch: (techId: string) => { success: boolean; message: string };
+  onRecruitLeader: (leaderId: string) => { success: boolean; message: string };
+  onUpgradeLeader: (leaderIndex: number) => { success: boolean; message: string };
 }
 
-type ColonyTab = 'overview' | 'buildings' | 'population' | 'research';
+type ColonyTab = 'overview' | 'buildings' | 'population' | 'research' | 'leaders';
 
 export default function ColonyPanel(props: ColonyPanelProps) {
-  const { ship, onUnlockColony, onSelectPlanet, onRescrollPlanets, generateScoutingPool, onBuild, onRecruitPop, onAssignPop, onStartResearch } = props;
+  const { ship, onUnlockColony, onSelectPlanet, onRescrollPlanets, generateScoutingPool, onBuild, onRecruitPop, onAssignPop, onStartResearch, onRecruitLeader, onUpgradeLeader } = props;
   const colony = ship.colony;
   const [tab, setTab] = useState<ColonyTab>('overview');
   const [message, setMessage] = useState('');
@@ -108,6 +111,7 @@ export default function ColonyPanel(props: ColonyPanelProps) {
   const [scoutPool, setScoutPool] = useState<PlanetTypeId[] | null>(null);
   const [buildCatFilter, setBuildCatFilter] = useState<string>('all');
   const [popCatFilter, setPopCatFilter] = useState<string>('all');
+  const [leaderOptions, setLeaderOptions] = useState<ReturnType<typeof rollLeaders> | null>(null);
 
   const showMsg = (m: string, t: 'success' | 'error') => { setMessage(m); setMsgType(t); setTimeout(() => setMessage(''), 4000); };
 
@@ -244,6 +248,7 @@ export default function ColonyPanel(props: ColonyPanelProps) {
     { id: 'buildings', label: '建筑', icon: Wrench },
     { id: 'population', label: '人口', icon: Users },
     { id: 'research', label: '科研', icon: FlaskConical },
+    { id: 'leaders', label: '领袖', icon: Crown },
   ];
 
   return (
@@ -501,23 +506,31 @@ export default function ColonyPanel(props: ColonyPanelProps) {
             }).map((inst) => {
               const def = getBuildingDef(inst.defId);
               if (!def) return null;
+              // 领袖扩展的最大人口
+              let effMax = def.maxPop;
+              for (const l of (colony?.leaders || [])) {
+                const ld = getLeaderDef(l.id);
+                const ex = ld?.levelExtras[l.level - 1];
+                if (ex?.popCapBonus?.[def.id]) effMax = Math.max(effMax, ex.popCapBonus[def.id]);
+              }
+              const extended = effMax > def.maxPop;
               const num = buildingNumbers[inst.uid] || '01';
               return (
                 <div key={inst.uid} className="flex items-center justify-between bg-slate-800/60 rounded-lg p-3 mb-2">
                   <div>
                     <span className={`text-sm ${CAT_COLORS[def.category] || 'text-slate-500'} px-1 py-0.5 rounded mr-1`}>{CAT_LABELS[def.category]}</span>
                     <span className="text-sm text-slate-200">{def.name}{num}</span>
-                    <span className="text-sm text-slate-500 ml-2">(0-{def.maxPop}人)</span>
+                    <span className="text-sm text-slate-500 ml-2">(0-{effMax}人{extended ? <span className="text-amber-400"> 领袖+{(effMax-def.maxPop)}</span> : ''})</span>
                   </div>
                   <div className="flex items-center gap-1">
-                    <input type="number" min={0} max={def.maxPop} value={inst.assignedPop}
+                    <input type="number" min={0} max={effMax} value={inst.assignedPop}
                       onChange={(e) => {
-                        const v = Math.max(0, Math.min(def.maxPop, parseInt(e.target.value) || 0));
+                        const v = Math.max(0, Math.min(effMax, parseInt(e.target.value) || 0));
                         onAssignPop(inst.uid, v);
                       }}
                       className="w-14 bg-slate-800 border border-slate-600 rounded px-2 py-1 text-sm text-cyan-400 text-center font-bold"
                     />
-                    <span className="text-sm text-slate-600">/ {def.maxPop}</span>
+                    <span className="text-sm text-slate-600">/ {effMax}</span>
                   </div>
                 </div>
               );
@@ -577,6 +590,79 @@ export default function ColonyPanel(props: ColonyPanelProps) {
                 })}
               </div>
             </div>
+          )}
+        </div>
+      )}
+
+      {/* ===== 领袖 ===== */}
+      {tab === 'leaders' && (
+        <div className="space-y-4">
+          {!colony.buildings.some((b) => b.active && b.defId === 'B27') ? (
+            <div className="bg-slate-900/60 border border-slate-700 rounded-xl p-4 text-center">
+              <Crown size={32} className="mx-auto mb-2 text-slate-600" />
+              <p className="text-sm text-slate-400">需先建造星河议政厅(B27)解锁领袖功能</p>
+            </div>
+          ) : (
+            <>
+              {/* 招募 */}
+              <div className="bg-slate-900/60 border border-slate-700 rounded-xl p-4">
+                <h4 className="font-bold text-slate-200 mb-2">招募领袖 (10星尘/次)</h4>
+                <p className="text-sm text-slate-400 mb-3">当前: {colony.leaders.length}/{colony.leaderCap}</p>
+                {!leaderOptions ? (
+                  <button onClick={() => {
+                    if (ship.stardust < 10) { showMsg('星尘不足', 'error'); return; }
+                    if (colony.leaders.length >= colony.leaderCap) { showMsg('领袖已满', 'error'); return; }
+                    setLeaderOptions(rollLeaders(3));
+                  }} disabled={ship.stardust < 10 || colony.leaders.length >= colony.leaderCap}
+                    className="px-4 py-2 bg-purple-700 hover:bg-purple-600 disabled:bg-slate-700 rounded-lg text-sm font-bold text-white">
+                    {colony.leaders.length >= colony.leaderCap ? '已满' : '开始招募'}
+                  </button>
+                ) : (
+                  <div className="space-y-2">
+                    {leaderOptions.map((ld, i) => {
+                      const rc = ld.rarity==='SSR'?'text-amber-400':ld.rarity==='SR'?'text-purple-400':'text-blue-400';
+                      return (
+                        <div key={i} className="bg-slate-800/60 border border-slate-700 rounded-lg p-3 flex justify-between items-center">
+                          <div>
+                            <span className={`text-sm font-bold ${rc}`}>{ld.rarity}级</span>
+                            <span className="text-sm text-slate-200 font-bold ml-2">{ld.name}</span>
+                            <span className="text-sm text-slate-500"> · {ld.abilityName}</span>
+                            <p className="text-sm text-slate-400 mt-1">{ld.description}</p>
+                          </div>
+                          <button onClick={() => {const r=onRecruitLeader(ld.id);showMsg(r.message,r.success?'success':'error');if(r.success)setLeaderOptions(null);}}
+                            className="px-3 py-1.5 bg-purple-700 hover:bg-purple-600 rounded text-sm font-bold">招募</button>
+                        </div>
+                      );
+                    })}
+                    <button onClick={()=>setLeaderOptions(null)} className="text-sm text-slate-500">取消</button>
+                  </div>
+                )}
+              </div>
+              {/* 已有领袖 */}
+              {colony.leaders.length > 0 && (
+                <div className="bg-slate-900/60 border border-slate-700 rounded-xl p-4">
+                  <h4 className="font-bold text-slate-200 mb-2">我的领袖</h4>
+                  {colony.leaders.map((l, i) => (
+                    <div key={i} className="bg-slate-800/60 border border-slate-700 rounded-lg p-3 mb-2 flex justify-between items-center">
+                      <div>
+                        <span className={`text-sm font-bold ${l.rarity==='SSR'?'text-amber-400':l.rarity==='SR'?'text-purple-400':'text-blue-400'}`}>{l.rarity} Lv{l.level}</span>
+                        <span className="text-sm text-slate-200 font-bold ml-2">{l.name} · {l.abilityName}</span>
+                      </div>
+                      {l.level < 3 && (
+                        <button onClick={() => {
+                          const cost = l.level===1?20:45;
+                          if (ship.stardust<cost) { showMsg(`星尘不足`, 'error'); return; }
+                          const r=onUpgradeLeader(i); showMsg(r.message,r.success?'success':'error');
+                        }} disabled={ship.stardust < (l.level===1?20:45)}
+                          className="px-3 py-1.5 bg-yellow-700 hover:bg-yellow-600 disabled:bg-slate-700 rounded text-sm font-bold">
+                          升级({l.level===1?20:45}星尘)
+                        </button>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </>
           )}
         </div>
       )}

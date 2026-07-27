@@ -4,6 +4,7 @@ import type { Colony, PlanetTypeId, BuildingInstance } from '@/types/colony';
 import { ALL_PLANETS } from '@/data/colony/planets';
 import { getBuildingDef } from '@/data/colony/buildings';
 import { getTechById } from '@/data/colony/techs';
+import { getLeaderDef, type LeaderDef, type LeaderExtraEffects } from '@/data/colony/leaders';
 
 const UNLOCK_COST = 30000;
 
@@ -71,6 +72,8 @@ export function useColony(
           buildings,
           population: { total: initialPop, available: initialPop, cap: initialCap },
           techState: { researched: [], currentResearch: null, currentProgress: 0, researchPoints: 500, researchSeed: 0 },
+          leaders: [],
+          leaderCap: 3,
         };
         ships[0] = s;
         result = { success: true, message: `成功在「${planetDef.name}」建立殖民地「${name}」！` };
@@ -244,13 +247,23 @@ export function useColony(
         const def = getBuildingDef(inst.defId);
         if (!def) { result = { success: false, message: '建筑定义不存在' }; return prev; }
 
+        // 计算领袖扩展后的最大入驻人口
+        let effMax = def.maxPop;
+        if (s.colony) {
+          for (const l of s.colony.leaders) {
+            const ld = getLeaderDef(l.id);
+            const extras = ld?.levelExtras[l.level - 1];
+            if (extras?.popCapBonus?.[inst.defId]) effMax = Math.max(effMax, extras.popCapBonus[inst.defId]);
+          }
+        }
+
         const delta = count - inst.assignedPop;
         if (delta > 0 && s.colony.population.available < delta) {
           result = { success: false, message: '空闲人口不足' };
           return prev;
         }
-        if (count < 0 || count > def.maxPop) {
-          result = { success: false, message: `入驻人口需在0-${def.maxPop}之间` };
+        if (count < 0 || count > effMax) {
+          result = { success: false, message: `入驻人口需在0-${effMax}之间` };
           return prev;
         }
         s.colony = {
@@ -297,9 +310,60 @@ export function useColony(
     return result;
   }, [dispatch]);
 
+  /** 招募领袖 */
+  const recruitLeader = useCallback((leaderId: string): { success: boolean; message: string } => {
+    const ld = getLeaderDef(leaderId);
+    if (!ld) return { success: false, message: '领袖不存在' };
+    let result = { success: false, message: '' };
+    dispatch({
+      type: 'FUNCTIONAL_UPDATE',
+      updater: (prev) => {
+        const ships = [...prev.ships]; const s = { ...ships[0] };
+        if (!s.colony || s.colony.phase !== 'active') { result={success:false,message:'殖民地未激活'}; return prev; }
+        const hasB27 = s.colony.buildings.some((b) => b.active && b.defId === 'B27');
+        if (!hasB27) { result={success:false,message:'需建造星河议政厅(B27)'}; return prev; }
+        if (s.colony.leaders.length >= s.colony.leaderCap) { result={success:false,message:'领袖数量已达上限'}; return prev; }
+        const planetDef = s.colony.planetType ? ALL_PLANETS.find((p)=>p.id===s.colony.planetType) : null;
+        const baseCost = 10;
+        const extraCost = planetDef?.buffs.leaderCostDelta || 0;
+        const leaderCostReduction = s.colony.leaders.reduce((sum, l) => { const d=getLeaderDef(l.id); return sum + ((d?.levelExtras?.[l.level-1]?.leaderCostReduction)||0); }, 0);
+        const cost = Math.max(1, baseCost + extraCost - leaderCostReduction);
+        if (s.stardust < cost) { result={success:false,message:`星尘不足(需要${cost})`}; return prev; }
+        s.stardust -= cost;
+        s.colony.leaders = [...s.colony.leaders, { id: ld.id, name: ld.name, rarity: ld.rarity, description: ld.description, abilityName: ld.abilityName, level: 1 }];
+        result = { success: true, message: `招募领袖「${ld.name}」(R=${ld.rarity})！` };
+        ships[0] = s; return { ...prev, ships };
+      },
+    });
+    return result;
+  }, [dispatch]);
+
+  /** 领袖升级 */
+  const upgradeLeader = useCallback((leaderIndex: number): { success: boolean; message: string } => {
+    let result = { success: false, message: '' };
+    dispatch({
+      type: 'FUNCTIONAL_UPDATE',
+      updater: (prev) => {
+        const ships = [...prev.ships]; const s = { ...ships[0] };
+        if (!s.colony || s.colony.phase !== 'active') { result={success:false,message:'殖民地未激活'}; return prev; }
+        const li = s.colony.leaders[leaderIndex];
+        if (!li) { result={success:false,message:'领袖不存在'}; return prev; }
+        if (li.level >= 3) { result={success:false,message:'已达最高等级'}; return prev; }
+        const cost = li.level === 1 ? 20 : 45;
+        if (s.stardust < cost) { result={success:false,message:`星尘不足(需要${cost})`}; return prev; }
+        s.stardust -= cost;
+        s.colony.leaders = s.colony.leaders.map((l, i) => i === leaderIndex ? { ...l, level: l.level + 1 } : l);
+        result = { success: true, message: `「${li.name}」升至Lv${li.level+1}！` };
+        ships[0] = s; return { ...prev, ships };
+      },
+    });
+    return result;
+  }, [dispatch]);
+
   return {
     unlockColony, selectPlanet, rescrollPlanets, generateScoutingPool,
     buildColonyBuilding, recruitPop, assignPop, startResearch,
+    recruitLeader, upgradeLeader,
   };
 }
 
@@ -341,6 +405,26 @@ export function processColonyTurn(ship: Mothership, _turn: number): void {
   }
 
   // 建筑产出计算
+  // 计算领袖加成映射 (buildingId → bonus%)
+  const leaderBonusMap: Record<string, number> = {};
+  let lAllBonus = 0, lMatBonus = 0;
+  for (const l of colony.leaders) {
+    const ld = getLeaderDef(l.id);
+    if (!ld) continue;
+    const bonuses = ld.levelBonuses[l.level - 1] || {};
+    for (const [bid, b] of Object.entries(bonuses)) {
+      if (bid === 'ALL') lAllBonus += b;
+      else if (bid === 'ALL_MATERIAL') lMatBonus += b;
+      else leaderBonusMap[bid] = (leaderBonusMap[bid] || 0) + b;
+    }
+  }
+  // 合并特殊加成到所有建筑
+  for (const inst of colony.buildings) {
+    if (lAllBonus > 0) leaderBonusMap[inst.defId] = (leaderBonusMap[inst.defId] || 0) + lAllBonus;
+    const def = getBuildingDef(inst.defId);
+    if (def?.category === 'material' && lMatBonus > 0) leaderBonusMap[inst.defId] = (leaderBonusMap[inst.defId] || 0) + lMatBonus;
+  }
+
   let totalFood = 0, totalAlloy = 0, totalGold = 0, totalStardust = 0, totalRP = 0;
 
   for (const inst of colony.buildings) {
@@ -348,36 +432,63 @@ export function processColonyTurn(ship: Mothership, _turn: number): void {
     const def = getBuildingDef(inst.defId);
     if (!def || !def.outputType) continue;
 
+    // 领袖指定建筑人口槽位扩展
+    let effMaxPop = def.maxPop;
+    for (const l of colony.leaders) {
+      const ld = getLeaderDef(l.id);
+      const extras = ld?.levelExtras[l.level - 1];
+      if (extras?.popCapBonus?.[inst.defId]) effMaxPop = Math.max(effMaxPop, extras.popCapBonus[inst.defId]);
+    }
+    const effPop = Math.min(inst.assignedPop, effMaxPop);
+
+    const lb = (leaderBonusMap[inst.defId] || 0) / 100;
     let output = 0;
     if (def.outputType === 'food') {
-      output = (def.baseOutput || 0) + (def.popFactor || 0) * inst.assignedPop;
+      output = (def.baseOutput || 0) + (def.popFactor || 0) * effPop;
       if (planetDef?.buffs.foodMult) output = Math.ceil(output * planetDef.buffs.foodMult);
+      output = Math.ceil(output * (1 + lb));
       totalFood += output;
     } else if (def.outputType === 'alloy') {
-      output = (def.baseOutput || 0) + (def.popFactor || 0) * inst.assignedPop;
+      output = (def.baseOutput || 0) + (def.popFactor || 0) * effPop;
       if (planetDef?.buffs.alloyMult) output = Math.ceil(output * planetDef.buffs.alloyMult);
+      output = Math.ceil(output * (1 + lb));
       totalAlloy += output;
     } else if (def.outputType === 'stardust') {
-      output = (def.baseOutput || 0) + (def.popFactor || 0) * inst.assignedPop;
+      output = (def.baseOutput || 0) + (def.popFactor || 0) * effPop;
       if (planetDef?.buffs.stardustMult) output = Math.ceil(output * planetDef.buffs.stardustMult);
+      output = Math.ceil(output * (1 + lb));
       totalStardust += output;
     } else if (def.outputType === 'gold') {
       output = Math.floor(Math.random() * ((def.goldOutputMax || 0) - (def.goldOutputMin || 0) + 1)) + (def.goldOutputMin || 0);
+      output = Math.ceil(output * (1 + lb));
       totalGold += output;
     } else if (def.outputType === 'material' && def.outputMaterialId) {
-      output = (def.popFactor || 0) * inst.assignedPop;
+      output = (def.popFactor || 0) * effPop;
       const matMult = planetDef?.buffs.materialMults?.[def.outputMaterialId] || 1;
-      output = Math.ceil(output * matMult);
+      output = Math.ceil(output * matMult * (1 + lb));
       ship.materials = { ...(ship.materials || {}), [def.outputMaterialId]: ((ship.materials || {})[def.outputMaterialId] || 0) + output };
     } else if (def.outputType === 'research') {
-      output = (def.popFactor || 0) * inst.assignedPop;
+      output = (def.popFactor || 0) * effPop;
       if (planetDef?.buffs.researchMult) output = Math.ceil(output * planetDef.buffs.researchMult);
-      // 量子实验室倍率
       const hasB26 = colony.buildings.some((b) => b.active && b.defId === 'B26');
       if (hasB26) output = Math.ceil(output * 1.5);
+      output = Math.ceil(output * (1 + lb));
       totalRP += output;
     }
   }
+
+  // 领袖特殊效果
+  let lRP = 0, lDM = 0, lQ = 0, lSD = 0;
+  for (const l of colony.leaders) {
+    const ld = getLeaderDef(l.id); const ex = ld?.levelExtras[l.level-1];
+    if (ex?.researchPerTurn) lRP += Math.floor(Math.random()*(ex.researchPerTurn[1]-ex.researchPerTurn[0]+1))+ex.researchPerTurn[0];
+    if (ex?.darkMatterPerTurn) lDM += ex.darkMatterPerTurn;
+    if (ex?.quantumPerTurn) lQ += ex.quantumPerTurn;
+    if (ex?.stardustPerTurn) lSD += ex.stardustPerTurn;
+  }
+  totalRP += lRP; ship.stardust += lSD;
+  if (lDM>0) ship.materials = { ...(ship.materials||{}), dark_matter: ((ship.materials||{}).dark_matter||0)+lDM };
+  if (lQ>0) ship.materials = { ...(ship.materials||{}), quantum: ((ship.materials||{}).quantum||0)+lQ };
 
   ship.food += totalFood;
   ship.alloy += totalAlloy;
@@ -394,13 +505,37 @@ export function processColonyTurn(ship: Mothership, _turn: number): void {
     colony.population.available += 1;
   }
 
-  // 人口食物消耗
-  const foodPerPop = 3 + (planetDef?.buffs.foodConsumptionDelta || 0);
+  // 人口食物消耗（含领袖食物减免）
+  let foodPerPop = 3 + (planetDef?.buffs.foodConsumptionDelta || 0);
+  for (const l of colony.leaders) {
+    const ld = getLeaderDef(l.id); const ex = ld?.levelExtras[l.level-1];
+    foodPerPop += (ex?.foodConsumptionDelta || 0);
+  }
+  foodPerPop = Math.max(1, foodPerPop);
   const totalFoodCost = colony.population.total * foodPerPop;
   ship.food -= totalFoodCost;
 
-  // 人口上限重新计算
+  // 人口上限重新计算（含领袖上限加成）
   colony.population.cap = calcPopCap(colony);
+
+  // 领袖免费人口效果
+  for (const l of colony.leaders) {
+    const ld = getLeaderDef(l.id); const ex = ld?.levelExtras[l.level-1];
+    if (ex?.freePopEveryTurns && _turn % ex.freePopEveryTurns === 0 && colony.population.total < colony.population.cap) {
+      colony.population.total += 1; colony.population.available += 1;
+    }
+  }
+
+  // 领袖上限：T23/T24 + 领袖自己加的上限
+  colony.leaderCap = 3;
+  if (colony.techState) {
+    if (colony.techState.researched.includes('T23')) colony.leaderCap += 1;
+    if (colony.techState.researched.includes('T24')) colony.leaderCap += 3;
+  }
+  for (const l of colony.leaders) {
+    const ld = getLeaderDef(l.id); const ex = ld?.levelExtras[l.level-1];
+    colony.leaderCap += (ex?.leaderCapBonus || 0);
+  }
 
   // 科研处理
   if (colony.techState) {
@@ -426,6 +561,23 @@ function calcPopCap(colony: Colony): number {
     if (!inst.active) continue;
     if (inst.defId === 'B1') cap += 5;
     if (inst.defId === 'B2') cap += 20;
+  }
+  // 领袖人口上限加成
+  for (const l of colony.leaders) {
+    const ld = getLeaderDef(l.id); const ex = ld?.levelExtras[l.level-1];
+    cap += (ex?.populationCapBonus || 0);
+    // L16 穹顶之父：居住建筑上限+
+    if (l.id === 'L16') {
+      const mult = [0.5, 1.0, 1.5][l.level-1] || 0;
+      for (const inst of colony.buildings) {
+        if (!inst.active || (inst.defId !== 'B1' && inst.defId !== 'B2')) continue;
+        cap += Math.ceil((inst.defId === 'B1' ? 5 : 20) * mult);
+      }
+      if (l.level >= 3) {
+        const b2Count = colony.buildings.filter((b) => b.active && b.defId === 'B2').length;
+        cap += b2Count * 5;
+      }
+    }
   }
   return cap;
 }

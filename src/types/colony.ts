@@ -118,6 +118,15 @@ export interface TechState {
   researchSeed: number;
 }
 
+export interface ColonyLeader {
+  id: string;
+  name: string;
+  rarity: 'R' | 'SR' | 'SSR';
+  description: string;
+  abilityName: string;
+  level: number; // 1-3
+}
+
 // ==================== 殖民地 ====================
 
 export type ColonyPhase =
@@ -134,7 +143,9 @@ export interface Colony {
   buildings: BuildingInstance[];
   population: Population;
   techState?: TechState;           // 科技状态（Phase 2）
-  scoutingPool?: PlanetTypeId[];   // 可选择的星球池（3个）
+  leaders: ColonyLeader[];           // 已招募的领袖
+  leaderCap: number;                 // 领袖上限（基础3）
+  scoutingPool?: PlanetTypeId[];     // 可选择的星球池（3个）
 }
 
 // ==================== 帮助函数 ====================
