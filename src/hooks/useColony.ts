@@ -70,7 +70,7 @@ export function useColony(
           planetName: name,
           buildings,
           population: { total: initialPop, available: initialPop, cap: initialCap },
-          techState: { researched: [], currentResearch: null, currentProgress: 0, researchPoints: 500 },
+          techState: { researched: [], currentResearch: null, currentProgress: 0, researchPoints: 500, researchSeed: 0 },
         };
         ships[0] = s;
         result = { success: true, message: `成功在「${planetDef.name}」建立殖民地「${name}」！` };
@@ -249,8 +249,8 @@ export function useColony(
           result = { success: false, message: '空闲人口不足' };
           return prev;
         }
-        if (count < def.minPop || count > def.maxPop) {
-          result = { success: false, message: `入驻人口需在${def.minPop}-${def.maxPop}之间` };
+        if (count < 0 || count > def.maxPop) {
+          result = { success: false, message: `入驻人口需在0-${def.maxPop}之间` };
           return prev;
         }
         s.colony = {
@@ -405,6 +405,7 @@ export function processColonyTurn(ship: Mothership, _turn: number): void {
   // 科研处理
   if (colony.techState) {
     colony.techState.researchPoints += totalRP;
+    colony.techState.researchSeed = (colony.techState.researchSeed || 0) + 1; // 每回合刷新可选科技
     if (colony.techState.currentResearch) {
       colony.techState.currentProgress += 1;
       const tech = getTechById(colony.techState.currentResearch);

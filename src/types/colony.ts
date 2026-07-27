@@ -115,6 +115,7 @@ export interface TechState {
   currentResearch: string | null;
   currentProgress: number;
   researchPoints: number;
+  researchSeed: number;
 }
 
 // ==================== 殖民地 ====================

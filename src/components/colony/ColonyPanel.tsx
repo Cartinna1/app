@@ -123,7 +123,7 @@ export default function ColonyPanel(props: ColonyPanelProps) {
     if (!colony?.techState || colony.techState.currentResearch) return [];
     const available = getAvailableTechs(colony.techState.researched);
     return [...available].sort(() => Math.random() - 0.5).slice(0, 2);
-  }, [colony?.techState?.researched, colony?.techState?.currentResearch]);
+  }, [colony?.techState?.researched, colony?.techState?.currentResearch, colony?.techState?.researchSeed]);
 
   // 提前计算活跃建筑的合并视图（必须在条件 return 之前，hooks 顺序不能变）
   const liveBuildings = useMemo(() => (colony?.buildings || []).filter((b) => b.active), [colony?.buildings]);
