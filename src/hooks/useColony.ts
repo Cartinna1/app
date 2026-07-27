@@ -150,6 +150,7 @@ export function useColony(
         let leaderCostRedPct = 0;
         for (const l of s.colony!.leaders || []) {
           const ld = getLeaderDef(l.id);
+          // L18 盖亚通用造价减免
           leaderCostRedPct += (ld?.levelExtras[l.level-1]?.buildCostReduction || 0);
           // L16 穹顶之父 B2专属减免
           if (l.id === 'L16' && defId === 'B2' && l.level >= 2) {

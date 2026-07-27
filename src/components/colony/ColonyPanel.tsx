@@ -295,57 +295,115 @@ export default function ColonyPanel(props: ColonyPanelProps) {
             </div>
           </div>
           {/* 产出汇总 */}
-          {liveBuildings.length > 0 && (
+          {liveBuildings.length > 0 && (() => {
+            const pod = planet?.buffs;
+            const omMap: Record<string, number> = {};
+            let omAll = 0, omMat = 0;
+            for (const l of colony.leaders || []) {
+              const ld = getLeaderDef(l.id);
+              const bonuses = ld?.levelBonuses[l.level-1] || {};
+              for (const [bid, b] of Object.entries(bonuses)) {
+                if (bid === 'ALL') omAll += b;
+                else if (bid === 'ALL_MATERIAL') omMat += b;
+                else omMap[bid] = (omMap[bid] || 0) + b;
+              }
+            }
+            const bonusLines: { label: string; value: number; detail: string }[] = [];
+            const matLines: { k: string; v: number; detail: string }[] = [];
+            const MAT_CN: Record<string, string> = { oil:'石油', gold_ore:'金矿', carbon:'碳块', dark_matter:'暗物质', quantum:'量子簇', silicon:'硅片' };
+            for (const inst of liveBuildings) {
+              if (inst.assignedPop <= 0) continue;
+              const d = getBuildingDef(inst.defId);
+              if (!d) continue;
+              // 有效人口（含领袖槽位扩展）
+              let efm = d.maxPop;
+              for (const l of colony.leaders || []) {
+                const ex = getLeaderDef(l.id)?.levelExtras[l.level-1];
+                if (ex?.popCapBonus?.[inst.defId]) efm = Math.max(efm, ex.popCapBonus[inst.defId]);
+              }
+              const ep = Math.min(inst.assignedPop, efm > 0 ? efm : inst.assignedPop);
+              const base = (d.baseOutput||0)+(d.popFactor||0)*ep;
+              const lb = ((omMap[inst.defId]||0)+(d.category==='material'?omMat:0)+omAll)/100;
+              if (d.outputType === 'food') {
+                const pm = pod?.foodMult ? (pod.foodMult-1) : 0;
+                const v = Math.ceil(base*(1+pm+lb));
+                const parts: string[] = [`${d.name}:${base}`];
+                if (pod?.foodMult) parts.push(`星球${pod.foodMult>1?'+':''}${Math.round(pm*100)}%`);
+                if (lb>0) parts.push(`领袖+${Math.round(lb*100)}%`);
+                bonusLines.push({ label: '食物', value: v, detail: parts.join(' ') });
+              } else if (d.outputType === 'alloy') {
+                const pm = pod?.alloyMult ? (pod.alloyMult-1) : 0;
+                const v = Math.ceil(base*(1+pm+lb));
+                const parts: string[] = [`${d.name}:${base}`];
+                if (pod?.alloyMult) parts.push(`星球${pod.alloyMult>1?'+':''}${Math.round(pm*100)}%`);
+                if (lb>0) parts.push(`领袖+${Math.round(lb*100)}%`);
+                bonusLines.push({ label: '合金', value: v, detail: parts.join(' ') });
+              } else if (d.outputType === 'stardust') {
+                const pm = pod?.buffs.stardustMult ? (pod.buffs.stardustMult-1) : 0;
+                const v = Math.ceil(base*(1+pm+lb));
+                const parts: string[] = [`${d.name}:${base}`];
+                if (pod?.stardustMult) parts.push(`星球${pod.stardustMult>1?'+':''}${Math.round(pm*100)}%`);
+                if (lb>0) parts.push(`领袖+${Math.round(lb*100)}%`);
+                bonusLines.push({ label: '星尘', value: v, detail: parts.join(' ') });
+              } else if (d.outputType === 'gold') {
+                const v = Math.ceil(Math.floor(((d.goldOutputMin||0)+(d.goldOutputMax||0))/2)*(1+lb));
+                const parts: string[] = [`${d.name}`];
+                if (lb>0) parts.push(`领袖+${Math.round(lb*100)}%`);
+                bonusLines.push({ label: '金币', value: v, detail: parts.join(' ') });
+              } else if (d.outputType === 'research') {
+                const v = Math.ceil(base*(1+lb));
+                const parts: string[] = [`${d.name}:${base}`];
+                if (lb>0) parts.push(`领袖+${Math.round(lb*100)}%`);
+                bonusLines.push({ label: '科研', value: v, detail: parts.join(' ') });
+              } else if (d.outputType === 'material' && d.outputMaterialId) {
+                const pm = pod?.materialMults?.[d.outputMaterialId] ? (pod.materialMults[d.outputMaterialId]-1) : 0;
+                const v = Math.ceil(base*(1+pm+lb));
+                const parts: string[] = [`${d.name}:${base}`];
+                if (pm!==0) parts.push(`星球${pm>0?'+':''}${Math.round(pm*100)}%`);
+                if (lb>0) parts.push(`领袖+${Math.round(lb*100)}%`);
+                matLines.push({ k: d.outputMaterialId, v, detail: parts.join(' ') });
+              }
+            }
+            // 聚合同类
+            const agg: Record<string, {value:number;details:string[]}> = {};
+            for (const bl of bonusLines) {
+              if (!agg[bl.label]) agg[bl.label] = {value:0,details:[]};
+              agg[bl.label].value += bl.value;
+              agg[bl.label].details.push(bl.detail);
+            }
+            const aggMat: Record<string, {value:number;details:string[]}> = {};
+            for (const ml of matLines) {
+              const cn = MAT_CN[ml.k] || ml.k;
+              if (!aggMat[cn]) aggMat[cn] = {value:0,details:[]};
+              aggMat[cn].value += ml.v;
+              aggMat[cn].details.push(ml.detail);
+            }
+            return (
             <div className="bg-slate-900/60 border border-slate-700 rounded-xl p-3">
               <h4 className="text-sm font-bold text-slate-400 mb-2">每回合产出</h4>
-              <div className="flex flex-wrap gap-x-3 gap-y-1 text-sm">
-                {(() => {
-                  const pod = planet?.buffs;
-                  // 领袖加成映射
-                  const omMap: Record<string, number> = {};
-                  let omAll = 0, omMat = 0;
-                  for (const l of colony.leaders || []) {
-                    const ld = getLeaderDef(l.id);
-                    const bonuses = ld?.levelBonuses[l.level-1] || {};
-                    for (const [bid, b] of Object.entries(bonuses)) {
-                      if (bid === 'ALL') omAll += b;
-                      else if (bid === 'ALL_MATERIAL') omMat += b;
-                      else omMap[bid] = (omMap[bid] || 0) + b;
-                    }
-                  }
-                  let f = 0, a = 0, s = 0, g = 0, rp = 0;
-                  const mats: Record<string, number> = {};
-                  for (const inst of liveBuildings) {
-                    if (inst.assignedPop <= 0) continue;
-                    const d = getBuildingDef(inst.defId);
-                    if (!d) continue;
-                    const base = (d.baseOutput||0)+(d.popFactor||0)*inst.assignedPop;
-                    const lb = ((omMap[inst.defId]||0)+(d.category==='material'?omMat:0)+omAll)/100;
-                    if (d.outputType === 'food') { const pm = pod?.foodMult ? (pod.foodMult-1) : 0; f += Math.ceil(base*(1+pm+lb)); }
-                    else if (d.outputType === 'alloy') { const pm = pod?.alloyMult ? (pod.alloyMult-1) : 0; a += Math.ceil(base*(1+pm+lb)); }
-                    else if (d.outputType === 'stardust') { const pm = pod?.stardustMult ? (pod.stardustMult-1) : 0; s += Math.ceil(base*(1+pm+lb)); }
-                    else if (d.outputType === 'gold') { const o = Math.floor(((d.goldOutputMin||0)+(d.goldOutputMax||0))/2); g += Math.ceil(o*(1+lb)); }
-                    else if (d.outputType === 'research') { rp += Math.ceil(base*(1+lb)); }
-                    else if (d.outputType === 'material' && d.outputMaterialId) { 
-                      const pm = pod?.materialMults?.[d.outputMaterialId] ? (pod.materialMults[d.outputMaterialId]-1) : 0;
-                      mats[d.outputMaterialId] = (mats[d.outputMaterialId]||0) + Math.ceil(base*(1+pm+lb));
-                    }
-                  }
-                  return <>
-                    {f > 0 && <span className="text-green-400">食物 +{f}</span>}
-                    {a > 0 && <span className="text-slate-300">合金 +{a}</span>}
-                    {s > 0 && <span className="text-purple-400">星尘 +{s}</span>}
-                    {g > 0 && <span className="text-yellow-400">金币 +{g}</span>}
-                    {rp > 0 && <span className="text-cyan-400">科研 +{rp}</span>}
-                    {Object.entries(mats).map(([k,v]) => <span key={k} className="text-amber-400">{(MAT_NAMES as Record<string,string>)[k]||k} +{v}</span>)}
-                  </>;
-                })()}
+              <div className="space-y-1 text-sm">
+                {Object.entries(agg).map(([k,v]) => (
+                  <div key={k} className="flex flex-wrap items-baseline gap-x-1">
+                    <span className="text-slate-500">{k}:</span>
+                    <span className={k==='食物'?'text-green-400':k==='合金'?'text-slate-300':k==='星尘'?'text-purple-400':k==='金币'?'text-yellow-400':'text-cyan-400'}>+{v.value}</span>
+                    <span className="text-slate-600">（{v.details.join(' | ')}）</span>
+                  </div>
+                ))}
+                {Object.entries(aggMat).map(([k,v]) => (
+                  <div key={k} className="flex flex-wrap items-baseline gap-x-1">
+                    <span className="text-slate-500">{k}:</span>
+                    <span className="text-amber-400">+{v.value}</span>
+                    <span className="text-slate-600">（{v.details.join(' | ')}）</span>
+                  </div>
+                ))}
+                {Object.keys(agg).length===0 && Object.keys(aggMat).length===0 && <span className="text-slate-500">暂无产出（建筑无人入驻）</span>}
               </div>
-              <div className="text-sm text-red-400 mt-1">
-                {(() => { let fp=3+(planet?.buffs.foodConsumptionDelta||0); for(const l of colony.leaders||[]){fp+=(getLeaderDef(l.id)?.levelExtras[l.level-1]?.foodConsumptionDelta||0);} return `食物消耗: -${colony.population.total * Math.max(1, fp)}`; })()}
+              <div className="text-sm text-red-400 mt-2">
+                {(() => { let fp=3+(pod?.foodConsumptionDelta||0); for(const l of colony.leaders||[]){fp+=(getLeaderDef(l.id)?.levelExtras[l.level-1]?.foodConsumptionDelta||0);} return `食物消耗: -${colony.population.total * Math.max(1, fp)} (每人${Math.max(1,fp)})`; })()}
               </div>
             </div>
-          )}
+            );
+          })()}
         </div>
       )}
 
@@ -378,22 +436,39 @@ export default function ColonyPanel(props: ColonyPanelProps) {
                 </div>
               );
               const maxLabel = def.maxPop > 0 ? `入驻 ${inst.assignedPop}/${def.maxPop}` : `入驻 ${inst.assignedPop}`;
-              // 计算该建筑实际产出
+              // 类型标签颜色
+              const tc: Record<string,string> = { housing:'bg-blue-700', food:'bg-green-700', alloy:'bg-slate-600', stardust:'bg-purple-700', trade:'bg-amber-700', material:'bg-orange-700', functional:'bg-cyan-700' };
+              const tl: Record<string,string> = { housing:'居住', food:'食物', alloy:'合金', stardust:'星尘', trade:'贸易', material:'原料', functional:'功能' };
+              const catTag = (def.category && tl[def.category]) ? <span className={`text-xs ${tc[def.category]||'bg-slate-600'} text-white px-1.5 py-0.5 rounded mr-1`}>{tl[def.category]}</span> : null;
+              // 计算该建筑实际产出（用有效人口）
               let liveOut = '';
               if (inst.assignedPop > 0 && def.outputType) {
-                const b = (def.baseOutput||0)+(def.popFactor||0)*inst.assignedPop;
+                let efm = def.maxPop;
+                for (const l of colony.leaders || []) {
+                  const ex = getLeaderDef(l.id)?.levelExtras[l.level-1];
+                  if (ex?.popCapBonus?.[inst.defId]) efm = Math.max(efm, ex.popCapBonus[inst.defId]);
+                }
+                const ep = Math.min(inst.assignedPop, efm > 0 ? efm : inst.assignedPop);
+                const b = (def.baseOutput||0)+(def.popFactor||0)*ep;
                 const lb = ((mlMap[inst.defId]||0)+(def.category==='material'?mlMat:0)+mlAll)/100;
-                let v=0, un='';
-                if (def.outputType === 'food') { const pm = planet?.buffs.foodMult ? (planet.buffs.foodMult-1) : 0; v=Math.ceil(b*(1+pm+lb)); un='食物'; }
-                else if (def.outputType === 'alloy') { const pm = planet?.buffs.alloyMult ? (planet.buffs.alloyMult-1) : 0; v=Math.ceil(b*(1+pm+lb)); un='合金'; }
-                else if (def.outputType === 'stardust') { const pm = planet?.buffs.stardustMult ? (planet.buffs.stardustMult-1) : 0; v=Math.ceil(b*(1+pm+lb)); un='星尘'; }
-                else if (def.outputType === 'gold') { v=Math.ceil(Math.floor(((def.goldOutputMin||0)+(def.goldOutputMax||0))/2)*(1+lb)); un='金币'; }
-                else if (def.outputType === 'research') { v=Math.ceil(b*(1+lb)); un='科研'; }
-                if (v>0) liveOut = `产出: ${v} ${un}/回合`;
+                let v=0, un='', detail='';
+                if (def.outputType === 'food') { const pm = planet?.buffs.foodMult ? (planet.buffs.foodMult-1) : 0; v=Math.ceil(b*(1+pm+lb)); un='食物'; detail=`${b}${pm!==0?'星球'+(pm>0?'+':'')+Math.round(pm*100)+'%':''}${lb>0?'领袖+'+Math.round(lb*100)+'%':''}`; }
+                else if (def.outputType === 'alloy') { const pm = planet?.buffs.alloyMult ? (planet.buffs.alloyMult-1) : 0; v=Math.ceil(b*(1+pm+lb)); un='合金'; detail=`${b}${pm!==0?'星球'+(pm>0?'+':'')+Math.round(pm*100)+'%':''}${lb>0?'领袖+'+Math.round(lb*100)+'%':''}`; }
+                else if (def.outputType === 'stardust') { const pm = planet?.buffs.stardustMult ? (planet.buffs.stardustMult-1) : 0; v=Math.ceil(b*(1+pm+lb)); un='星尘'; detail=`${b}${pm!==0?'星球'+(pm>0?'+':'')+Math.round(pm*100)+'%':''}${lb>0?'领袖+'+Math.round(lb*100)+'%':''}`; }
+                else if (def.outputType === 'gold') { v=Math.ceil(Math.floor(((def.goldOutputMin||0)+(def.goldOutputMax||0))/2)*(1+lb)); un='金币'; detail=`${lb>0?'领袖+'+Math.round(lb*100)+'%':''}`; }
+                else if (def.outputType === 'research') { v=Math.ceil(b*(1+lb)); un='科研'; detail=`${b}${lb>0?'领袖+'+Math.round(lb*100)+'%':''}`; }
+                else if (def.outputType === 'material' && def.outputMaterialId) {
+                  const mc: Record<string,string> = { oil:'石油', gold_ore:'金矿', carbon:'碳块', dark_matter:'暗物质', quantum:'量子簇', silicon:'硅片' };
+                  const pm = planet?.buffs.materialMults?.[def.outputMaterialId] ? (planet.buffs.materialMults[def.outputMaterialId]-1) : 0;
+                  v=Math.ceil(b*(1+pm+lb)); un=mc[def.outputMaterialId]||def.outputMaterialId;
+                  detail=`${b}${pm!==0?'星球'+(pm>0?'+':'')+Math.round(pm*100)+'%':''}${lb>0?'领袖+'+Math.round(lb*100)+'%':''}`;
+                }
+                if (v>0) liveOut = `产出: ${v} ${un}/回合 (${detail})`;
               }
               return (
                 <div key={inst.uid} className="bg-slate-900/60 border border-green-700/40 rounded-lg p-3 mb-2 flex justify-between items-center">
                   <div>
+                    {catTag}
                     <span className="text-sm text-green-300 font-bold">{def.name}</span>
                     <span className="text-sm text-slate-500 ml-2">{maxLabel}</span>
                     {liveOut && <span className="text-sm text-cyan-400 ml-2">{liveOut}</span>}

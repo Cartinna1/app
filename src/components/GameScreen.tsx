@@ -660,7 +660,7 @@ function OverviewTab({
               {colStardust > 0 && <div><span className="text-slate-500">星尘产出:</span> <span className="text-purple-400 font-bold">+{colStardust} (殖民地)</span></div>}
               {colGold > 0 && <div><span className="text-slate-500">金币产出:</span> <span className="text-yellow-400 font-bold">+{colGold} (殖民地)</span></div>}
               {colRP > 0 && <div><span className="text-slate-500">科研产出:</span> <span className="text-cyan-400 font-bold">+{colRP} (殖民地)</span></div>}
-              {Object.entries(colMats).map(([k,v]) => v>0 && <div key={k}><span className="text-slate-500">{k}:</span> <span className="text-amber-400 font-bold">+{v} (殖民地)</span></div>)}
+              {(() => { const mc: Record<string,string> = { oil:'石油', gold_ore:'金矿', carbon:'碳块', dark_matter:'暗物质', quantum:'量子簇', silicon:'硅片' }; return Object.entries(colMats).map(([k,v]) => v>0 && <div key={k}><span className="text-slate-500">{mc[k]||k}:</span> <span className="text-amber-400 font-bold">+{v} (殖民地)</span></div>); })()}
             </div>
           </div>
         );

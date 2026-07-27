@@ -98,7 +98,7 @@ export const ALL_LEADERS: LeaderDef[] = [
   { id: 'L16', rarity: 'SSR', name: '苍穹·奥丁', abilityName: '穹顶之父',
     description: '传说他曾以一己之力设计出穹顶都市的第三代生态循环系统，让一座濒死殖民地重获新生。',
     levelBonuses: [{}, {}, {}],
-    levelExtras: [{ populationCapBonus: 0/*B1/B2 +50% handled in calcPopCap */ }, { buildCostReduction: 30/*B2 only*/ }, { buildCostReduction: 50, populationCapBonus: 5 }] },
+    levelExtras: [{}, {}, { populationCapBonus: 0 }] },
   { id: 'L17', rarity: 'SSR', name: '永动·卡尔文', abilityName: '永恒循环',
     description: '他宣称自己找到了资源循环的终极公式，任何废弃物在他手中都会变成某种生产的起点。',
     levelBonuses: [{ 'ALL_MATERIAL':25 }, { 'ALL_MATERIAL':40 }, { 'ALL_MATERIAL':60 }],
