@@ -212,6 +212,7 @@ export function useColony(
           return prev;
         }
         s.gold -= cost;
+        s.goldLog = [{ turn: prev.turn, amount: -cost, reason: `招募${amount}人口`, balanceAfter: s.gold }, ...s.goldLog].slice(0, 200);
         s.colony = {
           ...s.colony,
           population: {
@@ -314,49 +315,43 @@ export function useColony(
   const recruitLeader = useCallback((leaderId: string): { success: boolean; message: string } => {
     const ld = getLeaderDef(leaderId);
     if (!ld) return { success: false, message: '领袖不存在' };
-    // 检查是否已拥有该领袖
-    const colony2 = gameState.ships[0].colony;
-    if (colony2?.leaders?.some((l) => l.id === leaderId)) {
-      return { success: false, message: '该领袖已招募' };
-    }
-    let result = { success: false, message: '' };
+    const col = gameState.ships[0].colony;
+    if (!col || col.phase !== 'active') return { success: false, message: '殖民地未激活' };
+    const hasB27 = col.buildings.some((b) => b.active && b.defId === 'B27');
+    if (!hasB27) return { success: false, message: '需建造星河议政厅(B27)' };
+    if (col.leaders.some((l) => l.id === leaderId)) return { success: false, message: '该领袖已招募' };
+    if (col.leaders.length >= col.leaderCap) return { success: false, message: '领袖数量已达上限' };
     dispatch({
       type: 'FUNCTIONAL_UPDATE',
       updater: (prev) => {
         const ships = [...prev.ships]; const s = { ...ships[0] };
-        if (!s.colony || s.colony.phase !== 'active') { result={success:false,message:'殖民地未激活'}; return prev; }
-        const hasB27 = s.colony.buildings.some((b) => b.active && b.defId === 'B27');
-        if (!hasB27) { result={success:false,message:'需建造星河议政厅(B27)'}; return prev; }
-        if (s.colony!.leaders.length >= s.colony!.leaderCap) { result={success:false,message:'领袖数量已达上限'}; return prev; }
-        s.colony.leaders = [...s.colony.leaders, { id: ld.id, name: ld.name, rarity: ld.rarity, description: ld.description, abilityName: ld.abilityName, level: 1 }];
-        result = { success: true, message: `招募领袖「${ld.name}」(R=${ld.rarity})！` };
+        s.colony!.leaders = [...s.colony!.leaders, { id: ld.id, name: ld.name, rarity: ld.rarity, description: ld.description, abilityName: ld.abilityName, level: 1 }];
         ships[0] = s; return { ...prev, ships };
       },
     });
-    return result;
-  }, [dispatch]);
+    return { success: true, message: `招募「${ld.name}」(${ld.rarity})` };
+  }, [dispatch, gameState]);
 
   /** 领袖升级 */
   const upgradeLeader = useCallback((leaderIndex: number): { success: boolean; message: string } => {
-    let result = { success: false, message: '' };
+    const col = gameState.ships[0].colony;
+    if (!col || col.phase !== 'active') return { success: false, message: '殖民地未激活' };
+    const li = col.leaders[leaderIndex];
+    if (!li) return { success: false, message: '领袖不存在' };
+    if (li.level >= 3) return { success: false, message: '已达最高等级' };
+    const cost = li.level === 1 ? 20 : 45;
+    if (gameState.ships[0].stardust < cost) return { success: false, message: `星尘不足(需要${cost})` };
     dispatch({
       type: 'FUNCTIONAL_UPDATE',
       updater: (prev) => {
         const ships = [...prev.ships]; const s = { ...ships[0] };
-        if (!s.colony || s.colony.phase !== 'active') { result={success:false,message:'殖民地未激活'}; return prev; }
-        const li = s.colony.leaders[leaderIndex];
-        if (!li) { result={success:false,message:'领袖不存在'}; return prev; }
-        if (li.level >= 3) { result={success:false,message:'已达最高等级'}; return prev; }
-        const cost = li.level === 1 ? 20 : 45;
-        if (s.stardust < cost) { result={success:false,message:`星尘不足(需要${cost})`}; return prev; }
         s.stardust -= cost;
-        s.colony.leaders = s.colony.leaders.map((l, i) => i === leaderIndex ? { ...l, level: l.level + 1 } : l);
-        result = { success: true, message: `「${li.name}」升至Lv${li.level+1}！` };
+        s.colony!.leaders = s.colony!.leaders.map((l, i) => i === leaderIndex ? { ...l, level: l.level + 1 } : l);
         ships[0] = s; return { ...prev, ships };
       },
     });
-    return result;
-  }, [dispatch]);
+    return { success: true, message: `「${li.name}」升至Lv${li.level+1}` };
+  }, [dispatch, gameState]);
 
   /** 领袖招募：扣星尘+生成选项存入 colony.recruitPool */
   const rollAndRecruit = useCallback(() => {
