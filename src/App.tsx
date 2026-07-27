@@ -41,7 +41,7 @@ function App() {
     startResearch,
     recruitLeader,
     upgradeLeader,
-    chargeLeaderRoll,
+    rollAndRecruit,
     buyAlloy,
     buyFood,
     buyRelic,
@@ -116,7 +116,7 @@ function App() {
       onStartResearch={startResearch}
       onRecruitLeader={recruitLeader}
       onUpgradeLeader={upgradeLeader}
-      onChargeLeaderRoll={chargeLeaderRoll}
+      onRollAndRecruit={rollAndRecruit}
       onBuyAlloy={buyAlloy}
       onBuyFood={buyFood}
       onBuyRelic={buyRelic}

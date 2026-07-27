@@ -5,6 +5,7 @@ import { ALL_PLANETS } from '@/data/colony/planets';
 import { getBuildingDef } from '@/data/colony/buildings';
 import { getTechById } from '@/data/colony/techs';
 import { getLeaderDef } from '@/data/colony/leaders';
+import { rollLeaders } from '@/data/colony/leaders';
 
 const UNLOCK_COST = 30000;
 
@@ -353,17 +354,19 @@ export function useColony(
     return result;
   }, [dispatch]);
 
-  /** 扣领袖招募费用 */
-  const chargeLeaderRoll = useCallback((): { success: boolean; message: string } => {
-    let result = { success: false, message: '' };
+  /** 领袖招募：扣星尘+返回3个领袖选项 */
+  const rollAndRecruit = useCallback((): { success: boolean; message: string; leaders?: any[] } => {
+    let result: any = { success: false, message: '', leaders: null };
     dispatch({
       type: 'FUNCTIONAL_UPDATE',
       updater: (prev) => {
-        const ships = [...prev.ships]; const s = { ...ships[0] };
+        const s = { ...prev.ships[0] };
         if (s.stardust < 10) { result = { success: false, message: '星尘不足' }; return prev; }
         s.stardust -= 10;
-        result = { success: true, message: '扣10星尘' };
-        ships[0] = s; return { ...prev, ships };
+        const ships = [...prev.ships]; ships[0] = s;
+        const { rollLeaders: rl } = require('@/data/colony/leaders');
+        result = { success: true, message: '', leaders: rl(3) };
+        return { ...prev, ships };
       },
     });
     return result;
@@ -372,7 +375,7 @@ export function useColony(
   return {
     unlockColony, selectPlanet, rescrollPlanets, generateScoutingPool,
     buildColonyBuilding, recruitPop, assignPop, startResearch,
-    recruitLeader, upgradeLeader, chargeLeaderRoll,
+    recruitLeader, upgradeLeader, rollAndRecruit,
   };
 }
 
