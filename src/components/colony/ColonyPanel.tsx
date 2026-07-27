@@ -15,7 +15,6 @@ const MAT_NAMES: Record<string, string> = {
 function matLabel(id: string): string { return MAT_NAMES[id] || id; }
 
 function getBuffList(planet: PlanetDef): { name: string; desc: string; color: string }[] {
-  const b = planet.buffs;
   const list: { name: string; desc: string; color: string }[] = [];
   // 按照文档中的 BUFF 名称
   if (planet.id === 'desert') {
@@ -372,10 +371,10 @@ export default function ColonyPanel(props: ColonyPanelProps) {
             <h4 className="font-bold text-slate-200 mb-3">分配人口到建筑</h4>
             <p className="text-xs text-slate-400 mb-2">空闲人口: <span className="text-cyan-400 font-bold">{colony.population.available}</span></p>
             {liveBuildings.filter((b) => {
-              const def = getBuildingDef(b.defId);
+              const def = getBuildingDef(inst.defId);
               return def && def.maxPop > 0;
             }).map((inst) => {
-              const def = getBuildingDef(b.defId);
+              const def = getBuildingDef(inst.defId);
               if (!def) return null;
               const isFixed = def.minPop === def.maxPop;
               return (
