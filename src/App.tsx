@@ -42,7 +42,6 @@ function App() {
     recruitLeader,
     upgradeLeader,
     rollAndRecruit,
-    clearRecruitPool,
     cancelBuilding,
     demolishBuilding,
     buyAlloy,
