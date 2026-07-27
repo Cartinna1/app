@@ -97,13 +97,14 @@ interface ColonyPanelProps {
   onRecruitLeader: (leaderId: string) => void;
   onUpgradeLeader: (leaderIndex: number) => { success: boolean; message: string };
   onRollAndRecruit: () => void;
-  onClearRecruitPool: () => void;
+  onCancelBuilding: (uid: string) => void;
+  onDemolishBuilding: (uid: string) => void;
 }
 
 type ColonyTab = 'overview' | 'buildings' | 'population' | 'research' | 'leaders';
 
 export default function ColonyPanel(props: ColonyPanelProps) {
-  const { ship, onUnlockColony, onSelectPlanet, onRescrollPlanets, generateScoutingPool, onBuild, onRecruitPop, onAssignPop, onStartResearch, onRecruitLeader, onUpgradeLeader, onRollAndRecruit } = props;
+  const { ship, onUnlockColony, onSelectPlanet, onRescrollPlanets, generateScoutingPool, onBuild, onRecruitPop, onAssignPop, onStartResearch, onRecruitLeader, onUpgradeLeader, onRollAndRecruit, onCancelBuilding, onDemolishBuilding } = props;
   const colony = ship.colony;
   const [tab, setTab] = useState<ColonyTab>('overview');
   const [message, setMessage] = useState('');
@@ -351,28 +352,24 @@ export default function ColonyPanel(props: ColonyPanelProps) {
           {/* 已建成（合并同类） */}
           <div>
             <h4 className="text-sm font-bold text-green-400 mb-2">已建成</h4>
-            {groupedLive.length === 0 && <p className="text-slate-500 text-sm">暂无已建成建筑</p>}
-            {groupedLive.map((g) => {
-              const def = getBuildingDef(g.defId);
-              // B7 不在 Phase 1 定义中，跳过
-              if (!def) {
-                return (
-                  <div key={g.defId} className="bg-slate-900/60 border border-purple-700/40 rounded-lg p-3 mb-2">
-                    <span className="text-sm text-purple-300 font-bold">纳米铸造阵列 (B7)</span>
-                    <span className="text-sm text-slate-500 ml-2">×{g.count} | 此阶段暂未实现功能</span>
-                  </div>
-                );
-              }
-              const maxLabel = def.maxPop > 0 ? ` | 入驻人口: ${g.totalPop} | 产出: ${getOutputDesc(def)}` : ` | ${getOutputDesc(def)}`;
+            {colony.buildings.filter((b: any) => b.active).length === 0 && <p className="text-slate-500 text-sm">暂无已建成建筑</p>}
+            {colony.buildings.filter((b: any) => b.active).map((inst: any) => {
+              const def = getBuildingDef(inst.defId);
+              if (!def) return (
+                <div key={inst.uid} className="bg-slate-900/60 border border-purple-700/40 rounded-lg p-3 mb-2 flex justify-between items-center">
+                  <span className="text-sm text-purple-300 font-bold">{inst.defId}</span>
+                  <button onClick={() => onDemolishBuilding(inst.uid)} className="px-2 py-1 bg-red-700 hover:bg-red-600 rounded text-xs font-bold">拆除</button>
+                </div>
+              );
+              const maxLabel = def.maxPop > 0 ? `入驻 ${inst.assignedPop}/${def.maxPop}` : `入驻 ${inst.assignedPop}`;
               return (
-                <div key={g.defId} className="bg-slate-900/60 border border-green-700/40 rounded-lg p-3 mb-2">
-                  <div className="flex justify-between items-center">
-                    <div>
-                      <span className="text-sm text-green-300 font-bold">{def.name}</span>
-                      {g.count > 1 && <span className="text-sm text-slate-500 ml-1">×{g.count}</span>}
-                      <span className="text-sm text-slate-500 ml-2">{maxLabel}</span>
-                    </div>
+                <div key={inst.uid} className="bg-slate-900/60 border border-green-700/40 rounded-lg p-3 mb-2 flex justify-between items-center">
+                  <div>
+                    <span className="text-sm text-green-300 font-bold">{def.name}</span>
+                    <span className="text-sm text-slate-500 ml-2">{maxLabel} | {getOutputDesc(def)}</span>
                   </div>
+                  <button onClick={() => { onDemolishBuilding(inst.uid); showMsg(`已拆除「${def.name}」`, 'success'); }}
+                    className="px-2 py-1 bg-red-700 hover:bg-red-600 rounded text-xs font-bold flex-shrink-0 ml-3">拆除</button>
                 </div>
               );
             })}
@@ -388,7 +385,10 @@ export default function ColonyPanel(props: ColonyPanelProps) {
                 return (
                   <div key={inst.uid} className="bg-slate-900/60 border border-yellow-700/40 rounded-lg p-3 mb-2 flex justify-between items-center">
                     <div><span className="text-sm text-yellow-300 font-bold">{def.name}</span></div>
-                    <span className="text-sm text-yellow-400">{inst.buildProgress}/{Math.max(1, def.buildTurns + (planet?.buffs.buildTurnDelta || 0))} 回合</span>
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm text-yellow-400">{inst.buildProgress}/{Math.max(1, def.buildTurns + (planet?.buffs.buildTurnDelta || 0))} 回合</span>
+                      <button onClick={() => onCancelBuilding(inst.uid)} className="px-2 py-1 bg-red-700 hover:bg-red-600 rounded text-xs font-bold">取消</button>
+                    </div>
                   </div>
                 );
               })}

@@ -78,7 +78,8 @@ interface GameScreenProps {
   onRecruitLeader: (leaderId: string) => void;
   onUpgradeLeader: (leaderIndex: number) => { success: boolean; message: string };
   onRollAndRecruit: () => void;
-  onClearRecruitPool: () => void;
+  onCancelBuilding: (uid: string) => void
+  onDemolishBuilding: (uid: string) => void;
   onBuyAlloy: (type: 'gold' | 'stardust', qty: number) => boolean;
   onBuyFood: (type: 'gold' | 'alloy', qty: number) => boolean;
   onBuyRelic: (relicId: string) => { success: boolean; message: string };
@@ -148,6 +149,8 @@ export default function GameScreen({
   onRecruitLeader,
   onUpgradeLeader,
   onRollAndRecruit,
+            onCancelBuilding,
+            onDemolishBuilding,
   onClearRecruitPool,
   onBuyAlloy,
   onBuyFood,
@@ -419,6 +422,8 @@ export default function GameScreen({
               onRecruitLeader={onRecruitLeader}
               onUpgradeLeader={onUpgradeLeader}
               onRollAndRecruit={onRollAndRecruit}
+              onCancelBuilding={onCancelBuilding}
+              onDemolishBuilding={onDemolishBuilding}
               onClearRecruitPool={onClearRecruitPool}
             />
           )}
@@ -597,17 +602,33 @@ function OverviewTab({
         if (ship.colony?.phase === 'active') {
           const c = ship.colony;
           const pd = c.planetType ? getPlanetById(c.planetType) : undefined;
+          // 领袖加成映射
+          const lbMap: Record<string, number> = {};
+          let lAll = 0, lMat = 0;
+          for (const l of c.leaders || []) {
+            const ld = getLeaderDef(l.id);
+            const bonuses = ld?.levelBonuses[l.level-1] || {};
+            for (const [bid, b] of Object.entries(bonuses)) {
+              if (bid === 'ALL') lAll += b;
+              else if (bid === 'ALL_MATERIAL') lMat += b;
+              else lbMap[bid] = (lbMap[bid] || 0) + b;
+            }
+          }
           for (const inst of c.buildings) {
             if (!inst.active || inst.assignedPop <= 0) continue;
             const d = getBuildingDef(inst.defId);
             if (!d || !d.outputType) continue;
             let o = 0;
-            if (d.outputType === 'food') { o = (d.baseOutput||0)+(d.popFactor||0)*inst.assignedPop; if (pd?.buffs.foodMult) o=Math.ceil(o*pd.buffs.foodMult); colFood+=o; }
-            else if (d.outputType === 'alloy') { o = (d.baseOutput||0)+(d.popFactor||0)*inst.assignedPop; if (pd?.buffs.alloyMult) o=Math.ceil(o*pd.buffs.alloyMult); colAlloy+=o; }
-            else if (d.outputType === 'stardust') { o = (d.baseOutput||0)+(d.popFactor||0)*inst.assignedPop; if (pd?.buffs.stardustMult) o=Math.ceil(o*pd.buffs.stardustMult); colStardust+=o; }
-            else if (d.outputType === 'gold') colGold += Math.floor(((d.goldOutputMin||0)+(d.goldOutputMax||0))/2);
+            const lb = ((lbMap[inst.defId]||0)+(d.category==='material'?lMat:0)+lAll)/100;
+            if (d.outputType === 'food') { o=(d.baseOutput||0)+(d.popFactor||0)*inst.assignedPop; if(pd?.buffs.foodMult)o=Math.ceil(o*pd.buffs.foodMult); colFood+=Math.ceil(o*(1+lb)); }
+            else if (d.outputType === 'alloy') { o=(d.baseOutput||0)+(d.popFactor||0)*inst.assignedPop; if(pd?.buffs.alloyMult)o=Math.ceil(o*pd.buffs.alloyMult); colAlloy+=Math.ceil(o*(1+lb)); }
+            else if (d.outputType === 'stardust') { o=(d.baseOutput||0)+(d.popFactor||0)*inst.assignedPop; if(pd?.buffs.stardustMult)o=Math.ceil(o*pd.buffs.stardustMult); colStardust+=Math.ceil(o*(1+lb)); }
+            else if (d.outputType === 'gold') { o=Math.floor(((d.goldOutputMin||0)+(d.goldOutputMax||0))/2); colGold+=Math.ceil(o*(1+lb)); }
           }
-          colFoodCost = c.population.total * (3 + (pd?.buffs.foodConsumptionDelta || 0));
+          // 食物消耗含领袖减免
+          let fpp = 3 + (pd?.buffs.foodConsumptionDelta || 0);
+          for (const l of c.leaders || []) fpp += (getLeaderDef(l.id)?.levelExtras[l.level-1]?.foodConsumptionDelta || 0);
+          colFoodCost = c.population.total * Math.max(1, fpp);
         }
         return (
           <div className="mb-4 bg-slate-900/60 border border-slate-700 rounded-xl p-3 md:p-4">

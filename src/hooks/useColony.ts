@@ -416,10 +416,37 @@ export function useColony(
     });
   }, [dispatch]);
 
+  /** 取消建造 */
+  const cancelBuilding = useCallback((uid: string) => {
+    dispatch({
+      type: 'FUNCTIONAL_UPDATE',
+      updater: (prev) => {
+        const ships = [...prev.ships]; const s = { ...ships[0] };
+        if (!s.colony) return prev;
+        s.colony = { ...s.colony, buildings: s.colony.buildings.filter((b: any) => b.uid !== uid) };
+        ships[0] = s; return { ...prev, ships };
+      },
+    });
+  }, [dispatch]);
+
+  /** 拆除已建成建筑 */
+  const demolishBuilding = useCallback((uid: string) => {
+    dispatch({
+      type: 'FUNCTIONAL_UPDATE',
+      updater: (prev) => {
+        const ships = [...prev.ships]; const s = { ...ships[0] };
+        if (!s.colony) return prev;
+        s.colony = { ...s.colony, buildings: s.colony.buildings.filter((b: any) => b.uid !== uid) };
+        ships[0] = s; return { ...prev, ships };
+      },
+    });
+  }, [dispatch]);
+
   return {
     unlockColony, selectPlanet, rescrollPlanets, generateScoutingPool,
     buildColonyBuilding, recruitPop, assignPop, startResearch,
     recruitLeader, upgradeLeader, rollAndRecruit, clearRecruitPool,
+    cancelBuilding, demolishBuilding,
   };
 }
 
@@ -596,21 +623,10 @@ export function processColonyTurn(ship: Mothership, _turn: number): void {
     }
   }
 
-  // 领袖上限：T23/T24 + 领袖自己加的上限
-  colony.leaderCap = 3;
-  if (colony.techState) {
-    if (colony.techState.researched.includes('T23')) colony.leaderCap += 1;
-    if (colony.techState.researched.includes('T24')) colony.leaderCap += 3;
-  }
-  for (const l of colony.leaders) {
-    const ld = getLeaderDef(l.id); const ex = ld?.levelExtras[l.level-1];
-    colony.leaderCap += (ex?.leaderCapBonus || 0);
-  }
-
   // 科研处理
   if (colony.techState) {
     colony.techState.researchPoints += totalRP;
-    colony.techState.researchSeed = (colony.techState.researchSeed || 0) + 1; // 每回合刷新可选科技
+    colony.techState.researchSeed = (colony.techState.researchSeed || 0) + 1;
     if (colony.techState.currentResearch) {
       const polarBonus = (planetDef && planetDef.id === 'polar') ? 1 : 0;
       colony.techState.currentProgress += 1 + polarBonus;
@@ -621,6 +637,17 @@ export function processColonyTurn(ship: Mothership, _turn: number): void {
         colony.techState.currentProgress = 0;
       }
     }
+  }
+
+  // 领袖上限（科技+领袖，放在科研处理之后确保新研究的科技生效）
+  colony.leaderCap = 3;
+  if (colony.techState) {
+    if (colony.techState.researched.includes('T23')) colony.leaderCap += 1;
+    if (colony.techState.researched.includes('T24')) colony.leaderCap += 3;
+  }
+  for (const l of colony.leaders) {
+    const ld = getLeaderDef(l.id); const ex = ld?.levelExtras[l.level-1];
+    colony.leaderCap += (ex?.leaderCapBonus || 0);
   }
 }
 

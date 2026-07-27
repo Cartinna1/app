@@ -43,6 +43,8 @@ function App() {
     upgradeLeader,
     rollAndRecruit,
     clearRecruitPool,
+    cancelBuilding,
+    demolishBuilding,
     buyAlloy,
     buyFood,
     buyRelic,
