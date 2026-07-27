@@ -61,11 +61,25 @@ function getOutputDesc(def: ReturnType<typeof getBuildingDef>): string {
   if (def.outputType === 'food') return `产食物: ${def.baseOutput}+入驻×${def.popFactor}/回合`;
   if (def.outputType === 'alloy') return `产合金: ${def.baseOutput}+入驻×${def.popFactor}/回合`;
   if (def.outputType === 'gold') return `产金币: ${def.goldOutputMin}-${def.goldOutputMax}/回合`;
-  if (def.outputType === 'stardust') return `产星尘`;
-  if (def.outputType === 'research') return '产科研点';
-  if (def.category === 'housing') return `人口上限+5`;
+  if (def.outputType === 'stardust') return `产星尘: ${def.baseOutput}/回合`;
+  if (def.outputType === 'material') return `产${matLabel(def.outputMaterialId || '')}: 入驻×${def.popFactor}/回合`;
+  if (def.outputType === 'research') return `产科研点: ${def.popFactor}×入驻/回合`;
+  if (def.category === 'housing') return `人口上限+${def.id === 'B2' ? '20' : '5'}`;
+  if (def.id === 'B27') return '解锁招募领袖';
+  if (def.id === 'B26') return '研究实验室产出×1.5';
+  if (def.id === 'B28') return '每2回合+1人口';
   return '';
 }
+
+const CAT_COLORS: Record<string, string> = {
+  housing: 'bg-blue-900/30 text-blue-400', food: 'bg-green-900/30 text-green-400',
+  alloy: 'bg-slate-700/50 text-slate-300', stardust: 'bg-purple-900/30 text-purple-400',
+  trade: 'bg-yellow-900/30 text-yellow-400', material: 'bg-amber-900/30 text-amber-400',
+  functional: 'bg-cyan-900/30 text-cyan-400',
+};
+const CAT_LABELS: Record<string, string> = {
+  housing: '居住', food: '食物', alloy: '合金', stardust: '星尘', trade: '贸易', material: '原料', functional: '功能',
+};
 
 // ==================== 组件 ====================
 
@@ -103,7 +117,16 @@ export default function ColonyPanel(props: ColonyPanelProps) {
     }
   }, [colony?.phase]);
 
+  // 科研：稳定随机选项
+  const researchOptions = useMemo(() => {
+    if (!colony?.techState || colony.techState.currentResearch) return [];
+    const available = getAvailableTechs(colony.techState.researched);
+    return [...available].sort(() => Math.random() - 0.5).slice(0, 2);
+  }, [colony?.techState?.researched, colony?.techState?.currentResearch]);
+
   // 提前计算活跃建筑的合并视图（必须在条件 return 之前，hooks 顺序不能变）
+  const liveBuildings = useMemo(() => (colony?.buildings || []).filter((b) => b.active), [colony?.buildings]);
+  const pendingBuildings = useMemo(() => (colony?.buildings || []).filter((b) => !b.active), [colony?.buildings]);
   const liveBuildings = useMemo(() => (colony?.buildings || []).filter((b) => b.active), [colony?.buildings]);
   const pendingBuildings = useMemo(() => (colony?.buildings || []).filter((b) => !b.active), [colony?.buildings]);
   const groupedLive = useMemo(() => {
@@ -247,7 +270,7 @@ export default function ColonyPanel(props: ColonyPanelProps) {
           )}
           <div className="grid grid-cols-3 gap-3">
             <div className="bg-slate-900/60 border border-slate-700 rounded-xl p-3 text-center">
-              <p className="text-[10px] text-slate-500">已建成</p>
+              <p className="text-[10px] text-slate-500">已建���</p>
               <p className="text-lg font-bold text-cyan-400">{liveBuildings.length}</p>
             </div>
             <div className="bg-slate-900/60 border border-slate-700 rounded-xl p-3 text-center">
@@ -255,10 +278,49 @@ export default function ColonyPanel(props: ColonyPanelProps) {
               <p className="text-lg font-bold text-yellow-400">{pendingBuildings.length}</p>
             </div>
             <div className="bg-slate-900/60 border border-slate-700 rounded-xl p-3 text-center">
-              <p className="text-[10px] text-slate-500">人口上限</p>
+              <p className="text-[10px] text-slate-500">人口���限</p>
               <p className="text-lg font-bold text-purple-400">{colony.population.cap}</p>
             </div>
           </div>
+          {/* 产出汇总 */}
+          {liveBuildings.length > 0 && (
+            <div className="bg-slate-900/60 border border-slate-700 rounded-xl p-3">
+              <h4 className="text-xs font-bold text-slate-400 mb-2">每回合产出</h4>
+              <div className="flex flex-wrap gap-x-3 gap-y-1 text-[10px]">
+                {(() => {
+                  const pod = planet?.buffs;
+                  let f = 0, a = 0, s = 0, g = 0, rp = 0;
+                  const mats: Record<string, number> = {};
+                  for (const inst of liveBuildings) {
+                    if (inst.assignedPop <= 0) continue;
+                    const d = getBuildingDef(inst.defId);
+                    if (!d) continue;
+                    if (d.outputType === 'food') { f += Math.ceil(((d.baseOutput||0)+(d.popFactor||0)*inst.assignedPop)*(pod?.foodMult||1)); }
+                    else if (d.outputType === 'alloy') { a += Math.ceil(((d.baseOutput||0)+(d.popFactor||0)*inst.assignedPop)*(pod?.alloyMult||1)); }
+                    else if (d.outputType === 'stardust') { s += Math.ceil(((d.baseOutput||0)+(d.popFactor||0)*inst.assignedPop)*(pod?.stardustMult||1)); }
+                    else if (d.outputType === 'gold') { g += Math.floor(((d.goldOutputMin||0)+(d.goldOutputMax||0))/2); }
+                    else if (d.outputType === 'research') { rp += (d.popFactor||0)*inst.assignedPop; }
+                    else if (d.outputType === 'material' && d.outputMaterialId) { 
+                      const mm = pod?.materialMults?.[d.outputMaterialId] || 1;
+                      mats[d.outputMaterialId] = (mats[d.outputMaterialId]||0) + Math.ceil((d.popFactor||0)*inst.assignedPop*mm);
+                    }
+                  }
+                  const mns = { carbon:'碳块', gold_ore:'黄金', oil:'石油', dark_matter:'暗物质', silicon:'硅片', quantum:'量子簇' };
+                  return <>
+                    {f > 0 && <span className="text-green-400">食物 +{f}</span>}
+                    {a > 0 && <span className="text-slate-300">合金 +{a}</span>}
+                    {s > 0 && <span className="text-purple-400">星尘 +{s}</span>}
+                    {g > 0 && <span className="text-yellow-400">金币 +{g}</span>}
+                    {rp > 0 && <span className="text-cyan-400">科研 +{rp}</span>}
+                    {Object.entries(mats).map(([k,v]) => <span key={k} className="text-amber-400">{mns[k]||k} +{v}</span>)}
+                  </>;
+                })()}
+              </div>
+              <div className="text-[10px] text-red-400 mt-1">
+                食物消耗: -{colony.population.total * (3 + (planet?.buffs.foodConsumptionDelta || 0))}
+              </div>
+            </div>
+          )}
         </div>
       )}
 
@@ -322,6 +384,7 @@ export default function ColonyPanel(props: ColonyPanelProps) {
                 <div key={def.id} className={`bg-slate-900/60 border rounded-lg p-3 mb-2 ${limited ? 'opacity-50 border-slate-800' : 'border-slate-700'}`}>
                   <div className="flex justify-between items-start mb-2">
                     <div>
+                      <span className={`text-[10px] ${CAT_COLORS[def.category] || 'text-slate-500'} px-1.5 py-0.5 rounded mr-1`}>{CAT_LABELS[def.category] || def.category}</span>
                       <span className="text-sm text-slate-200 font-bold">{def.name}</span>
                       <span className="text-[10px] text-cyan-400 ml-2">{getOutputDesc(def)}</span>
                     </div>
@@ -341,6 +404,12 @@ export default function ColonyPanel(props: ColonyPanelProps) {
                       金币 {actualGoldCost.toLocaleString()}{costMult !== 1 ? <span className="text-slate-600"> (基础{def.costGold.toLocaleString()} ×{costMult})</span> : ''}{!ship.gold || ship.gold < actualGoldCost ? ' (不足)' : ''}
                     </span>
                       );
+                    })()}
+                    {def.costAlloy && (() => {
+                      const aCost = Math.ceil((def.costAlloy || 0) * (planet?.buffs.buildCostMult || 1));
+                      return <span className={ship.alloy >= aCost ? 'text-slate-300' : 'text-red-400'}>
+                        合金 {ship.alloy}/{aCost}{ship.alloy < aCost ? ' (不足)' : ''}
+                      </span>;
                     })()}
                     {/* 原料成本 */}
                     {def.costMaterials && Object.entries(def.costMaterials).map(([matId, amt]) => {
@@ -388,37 +457,78 @@ export default function ColonyPanel(props: ColonyPanelProps) {
             </div>
           </div>
 
-          {/* 人口分配 */}
+          {/* 人口分配（合并同类建筑） */}
           <div className="bg-slate-900/60 border border-slate-700 rounded-xl p-4">
             <h4 className="font-bold text-slate-200 mb-3">分配人口到建筑</h4>
             <p className="text-xs text-slate-400 mb-2">空闲人口: <span className="text-cyan-400 font-bold">{colony.population.available}</span></p>
-            {liveBuildings.filter((inst) => {
-              const def = getBuildingDef(inst.defId);
+            {groupedLive.filter((g) => {
+              const def = getBuildingDef(g.defId);
               return def && def.maxPop > 0;
-            }).map((inst) => {
-              const def = getBuildingDef(inst.defId);
+            }).map((g) => {
+              const def = getBuildingDef(g.defId);
               if (!def) return null;
+              const totalMax = def.maxPop * g.count;
               const isFixed = def.minPop === def.maxPop;
+              const currentTotal = g.totalPop;
+              // 合并后的最小人口（每个至少minPop）
+              const mergedMin = 0;
               return (
-                <div key={inst.uid} className="flex items-center justify-between bg-slate-800/60 rounded-lg p-3 mb-2">
+                <div key={g.defId} className="flex items-center justify-between bg-slate-800/60 rounded-lg p-3 mb-2">
                   <div>
                     <span className="text-sm text-slate-200">{def.name}</span>
-                    <span className="text-xs text-slate-500 ml-2">({def.minPop}-{def.maxPop}人)</span>
+                    {g.count > 1 && <span className="text-xs text-slate-500 ml-1">×{g.count}</span>}
+                    <span className="text-xs text-slate-500 ml-2">(0-{totalMax}人)</span>
                     <span className="text-[10px] text-cyan-400 ml-2">{getOutputDesc(def)}</span>
                   </div>
                   {isFixed ? (
-                    <button onClick={() => { const r = onAssignPop(inst.uid, def.maxPop); showMsg(r.message, r.success ? 'success' : 'error'); }}
-                      disabled={inst.assignedPop >= def.maxPop}
-                      className={`px-3 py-1.5 rounded text-xs font-bold transition-colors ${inst.assignedPop >= def.maxPop ? 'bg-green-700 text-green-300' : 'bg-cyan-700 hover:bg-cyan-600 text-white'}`}>
-                      {inst.assignedPop >= def.maxPop ? `已满 (${def.maxPop}人)` : `入驻 ${def.maxPop}人`}
+                    <button onClick={() => {
+                      const target = g.count * def.maxPop;
+                      // 逐个建筑分配
+                      let remaining = target - currentTotal;
+                      for (const uid of g.uids) {
+                        if (remaining <= 0) break;
+                        const inst = liveBuildings.find((b) => b.uid === uid);
+                        if (inst && inst.assignedPop < def.maxPop) {
+                          const add = Math.min(remaining, def.maxPop - inst.assignedPop);
+                          onAssignPop(uid, inst.assignedPop + add);
+                          remaining -= add;
+                        }
+                      }
+                      showMsg(`已分配人口到${g.count}座${def.name}`, 'success');
+                    }} disabled={currentTotal >= totalMax}
+                      className={`px-3 py-1.5 rounded text-xs font-bold ${currentTotal >= totalMax ? 'bg-green-700 text-green-300' : 'bg-cyan-700 text-white'}`}>
+                      {currentTotal >= totalMax ? `已满` : `全部入驻 (${totalMax}人)`}
                     </button>
                   ) : (
                     <div className="flex items-center gap-1">
-                      <button onClick={() => { const r = onAssignPop(inst.uid, Math.max(def.minPop, inst.assignedPop - 1)); showMsg(r.message, r.success ? 'success' : 'error'); }}
-                        className="w-7 h-7 rounded bg-slate-700 hover:bg-slate-600 flex items-center justify-center"><Minus size={12} className="text-slate-300" /></button>
-                      <span className="w-8 text-center text-sm text-cyan-400 font-bold">{inst.assignedPop}</span>
-                      <button onClick={() => { const r = onAssignPop(inst.uid, Math.min(def.maxPop, inst.assignedPop + 1)); showMsg(r.message, r.success ? 'success' : 'error'); }}
-                        className="w-7 h-7 rounded bg-slate-700 hover:bg-slate-600 flex items-center justify-center"><Plus size={12} className="text-slate-300" /></button>
+                      <button onClick={() => {
+                        // 减人口：从最后有人的建筑减
+                        let remaining = 1;
+                        for (let j = g.uids.length - 1; j >= 0 && remaining > 0; j--) {
+                          const uid = g.uids[j];
+                          const inst = liveBuildings.find((b) => b.uid === uid);
+                          if (inst && inst.assignedPop > 0) {
+                            const sub = Math.min(remaining, inst.assignedPop);
+                            onAssignPop(uid, inst.assignedPop - sub);
+                            remaining -= sub;
+                          }
+                        }
+                      }} disabled={currentTotal <= 0}
+                        className="w-7 h-7 rounded bg-slate-700 hover:bg-slate-600 flex items-center justify-center"><Minus size={12} /></button>
+                      <span className="w-8 text-center text-sm text-cyan-400 font-bold">{currentTotal}</span>
+                      <button onClick={() => {
+                        let remaining = 1;
+                        for (const uid of g.uids) {
+                          if (remaining <= 0) break;
+                          const inst = liveBuildings.find((b) => b.uid === uid);
+                          if (inst && inst.assignedPop < def.maxPop) {
+                            const add = Math.min(remaining, def.maxPop - inst.assignedPop);
+                            onAssignPop(uid, inst.assignedPop + add);
+                            remaining -= add;
+                          }
+                        }
+                      }} disabled={currentTotal >= totalMax || colony.population.available < 1}
+                        className="w-7 h-7 rounded bg-slate-700 hover:bg-slate-600 flex items-center justify-center"><Plus size={12} /></button>
                     </div>
                   )}
                 </div>
@@ -444,14 +554,11 @@ export default function ColonyPanel(props: ColonyPanelProps) {
               );
             })() : <p className="text-xs text-slate-500">尚未选择研究项目 | 每回合产出科研点数无法显示的不会在此显示</p>}
           </div>
-          {!colony.techState.currentResearch && (() => {
-            const available = getAvailableTechs(colony.techState!.researched);
-            const shuffled = [...available].sort(() => Math.random() - 0.5).slice(0, 2);
-            return (
+          {!colony.techState.currentResearch && (
             <div>
               <h4 className="text-sm font-bold text-purple-400 mb-2">可选科技</h4>
               <div className="space-y-2">
-                {shuffled.map((tech) => (
+                {researchOptions.map((tech) => (
                   <div key={tech.id} className={`bg-slate-900/60 border rounded-lg p-3 flex justify-between items-center ${colony.techState!.researchPoints >= tech.costRP ? 'border-purple-700/40' : 'border-slate-800 opacity-50'}`}>
                     <div>
                       <span className="text-sm text-purple-300 font-bold">{tech.name}</span>
@@ -466,15 +573,18 @@ export default function ColonyPanel(props: ColonyPanelProps) {
                 ))}
               </div>
             </div>
-            );
-          })()}
+          )}
           {colony.techState.researched.length > 0 && (
             <div>
               <h4 className="text-sm font-bold text-green-400 mb-2">已完成 ({colony.techState.researched.length})</h4>
               <div className="flex flex-wrap gap-1.5">
                 {colony.techState.researched.map((tid) => {
                   const t = getTechById(tid);
-                  return <span key={tid} className="text-[10px] bg-green-900/20 text-green-400 border border-green-700/30 px-2 py-1 rounded">{t?.name || tid}</span>;
+                  const info = t ? (t.unlocksBuilding ? `解锁 ${getBuildingDef(t.unlocksBuilding)?.name || ''}` : t.leaderCapBonus ? `领袖上限+${t.leaderCapBonus}` : '') : '';
+                  return <div key={tid} className="text-[10px] bg-green-900/20 text-green-400 border border-green-700/30 px-2 py-1 rounded">
+                    <span className="font-bold">{t?.name || tid}</span>
+                    {info && <span className="text-green-600 ml-1">- {info}</span>}
+                  </div>;
                 })}
               </div>
             </div>

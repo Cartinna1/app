@@ -565,64 +565,45 @@ function OverviewTab({
         )}
       </div>
 
-      {/* 本体食物消耗 */}
+      {/* 资源收支明细 */}
       {(() => {
         const t = gameState.turn;
-        let foodCost: number;
-        if (t <= 5) foodCost = 1;
-        else if (t <= 10) foodCost = 3;
-        else if (t <= 15) foodCost = 7;
-        else if (t <= 20) foodCost = 15;
-        else if (t <= 25) foodCost = 23;
-        else if (t <= 30) foodCost = 26;
-        else foodCost = t;
+        let crewFoodCost: number;
+        if (t <= 5) crewFoodCost = 1; else if (t <= 10) crewFoodCost = 3;
+        else if (t <= 15) crewFoodCost = 7; else if (t <= 20) crewFoodCost = 15;
+        else if (t <= 25) crewFoodCost = 23; else if (t <= 30) crewFoodCost = 26;
+        else crewFoodCost = t;
         const preserve = ship.relics.some((r) => r.id === 'r_007') ? 0.5 : 0;
-        const actual = Math.floor(foodCost * (1 - preserve));
+        const actualCrewCost = Math.floor(crewFoodCost * (1 - preserve));
+        // 殖民地数据
+        let colFood = 0, colAlloy = 0, colStardust = 0, colGold = 0, colFoodCost = 0;
+        if (ship.colony?.phase === 'active') {
+          const c = ship.colony;
+          const pd = c.planetType ? getPlanetById(c.planetType) : undefined;
+          for (const inst of c.buildings) {
+            if (!inst.active || inst.assignedPop <= 0) continue;
+            const d = getBuildingDef(inst.defId);
+            if (!d || !d.outputType) continue;
+            let o = 0;
+            if (d.outputType === 'food') { o = (d.baseOutput||0)+(d.popFactor||0)*inst.assignedPop; if (pd?.buffs.foodMult) o=Math.ceil(o*pd.buffs.foodMult); colFood+=o; }
+            else if (d.outputType === 'alloy') { o = (d.baseOutput||0)+(d.popFactor||0)*inst.assignedPop; if (pd?.buffs.alloyMult) o=Math.ceil(o*pd.buffs.alloyMult); colAlloy+=o; }
+            else if (d.outputType === 'stardust') { o = (d.baseOutput||0)+(d.popFactor||0)*inst.assignedPop; if (pd?.buffs.stardustMult) o=Math.ceil(o*pd.buffs.stardustMult); colStardust+=o; }
+            else if (d.outputType === 'gold') colGold += Math.floor(((d.goldOutputMin||0)+(d.goldOutputMax||0))/2);
+          }
+          colFoodCost = c.population.total * (3 + (pd?.buffs.foodConsumptionDelta || 0));
+        }
         return (
           <div className="mb-4 bg-slate-900/60 border border-slate-700 rounded-xl p-3 md:p-4">
-            <h3 className="text-xs text-amber-400 font-bold mb-2">舰队维生</h3>
-            <div className="grid grid-cols-2 gap-2 text-xs">
-              <div><span className="text-slate-500">船员食物消耗:</span> <span className="text-red-400 font-bold">-{actual}/回合</span></div>
-              <div><span className="text-slate-500">当前食物存量:</span> <span className={ship.food >= 0 ? 'text-green-400 font-bold' : 'text-red-400 font-bold'}>{ship.food}</span></div>
+            <h3 className="text-xs text-amber-400 font-bold mb-3">资源收支</h3>
+            <div className="grid grid-cols-2 gap-2 text-[10px] md:text-xs">
+              <div><span className="text-slate-500">食物总产出:</span> <span className="text-green-400 font-bold">+{colFood}{colFood>0?' (殖民地)':''}</span></div>
+              <div><span className="text-slate-500">食物总消耗:</span> <span className="text-red-400 font-bold">-{actualCrewCost+colFoodCost}{colFoodCost>0?` (船员${actualCrewCost}+殖民${colFoodCost})`:` (船员)`}</span></div>
+              <div><span className="text-slate-500">食物净增减:</span> <span className={(colFood - actualCrewCost - colFoodCost) >= 0 ? 'text-green-400 font-bold' : 'text-red-400 font-bold'}>{colFood - actualCrewCost - colFoodCost >= 0 ? '+' : ''}{colFood - actualCrewCost - colFoodCost}</span></div>
+              <div><span className="text-slate-500">当前食物:</span> <span className={ship.food >= 0 ? 'text-green-400 font-bold' : 'text-red-400 font-bold'}>{ship.food}</span></div>
+              {colAlloy > 0 && <div><span className="text-slate-500">合金产出:</span> <span className="text-slate-300 font-bold">+{colAlloy} (殖民地)</span></div>}
+              {colStardust > 0 && <div><span className="text-slate-500">星尘产出:</span> <span className="text-purple-400 font-bold">+{colStardust} (殖民地)</span></div>}
+              {colGold > 0 && <div><span className="text-slate-500">金币产出:</span> <span className="text-yellow-400 font-bold">+{colGold} (殖民地)</span></div>}
             </div>
-          </div>
-        );
-      })()}
-
-      {/* 殖民地收支（如果已激活） */}
-      {ship.colony && ship.colony.phase === 'active' && (() => {
-        const colony = ship.colony;
-        const planetDef = colony.planetType ? getPlanetById(colony.planetType) : undefined;
-        let colFood = 0, colAlloy = 0, colGold = 0;
-        for (const inst of colony.buildings) {
-          if (!inst.active || inst.assignedPop <= 0) continue;
-          const def = getBuildingDef(inst.defId);
-          if (!def || !def.outputType) continue;
-          if (def.outputType === 'food') {
-            let o = (def.baseOutput || 0) + (def.popFactor || 0) * inst.assignedPop;
-            if (planetDef?.buffs.foodMult) o = Math.ceil(o * planetDef.buffs.foodMult);
-            colFood += o;
-          } else if (def.outputType === 'alloy') {
-            let o = (def.baseOutput || 0) + (def.popFactor || 0) * inst.assignedPop;
-            if (planetDef?.buffs.alloyMult) o = Math.ceil(o * planetDef.buffs.alloyMult);
-            colAlloy += o;
-          } else if (def.outputType === 'gold') {
-            const mn = def.goldOutputMin || 0, mx = def.goldOutputMax || 0;
-            colGold += Math.floor((mn + mx) / 2);
-          }
-        }
-        const foodPerPop = 3 + (planetDef?.buffs.foodConsumptionDelta || 0);
-        const colFoodCost = colony.population.total * foodPerPop;
-        return (
-          <div className="mb-4 bg-cyan-900/20 border border-cyan-700/30 rounded-xl p-3 md:p-4">
-            <h3 className="text-xs text-cyan-400 font-bold mb-2">殖民地「{colony.planetName}」收支</h3>
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-xs">
-              <div><span className="text-slate-500">食物产出:</span> <span className="text-green-400 font-bold">+{colFood}</span></div>
-              <div><span className="text-slate-500">食物消耗:</span> <span className="text-red-400 font-bold">-{colFoodCost}</span></div>
-              <div><span className="text-slate-500">合金产出:</span> <span className="text-slate-300 font-bold">+{colAlloy}</span></div>
-              <div><span className="text-slate-500">金币产出:</span> <span className="text-yellow-400 font-bold">+{colGold}</span></div>
-            </div>
-            <div className="text-[10px] text-slate-500 mt-1">人口 {colony.population.total}/{colony.population.cap} | 空闲 {colony.population.available}</div>
           </div>
         );
       })()}
