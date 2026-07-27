@@ -756,6 +756,16 @@ export default function ColonyPanel(props: ColonyPanelProps) {
                       if (ex1.freePopEveryTurns) skillDesc += ' | 每'+ex1.freePopEveryTurns+'回合免费1人口';
                       if (ex1.populationCapBonus) skillDesc += ' | 人口上限+'+ex1.populationCapBonus;
                       if (ex1.leaderCapBonus) skillDesc += ' | 领袖上限+'+ex1.leaderCapBonus;
+                      if (ex1.popCapBonus) { for (const [bid, n] of Object.entries(ex1.popCapBonus)) { const bd = getBuildingDef(bid); skillDesc += ` | ${bd?.name||bid}上限+${n}`; } }
+                      if (ex1.recruitCostBonus) skillDesc += ` | 招募费用${ex1.recruitCostBonus}`;
+                      if (ex1.recruitCapPerTurn) skillDesc += ` | 招募上限+${ex1.recruitCapPerTurn}/回合`;
+                      if (ex1.randomMatsPerTurn) skillDesc += ` | 随机原料+${ex1.randomMatsPerTurn}/回合`;
+                      if (ex1.leaderCostReduction) skillDesc += ` | 领袖招募费-${ex1.leaderCostReduction}`;
+                      if (ex1.b26Mult) skillDesc += ` | 量子实验室×${ex1.b26Mult}`;
+                      if (ex1.buildCostReduction) skillDesc += ` | 造价-${ex1.buildCostReduction}%`;
+                      if (ex1.stardustPerTurn) skillDesc += ` | 星尘+${ex1.stardustPerTurn}/回合`;
+                      if (ex1.darkMatterPerTurn) skillDesc += ` | 暗物质+${ex1.darkMatterPerTurn}/回合`;
+                      if (ex1.quantumPerTurn) skillDesc += ` | 量子簇+${ex1.quantumPerTurn}/回合`;
                       return (
                         <div key={i} className="bg-slate-800/60 border border-slate-700 rounded-lg p-3 flex justify-between items-center gap-3">
                           <img
@@ -808,6 +818,12 @@ export default function ColonyPanel(props: ColonyPanelProps) {
                     if (currExtras.quantumPerTurn) parts.push(`量子簇+${currExtras.quantumPerTurn}/回合`);
                     if (currExtras.leaderCapBonus) parts.push(`领袖上限+${currExtras.leaderCapBonus}`);
                     if (currExtras.buildCostReduction) parts.push(`造价-${currExtras.buildCostReduction}%`);
+                    if (currExtras.popCapBonus) { for (const [bid, n] of Object.entries(currExtras.popCapBonus)) { const bd = getBuildingDef(bid); parts.push(`${bd?.name||bid}上限+${n}`); } }
+                    if (currExtras.recruitCostBonus) parts.push(`招募费用${currExtras.recruitCostBonus}`);
+                    if (currExtras.recruitCapPerTurn) parts.push(`招募上限+${currExtras.recruitCapPerTurn}/回合`);
+                    if (currExtras.randomMatsPerTurn) parts.push(`随机原料+${currExtras.randomMatsPerTurn}/回合`);
+                    if (currExtras.leaderCostReduction) parts.push(`领袖招募费-${currExtras.leaderCostReduction}`);
+                    if (currExtras.b26Mult) parts.push(`量子实验室×${currExtras.b26Mult}`);
                     return (
                     <div key={i} className="bg-slate-800/60 border border-slate-700 rounded-lg p-3 mb-2 flex gap-3 items-start">
                       <img
