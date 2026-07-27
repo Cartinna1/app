@@ -613,9 +613,10 @@ export default function ColonyPanel(props: ColonyPanelProps) {
                   <button onClick={() => {
                     if (ship.stardust < 10) { showMsg('星尘不足', 'error'); return; }
                     if (colony.leaders.length >= colony.leaderCap) { showMsg('领袖已满', 'error'); return; }
+                    const opts = rollLeaders(3);
+                    setLeaderOptions(opts);
                     const r1 = onChargeLeaderRoll();
-                    if (!r1.success) { showMsg(r1.message, 'error'); return; }
-                    setLeaderOptions(rollLeaders(3));
+                    if (!r1.success) { showMsg(r1.message, 'error'); setLeaderOptions(null); return; }
                   }} disabled={ship.stardust < 10 || colony.leaders.length >= colony.leaderCap}
                     className="px-4 py-2 bg-purple-700 hover:bg-purple-600 disabled:bg-slate-700 rounded-lg text-sm font-bold text-white">
                     {colony.leaders.length >= colony.leaderCap ? '已满' : '开始招募'}
@@ -655,11 +656,11 @@ export default function ColonyPanel(props: ColonyPanelProps) {
                       );
                     })}
                     <button onClick={() => {
-                      if (ship.stardust < 10) { showMsg('星尘不足(需要10)', 'error'); return; }
                       if (colony.leaders.length >= colony.leaderCap) { showMsg('领袖已满', 'error'); return; }
+                      const opts2 = rollLeaders(3);
+                      setLeaderOptions(opts2);
                       const r2 = onChargeLeaderRoll();
-                      if (!r2.success) { showMsg(r2.message, 'error'); return; }
-                      setLeaderOptions(rollLeaders(3));
+                      if (!r2.success) { showMsg(r2.message, 'error'); setLeaderOptions(null); return; }
                     }} disabled={ship.stardust < 10 || colony.leaders.length >= colony.leaderCap}
                       className="text-sm text-purple-400 hover:text-purple-300 disabled:text-slate-600">换一批 (10星尘)</button>
                   </div>
