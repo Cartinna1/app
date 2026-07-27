@@ -130,10 +130,10 @@ export function useColony(
           return prev;
         }
         // 数量限制校验（含领袖扩展）
-        let effMaxCount = def.maxCount;
+        let effMaxCount: number | undefined = def.maxCount;
         if (defId === 'B9') {
           for (const l of s.colony!.leaders || []) {
-            if (l.id === 'L12' && l.level >= 2) effMaxCount += 1;
+            if (l.id === 'L12' && l.level >= 2) effMaxCount = (effMaxCount ?? 0) + 1;
           }
         }
         if (effMaxCount != null) {
