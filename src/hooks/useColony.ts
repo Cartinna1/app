@@ -129,17 +129,34 @@ export function useColony(
           result = { success: false, message: '殖民地未激活' };
           return prev;
         }
-        // 数量限制校验
-        if (def.maxCount) {
+        // 数量限制校验（含领袖扩展）
+        let effMaxCount = def.maxCount;
+        if (defId === 'B9') {
+          for (const l of s.colony!.leaders || []) {
+            if (l.id === 'L12' && l.level >= 2) effMaxCount += 1;
+          }
+        }
+        if (effMaxCount) {
           const count = s.colony.buildings.filter((b) => b.defId === defId).length;
-          if (count >= def.maxCount) {
-            result = { success: false, message: `「${def.name}」建造数量已达上限(${def.maxCount})` };
+          if (count >= effMaxCount) {
+            result = { success: false, message: `「${def.name}」建造数量已达上限(${effMaxCount})` };
             return prev;
           }
         }
         // 星球BUFF
         const planetDef2 = s.colony!.planetType ? ALL_PLANETS.find((p) => p.id === s.colony!.planetType) : null;
-        const costMult = planetDef2?.buffs.buildCostMult || 1;
+        const planetCostMult = planetDef2?.buffs.buildCostMult || 1;
+        // 领袖造价减免
+        let leaderCostRedPct = 0;
+        for (const l of s.colony!.leaders || []) {
+          const ld = getLeaderDef(l.id);
+          leaderCostRedPct += (ld?.levelExtras[l.level-1]?.buildCostReduction || 0);
+          // L16 穹顶之父 B2专属减免
+          if (l.id === 'L16' && defId === 'B2' && l.level >= 2) {
+            leaderCostRedPct += (l.level === 2 ? 30 : 50);
+          }
+        }
+        const costMult = Math.max(0.1, planetCostMult * (1 - leaderCostRedPct / 100));
         const turnDelta = planetDef2?.buffs.buildTurnDelta || 0;
         const actualGoldCost = Math.ceil(def.costGold * costMult);
         const actualBuildTurns = Math.max(1, def.buildTurns + turnDelta);
@@ -162,6 +179,7 @@ export function useColony(
           }
         }
         s.gold -= actualGoldCost;
+        s.goldLog = [{ turn: prev.turn, amount: -actualGoldCost, reason: `建造「${def.name}」`, balanceAfter: s.gold }, ...s.goldLog].slice(0, 200);
         if (def.costAlloy) s.alloy -= Math.ceil(def.costAlloy * costMult);
         if (def.costMaterials) {
           s.materials = { ...s.materials };
@@ -185,7 +203,6 @@ export function useColony(
   /** 招募人口 */
   const recruitPop = useCallback((amount: number): { success: boolean; message: string } => {
     if (amount <= 0) return { success: false, message: '数量必须大于0' };
-    if (amount > 5) return { success: false, message: '每回合最多招募5人口' };
     let result = { success: false, message: '' };
     dispatch({
       type: 'FUNCTIONAL_UPDATE',
@@ -202,7 +219,19 @@ export function useColony(
           const pd = ALL_PLANETS.find((p) => p.id === s.colony!.planetType);
           return pd?.buffs.recruitCostDelta || 0;
         })();
-        const cost = (baseCost + planetDelta) * amount;
+        // 领袖招募费用减免
+        let recruitCostBonus = 0; let recruitCapBonus = 0;
+        for (const l of s.colony!.leaders || []) {
+          const ld = getLeaderDef(l.id);
+          recruitCostBonus += (ld?.levelExtras[l.level-1]?.recruitCostBonus || 0);
+          recruitCapBonus += (ld?.levelExtras[l.level-1]?.recruitCapPerTurn || 0);
+        }
+        const maxRecruit = 5 + recruitCapBonus;
+        if (amount > maxRecruit) {
+          result = { success: false, message: `每回合最多招募${maxRecruit}人口` };
+          return prev;
+        }
+        const cost = Math.max(0, (baseCost + planetDelta + recruitCostBonus) * amount);
         if (s.gold < cost) {
           result = { success: false, message: `金币不足（需要${cost.toLocaleString()}金币）` };
           return prev;
@@ -359,9 +388,15 @@ export function useColony(
       type: 'FUNCTIONAL_UPDATE',
       updater: (prev) => {
         const ships = [...prev.ships]; const s = { ...ships[0] };
-        if (!s.colony || s.stardust < 10) return prev;
+        if (!s.colony) return prev;
         if (s.colony.leaders.length >= s.colony.leaderCap) return prev;
-        s.stardust -= 10;
+        let lCostReduction = 0;
+        for (const l of s.colony.leaders) {
+          lCostReduction += (getLeaderDef(l.id)?.levelExtras[l.level-1]?.leaderCostReduction || 0);
+        }
+        const rollCost = Math.max(1, 10 - lCostReduction);
+        if (s.stardust < rollCost) return prev;
+        s.stardust -= rollCost;
         s.colony = { ...s.colony, recruitPool: rollLeaders(3) };
         ships[0] = s; return { ...prev, ships };
       },
@@ -507,12 +542,19 @@ export function processColonyTurn(ship: Mothership, _turn: number): void {
 
   // 领袖特殊效果
   let lRP = 0, lDM = 0, lQ = 0, lSD = 0;
+  const matIds = ['oil','gold_ore','carbon','dark_matter','quantum','silicon'];
   for (const l of colony.leaders) {
     const ld = getLeaderDef(l.id); const ex = ld?.levelExtras[l.level-1];
     if (ex?.researchPerTurn) lRP += Math.floor(Math.random()*(ex.researchPerTurn[1]-ex.researchPerTurn[0]+1))+ex.researchPerTurn[0];
     if (ex?.darkMatterPerTurn) lDM += ex.darkMatterPerTurn;
     if (ex?.quantumPerTurn) lQ += ex.quantumPerTurn;
     if (ex?.stardustPerTurn) lSD += ex.stardustPerTurn;
+    if (ex?.randomMatsPerTurn) {
+      for (let mi = 0; mi < ex.randomMatsPerTurn; mi++) {
+        const mid = matIds[Math.floor(Math.random() * matIds.length)];
+        ship.materials = { ...(ship.materials||{}), [mid]: ((ship.materials||{})[mid]||0)+1 };
+      }
+    }
   }
   totalRP += lRP; ship.stardust += lSD;
   if (lDM>0) ship.materials = { ...(ship.materials||{}), dark_matter: ((ship.materials||{}).dark_matter||0)+lDM };
