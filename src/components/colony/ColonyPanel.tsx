@@ -766,6 +766,8 @@ export default function ColonyPanel(props: ColonyPanelProps) {
                       if (ex1.stardustPerTurn) skillDesc += ` | 星尘+${ex1.stardustPerTurn}/回合`;
                       if (ex1.darkMatterPerTurn) skillDesc += ` | 暗物质+${ex1.darkMatterPerTurn}/回合`;
                       if (ex1.quantumPerTurn) skillDesc += ` | 量子簇+${ex1.quantumPerTurn}/回合`;
+                      {/* L16 穹顶之父（硬编码追加） */}
+                      {ld.id === 'L16' && (skillDesc += ' | 穹顶都市/居住舱人口效果+50%')}
                       return (
                         <div key={i} className="bg-slate-800/60 border border-slate-700 rounded-lg p-3 flex justify-between items-center gap-3">
                           <img
@@ -824,6 +826,12 @@ export default function ColonyPanel(props: ColonyPanelProps) {
                     if (currExtras.randomMatsPerTurn) parts.push(`随机原料+${currExtras.randomMatsPerTurn}/回合`);
                     if (currExtras.leaderCostReduction) parts.push(`领袖招募费-${currExtras.leaderCostReduction}`);
                     if (currExtras.b26Mult) parts.push(`量子实验室×${currExtras.b26Mult}`);
+                    {/* L16 穹顶之父（硬编码追加） */}
+                    {ld.id === 'L16' && (() => {
+                      const popPct = [50, 100, 150][l.level-1] || 0;
+                      parts.push(`穹顶都市/居住舱人口效果+${popPct}%`);
+                      if (l.level >= 2) parts.push(`B2造价-${l.level===2?30:50}%`);
+                    })()}
                     return (
                     <div key={i} className="bg-slate-800/60 border border-slate-700 rounded-lg p-3 mb-2 flex gap-3 items-start">
                       <img

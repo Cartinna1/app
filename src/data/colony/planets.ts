@@ -94,7 +94,7 @@ export const ALL_PLANETS: PlanetDef[] = [
     name: '遗落星球',
     description: '这个星球表面曾经被完全被单一城市所覆盖。如今这里只有废弃的古老遗迹，其原住民早已离去。',
     buffs: {
-      specialEffects: ['初始拥有一座已建造完成的纳米铸造阵列B7', '一级居住舱B1人口上限变为+3'],
+      specialEffects: ['初始拥有一座已建造完成的纳米铸造阵列B7、碳基材料合成器B20与暗物质压缩阱B21', '一级居住舱B1人口上限变为+3'],
     },
   },
 ];
