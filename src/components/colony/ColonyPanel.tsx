@@ -403,6 +403,17 @@ export default function ColonyPanel(props: ColonyPanelProps) {
                 {(() => { let fp=3+(pod?.foodConsumptionDelta||0); for(const l of colony.leaders||[]){fp+=(getLeaderDef(l.id)?.levelExtras[l.level-1]?.foodConsumptionDelta||0);} return `食物消耗: -${colony.population.total * Math.max(1, fp)} (每人${Math.max(1,fp)})`; })()}
               </div>
             </div>
+            {/* 星球 16:9 地貌图 */}
+            {colony.planetType && (
+              <div className="bg-slate-900/60 border border-slate-700 rounded-xl p-3">
+                <img
+                  src={`/planet-landscape/${colony.planetType}.png`}
+                  alt={planet?.name || '星球地貌'}
+                  onError={(e) => { (e.target as HTMLImageElement).parentElement!.style.display='none'; }}
+                  className="w-full aspect-video object-cover rounded-lg border border-slate-700"
+                />
+              </div>
+            )}
             );
           })()}
         </div>
