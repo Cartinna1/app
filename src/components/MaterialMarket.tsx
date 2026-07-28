@@ -13,7 +13,7 @@ export default function MaterialMarket({ materials, ship, shipIndex, onBuy }: Ma
   const [quantities, setQuantities] = useState<Record<string, number>>({});
   const [messages, setMessages] = useState<Record<string, string>>({});
 
-  const getQty = (matId: string) => quantities[matId] || 1;
+  const getQty = (matId: string) => quantities[matId] ?? 1;
 
   const handleBuy = (mat: RawMaterial) => {
     const qty = getQty(mat.id);

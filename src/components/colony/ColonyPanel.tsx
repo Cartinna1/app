@@ -657,9 +657,10 @@ export default function ColonyPanel(props: ColonyPanelProps) {
                     <span className="text-sm text-slate-500 ml-2">({def.minPop > 0 ? `${def.minPop}-` : '0-'}{effMax}人{extended ? <span className="text-amber-400"> 领袖+{(effMax-def.maxPop)}</span> : ''})</span>
                   </div>
                   <div className="flex items-center gap-1">
-                    <input type="number" min={0} max={effMax} value={inst.assignedPop}
+                    <input type="text" inputMode="numeric" pattern="[0-9]*" min={0} max={effMax} value={inst.assignedPop}
                       onChange={(e) => {
-                        let v = Math.max(0, Math.min(effMax, parseInt(e.target.value) || 0));
+                        const raw = e.target.value.replace(/[^0-9]/g, '');
+                        let v = raw === '' ? 0 : Math.max(0, Math.min(effMax, parseInt(raw)));
                         if (v > 0 && v < def.minPop) v = def.minPop;
                         onAssignPop(inst.uid, v);
                       }}
