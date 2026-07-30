@@ -153,7 +153,7 @@ export function useWonder(
         }
 
         // 进入下一阶段时触发事件
-        let eventId = ws.eventPending;
+        let eventId: WonderState['eventPending'] = ws.eventPending;
         let eventNote = '';
         if (newStage > ws.currentStage) {
           const ev = rollWonderEvent();
