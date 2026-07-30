@@ -73,26 +73,34 @@ export default function WonderPanel({
           <p className="text-sm text-slate-400 mb-1">条件已满足！选择一座奇观开始建设。一旦选定，其他奇观将永久锁定。</p>
           <p className="text-sm text-amber-400 mb-4">⚠ 任何一座奇观建成即可赢得游戏胜利。</p>
           <div className="space-y-4">
-            {ALL_WONDERS.map((w) => (
-              <div key={w.id}
-                className={`bg-slate-800/60 border rounded-xl p-4 cursor-pointer transition-all hover:border-cyan-500/60 ${selectedId === w.id ? 'border-cyan-500 bg-slate-800/80' : 'border-slate-700'}`}
-                onClick={() => setSelectedId(w.id)}
-              >
-                <div className="flex justify-between items-start mb-2">
-                  <div>
-                    <h3 className="text-lg font-bold text-slate-200">{w.name}</h3>
-                    <p className="text-sm text-amber-400">{w.subtitle}</p>
-                  </div>
-                  <span className="text-xs text-slate-500">偏好星球：{w.preferredPlanets}</span>
+{ALL_WONDERS.map((w) => (
+            <div key={w.id}
+              className={`bg-slate-800/60 border rounded-xl p-4 cursor-pointer transition-all hover:border-cyan-500/60 ${selectedId === w.id ? 'border-cyan-500 bg-slate-800/80' : 'border-slate-700'}`}
+              onClick={() => setSelectedId(w.id)}
+            >
+              <div className="flex justify-between items-start mb-2">
+                <div>
+                  <h3 className="text-lg font-bold text-slate-200">{w.name}</h3>
+                  <p className="text-sm text-amber-400">{w.subtitle}</p>
                 </div>
-                <p className="text-sm text-slate-400 mb-3 leading-relaxed">{w.description}</p>
-                <div className="flex flex-wrap gap-2">
-                  {w.totalLines.map((line, i) => (
-                    <span key={i} className="px-2 py-1 bg-slate-900/80 border border-slate-600 rounded text-xs text-slate-300">{line}</span>
-                  ))}
-                </div>
+                <span className="text-xs text-slate-500">偏好星球：{w.preferredPlanets}</span>
               </div>
-            ))}
+              <div className="flex gap-3">
+                <img
+                  src={`/wonders/${w.id}.png`}
+                  alt={w.name}
+                  onError={(e) => { (e.target as HTMLImageElement).style.display='none'; }}
+                  className="w-32 h-20 rounded-lg object-cover border border-slate-700 flex-shrink-0"
+                />
+                <p className="text-sm text-slate-400 flex-1 leading-relaxed">{w.description}</p>
+              </div>
+              <div className="flex flex-wrap gap-2 mt-3">
+                {w.totalLines.map((line, i) => (
+                  <span key={i} className="px-2 py-1 bg-slate-900/80 border border-slate-600 rounded text-xs text-slate-300">{line}</span>
+                ))}
+              </div>
+            </div>
+          ))}
           </div>
           <button
             disabled={!selectedId}
@@ -224,6 +232,13 @@ export default function WonderPanel({
             <p className="text-lg font-bold text-slate-200">{ws.totalTurnsSpent}</p>
           </div>
         </div>
+        {/* 当前阶段大图 */}
+        <img
+          src={`/wonders/build/${ws.selectedWonderId}_${ws.currentStage + 1}.png`}
+          alt={`${wonder.name} - ${stage.name}`}
+          onError={(e) => { (e.target as HTMLImageElement).style.display='none'; }}
+          className="w-full aspect-video object-cover rounded-lg border border-slate-700 mb-3"
+        />
         {/* 阶段进度条 */}
         <div className="mb-3">
           <p className="text-sm text-slate-400 mb-2">
