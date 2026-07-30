@@ -15,16 +15,18 @@ interface Props {
   onSelectWonder: (id: string) => { success: boolean; message: string };
   onSubmitResources: () => { success: boolean; message: string };
   onHandleEvent: (choice: 'A' | 'B') => { success: boolean; message: string };
+  onCompleteWonder: () => { success: boolean; message: string };
   onShowMsg: (msg: string, type: 'success' | 'error') => void;
 }
 
 export default function WonderPanel({
   colony, researchedCount, hasT25, conditionsMet,
   shipGold, shipAlloy, shipStardust, shipFood, shipMaterials,
-  onSelectWonder, onSubmitResources, onHandleEvent, onShowMsg,
+  onSelectWonder, onSubmitResources, onHandleEvent, onCompleteWonder, onShowMsg,
 }: Props) {
   const ws = colony.wonder;
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [showConfirm, setShowConfirm] = useState(false);
 
   // ===== 模式 1：未满足条件或未初始化 =====
   if ((!ws || ws.phase === 'inactive') && !conditionsMet) {
@@ -119,10 +121,41 @@ export default function WonderPanel({
     return (
       <div className="space-y-4">
         <div className="bg-slate-900/60 border border-amber-700/40 rounded-xl p-6 text-center">
-          <h2 className="text-3xl font-bold text-amber-400 mb-4">🎉 奇观建成！</h2>
+          <h2 className="text-3xl font-bold text-amber-400 mb-4">🏆 奇观已竣工</h2>
           <p className="text-xl text-slate-200 mb-2">「{wonder.name}」已经矗立在群星之间。</p>
-          <p className="text-lg text-slate-400 mb-6">你赢得了游戏胜利。</p>
-          <div className="bg-slate-800/60 rounded-lg p-4 text-left max-w-lg mx-auto">
+          <p className="text-sm text-red-400 mb-6">⚠ 确认建成后将结束本局游戏，无法继续。</p>
+
+          {showConfirm ? (
+            <div className="bg-red-900/20 border border-red-700/40 rounded-lg p-4 mb-4">
+              <p className="text-sm text-red-300 mb-3">确定要建成「{wonder.name}」并结束游戏吗？</p>
+              <div className="flex gap-3 justify-center">
+                <button
+                  onClick={() => {
+                    const r = onCompleteWonder();
+                    onShowMsg(r.message, r.success ? 'success' : 'error');
+                  }}
+                  className="px-8 py-3 bg-amber-600 hover:bg-amber-500 rounded-lg text-lg font-bold text-white transition-colors"
+                >
+                  确认建成
+                </button>
+                <button
+                  onClick={() => setShowConfirm(false)}
+                  className="px-8 py-3 bg-slate-700 hover:bg-slate-600 rounded-lg text-lg font-bold text-slate-200 transition-colors"
+                >
+                  取消
+                </button>
+              </div>
+            </div>
+          ) : (
+            <button
+              onClick={() => setShowConfirm(true)}
+              className="px-10 py-4 bg-amber-600 hover:bg-amber-500 rounded-xl text-2xl font-bold text-white transition-colors shadow-lg shadow-amber-900/30"
+            >
+              🏆 建成奇观
+            </button>
+          )}
+
+          <div className="bg-slate-800/60 rounded-lg p-4 text-left max-w-lg mx-auto mt-6">
             <p className="text-sm text-amber-400 font-bold mb-2">建设历程</p>
             {ws.eventHistory.map((h, i) => (
               <p key={i} className="text-xs text-slate-400 leading-relaxed">{h}</p>
@@ -197,34 +230,31 @@ export default function WonderPanel({
         </div>
         {/* 本回合需求 */}
         <div className="bg-slate-800/60 border border-slate-700 rounded-lg p-3 mb-3">
-          <p className="text-xs text-slate-400 mb-2">本回合需缴纳资源</p>
+          <p className="text-xs text-slate-400 mb-2">本回合需缴纳资源（每游戏回合限交 1 次）</p>
           <div className="flex flex-wrap gap-1 mb-3">{allChecks}</div>
-          <button
-            disabled={ws.eventPending !== null}
-            onClick={() => {
-              if (!allPassed) {
-                const missing = allChecks.filter((c: any) => c.props.className.includes('red'));
-                const names = missing.map((c: any) => {
-                  const text = c.props.children;
-                  return text;
-                }).join(', ');
-                onShowMsg(`缺少资源：${names}，无法缴纳`, 'error');
-                return;
-              }
-              const r = onSubmitResources();
-              onShowMsg(r.message, r.success ? 'success' : 'error');
-            }}
-            className={`w-full px-4 py-3 rounded-lg text-lg font-bold transition-colors ${
-              ws.eventPending !== null
-                ? 'bg-slate-700 text-slate-500 cursor-not-allowed'
-                : allPassed
-                ? 'bg-cyan-600 hover:bg-cyan-500 text-white'
-                : 'bg-slate-700 text-slate-500 cursor-not-allowed'
-            }`}
-          >
-            {ws.eventPending !== null ? '⚠ 请先处理事件' : allPassed ? `提交资源 · 推进「${stage.name}」` : '资源不足，无法提交'}
-          </button>
-        </div>
+          {ws.submittedThisTurn ? (
+            <div className="w-full px-4 py-3 rounded-lg text-lg font-bold text-center bg-green-900/40 border border-green-700/50 text-green-400">
+              ✓ 已提交 — 请结束游戏回合以推进建设
+            </div>
+          ) : (
+            <button
+              disabled={ws.eventPending !== null}
+              onClick={() => {
+                if (!allPassed) { onShowMsg('资源不足，无法缴纳', 'error'); return; }
+                const r = onSubmitResources();
+                onShowMsg(r.message, r.success ? 'success' : 'error');
+              }}
+              className={`w-full px-4 py-3 rounded-lg text-lg font-bold transition-colors ${
+                ws.eventPending !== null
+                  ? 'bg-slate-700 text-slate-500 cursor-not-allowed'
+                  : allPassed
+                  ? 'bg-cyan-600 hover:bg-cyan-500 text-white'
+                  : 'bg-slate-700 text-slate-500 cursor-not-allowed'
+              }`}
+            >
+              {ws.eventPending !== null ? '⚠ 请先处理事件' : allPassed ? `提交资源 · 推进「${stage.name}」` : '资源不足，无法提交'}
+            </button>
+          )}
       </div>
 
       {/* 事件处理 */}

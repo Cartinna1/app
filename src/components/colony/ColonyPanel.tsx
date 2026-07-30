@@ -104,13 +104,14 @@ interface ColonyPanelProps {
   onSelectWonder: (wonderId: string) => { success: boolean; message: string };
   onSubmitWonderResources: () => { success: boolean; message: string };
   onHandleWonderEvent: (choice: 'A' | 'B') => { success: boolean; message: string };
+  onCompleteWonder: () => { success: boolean; message: string };
   canStartWonder: () => { success: boolean; reasons: string[] };
 }
 
 type ColonyTab = 'overview' | 'buildings' | 'population' | 'research' | 'leaders' | 'wonders';
 
 export default function ColonyPanel(props: ColonyPanelProps) {
-  const { ship, onUnlockColony, onSelectPlanet, onRescrollPlanets, generateScoutingPool, onBuild, onRecruitPop, onAssignPop, onStartResearch, onRecruitLeader, onUpgradeLeader, onRollAndRecruit, onCancelBuilding, onDemolishBuilding, onSelectWonder, onSubmitWonderResources, onHandleWonderEvent, canStartWonder } = props;
+  const { ship, onUnlockColony, onSelectPlanet, onRescrollPlanets, generateScoutingPool, onBuild, onRecruitPop, onAssignPop, onStartResearch, onRecruitLeader, onUpgradeLeader, onRollAndRecruit, onCancelBuilding, onDemolishBuilding, onSelectWonder, onSubmitWonderResources, onHandleWonderEvent, onCompleteWonder, canStartWonder } = props;
   const colony = ship.colony;
   const [tab, setTab] = useState<ColonyTab>('overview');
   const [message, setMessage] = useState('');
@@ -905,6 +906,7 @@ export default function ColonyPanel(props: ColonyPanelProps) {
           onSelectWonder={(id) => onSelectWonder(id)}
           onSubmitResources={() => onSubmitWonderResources()}
           onHandleEvent={(choice) => onHandleWonderEvent(choice)}
+          onCompleteWonder={() => onCompleteWonder()}
           onShowMsg={showMsg}
         />
       )}

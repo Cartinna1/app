@@ -48,6 +48,7 @@ function App() {
     submitWonderResources,
     handleWonderEvent,
     canStartWonder,
+    completeWonder,
     buyAlloy,
     buyFood,
     buyRelic,
@@ -71,6 +72,16 @@ function App() {
         onSelect={(shipId) => selectShips(shipId)}
         onLoad={() => loadSave()}
         hasSave={hasSave()}
+      />
+    );
+  }
+
+  if (gameState.gameWon) {
+    return (
+      <GameOverScreen
+        reason={`🎉 奇观「${gameState.wonWonderName}」建设完成！你赢得了胜利！`}
+        turn={gameState.turn}
+        onRestart={resetGame}
       />
     );
   }
@@ -128,6 +139,7 @@ function App() {
       onSelectWonder={selectWonder}
       onSubmitWonderResources={submitWonderResources}
       onHandleWonderEvent={handleWonderEvent}
+      onCompleteWonder={completeWonder}
       canStartWonder={canStartWonder}
       onBuyAlloy={buyAlloy}
       onBuyFood={buyFood}

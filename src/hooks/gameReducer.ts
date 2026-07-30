@@ -22,6 +22,8 @@ export const initialGameState: GameState = {
   factionPolicy: { type: 'normal', effect: POLICY_EFFECTS['normal'] },
   policyRemainingTurns: 0,
   stardustMarket: { currentRelicId: null, soldRelicIds: [] },
+  gameWon: false,
+  wonWonderName: '',
 };
 
 // ==================== Reducer ====================

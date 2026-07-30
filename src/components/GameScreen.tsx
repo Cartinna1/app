@@ -84,6 +84,7 @@ interface GameScreenProps {
   onSelectWonder: (wonderId: string) => { success: boolean; message: string };
   onSubmitWonderResources: () => { success: boolean; message: string };
   onHandleWonderEvent: (choice: 'A' | 'B') => { success: boolean; message: string };
+  onCompleteWonder: () => { success: boolean; message: string };
   canStartWonder: () => { success: boolean; reasons: string[] };
   onBuyAlloy: (type: 'gold' | 'stardust', qty: number) => boolean;
   onBuyFood: (type: 'gold' | 'alloy', qty: number) => boolean;
@@ -159,6 +160,7 @@ export default function GameScreen({
             onSelectWonder,
             onSubmitWonderResources,
             onHandleWonderEvent,
+            onCompleteWonder,
             canStartWonder,
   onBuyAlloy,
   onBuyFood,
@@ -435,6 +437,7 @@ export default function GameScreen({
               onSelectWonder={onSelectWonder}
               onSubmitWonderResources={onSubmitWonderResources}
               onHandleWonderEvent={onHandleWonderEvent}
+              onCompleteWonder={onCompleteWonder}
               canStartWonder={canStartWonder}
             />
           )}

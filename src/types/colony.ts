@@ -212,6 +212,7 @@ export interface WonderState {
   eventPending: WonderEventType | null;  // 当前待处理事件
   totalTurnsSpent: number;      // 已花费的回合总数
   eventHistory: string[];       // 事件历史文本
+  submittedThisTurn: boolean;   // 本回合是否已提交资源
 }
 
 // ==================== 帮助函数 ====================

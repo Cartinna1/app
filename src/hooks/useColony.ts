@@ -5,7 +5,7 @@ import { ALL_PLANETS } from '@/data/colony/planets';
 import { getBuildingDef } from '@/data/colony/buildings';
 import { getTechById } from '@/data/colony/techs';
 import { getLeaderDef, rollLeaders } from '@/data/colony/leaders';
-import { useWonder } from './useWonder';
+import { useWonder, processWonderTurn } from './useWonder';
 
 const UNLOCK_COST = 30000;
 
@@ -451,14 +451,14 @@ export function useColony(
   }, [dispatch]);
 
   // 奇观系统
-  const { selectWonder, submitWonderResources, handleWonderEvent, canStartWonder } = useWonder(gameState, dispatch);
+  const { selectWonder, submitWonderResources, handleWonderEvent, canStartWonder, completeWonder } = useWonder(gameState, dispatch);
 
   return {
     unlockColony, selectPlanet, rescrollPlanets, generateScoutingPool,
     buildColonyBuilding, recruitPop, assignPop, startResearch,
     recruitLeader, upgradeLeader, rollAndRecruit, clearRecruitPool,
     cancelBuilding, demolishBuilding,
-    selectWonder, submitWonderResources, handleWonderEvent, canStartWonder,
+    selectWonder, submitWonderResources, handleWonderEvent, canStartWonder, completeWonder,
   };
 }
 
@@ -663,6 +663,9 @@ export function processColonyTurn(ship: Mothership, _turn: number): void {
     const ld = getLeaderDef(l.id); const ex = ld?.levelExtras[l.level-1];
     colony.leaderCap += (ex?.leaderCapBonus || 0);
   }
+
+  // 奇观回合结算
+  processWonderTurn(ship, _turn);
 }
 
 function calcPopCap(colony: Colony): number {

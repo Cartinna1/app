@@ -281,6 +281,8 @@ export interface GameState {
   factionPolicy: { type: TradePolicy; effect: PolicyEffect }; // 当前全星系贸易政策
   policyRemainingTurns: number; // 当前政策剩余持续回合数
   stardustMarket: StardustMarket; // 星尘集市
+  gameWon: boolean;
+  wonWonderName: string;
 }
 
 export type GameAction =
