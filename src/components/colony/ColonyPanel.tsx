@@ -897,7 +897,6 @@ export default function ColonyPanel(props: ColonyPanelProps) {
           researchedCount={colony.techState?.researched?.length || 0}
           hasT25={colony.techState?.researched?.includes('T25') || false}
           conditionsMet={canStartWonder().success}
-          conditionReasons={canStartWonder().reasons}
           shipGold={ship.gold}
           shipAlloy={ship.alloy}
           shipStardust={ship.stardust}

@@ -1,13 +1,12 @@
 import { useState } from 'react';
 import { ALL_WONDERS, getWonderDef, WONDER_EVENTS } from '@/data/colony/wonders';
-import type { Colony, WonderState } from '@/types/colony';
+import type { Colony } from '@/types/colony';
 
 interface Props {
   colony: Colony;
   researchedCount: number;
   hasT25: boolean;
   conditionsMet: boolean;
-  conditionReasons: string[];
   shipGold: number;
   shipAlloy: number;
   shipStardust: number;
@@ -20,7 +19,7 @@ interface Props {
 }
 
 export default function WonderPanel({
-  colony, researchedCount, hasT25, conditionsMet, conditionReasons,
+  colony, researchedCount, hasT25, conditionsMet,
   shipGold, shipAlloy, shipStardust, shipFood, shipMaterials,
   onSelectWonder, onSubmitResources, onHandleEvent, onShowMsg,
 }: Props) {

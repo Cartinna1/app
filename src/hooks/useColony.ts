@@ -451,7 +451,7 @@ export function useColony(
   }, [dispatch]);
 
   // 奇观系统
-  const { selectWonder, submitWonderResources, handleWonderEvent, canStartWonder } = useWonder(_gameState, dispatch);
+  const { selectWonder, submitWonderResources, handleWonderEvent, canStartWonder } = useWonder(gameState, dispatch);
 
   return {
     unlockColony, selectPlanet, rescrollPlanets, generateScoutingPool,

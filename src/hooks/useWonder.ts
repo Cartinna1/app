@@ -1,12 +1,12 @@
 import { useCallback } from 'react';
 import { getWonderDef, rollWonderEvent } from '@/data/colony/wonders';
 import type { GameState } from '@/types/game';
-import type { WonderId, WonderState } from '@/types/colony';
+import type { WonderState } from '@/types/colony';
 
 interface WonderActions {
   selectWonder: (wonderId: string) => { success: boolean; message: string };
-  submitWonderResources: (shipIndex: number) => { success: boolean; message: string };
-  handleWonderEvent: (shipIndex: number, choice: 'A' | 'B') => { success: boolean; message: string };
+  submitWonderResources: () => { success: boolean; message: string };
+  handleWonderEvent: (choice: 'A' | 'B') => { success: boolean; message: string };
   canStartWonder: () => { success: boolean; reasons: string[] };
 }
 
@@ -56,7 +56,7 @@ export function useWonder(
         const s = { ...ships[0], colony: { ...ships[0].colony! } };
         const newWonderState: WonderState = {
           phase: 'building',
-          selectedWonderId: wonderId,
+          selectedWonderId: wonderId as WonderState['selectedWonderId'],
           currentStage: 0,
           stageProgress: 0,
           eventPending: null,
@@ -77,7 +77,7 @@ export function useWonder(
   }, [canStartWonder, dispatch]);
 
   /** 提交本回合资源，推进 1 回合进度 */
-  const submitWonderResources = useCallback((shipIndex: number): { success: boolean; message: string } => {
+  const submitWonderResources = useCallback((): { success: boolean; message: string } => {
     let result = { success: false, message: '' };
     dispatch({
       type: 'FUNCTIONAL_UPDATE',
@@ -179,7 +179,7 @@ export function useWonder(
   }, [dispatch]);
 
   /** 处理奇观事件 */
-  const handleWonderEvent = useCallback((shipIndex: number, choice: 'A' | 'B'): { success: boolean; message: string } => {
+  const handleWonderEvent = useCallback((choice: 'A' | 'B'): { success: boolean; message: string } => {
     let result = { success: false, message: '' };
     dispatch({
       type: 'FUNCTIONAL_UPDATE',
@@ -195,7 +195,6 @@ export function useWonder(
         let newProgress = ws.stageProgress;
         let newStage = ws.currentStage;
         let historyMsg = '';
-        const evDef = rollWonderEvent; // just for type reference, actual event is from ws.eventPending
 
         switch (ws.eventPending) {
           case 'tech_breakthrough':

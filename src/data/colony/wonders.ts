@@ -1,4 +1,4 @@
-import type { WonderDef, WonderStageDef, WonderEventDef } from '@/types/colony';
+import type { WonderDef, WonderEventDef } from '@/types/colony';
 
 /** 五座奇观完整定义 */
 export const ALL_WONDERS: WonderDef[] = [
