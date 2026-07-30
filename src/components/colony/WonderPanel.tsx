@@ -253,21 +253,23 @@ export default function WonderPanel({
             </div>
           ) : (
             <button
-              disabled={ws.eventPending !== null}
+              disabled={ws.submittedThisTurn || ws.eventPending !== null}
               onClick={() => {
                 if (!allPassed) { onShowMsg('资源不足，无法缴纳', 'error'); return; }
                 const r = onSubmitResources();
                 onShowMsg(r.message, r.success ? 'success' : 'error');
               }}
               className={`w-full px-4 py-3 rounded-lg text-lg font-bold transition-colors ${
-                ws.eventPending !== null
+                ws.submittedThisTurn
+                  ? 'bg-green-900/40 border border-green-700/50 text-green-400 cursor-not-allowed'
+                  : ws.eventPending !== null
                   ? 'bg-slate-700 text-slate-500 cursor-not-allowed'
                   : allPassed
                   ? 'bg-cyan-600 hover:bg-cyan-500 text-white'
                   : 'bg-slate-700 text-slate-500 cursor-not-allowed'
               }`}
             >
-              {ws.eventPending !== null ? '⚠ 请先处理事件' : allPassed ? `提交资源 · 推进「${stage.name}」` : '资源不足，无法提交'}
+              {ws.submittedThisTurn ? '✓ 已提交 — 请结束游戏回合以推进建设' : ws.eventPending !== null ? '⚠ 请先处理事件' : allPassed ? `提交资源 · 推进「${stage.name}」` : '资源不足，无法提交'}
             </button>
           )}
         </div>
