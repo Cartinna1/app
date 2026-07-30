@@ -82,6 +82,7 @@ function App() {
         reason={`🎉 奇观「${gameState.wonWonderName}」建设完成！你赢得了胜利！`}
         turn={gameState.turn}
         onRestart={resetGame}
+        isVictory
       />
     );
   }
