@@ -177,6 +177,23 @@ export default function WonderPanel({
     );
   };
 
+  const checkBool = (need: number, have: number) => need <= 0 || have >= need;
+
+  const resourceFlags = {
+    gold: checkBool(stage.gold, shipGold),
+    alloy: checkBool(stage.alloy, shipAlloy),
+    silicon: checkBool(stage.silicon, shipMaterials.silicon || 0),
+    quantum: checkBool(stage.quantum, shipMaterials.quantum || 0),
+    dark_matter: checkBool(stage.dark_matter, shipMaterials.dark_matter || 0),
+    stardust: checkBool(stage.stardust, shipStardust),
+    food: checkBool(stage.food, shipFood),
+    carbon: checkBool(stage.carbon, shipMaterials.carbon || 0),
+    oil: checkBool(stage.oil, shipMaterials.oil || 0),
+    gold_ore: checkBool(stage.gold_ore, shipMaterials.gold_ore || 0),
+    research: checkBool(stage.research, colony.techState?.researchPoints || 0),
+  };
+  const allPassed = Object.values(resourceFlags).every(Boolean);
+
   const allChecks = [
     checkRes(stage.gold, shipGold, '金币'),
     checkRes(stage.alloy, shipAlloy, '合金'),
@@ -190,8 +207,6 @@ export default function WonderPanel({
     checkRes(stage.gold_ore, shipMaterials.gold_ore || 0, '金矿'),
     checkRes(stage.research, colony.techState?.researchPoints || 0, '科研点'),
   ].filter(Boolean);
-
-  const allPassed = allChecks.every((c: any) => c && c.props && c.props.className && !c.props.className.includes('red'));
 
   const eventDef = ws.eventPending ? WONDER_EVENTS.find(e => e.id === ws.eventPending) : null;
 
@@ -255,6 +270,7 @@ export default function WonderPanel({
               {ws.eventPending !== null ? '⚠ 请先处理事件' : allPassed ? `提交资源 · 推进「${stage.name}」` : '资源不足，无法提交'}
             </button>
           )}
+        </div>
       </div>
 
       {/* 事件处理 */}
