@@ -131,6 +131,8 @@ export function useSave(
             factionPolicy: saveData.factionPolicy || { type: 'normal', effect: POLICY_EFFECTS['normal'] },
             policyRemainingTurns: saveData.policyRemainingTurns || 0,
             stardustMarket: saveData.stardustMarket || { currentRelicId: null, soldRelicIds: [] },
+            gameWon: saveData.gameWon || false,
+            wonWonderName: saveData.wonWonderName || '',
           };
           dispatch({ type: 'LOAD_SAVE', state });
           resolve(true);
