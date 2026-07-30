@@ -5,7 +5,8 @@ import { getBuildableBuildings, getBuildingDef } from '@/data/colony/buildings';
 import { getPlanetById } from '@/data/colony/planets';
 import { getTechById, getAvailableTechs } from '@/data/colony/techs';
 import { getLeaderDef } from '@/data/colony/leaders';
-import { Home, Users, Wrench, Play, UserPlus, FlaskConical, Crown } from 'lucide-react';
+import { Home, Users, Wrench, Play, UserPlus, FlaskConical, Crown, Trophy } from 'lucide-react';
+import WonderPanel from './WonderPanel';
 
 // ==================== 辅助函数 ====================
 
@@ -99,12 +100,17 @@ interface ColonyPanelProps {
   onRollAndRecruit: () => void;
   onCancelBuilding: (uid: string) => void;
   onDemolishBuilding: (uid: string) => void;
+  // 奇观
+  onSelectWonder: (wonderId: string) => { success: boolean; message: string };
+  onSubmitWonderResources: () => { success: boolean; message: string };
+  onHandleWonderEvent: (choice: 'A' | 'B') => { success: boolean; message: string };
+  canStartWonder: () => { success: boolean; reasons: string[] };
 }
 
-type ColonyTab = 'overview' | 'buildings' | 'population' | 'research' | 'leaders';
+type ColonyTab = 'overview' | 'buildings' | 'population' | 'research' | 'leaders' | 'wonders';
 
 export default function ColonyPanel(props: ColonyPanelProps) {
-  const { ship, onUnlockColony, onSelectPlanet, onRescrollPlanets, generateScoutingPool, onBuild, onRecruitPop, onAssignPop, onStartResearch, onRecruitLeader, onUpgradeLeader, onRollAndRecruit, onCancelBuilding, onDemolishBuilding } = props;
+  const { ship, onUnlockColony, onSelectPlanet, onRescrollPlanets, generateScoutingPool, onBuild, onRecruitPop, onAssignPop, onStartResearch, onRecruitLeader, onUpgradeLeader, onRollAndRecruit, onCancelBuilding, onDemolishBuilding, onSelectWonder, onSubmitWonderResources, onHandleWonderEvent, canStartWonder } = props;
   const colony = ship.colony;
   const [tab, setTab] = useState<ColonyTab>('overview');
   const [message, setMessage] = useState('');
@@ -241,6 +247,7 @@ export default function ColonyPanel(props: ColonyPanelProps) {
     { id: 'population', label: '人口', icon: Users },
     { id: 'research', label: '科研', icon: FlaskConical },
     { id: 'leaders', label: '领袖', icon: Crown },
+    { id: 'wonders', label: '奇观', icon: Trophy },
   ];
 
   return (
@@ -881,6 +888,26 @@ export default function ColonyPanel(props: ColonyPanelProps) {
             </>
           )}
         </div>
+      )}
+
+      {/* ===== 奇观 ===== */}
+      {tab === 'wonders' && (
+        <WonderPanel
+          colony={colony}
+          researchedCount={colony.techState?.researched?.length || 0}
+          hasT25={colony.techState?.researched?.includes('T25') || false}
+          conditionsMet={canStartWonder().success}
+          conditionReasons={canStartWonder().reasons}
+          shipGold={ship.gold}
+          shipAlloy={ship.alloy}
+          shipStardust={ship.stardust}
+          shipFood={ship.food}
+          shipMaterials={ship.materials}
+          onSelectWonder={(id) => onSelectWonder(id)}
+          onSubmitResources={() => onSubmitWonderResources()}
+          onHandleEvent={(choice) => onHandleWonderEvent(choice)}
+          onShowMsg={showMsg}
+        />
       )}
     </div>
   );

@@ -97,6 +97,10 @@ export const ALL_TECHS: ResearchTech[] = [
   { id: 'T24', name: '集体意识协同网络', leaderCapBonus: 3,
     description: '"我们不再指挥个体，我们编织灵魂的网络。"利用量子纠缠态与群体神经接口，构建一个覆盖整个殖民地的协同意识网络。领袖们的决策通过分布式智能实时优化，个体的认知负荷被集体分担。在网络的带宽极限内，殖民地能够同时容纳并协调更多领袖，他们如同一个超级有机体的不同器官般运作。',
     costRP: 2000, researchTurns: 5, prerequisites: ['T23'] },
+  // ===== T25 星河奇迹 =====
+  { id: 'T25', name: '星河奇迹',
+    description: '"巨型结构是我们时代的伟大奇观。如此范围的大型工程在几代人之前是完全无法想象的。"解锁殖民面板中的奇观建设功能，完成后可赢得游戏胜利。',
+    costRP: 10000, researchTurns: 6, prerequisites: [], minResearchedCount: 10 },
 ];
 
 export function getTechById(id: string): ResearchTech | undefined {
@@ -106,6 +110,7 @@ export function getTechById(id: string): ResearchTech | undefined {
 export function getAvailableTechs(researchedIds: string[]): ResearchTech[] {
   return ALL_TECHS.filter((t) =>
     !researchedIds.includes(t.id) &&
-    t.prerequisites.every((p) => researchedIds.includes(p))
+    t.prerequisites.every((p) => researchedIds.includes(p)) &&
+    (!t.minResearchedCount || researchedIds.length >= t.minResearchedCount)
   );
 }

@@ -81,6 +81,10 @@ interface GameScreenProps {
   onRollAndRecruit: () => void;
   onCancelBuilding: (uid: string) => void
   onDemolishBuilding: (uid: string) => void;
+  onSelectWonder: (wonderId: string) => { success: boolean; message: string };
+  onSubmitWonderResources: () => { success: boolean; message: string };
+  onHandleWonderEvent: (choice: 'A' | 'B') => { success: boolean; message: string };
+  canStartWonder: () => { success: boolean; reasons: string[] };
   onBuyAlloy: (type: 'gold' | 'stardust', qty: number) => boolean;
   onBuyFood: (type: 'gold' | 'alloy', qty: number) => boolean;
   onBuyRelic: (relicId: string) => { success: boolean; message: string };
@@ -152,6 +156,10 @@ export default function GameScreen({
   onRollAndRecruit,
             onCancelBuilding,
             onDemolishBuilding,
+            onSelectWonder,
+            onSubmitWonderResources,
+            onHandleWonderEvent,
+            canStartWonder,
   onBuyAlloy,
   onBuyFood,
   onBuyRelic,
@@ -424,6 +432,10 @@ export default function GameScreen({
               onRollAndRecruit={onRollAndRecruit}
               onCancelBuilding={onCancelBuilding}
               onDemolishBuilding={onDemolishBuilding}
+              onSelectWonder={onSelectWonder}
+              onSubmitWonderResources={onSubmitWonderResources}
+              onHandleWonderEvent={onHandleWonderEvent}
+              canStartWonder={canStartWonder}
             />
           )}
           {activeTab === 'redeem' && (

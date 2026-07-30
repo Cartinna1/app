@@ -106,6 +106,8 @@ export interface ResearchTech {
   costRP: number;
   researchTurns: number;
   prerequisites: string[];
+  /** 最少已研究科技数（T25需要≥10） */
+  minResearchedCount?: number;
   unlocksBuilding?: string;
   leaderCapBonus?: number;
 }
@@ -147,6 +149,69 @@ export interface Colony {
   leaderCap: number;                 // 领袖上限（基础3）
   scoutingPool?: PlanetTypeId[];     // 可选择的星球池（3个）
   recruitPool?: any[];               // 招募池（领袖选项，暂存）
+  wonder?: WonderState;              // 奇观建设状态
+}
+
+// ==================== 奇观 ====================
+
+export type WonderId = 'dyson' | 'gate' | 'engine' | 'archive' | 'beacon';
+
+export interface WonderStageDef {
+  name: string;
+  turns: number;
+  gold: number;
+  alloy: number;
+  silicon: number;
+  quantum: number;
+  dark_matter: number;
+  stardust: number;
+  food: number;
+  carbon: number;
+  oil: number;
+  gold_ore: number;
+  research: number;
+}
+
+export interface WonderDef {
+  id: WonderId;
+  name: string;
+  subtitle: string;
+  description: string;
+  stages: WonderStageDef[];
+  preferredPlanets: string;
+  totalLines: string[];
+}
+
+export type WonderPhase =
+  | 'inactive'      // 未满足条件
+  | 'selecting'     // 可选择奇观
+  | 'building';     // 建设中
+
+export type WonderEventType =
+  | 'tech_breakthrough'
+  | 'construction_accident'
+  | 'faction_intervention'
+  | 'unexpected_discovery'
+  | 'plague_outbreak'
+  | 'sabotage'
+  | 'leader_sacrifice';
+
+export interface WonderEventDef {
+  id: WonderEventType;
+  name: string;
+  description: string;
+  optionA: { label: string; effect: string };
+  optionB: { label: string; effect: string };
+}
+
+export interface WonderState {
+  phase: WonderPhase;
+  selectedWonderId: WonderId | null;
+  currentStage: number;         // 0-based, 当前阶段索引
+  stageProgress: number;        // 当前阶段已完成回合数
+  eventPending: WonderEventType | null;  // 当前待处理事件
+  totalTurnsSpent: number;      // 已花费的回合总数
+  eventHistory: string[];       // 事件历史文本
 }
 
 // ==================== 帮助函数 ====================

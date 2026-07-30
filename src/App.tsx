@@ -44,6 +44,10 @@ function App() {
     rollAndRecruit,
     cancelBuilding,
     demolishBuilding,
+    selectWonder,
+    submitWonderResources,
+    handleWonderEvent,
+    canStartWonder,
     buyAlloy,
     buyFood,
     buyRelic,
@@ -121,6 +125,10 @@ function App() {
       onRollAndRecruit={rollAndRecruit}
       onCancelBuilding={cancelBuilding}
       onDemolishBuilding={demolishBuilding}
+      onSelectWonder={selectWonder}
+      onSubmitWonderResources={submitWonderResources}
+      onHandleWonderEvent={handleWonderEvent}
+      canStartWonder={canStartWonder}
       onBuyAlloy={buyAlloy}
       onBuyFood={buyFood}
       onBuyRelic={buyRelic}

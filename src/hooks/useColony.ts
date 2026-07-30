@@ -5,6 +5,7 @@ import { ALL_PLANETS } from '@/data/colony/planets';
 import { getBuildingDef } from '@/data/colony/buildings';
 import { getTechById } from '@/data/colony/techs';
 import { getLeaderDef, rollLeaders } from '@/data/colony/leaders';
+import { useWonder } from './useWonder';
 
 const UNLOCK_COST = 30000;
 
@@ -449,11 +450,15 @@ export function useColony(
     });
   }, [dispatch]);
 
+  // 奇观系统
+  const { selectWonder, submitWonderResources, handleWonderEvent, canStartWonder } = useWonder(_gameState, dispatch);
+
   return {
     unlockColony, selectPlanet, rescrollPlanets, generateScoutingPool,
     buildColonyBuilding, recruitPop, assignPop, startResearch,
     recruitLeader, upgradeLeader, rollAndRecruit, clearRecruitPool,
     cancelBuilding, demolishBuilding,
+    selectWonder, submitWonderResources, handleWonderEvent, canStartWonder,
   };
 }
 
