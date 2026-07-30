@@ -202,6 +202,7 @@ export function useWonder(
         }
 
         // 完成检测
+        if (newStage >= wonder.stages.length) {
           s.colony = { ...s.colony, wonder: { ...ws, eventPending: null, currentStage: newStage, stageProgress: 0, eventHistory: [...ws.eventHistory, `[事件] ${historyMsg}`, '[胜利] 奇观完成！'] } };
           ships[0] = s; result = { success: true, message: '🎉 奇观建设完成！你赢得了胜利！' }; return { ...prev, ships };
         }
