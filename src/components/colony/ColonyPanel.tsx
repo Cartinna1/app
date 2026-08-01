@@ -1,7 +1,7 @@
 import { useState, useMemo, useEffect } from 'react';
 import type { Mothership } from '@/types/game';
 import type { PlanetTypeId, PlanetDef } from '@/types/colony';
-import { getBuildableBuildings, getBuildingDef } from '@/data/colony/buildings';
+import { getBuildableBuildings, getBuildingDef, getBuildingEffect } from '@/data/colony/buildings';
 import { getPlanetById } from '@/data/colony/planets';
 import { getTechById, getAvailableTechs } from '@/data/colony/techs';
 import { getLeaderDef } from '@/data/colony/leaders';
@@ -697,7 +697,7 @@ export default function ColonyPanel(props: ColonyPanelProps) {
                   <p className="text-sm text-yellow-400 mt-1">进度: {colony.techState.currentProgress}/{ct?.researchTurns} 回合</p>
                   {ct?.unlocksBuilding && (() => {
                     const bd = getBuildingDef(ct.unlocksBuilding);
-                    return <p className="text-sm text-cyan-400 mt-1">🏗 完成后解锁: {bd?.name} — {bd?.description}</p>;
+                    return bd ? <p className="text-sm text-cyan-400 mt-1">🏗 完成后解锁: {bd.name} — {getBuildingEffect(bd)}</p> : null;
                   })()}
                   {ct?.leaderCapBonus && <p className="text-sm text-amber-400 mt-1">👥 领袖上限 +{ct.leaderCapBonus}</p>}
                 </div>
@@ -716,7 +716,7 @@ export default function ColonyPanel(props: ColonyPanelProps) {
                       <p className="text-sm text-slate-400 mt-1">{tech.description}</p>
                       {tech.unlocksBuilding && (() => {
                         const bd = getBuildingDef(tech.unlocksBuilding);
-                        return <p className="text-sm text-cyan-400 mt-0.5">🏗 解锁: {bd?.name} — {bd?.description}</p>;
+                        return bd ? <p className="text-sm text-cyan-400 mt-0.5">🏗 解锁: {bd.name} — {getBuildingEffect(bd)}</p> : null;
                       })()}
                       {tech.leaderCapBonus && <span className="text-sm text-amber-400 ml-2">领袖上限 +{tech.leaderCapBonus}</span>}
                     </div>
@@ -735,7 +735,7 @@ export default function ColonyPanel(props: ColonyPanelProps) {
                 {colony.techState.researched.map((tid) => {
                   const t = getTechById(tid);
                   const bd = t?.unlocksBuilding ? getBuildingDef(t.unlocksBuilding) : null;
-                  const info = bd ? `${bd.name} — ${bd.description}` : t?.leaderCapBonus ? `领袖上限+${t.leaderCapBonus}` : '';
+                  const info = bd ? `${bd.name} — ${getBuildingEffect(bd)}` : t?.leaderCapBonus ? `领袖上限+${t.leaderCapBonus}` : '';
                   return <div key={tid} className="text-sm bg-green-900/20 text-green-400 border border-green-700/30 px-2 py-1 rounded" title={info || undefined}>
                     <span className="font-bold">{t?.name || tid}</span>
                     {bd && <span className="text-green-600 ml-1">- {bd.name}</span>}

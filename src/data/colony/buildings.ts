@@ -54,3 +54,43 @@ export function getBuildingDef(id: string): BuildingDef | undefined {
 export function getBuildableBuildings(researchedIds: string[]): BuildingDef[] {
   return FULL_BUILDINGS.filter((b) => !b.requiresTech || researchedIds.includes(b.requiresTech));
 }
+
+/** 获取建筑产出效果描述（用于科技解锁提示） */
+export function getBuildingEffect(bd: BuildingDef): string {
+  const min = bd.minPop, max = bd.maxPop;
+  // 功能类特殊建筑
+  if (bd.id === 'B1') return '提供5人口上限';
+  if (bd.id === 'B2') return '提供额外10人口上限';
+  if (bd.id === 'B26') return '使所有研究实验室产出翻倍';
+  if (bd.id === 'B27') return '解锁领袖招募功能';
+  if (bd.id === 'B28') return '每回合自动招募1人口';
+  if (bd.category === 'housing') return '提供居住空间，提升人口上限';
+  if (min === 0 && max === 0) return '功能建筑';
+
+  const base = bd.baseOutput || 0;
+  const pf = bd.popFactor || 0;
+
+  switch (bd.outputType) {
+    case 'food':
+    case 'alloy': {
+      const unit = bd.outputType === 'food' ? '食物' : '合金';
+      const lo = base + pf * min, hi = base + pf * max;
+      return min === max ? `每回合产出${lo}${unit}` : `${min}人产出${lo}${unit}，满人${max}人产出${hi}${unit}`;
+    }
+    case 'stardust':
+      return `每回合产出${base}星尘（固定产出）`;
+    case 'gold':
+      return `每回合产出${bd.goldOutputMin}~${bd.goldOutputMax}金币`;
+    case 'material': {
+      const mat = { carbon: '碳块', gold_ore: '金矿', oil: '石油', silicon: '硅片', dark_matter: '暗物质', quantum: '量子簇' }[bd.outputMaterialId || ''] || '原料';
+      const lo = base + pf * min, hi = base + pf * max;
+      return min === max ? `每回合产出${lo}${mat}` : `${min}人产出${lo}${mat}，满人${max}人产出${hi}${mat}`;
+    }
+    case 'research': {
+      const lo = base + pf * min, hi = base + pf * max;
+      return `${min}人产出${lo}科研点，满人${max}人产出${hi}科研点`;
+    }
+    default:
+      return '功能建筑';
+  }
+}
