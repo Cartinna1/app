@@ -695,6 +695,11 @@ export default function ColonyPanel(props: ColonyPanelProps) {
                   <p className="text-sm text-yellow-400 font-bold">研究中: {ct?.name}</p>
                   <p className="text-sm text-slate-400">{ct?.description}</p>
                   <p className="text-sm text-yellow-400 mt-1">进度: {colony.techState.currentProgress}/{ct?.researchTurns} 回合</p>
+                  {ct?.unlocksBuilding && (() => {
+                    const bd = getBuildingDef(ct.unlocksBuilding);
+                    return <p className="text-sm text-cyan-400 mt-1">🏗 完成后解锁: {bd?.name} — {bd?.description}</p>;
+                  })()}
+                  {ct?.leaderCapBonus && <p className="text-sm text-amber-400 mt-1">👥 领袖上限 +{ct.leaderCapBonus}</p>}
                 </div>
               );
             })() : <p className="text-sm text-slate-500">尚未选择研究项目 | 每回合产出科研点数无法显示的不会在此显示</p>}
@@ -709,7 +714,10 @@ export default function ColonyPanel(props: ColonyPanelProps) {
                       <span className="text-sm text-purple-300 font-bold">{tech.name}</span>
                       <span className="text-sm text-slate-500 ml-2">{tech.researchTurns}回合 | {tech.costRP}点</span>
                       <p className="text-sm text-slate-400 mt-1">{tech.description}</p>
-                      {tech.unlocksBuilding && <span className="text-sm text-cyan-400">解锁建筑: {getBuildingDef(tech.unlocksBuilding)?.name || ''}</span>}
+                      {tech.unlocksBuilding && (() => {
+                        const bd = getBuildingDef(tech.unlocksBuilding);
+                        return <p className="text-sm text-cyan-400 mt-0.5">🏗 解锁: {bd?.name} — {bd?.description}</p>;
+                      })()}
                       {tech.leaderCapBonus && <span className="text-sm text-amber-400 ml-2">领袖上限 +{tech.leaderCapBonus}</span>}
                     </div>
                     <button onClick={() => { const r = onStartResearch(tech.id); showMsg(r.message, r.success ? 'success' : 'error'); }}
@@ -726,10 +734,13 @@ export default function ColonyPanel(props: ColonyPanelProps) {
               <div className="flex flex-wrap gap-1.5">
                 {colony.techState.researched.map((tid) => {
                   const t = getTechById(tid);
-                  const info = t ? (t.unlocksBuilding ? `解锁 ${getBuildingDef(t.unlocksBuilding)?.name || ''}` : t.leaderCapBonus ? `领袖上限+${t.leaderCapBonus}` : '') : '';
-                  return <div key={tid} className="text-sm bg-green-900/20 text-green-400 border border-green-700/30 px-2 py-1 rounded">
+                  const bd = t?.unlocksBuilding ? getBuildingDef(t.unlocksBuilding) : null;
+                  const info = bd ? `${bd.name} — ${bd.description}` : t?.leaderCapBonus ? `领袖上限+${t.leaderCapBonus}` : '';
+                  return <div key={tid} className="text-sm bg-green-900/20 text-green-400 border border-green-700/30 px-2 py-1 rounded" title={info || undefined}>
                     <span className="font-bold">{t?.name || tid}</span>
-                    {info && <span className="text-green-600 ml-1">- {info}</span>}
+                    {bd && <span className="text-green-600 ml-1">- {bd.name}</span>}
+                    {t?.leaderCapBonus && !bd && <span className="text-green-600 ml-1">- 领袖上限+{t.leaderCapBonus}</span>}
+                  </div>;
                   </div>;
                 })}
               </div>
