@@ -741,7 +741,6 @@ export default function ColonyPanel(props: ColonyPanelProps) {
                     {bd && <span className="text-green-600 ml-1">- {bd.name}</span>}
                     {t?.leaderCapBonus && !bd && <span className="text-green-600 ml-1">- 领袖上限+{t.leaderCapBonus}</span>}
                   </div>;
-                  </div>;
                 })}
               </div>
             </div>
