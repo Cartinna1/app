@@ -3,7 +3,7 @@ import type { GameState, Mothership } from '@/types/game';
 import type { Colony, PlanetTypeId, BuildingInstance } from '@/types/colony';
 import { ALL_PLANETS } from '@/data/colony/planets';
 import { getBuildingDef } from '@/data/colony/buildings';
-import { getTechById } from '@/data/colony/techs';
+import { getTechById, REPEATABLE_TECHS, getRepeatableCost } from '@/data/colony/techs';
 import { getLeaderDef, rollLeaders } from '@/data/colony/leaders';
 import { useWonder, processWonderTurn } from './useWonder';
 
@@ -73,9 +73,10 @@ export function useColony(
           planetName: name,
           buildings,
           population: { total: initialPop, available: initialPop, cap: initialCap },
-          techState: { researched: [], currentResearch: null, currentProgress: 0, researchPoints: 500, researchSeed: 0 },
+          techState: { researched: [], currentResearch: null, currentProgress: 0, researchPoints: 500, researchSeed: 0, repeatableLevels: {} },
           leaders: [],
           leaderCap: 3,
+          energy: 0,
         };
         ships[0] = s;
         result = { success: true, message: `成功在「${planetDef.name}」建立殖民地「${name}」！` };
@@ -322,10 +323,11 @@ export function useColony(
     return result;
   }, [dispatch]);
 
-  /** 开始研究科技 */
+  /** 开始研究科技（含循环科技） */
   const startResearch = useCallback((techId: string): { success: boolean; message: string } => {
     const tech = getTechById(techId);
-    if (!tech) return { success: false, message: '科技不存在' };
+    const rpt = REPEATABLE_TECHS.find(rt => rt.id === techId);
+    if (!tech && !rpt) return { success: false, message: '科技不存在' };
     let result = { success: false, message: '' };
     dispatch({
       type: 'FUNCTIONAL_UPDATE',
@@ -335,12 +337,14 @@ export function useColony(
         if (!s.colony || s.colony.phase !== 'active') { result = { success: false, message: '殖民地未激活' }; return prev; }
         if (!s.colony.techState) { result = { success: false, message: '科技系统未就绪' }; return prev; }
         if (s.colony.techState.currentResearch) { result = { success: false, message: '已经在研究一项科技' }; return prev; }
-        if (s.colony.techState.researched.includes(techId)) { result = { success: false, message: '该科技已研究完成' }; return prev; }
-        if (s.colony.techState.researchPoints < tech.costRP) { result = { success: false, message: `科研点数不足（需要${tech.costRP}）` }; return prev; }
-        s.colony.techState.researchPoints -= tech.costRP;
-        s.colony.techState.currentResearch = techId;
-        s.colony.techState.currentProgress = 0;
-        result = { success: true, message: `开始研究「${tech.name}」（需要${tech.researchTurns}回合）` };
+        // 普通科技不可重复研究
+        if (tech && s.colony.techState.researched.includes(techId)) { result = { success: false, message: '该科技已研究完成' }; return prev; }
+        const cost = tech ? tech.costRP : getRepeatableCost(rpt!, (s.colony.techState.repeatableLevels?.[techId] || 0));
+        const turns = tech ? tech.researchTurns : rpt!.researchTurns;
+        const name = tech ? tech.name : rpt!.name;
+        if (s.colony.techState.researchPoints < cost) { result = { success: false, message: `科研点数不足（需要${cost}）` }; return prev; }
+        s.colony = { ...s.colony, techState: { ...s.colony.techState, researchPoints: s.colony.techState.researchPoints - cost, currentResearch: techId, currentProgress: 0 } };
+        result = { success: true, message: `开始研究「${name}」（需要${turns}回合）` };
         ships[0] = s;
         return { ...prev, ships };
       },
@@ -499,6 +503,46 @@ export function processColonyTurn(ship: Mothership, _turn: number): void {
     colony.buildings = [...colony.buildings];
   }
 
+  // ===== 电能计算（在产出计算之前） =====
+  let totalPowerGen = 0;
+  for (const inst of colony.buildings) {
+    if (!inst.active) continue;
+    const def = getBuildingDef(inst.defId);
+    if (!def || def.outputType !== 'power') continue;
+    if (inst.assignedPop < def.minPop) continue;
+    let base = (def.baseOutput || 0) + (def.popFactor || 0) * inst.assignedPop;
+    // L22 余晖脉冲加成（Lv1→B29+30%, Lv2→B29+B30各+30%, Lv3→同上+黑障保护）
+    for (const l of colony.leaders) {
+      const ld = getLeaderDef(l.id);
+      if (ld?.id === 'L22') {
+        const lv = l.level;
+        if ((def.id === 'B29' && lv >= 1) || (def.id === 'B30' && lv >= 2)) {
+          base *= 1.30;
+        }
+      }
+    }
+    totalPowerGen += Math.floor(base);
+  }
+  let totalPowerUse = 0;
+  for (const inst of colony.buildings) {
+    if (!inst.active) continue;
+    const def = getBuildingDef(inst.defId);
+    if (!def || def.outputType === 'power') continue; // 电力建筑自身不耗电
+    totalPowerUse += def.powerConsumption || 0;
+  }
+  // L21 负载平衡
+  let l21Bonus = 0;
+  for (const l of colony.leaders) {
+    const ld = getLeaderDef(l.id);
+    if (ld?.id === 'L21') { l21Bonus = [0.10, 0.15, 0.25][l.level - 1] || 0; }
+  }
+  const effectiveUse = Math.ceil(totalPowerUse * (1 - l21Bonus));
+  const netEnergy = totalPowerGen - effectiveUse;
+  // L22 Lv3 余晖脉冲——停电保护
+  const hasL22Lv3 = colony.leaders.some(l => l.id === 'L22' && l.level >= 3);
+  colony.energy = netEnergy;
+  const blackout = netEnergy < 0 && !hasL22Lv3;
+
   // 建筑产出计算
   // 计算领袖加成映射 (buildingId → bonus%)
   const leaderBonusMap: Record<string, number> = {};
@@ -526,6 +570,8 @@ export function processColonyTurn(ship: Mothership, _turn: number): void {
     const def = getBuildingDef(inst.defId);
     if (!def || !def.outputType) continue;
     if (!inst.active || inst.assignedPop < def.minPop) continue;
+    // 停电：跳过非电力产出
+    if (blackout && def.outputType !== 'power') continue;
 
     // 领袖指定建筑人口槽位扩展
     let effMaxPop = def.maxPop;
@@ -537,46 +583,48 @@ export function processColonyTurn(ship: Mothership, _turn: number): void {
     const effPop = Math.min(inst.assignedPop, effMaxPop);
 
     const lb = (leaderBonusMap[inst.defId] || 0) / 100;
+    // 循环科技加成
+    const rl = colony.techState?.repeatableLevels || {};
+    let rpBonus = 0;
+    if (def.outputType === 'food') rpBonus = (rl.RP_FOOD || 0) * 0.05;
+    else if (def.outputType === 'alloy') rpBonus = (rl.RP_ALLOY || 0) * 0.05;
+    else if (def.outputType === 'stardust') rpBonus = (rl.RP_STARDUST || 0) * 0.05;
+    else if (def.outputType === 'gold') rpBonus = (rl.RP_TRADE || 0) * 0.05;
+    else if (def.outputType === 'material') rpBonus = (rl.RP_MATERIAL || 0) * 0.05;
+    else if (def.outputType === 'research') rpBonus = (rl.RP_RESEARCH || 0) * 0.10;
     let output = 0;
     if (def.outputType === 'food') {
       const base = (def.baseOutput || 0) + (def.popFactor || 0) * effPop;
       const pm = planetDef?.buffs.foodMult ? (planetDef.buffs.foodMult - 1) : 0;
-      output = Math.ceil(base * (1 + pm + lb));
+      output = Math.ceil(base * (1 + pm + lb + rpBonus));
       totalFood += output;
     } else if (def.outputType === 'alloy') {
       const base = (def.baseOutput || 0) + (def.popFactor || 0) * effPop;
       const pm = planetDef?.buffs.alloyMult ? (planetDef.buffs.alloyMult - 1) : 0;
-      output = Math.ceil(base * (1 + pm + lb));
+      output = Math.ceil(base * (1 + pm + lb + rpBonus));
       totalAlloy += output;
     } else if (def.outputType === 'stardust') {
       const base = (def.baseOutput || 0) + (def.popFactor || 0) * effPop;
       const pm = planetDef?.buffs.stardustMult ? (planetDef.buffs.stardustMult - 1) : 0;
-      output = Math.ceil(base * (1 + pm + lb));
+      output = Math.ceil(base * (1 + pm + lb + rpBonus));
       totalStardust += output;
     } else if (def.outputType === 'gold') {
       output = Math.floor(Math.random() * ((def.goldOutputMax || 0) - (def.goldOutputMin || 0) + 1)) + (def.goldOutputMin || 0);
-      output = Math.ceil(output * (1 + lb));
+      output = Math.ceil(output * (1 + lb + rpBonus));
       totalGold += output;
     } else if (def.outputType === 'material' && def.outputMaterialId) {
       const base = (def.popFactor || 0) * effPop;
       const matMult = planetDef?.buffs.materialMults?.[def.outputMaterialId];
       const pm = matMult ? (matMult - 1) : 0;
-      output = Math.ceil(base * (1 + pm + lb));
+      output = Math.ceil(base * (1 + pm + lb + rpBonus));
       ship.materials = { ...(ship.materials || {}), [def.outputMaterialId]: ((ship.materials || {})[def.outputMaterialId] || 0) + output };
     } else if (def.outputType === 'research') {
       const base = (def.popFactor || 0) * effPop;
       const pm = planetDef?.buffs.researchMult ? (planetDef.buffs.researchMult - 1) : 0;
       let b26Bonus = 0;
       const hasB26 = colony.buildings.some((b) => b.active && b.defId === 'B26');
-      if (hasB26) {
-        b26Bonus = 0.5; // B26默认+50%
-        for (const l of colony.leaders) {
-          const bm = getLeaderDef(l.id)?.levelExtras[l.level - 1]?.b26Mult;
-          if (bm) b26Bonus = Math.max(b26Bonus, bm - 1);
-        }
-      }
-      output = Math.ceil(base * (1 + pm + lb + b26Bonus));
-      output = Math.ceil(output * (1 + lb));
+      if (hasB26) { b26Bonus = 0.5; for (const l of colony.leaders) { const bm = getLeaderDef(l.id)?.levelExtras[l.level - 1]?.b26Mult; if (bm) b26Bonus = Math.max(b26Bonus, bm - 1); } }
+      output = Math.ceil(base * (1 + pm + lb + b26Bonus + rpBonus));
       totalRP += output;
     }
   }
@@ -644,9 +692,18 @@ export function processColonyTurn(ship: Mothership, _turn: number): void {
     if (colony.techState.currentResearch) {
       const polarBonus = (planetDef && planetDef.id === 'polar') ? 1 : 0;
       colony.techState.currentProgress += 1 + polarBonus;
-      const tech = getTechById(colony.techState.currentResearch);
-      if (tech && colony.techState.currentProgress >= tech.researchTurns) {
-        colony.techState.researched = [...colony.techState.researched, colony.techState.currentResearch];
+      const tid = colony.techState.currentResearch;
+      const tech = getTechById(tid);
+      const rpt = REPEATABLE_TECHS.find(rt => rt.id === tid);
+      const targetTurns = tech ? tech.researchTurns : rpt ? rpt.researchTurns : 99;
+      if (colony.techState.currentProgress >= targetTurns) {
+        if (rpt) {
+          // 循环科技：叠加次数
+          colony.techState.repeatableLevels = { ...(colony.techState.repeatableLevels || {}) };
+          colony.techState.repeatableLevels[tid] = (colony.techState.repeatableLevels[tid] || 0) + 1;
+        } else {
+          colony.techState.researched = [...colony.techState.researched, tid];
+        }
         colony.techState.currentResearch = null;
         colony.techState.currentProgress = 0;
       }

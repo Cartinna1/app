@@ -101,6 +101,14 @@ export const ALL_TECHS: ResearchTech[] = [
   { id: 'T25', name: '星河奇迹',
     description: '"巨型结构是我们时代的伟大奇观。如此范围的大型工程在几代人之前是完全无法想象的。"解锁殖民面板中的奇观建设功能，完成后可赢得游戏胜利。',
     costRP: 10000, researchTurns: 6, prerequisites: [], minResearchedCount: 10 },
+  // ===== T26 聚变能源原理 =====
+  { id: 'T26', name: '聚变能源原理',
+    description: '"当温度和压力达到临界点，恒星的核心反应可以被囚禁在一枚磁场之茧中。"解锁聚变电站，大幅提升殖民地电能产出。',
+    costRP: 6000, researchTurns: 4, prerequisites: [], minResearchedCount: 15, unlocksBuilding: 'B30' },
+  // ===== T27 反物质约束理论 =====
+  { id: 'T27', name: '反物质约束理论',
+    description: '"反物质不是燃料……它是纯能量凝固成的晶体。困难不在于制造它，而在于说服它安静地待在容器里。"解锁反物质反应堆，彻底解决殖民地电能问题。',
+    costRP: 10000, researchTurns: 5, prerequisites: ['T26'], unlocksBuilding: 'B31' },
 ];
 
 export function getTechById(id: string): ResearchTech | undefined {
@@ -113,4 +121,45 @@ export function getAvailableTechs(researchedIds: string[]): ResearchTech[] {
     t.prerequisites.every((p) => researchedIds.includes(p)) &&
     (!t.minResearchedCount || researchedIds.length >= t.minResearchedCount)
   );
+}
+
+// ===== 循环科技 =====
+
+export interface RepeatableTech {
+  id: string;
+  name: string;
+  description: string;
+  baseCost: number;
+  costIncrement: number;
+  researchTurns: number;
+}
+
+export const REPEATABLE_TECHS: RepeatableTech[] = [
+  { id: 'RP_FOOD', name: '食物产能优化', description: '所有食物建筑产出 +5%', baseCost: 2400, costIncrement: 1200, researchTurns: 3 },
+  { id: 'RP_ALLOY', name: '合金冶炼精进', description: '所有合金建筑产出 +5%', baseCost: 2400, costIncrement: 1200, researchTurns: 3 },
+  { id: 'RP_STARDUST', name: '星尘捕获效率', description: '所有星尘建筑产出 +5%', baseCost: 3000, costIncrement: 1500, researchTurns: 5 },
+  { id: 'RP_MATERIAL', name: '原料提纯技术', description: '所有原料建筑产出 +5%', baseCost: 3000, costIncrement: 1500, researchTurns: 5 },
+  { id: 'RP_TRADE', name: '贸易网络扩展', description: '所有贸易建筑金币产出 +5%', baseCost: 2400, costIncrement: 1200, researchTurns: 3 },
+  { id: 'RP_RESEARCH', name: '科研加速协议', description: '所有研究建筑产出 +10%', baseCost: 3600, costIncrement: 1800, researchTurns: 5 },
+];
+
+/** 获取循环科技当前成本 */
+export function getRepeatableCost(tech: RepeatableTech, level: number): number {
+  return tech.baseCost + level * tech.costIncrement;
+}
+
+/** 根据循环科技ID获取建筑类别加成倍数 */
+export function getRepeatableBonus(repeatableLevels: Record<string, number>, category: string): number {
+  switch (category) {
+    case 'food': return 1 + (repeatableLevels['RP_FOOD'] || 0) * 0.05;
+    case 'alloy': return 1 + (repeatableLevels['RP_ALLOY'] || 0) * 0.05;
+    case 'stardust': return 1 + (repeatableLevels['RP_STARDUST'] || 0) * 0.05;
+    case 'material': return 1 + (repeatableLevels['RP_MATERIAL'] || 0) * 0.05;
+    case 'trade': return 1 + (repeatableLevels['RP_TRADE'] || 0) * 0.05;
+    case 'functional': {
+      const lv = repeatableLevels['RP_RESEARCH'] || 0;
+      return 1 + lv * 0.10; // research buildings
+    }
+    default: return 1;
+  }
 }

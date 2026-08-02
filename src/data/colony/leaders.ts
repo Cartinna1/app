@@ -115,6 +115,15 @@ export const ALL_LEADERS: LeaderDef[] = [
     description: '他曾是星际贤才招募法案的起草人，坚信一个文明的伟大程度取决于它容纳天才的胸怀。',
     levelBonuses: [{}, {}, {}],
     levelExtras: [{ leaderCapBonus: 1 }, { leaderCapBonus: 2, leaderCostReduction: 2 }, { leaderCapBonus: 3, leaderCostReduction: 3, researchPerTurn: [50,100] }] },
+  // ===== 电能领袖 =====
+  { id: 'L21', rarity: 'SR', name: '索林·瓦特', abilityName: '负载平衡',
+    description: '永远叼着一根绝缘电缆代替香烟的前电网工程师。他说电缆的焦味比烟草好闻，因为那意味着有人在用电。',
+    levelBonuses: [{}, {}, {}],
+    levelExtras: [{}, {}, {}] },
+  { id: 'L22', rarity: 'SSR', name: '诺娃·永昼', abilityName: '余晖脉冲',
+    description: '一位来自能量生命体的意识——在聚变事故中与反应堆核心融合，从此以纯能形态存在。殖民地停电的瞬间她总能醒来。',
+    levelBonuses: [{}, {}, {}],
+    levelExtras: [{}, {}, {}] },
 ];
 
 export function getLeaderDef(id: string): LeaderDef | undefined {

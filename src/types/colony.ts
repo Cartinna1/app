@@ -53,7 +53,8 @@ export type BuildingCategory =
   | 'stardust'   // 星尘生产
   | 'trade'      // 贸易/金币
   | 'material'   // 原料生产
-  | 'functional'; // 功能类
+  | 'functional' // 功能类
+  | 'power';     // 电能生产
 
 export interface BuildingDef {
   id: string;                // B1, B3, B6 等
@@ -68,7 +69,7 @@ export interface BuildingDef {
   minPop: number;            // 最少入驻人口（居住类=0）
   maxPop: number;            // 最多入驻人口
   /** 产出类型与公式 */
-  outputType?: 'food' | 'alloy' | 'stardust' | 'gold' | 'research' | 'material';
+  outputType?: 'food' | 'alloy' | 'stardust' | 'gold' | 'research' | 'material' | 'power';
   outputMaterialId?: string; // 原料类产出对应的 materialId
   /** 产出基准值，产出=(baseOutput + popFactor×入驻人口) */  
   baseOutput?: number;
@@ -77,6 +78,7 @@ export interface BuildingDef {
   goldOutputMin?: number;
   goldOutputMax?: number;
   requiresTech?: string;     // 需要的前置科技ID（Phase 2）
+  powerConsumption?: number;  // 每回合电能消耗
 }
 
 // ==================== 建筑实例 ====================
@@ -118,6 +120,7 @@ export interface TechState {
   currentProgress: number;
   researchPoints: number;
   researchSeed: number;
+  repeatableLevels: Record<string, number>; // 循环科技ID → 已叠加次数
 }
 
 export interface ColonyLeader {
@@ -150,6 +153,7 @@ export interface Colony {
   scoutingPool?: PlanetTypeId[];     // 可选择的星球池（3个）
   recruitPool?: any[];               // 招募池（领袖选项，暂存）
   wonder?: WonderState;              // 奇观建设状态
+  energy: number;                    // 当前净电能（-1以下=停电）
 }
 
 // ==================== 奇观 ====================

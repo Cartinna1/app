@@ -3,7 +3,7 @@ import type { Mothership } from '@/types/game';
 import type { PlanetTypeId, PlanetDef } from '@/types/colony';
 import { getBuildableBuildings, getBuildingDef, getBuildingEffect } from '@/data/colony/buildings';
 import { getPlanetById } from '@/data/colony/planets';
-import { getTechById, getAvailableTechs } from '@/data/colony/techs';
+import { getTechById, getAvailableTechs, REPEATABLE_TECHS, getRepeatableCost } from '@/data/colony/techs';
 import { getLeaderDef } from '@/data/colony/leaders';
 import { Home, Users, Wrench, Play, UserPlus, FlaskConical, Crown, Trophy } from 'lucide-react';
 import WonderPanel from './WonderPanel';
@@ -80,7 +80,7 @@ const CAT_COLORS: Record<string, string> = {
   functional: 'bg-cyan-900/30 text-cyan-400',
 };
 const CAT_LABELS: Record<string, string> = {
-  housing: '居住', food: '食物', alloy: '合金', stardust: '星尘', trade: '贸易', material: '原料', functional: '功能',
+  housing: '居住', food: '食物', alloy: '合金', stardust: '星尘', trade: '贸易', material: '原料', functional: '功能', power: '电能',
 };
 
 // ==================== 组件 ====================
@@ -137,8 +137,21 @@ export default function ColonyPanel(props: ColonyPanelProps) {
   const researchOptions = useMemo(() => {
     if (!colony?.techState || colony.techState.currentResearch) return [];
     const available = getAvailableTechs(colony.techState.researched);
-    return [...available].sort(() => Math.random() - 0.5).slice(0, 2);
-  }, [colony?.techState?.researched, colony?.techState?.currentResearch, colony?.techState?.researchSeed]);
+    if (available.length > 0) {
+      return [...available].sort(() => Math.random() - 0.5).slice(0, 2).map((t) => ({ id: t.id, name: t.name, desc: t.description, cost: t.costRP, turns: t.researchTurns, isRepeatable: false, repeatLevel: 0 }));
+    }
+    // 全部研究完：显示循环科技
+    const levels = colony.techState.repeatableLevels || {};
+    return REPEATABLE_TECHS.map((rt) => ({
+      id: rt.id,
+      name: rt.name,
+      desc: `${rt.description}（已叠加 ${levels[rt.id] || 0} 次）`,
+      cost: getRepeatableCost(rt, levels[rt.id] || 0),
+      turns: rt.researchTurns,
+      isRepeatable: true,
+      repeatLevel: levels[rt.id] || 0,
+    }));
+  }, [colony?.techState?.researched, colony?.techState?.currentResearch, colony?.techState?.researchSeed, colony?.techState?.repeatableLevels]);
 
   // 提前计算活跃建筑的合并视图（必须在条件 return 之前，hooks 顺序不能变）
   const liveBuildings = useMemo(() => (colony?.buildings || []).filter((b: any) => b.active), [colony?.buildings]);
@@ -303,6 +316,27 @@ export default function ColonyPanel(props: ColonyPanelProps) {
               <p className="text-lg font-bold text-purple-400">{colony.population.cap}</p>
             </div>
           </div>
+          {/* 电能状态 */}
+          <div className={`rounded-xl p-4 border ${(colony.energy ?? 0) < 0 ? 'bg-red-900/30 border-red-700/50' : 'bg-slate-900/60 border-slate-700'}`}>
+            <div className="flex justify-between items-center">
+              <div>
+                <p className="text-sm font-bold text-slate-300">⚡ 电能</p>
+                <p className="text-xs text-slate-500">净余电能</p>
+              </div>
+              <div className="text-right">
+                <p className={`text-xl font-bold ${(colony.energy ?? 0) < 0 ? 'text-red-400' : 'text-green-400'}`}>
+                  {(colony.energy ?? 0) >= 0 ? '+' : ''}{colony.energy ?? 0}
+                </p>
+                {((colony.energy ?? 0) < 0) && (
+                  <p className="text-xs text-red-400 mt-1">
+                    {colony.leaders?.some(l => l.id === 'L22' && l.level >= 3)
+                      ? '⚠ 停电中（余晖脉冲保护中：5回合内产出正常）'
+                      : '⚠ 停电：所有建筑停工'}
+                  </p>
+                )}
+              </div>
+            </div>
+          </div>
           {/* 产出汇总 */}
           {liveBuildings.length > 0 && (() => {
             const pod = planet?.buffs;
@@ -450,7 +484,7 @@ export default function ColonyPanel(props: ColonyPanelProps) {
             {/* 类型筛选标签（可点击） */}
             {liveBuildings.length > 0 && (
               <div className="flex flex-wrap gap-1 mb-3">
-                {['housing','food','alloy','stardust','trade','material','functional'].map((cat) => (
+                {['housing','food','alloy','stardust','trade','material','functional','power'].map((cat) => (
                   <button key={cat} onClick={() => setLiveBuildFilter(cat)}
                     className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-colors ${liveBuildFilter === cat ? 'bg-green-600 text-white' : 'bg-slate-700/80 text-slate-400 hover:bg-slate-600'}`}>
                     {CAT_LABELS[cat] || cat}
@@ -689,40 +723,53 @@ export default function ColonyPanel(props: ColonyPanelProps) {
           <div className="bg-slate-900/60 border border-slate-700 rounded-xl p-4">
             <h4 className="font-bold text-slate-200 mb-2">科研点数: {colony.techState.researchPoints}</h4>
             {colony.techState.currentResearch ? (() => {
-              const ct = getTechById(colony.techState.currentResearch);
+              const tid = colony.techState.currentResearch;
+              const ct = getTechById(tid) || REPEATABLE_TECHS.find(rt => rt.id === tid);
+              const isRp = ct && 'costIncrement' in ct;
               return (
-                <div className="bg-yellow-900/20 border border-yellow-700/40 rounded-lg p-3">
-                  <p className="text-sm text-yellow-400 font-bold">研究中: {ct?.name}</p>
-                  <p className="text-sm text-slate-400">{ct?.description}</p>
-                  <p className="text-sm text-yellow-400 mt-1">进度: {colony.techState.currentProgress}/{ct?.researchTurns} 回合</p>
-                  {ct?.unlocksBuilding && (() => {
-                    const bd = getBuildingDef(ct.unlocksBuilding);
+                <div className={`rounded-lg p-3 ${isRp ? 'bg-pink-900/20 border border-pink-700/40' : 'bg-yellow-900/20 border border-yellow-700/40'}`}>
+                  <p className={`text-sm font-bold ${isRp ? 'text-pink-400' : 'text-yellow-400'}`}>
+                    {isRp ? '🔄 ' : ''}研究中: {ct?.name}
+                  </p>
+                  <p className="text-sm text-slate-400">{isRp ? (ct as any).description : (ct as any)?.description}</p>
+                  <p className={`text-sm mt-1 ${isRp ? 'text-pink-400' : 'text-yellow-400'}`}>进度: {colony.techState.currentProgress}/{isRp ? (ct as any).researchTurns : (ct as any)?.researchTurns} 回合</p>
+                  {!isRp && (ct as any)?.unlocksBuilding && (() => {
+                    const bd = getBuildingDef((ct as any).unlocksBuilding);
                     return bd ? <p className="text-sm text-cyan-400 mt-1">🏗 完成后解锁: {bd.name} — {getBuildingEffect(bd)}</p> : null;
                   })()}
-                  {ct?.leaderCapBonus && <p className="text-sm text-amber-400 mt-1">👥 领袖上限 +{ct.leaderCapBonus}</p>}
+                  {!isRp && (ct as any)?.leaderCapBonus && <p className="text-sm text-amber-400 mt-1">👥 领袖上限 +{(ct as any).leaderCapBonus}</p>}
                 </div>
-              );
-            })() : <p className="text-sm text-slate-500">尚未选择研究项目 | 每回合产出科研点数无法显示的不会在此显示</p>}
+              );            })() : <p className="text-sm text-slate-500">{getAvailableTechs(colony.techState.researched).length === 0 ? '全部科技已研究完毕，可选循环科技。' : '尚未选择研究项目'}</p>}
           </div>
           {!colony.techState.currentResearch && (
             <div>
               <h4 className="text-sm font-bold text-purple-400 mb-2">可选科技</h4>
               <div className="space-y-2">
-                {researchOptions.map((tech) => (
-                  <div key={tech.id} className={`bg-slate-900/60 border rounded-lg p-3 flex justify-between items-center ${colony.techState!.researchPoints >= tech.costRP ? 'border-purple-700/40' : 'border-slate-800 opacity-50'}`}>
-                    <div>
-                      <span className="text-sm text-purple-300 font-bold">{tech.name}</span>
-                      <span className="text-sm text-slate-500 ml-2">{tech.researchTurns}回合 | {tech.costRP}点</span>
-                      <p className="text-sm text-slate-400 mt-1">{tech.description}</p>
+              {researchOptions.length === 0 && !colony.techState.currentResearch && (
+                <p className="text-sm text-slate-500 text-center py-4">所有科技已研究完毕，没有可用科技。</p>
+              )}
+              {researchOptions.map((tech: any) => (
+                <div key={tech.id} className={`bg-slate-900/60 border rounded-lg p-3 flex justify-between items-center ${colony.techState!.researchPoints >= tech.cost ? (tech.isRepeatable ? 'border-pink-700/40' : 'border-purple-700/40') : 'border-slate-800 opacity-50'}`}>
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <span className={`text-sm font-bold ${tech.isRepeatable ? 'text-pink-300' : 'text-purple-300'}`}>{tech.name}</span>
+                      {tech.isRepeatable && <span className="text-xs px-1.5 py-0.5 rounded bg-pink-900/30 text-pink-400 border border-pink-700/30">循环</span>}
+                      <span className="text-sm text-slate-500">{tech.turns}回合 | {tech.cost}点</span>
+                    </div>
+                    <p className="text-sm text-slate-400 mt-1">{tech.desc}</p>
                       {tech.unlocksBuilding && (() => {
                         const bd = getBuildingDef(tech.unlocksBuilding);
                         return bd ? <p className="text-sm text-cyan-400 mt-0.5">🏗 解锁: {bd.name} — {getBuildingEffect(bd)}</p> : null;
                       })()}
                       {tech.leaderCapBonus && <span className="text-sm text-amber-400 ml-2">领袖上限 +{tech.leaderCapBonus}</span>}
-                    </div>
-                    <button onClick={() => { const r = onStartResearch(tech.id); showMsg(r.message, r.success ? 'success' : 'error'); }}
-                      disabled={colony.techState!.researchPoints < tech.costRP}
-                      className="px-3 py-1.5 bg-purple-700 hover:bg-purple-600 disabled:bg-slate-700 rounded text-sm font-bold text-white">研究</button>
+                  </div>
+                  <button onClick={() => { const r = onStartResearch(tech.id); showMsg(r.message, r.success ? 'success' : 'error'); }}
+                    disabled={colony.techState!.researchPoints < tech.cost}
+                    className={`px-3 py-1.5 rounded text-sm font-bold text-white transition-colors ${
+                      tech.isRepeatable
+                        ? 'bg-pink-700 hover:bg-pink-600 disabled:bg-slate-700'
+                        : 'bg-purple-700 hover:bg-purple-600 disabled:bg-slate-700'
+                    }`}>研究</button>
                   </div>
                 ))}
               </div>
