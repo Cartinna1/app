@@ -861,6 +861,10 @@ export default function ColonyPanel(props: ColonyPanelProps) {
                       if (ex1.quantumPerTurn) skillDesc += ` | 量子簇+${ex1.quantumPerTurn}/回合`;
                       {/* L16 穹顶之父（硬编码追加） */}
                       {ld.id === 'L16' && (skillDesc += ' | 穹顶都市/居住舱人口效果+50%')}
+                      {/* L21 索林·瓦特 */}
+                      {ld.id === 'L21' && (skillDesc += ' | Lv1所有建筑电能消耗-10% | Lv2 -15% | Lv3 -25%')}
+                      {/* L22 诺娃·永昼 */}
+                      {ld.id === 'L22' && (skillDesc += ' | Lv1太阳能阵列+30% | Lv2聚变电站+30% | Lv3停电保护5回合')}
                       return (
                         <div key={i} className="bg-slate-800/60 border border-slate-700 rounded-lg p-3 flex justify-between items-center gap-3">
                           <img
@@ -924,6 +928,14 @@ export default function ColonyPanel(props: ColonyPanelProps) {
                       const popPct = [50, 100, 150][l.level-1] || 0;
                       parts.push(`穹顶都市/居住舱人口效果+${popPct}%`);
                       if (l.level >= 2) parts.push(`B2造价-${l.level===2?30:50}%`);
+                    })()}
+                    {/* L21 索林·瓦特 */}
+                    {ld.id === 'L21' && parts.push(`所有建筑电能消耗 -${[10,15,25][l.level-1]}%`)}
+                    {/* L22 诺娃·永昼 */}
+                    {ld.id === 'L22' && (() => {
+                      if (l.level >= 1) parts.push('太阳能阵列产出+30%');
+                      if (l.level >= 2) parts.push('聚变电站产出+30%');
+                      if (l.level >= 3) parts.push('停电后保持5回合正常产出');
                     })()}
                     return (
                     <div key={i} className="bg-slate-800/60 border border-slate-700 rounded-lg p-3 mb-2 flex gap-3 items-start">

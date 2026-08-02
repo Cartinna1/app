@@ -130,26 +130,27 @@ export function getLeaderDef(id: string): LeaderDef | undefined {
   return ALL_LEADERS.find((l) => l.id === id);
 }
 
-/** 随机生成3个领袖招募选项 */
-export function rollLeaders(count: number = 3): LeaderDef[] {
+/** 随机生成3个领袖招募选项（排除已招募的） */
+export function rollLeaders(count: number = 3, excludeIds: string[] = []): LeaderDef[] {
   const results: LeaderDef[] = [];
-  const pool = [...ALL_LEADERS];
-  for (let i = 0; i < count; i++) {
+  const pool = ALL_LEADERS.filter((l) => !excludeIds.includes(l.id));
+  if (pool.length === 0) return results; // 所有领袖都已招募
+  for (let i = 0; i < Math.min(count, pool.length); i++) {
     const r = Math.random();
     let rarity: 'R' | 'SR' | 'SSR';
     if (r < 0.70) rarity = 'R';
     else if (r < 0.97) rarity = 'SR';
     else rarity = 'SSR';
     const candidates = pool.filter((l) => l.rarity === rarity);
-    if (candidates.length === 0) {
-      const idx = Math.floor(Math.random() * pool.length);
-      results.push(pool[idx]);
-      pool.splice(idx, 1);
-    } else {
-      const idx = Math.floor(Math.random() * candidates.length);
-      results.push(candidates[idx]);
-      pool.splice(pool.indexOf(candidates[idx]), 1);
-    }
+    // 如果目标稀有度没有候选，放宽条件：优先选高稀有度 → 低稀有度
+    const fallbackCandidates = candidates.length > 0 ? candidates
+      : pool.filter((l) => l.rarity === 'SSR').length > 0 ? pool.filter((l) => l.rarity === 'SSR')
+      : pool.filter((l) => l.rarity === 'SR').length > 0 ? pool.filter((l) => l.rarity === 'SR')
+      : pool;
+    const idx = Math.floor(Math.random() * fallbackCandidates.length);
+    const picked = fallbackCandidates[idx];
+    results.push(picked);
+    pool.splice(pool.indexOf(picked), 1);
   }
   return results;
 }

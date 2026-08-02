@@ -402,7 +402,7 @@ export function useColony(
         const rollCost = Math.max(1, 10 - lCostReduction);
         if (s.stardust < rollCost) return prev;
         s.stardust -= rollCost;
-        s.colony = { ...s.colony, recruitPool: rollLeaders(3) };
+        s.colony = { ...s.colony, recruitPool: rollLeaders(3, s.colony.leaders.map((l) => l.id)) };
         ships[0] = s; return { ...prev, ships };
       },
     });
@@ -544,13 +544,22 @@ export function processColonyTurn(ship: Mothership, _turn: number): void {
     if (!def || def.outputType === 'power') continue; // 电力建筑自身不耗电
     totalPowerUse += def.powerConsumption || 0;
   }
-  // L21 负载平衡
+  // L21 负载平衡（按建筑取整，floor 确保低功耗建筑也有收益，但最低保留 1）
   let l21Bonus = 0;
   for (const l of colony.leaders) {
     const ld = getLeaderDef(l.id);
     if (ld?.id === 'L21') { l21Bonus = [0.10, 0.15, 0.25][l.level - 1] || 0; }
   }
-  const effectiveUse = Math.ceil(totalPowerUse * (1 - l21Bonus));
+  const effectiveUse = l21Bonus > 0
+    ? colony.buildings.reduce((sum, inst) => {
+        if (!inst.active) return sum;
+        const def = getBuildingDef(inst.defId);
+        if (!def || def.outputType === 'power') return sum;
+        const raw = def.powerConsumption || 0;
+        if (raw <= 0) return sum;
+        return sum + Math.max(1, Math.floor(raw * (1 - l21Bonus)));
+      }, 0)
+    : totalPowerUse;
   const netEnergy = totalPowerGen - effectiveUse;
   // L22 Lv3 余晖脉冲——停电保护
   const hasL22Lv3 = colony.leaders.some(l => l.id === 'L22' && l.level >= 3);
