@@ -121,7 +121,7 @@ export default function ColonyPanel(props: ColonyPanelProps) {
   const [scoutPool, setScoutPool] = useState<PlanetTypeId[] | null>(null);
   const [buildCatFilter, setBuildCatFilter] = useState<string>('housing');
   const [popCatFilter, setPopCatFilter] = useState<string>('all');
-  const [liveBuildFilter, setLiveBuildFilter] = useState<string>('all'); // 已建成建筑筛选：默认显示全部
+  const [liveBuildFilter, setLiveBuildFilter] = useState<string>('housing'); // 已建成建筑筛选
 
   const showMsg = (m: string, t: 'success' | 'error') => { setMessage(m); setMsgType(t); setTimeout(() => setMessage(''), 4000); };
 
@@ -330,20 +330,18 @@ export default function ColonyPanel(props: ColonyPanelProps) {
               }
               return sum;
             }, 0);
-            // L21 负载平衡：按建筑 floor 折扣，最低 1
+            // L21 负载平衡
             let l21Bonus = 0;
             for (const l of colony.leaders || []) {
               const ld = getLeaderDef(l.id);
               if (ld?.id === 'L21') l21Bonus = [0.10, 0.15, 0.25][l.level - 1] || 0;
             }
-            const totalUse = liveBuildings.reduce((sum, b) => {
+            const rawUse = liveBuildings.reduce((sum, b) => {
               const d = getBuildingDef(b.defId);
               if (!d || d.outputType === 'power') return sum;
-              const raw = d.powerConsumption || 0;
-              if (raw <= 0) return sum;
-              if (l21Bonus > 0) return sum + Math.max(1, Math.floor(raw * (1 - l21Bonus)));
-              return sum + raw;
+              return sum + (d.powerConsumption || 0);
             }, 0);
+            const totalUse = l21Bonus > 0 ? Math.ceil(rawUse * (1 - l21Bonus)) : rawUse;
             const netPwr = (colony.energy ?? 0);
             const hasL22Lv3 = colony.leaders?.some(l => l.id === 'L22' && l.level >= 3);
             return (
@@ -508,7 +506,7 @@ export default function ColonyPanel(props: ColonyPanelProps) {
             {/* 类型筛选标签（可点击） */}
             {liveBuildings.length > 0 && (
               <div className="flex flex-wrap gap-1 mb-3">
-                {['all','housing','food','alloy','stardust','trade','material','functional','power'].map((cat) => (
+                {['housing','food','alloy','stardust','trade','material','functional','power'].map((cat) => (
                   <button key={cat} onClick={() => setLiveBuildFilter(cat)}
                     className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-colors ${liveBuildFilter === cat ? 'bg-green-600 text-white' : 'bg-slate-700/80 text-slate-400 hover:bg-slate-600'}`}>
                     {CAT_LABELS[cat] || cat}
@@ -517,10 +515,10 @@ export default function ColonyPanel(props: ColonyPanelProps) {
                 ))}
               </div>
             )}
-            {liveBuildFilter !== 'all' && liveBuildings.filter((b:any) => { const d=getBuildingDef(b.defId); return d?.category === liveBuildFilter; }).length === 0 && liveBuildings.length > 0 && (
+            {liveBuildings.filter((b:any) => { const d=getBuildingDef(b.defId); return d?.category === liveBuildFilter; }).length === 0 && liveBuildings.length > 0 && (
               <p className="text-slate-500 text-sm mb-2">暂无「{CAT_LABELS[liveBuildFilter] || liveBuildFilter}」类型建筑</p>
             )}
-            {(liveBuildFilter === 'all' ? liveBuildings : liveBuildings.filter((b:any) => { const d=getBuildingDef(b.defId); return d?.category === liveBuildFilter; })).map((inst: any) => {
+            {liveBuildings.filter((b:any) => { const d=getBuildingDef(b.defId); return d?.category === liveBuildFilter; }).map((inst: any) => {
               const def = getBuildingDef(inst.defId);
               if (!def) return (
                 <div key={inst.uid} className="bg-slate-900/60 border border-purple-700/40 rounded-lg p-3 mb-2 flex justify-between items-center">
