@@ -330,7 +330,20 @@ export default function ColonyPanel(props: ColonyPanelProps) {
               }
               return sum;
             }, 0);
-            const totalUse = liveBuildings.reduce((sum, b) => sum + (getBuildingDef(b.defId)?.powerConsumption || 0), 0);
+            // L21 负载平衡：按建筑 floor 折扣，最低 1
+            let l21Bonus = 0;
+            for (const l of colony.leaders || []) {
+              const ld = getLeaderDef(l.id);
+              if (ld?.id === 'L21') l21Bonus = [0.10, 0.15, 0.25][l.level - 1] || 0;
+            }
+            const totalUse = liveBuildings.reduce((sum, b) => {
+              const d = getBuildingDef(b.defId);
+              if (!d || d.outputType === 'power') return sum;
+              const raw = d.powerConsumption || 0;
+              if (raw <= 0) return sum;
+              if (l21Bonus > 0) return sum + Math.max(1, Math.floor(raw * (1 - l21Bonus)));
+              return sum + raw;
+            }, 0);
             const netPwr = (colony.energy ?? 0);
             const hasL22Lv3 = colony.leaders?.some(l => l.id === 'L22' && l.level >= 3);
             return (
@@ -338,7 +351,7 @@ export default function ColonyPanel(props: ColonyPanelProps) {
                 <div className="flex justify-between items-center">
                   <div>
                     <p className="text-sm font-bold text-slate-300">⚡ 电能</p>
-                    <p className="text-xs text-slate-500">发电 {totalGen} − 消耗 {totalUse}</p>
+                    <p className="text-xs text-slate-500">发电 {totalGen} − 消耗 {totalUse}{l21Bonus > 0 ? ` (L21 -${Math.round(l21Bonus*100)}%)` : ''}</p>
                   </div>
                   <div className="text-right">
                     <p className={`text-xl font-bold ${netPwr < 0 ? 'text-red-400' : 'text-green-400'}`}>{netPwr >= 0 ? '+' : ''}{netPwr}</p>
@@ -940,7 +953,7 @@ export default function ColonyPanel(props: ColonyPanelProps) {
                     return (
                     <div key={i} className="bg-slate-800/60 border border-slate-700 rounded-lg p-3 mb-2 flex gap-3 items-start">
                       <img
-                        src={`/leaders/${ld.id}.png`}
+                        src={`/leaders/${ld.id}.jpg`}
                         alt={ld.name}
                         onError={(e) => { (e.target as HTMLImageElement).style.display='none'; }}
                         className={`w-16 h-16 rounded-lg object-cover flex-shrink-0 border-2 ${l.rarity==='SSR'?'border-amber-400 shadow-[0_0_10px_rgba(251,191,36,0.6)]':l.rarity==='SR'?'border-purple-400':'border-blue-400'}`}

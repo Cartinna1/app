@@ -563,8 +563,11 @@ export function processColonyTurn(ship: Mothership, _turn: number): void {
   const netEnergy = totalPowerGen - effectiveUse;
   // L22 Lv3 余晖脉冲——停电保护
   const hasL22Lv3 = colony.leaders.some(l => l.id === 'L22' && l.level >= 3);
-  colony.energy = netEnergy;
-  const blackout = netEnergy < 0 && !hasL22Lv3;
+  // 电能累积（容量上限 50，防止无限堆）
+  const prevEnergy = typeof colony.energy === 'number' ? colony.energy : 0;
+  const newEnergy = Math.max(-1, Math.min(50, prevEnergy + netEnergy));
+  colony.energy = newEnergy;
+  const blackout = newEnergy < 0 && !hasL22Lv3;
 
   // 建筑产出计算
   // 计算领袖加成映射 (buildingId → bonus%)
