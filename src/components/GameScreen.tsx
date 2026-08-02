@@ -80,7 +80,7 @@ interface GameScreenProps {
   onUpgradeLeader: (leaderIndex: number) => { success: boolean; message: string };
   onRollAndRecruit: () => void;
   onCancelBuilding: (uid: string) => void
-  onDemolishBuilding: (uid: string) => void;
+  onDemolishBuilding: (uid: string) => { success: boolean; message: string };
   onSelectWonder: (wonderId: string) => { success: boolean; message: string };
   onSubmitWonderResources: () => { success: boolean; message: string };
   onHandleWonderEvent: (choice: 'A' | 'B') => { success: boolean; message: string };

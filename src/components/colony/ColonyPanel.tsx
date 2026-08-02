@@ -99,7 +99,7 @@ interface ColonyPanelProps {
   onUpgradeLeader: (leaderIndex: number) => { success: boolean; message: string };
   onRollAndRecruit: () => void;
   onCancelBuilding: (uid: string) => void;
-  onDemolishBuilding: (uid: string) => void;
+  onDemolishBuilding: (uid: string) => { success: boolean; message: string };
   // 奇观
   onSelectWonder: (wonderId: string) => { success: boolean; message: string };
   onSubmitWonderResources: () => { success: boolean; message: string };
@@ -317,26 +317,37 @@ export default function ColonyPanel(props: ColonyPanelProps) {
             </div>
           </div>
           {/* 电能状态 */}
-          <div className={`rounded-xl p-4 border ${(colony.energy ?? 0) < 0 ? 'bg-red-900/30 border-red-700/50' : 'bg-slate-900/60 border-slate-700'}`}>
-            <div className="flex justify-between items-center">
-              <div>
-                <p className="text-sm font-bold text-slate-300">⚡ 电能</p>
-                <p className="text-xs text-slate-500">净余电能</p>
+          {(() => {
+            const totalGen = liveBuildings.reduce((sum, b) => {
+              const d = getBuildingDef(b.defId);
+              if (d?.outputType === 'power' && b.assignedPop >= d.minPop) {
+                let gen = (d.baseOutput || 0) + (d.popFactor || 0) * b.assignedPop;
+                for (const l of colony.leaders || []) {
+                  const ld = getLeaderDef(l.id);
+                  if (ld?.id === 'L22' && ((d.id === 'B29' && l.level >= 1) || (d.id === 'B30' && l.level >= 2))) gen = Math.floor(gen * 1.30);
+                }
+                return sum + Math.floor(gen);
+              }
+              return sum;
+            }, 0);
+            const totalUse = liveBuildings.reduce((sum, b) => sum + (getBuildingDef(b.defId)?.powerConsumption || 0), 0);
+            const netPwr = (colony.energy ?? 0);
+            const hasL22Lv3 = colony.leaders?.some(l => l.id === 'L22' && l.level >= 3);
+            return (
+              <div className={`rounded-xl p-4 border ${netPwr < 0 ? 'bg-red-900/30 border-red-700/50' : 'bg-slate-900/60 border-slate-700'}`}>
+                <div className="flex justify-between items-center">
+                  <div>
+                    <p className="text-sm font-bold text-slate-300">⚡ 电能</p>
+                    <p className="text-xs text-slate-500">发电 {totalGen} − 消耗 {totalUse}</p>
+                  </div>
+                  <div className="text-right">
+                    <p className={`text-xl font-bold ${netPwr < 0 ? 'text-red-400' : 'text-green-400'}`}>{netPwr >= 0 ? '+' : ''}{netPwr}</p>
+                    {netPwr < 0 && <p className="text-xs text-red-400 mt-1">{hasL22Lv3 ? '⚠ 停电中（余晖脉冲保护）' : '⚠ 停电：所有建筑停工'}</p>}
+                  </div>
+                </div>
               </div>
-              <div className="text-right">
-                <p className={`text-xl font-bold ${(colony.energy ?? 0) < 0 ? 'text-red-400' : 'text-green-400'}`}>
-                  {(colony.energy ?? 0) >= 0 ? '+' : ''}{colony.energy ?? 0}
-                </p>
-                {((colony.energy ?? 0) < 0) && (
-                  <p className="text-xs text-red-400 mt-1">
-                    {colony.leaders?.some(l => l.id === 'L22' && l.level >= 3)
-                      ? '⚠ 停电中（余晖脉冲保护中：5回合内产出正常）'
-                      : '⚠ 停电：所有建筑停工'}
-                  </p>
-                )}
-              </div>
-            </div>
-          </div>
+            );
+          })()}
           {/* 产出汇总 */}
           {liveBuildings.length > 0 && (() => {
             const pod = planet?.buffs;
@@ -501,7 +512,7 @@ export default function ColonyPanel(props: ColonyPanelProps) {
               if (!def) return (
                 <div key={inst.uid} className="bg-slate-900/60 border border-purple-700/40 rounded-lg p-3 mb-2 flex justify-between items-center">
                   <span className="text-sm text-purple-300 font-bold">{inst.defId}</span>
-                  <button onClick={() => onDemolishBuilding(inst.uid)} className="px-2 py-1 bg-red-700 hover:bg-red-600 rounded text-xs font-bold">拆除</button>
+                  <button onClick={() => { const r = onDemolishBuilding(inst.uid); showMsg(r.message, r.success ? 'success' : 'error'); }} className="px-2 py-1 bg-red-700 hover:bg-red-600 rounded text-xs font-bold">拆除</button>
                 </div>
               );
               const maxLabel = def.maxPop > 0 ? `入驻 ${inst.assignedPop}/${def.maxPop}${def.minPop > 0 ? ` (最小${def.minPop}人)` : ''}` : `入驻 ${inst.assignedPop}`;
@@ -543,7 +554,7 @@ export default function ColonyPanel(props: ColonyPanelProps) {
                     )}
                     {!liveOut && !(def.minPop > 0 && inst.assignedPop > 0 && inst.assignedPop < def.minPop) && <span className="text-sm text-slate-600 ml-2">{getOutputDesc(def)}</span>}
                   </div>
-                  <button onClick={() => { onDemolishBuilding(inst.uid); showMsg(`已拆除「${def.name}」`, 'success'); }}
+                  <button onClick={() => { const r = onDemolishBuilding(inst.uid); showMsg(r.message, r.success ? 'success' : 'error'); }} className="px-2 py-1 bg-red-700 hover:bg-red-600 rounded text-xs font-bold">拆除</button>
                     className="px-2 py-1 bg-red-700 hover:bg-red-600 rounded text-xs font-bold flex-shrink-0 ml-3">拆除</button>
                 </div>
               );
@@ -574,7 +585,7 @@ export default function ColonyPanel(props: ColonyPanelProps) {
           <div>
             <h4 className="text-sm font-bold text-cyan-400 mb-2">建造新建筑</h4>
             <div className="flex flex-wrap gap-1 mb-3">
-              {['all','housing','food','alloy','stardust','trade','material','functional'].map((cat) => (
+              {['all','housing','food','alloy','stardust','trade','material','functional','power'].map((cat) => (
                 <button key={cat} onClick={() => setBuildCatFilter(cat)}
                   className={`px-2.5 py-1 rounded-lg text-sm font-bold transition-colors ${buildCatFilter === cat ? 'bg-cyan-600 text-white' : 'bg-slate-700/80 text-slate-400 hover:bg-slate-600'}`}>
                   {cat === 'all' ? '全部' : (CAT_LABELS[cat] || cat)}
@@ -667,7 +678,7 @@ export default function ColonyPanel(props: ColonyPanelProps) {
             <p className="text-sm text-slate-400 mb-2">空闲人口: <span className="text-cyan-400 font-bold">{colony.population.available}</span></p>
             {/* 分类过滤 */}
             <div className="flex flex-wrap gap-1 mb-3">
-              {['all','housing','food','alloy','stardust','trade','material','functional'].map((cat) => (
+              {['all','housing','food','alloy','stardust','trade','material','functional','power'].map((cat) => (
                 <button key={cat} onClick={() => setPopCatFilter(cat)}
                   className={`px-2.5 py-1 rounded-lg text-sm font-bold transition-colors ${popCatFilter === cat ? 'bg-cyan-600 text-white' : 'bg-slate-700/80 text-slate-400 hover:bg-slate-600'}`}>
                   {cat === 'all' ? '全部' : (CAT_LABELS[cat] || cat)}

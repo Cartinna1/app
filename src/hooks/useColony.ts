@@ -59,13 +59,6 @@ export function useColony(
         const initialPop = planetDef.buffs.initialPop || 0;
         // 遗落星球赠送 B7/B20/B21
         const buildings: BuildingInstance[] = [];
-        if (planetId === 'ruin') {
-          buildings.push(
-            { defId: 'B7', uid: 'B7_ruin_1', assignedPop: 0, buildProgress: 3, active: true },
-            { defId: 'B20', uid: 'B20_ruin_1', assignedPop: 0, buildProgress: 3, active: true },
-            { defId: 'B21', uid: 'B21_ruin_1', assignedPop: 0, buildProgress: 4, active: true },
-          );
-        }
         s.colony = {
           ...s.colony,
           phase: 'active',
@@ -442,16 +435,36 @@ export function useColony(
   }, [dispatch]);
 
   /** 拆除已建成建筑 */
-  const demolishBuilding = useCallback((uid: string) => {
+  const demolishBuilding = useCallback((uid: string): { success: boolean; message: string } => {
+    let result = { success: false, message: '' };
     dispatch({
       type: 'FUNCTIONAL_UPDATE',
       updater: (prev) => {
         const ships = [...prev.ships]; const s = { ...ships[0] };
-        if (!s.colony) return prev;
+        if (!s.colony) { result = { success: false, message: '殖民地未激活' }; return prev; }
+        const inst = s.colony.buildings.find((b: any) => b.uid === uid);
+        if (!inst) { result = { success: false, message: '建筑不存在' }; return prev; }
+        if (!inst.active) { result = { success: false, message: '只能拆除已建成的建筑' }; return prev; }
+        // 检查居住建筑拆除后人口上限
+        const def = getBuildingDef(inst.defId);
+        if (def && (def.id === 'B1' || def.id === 'B2')) {
+          const removedCap = def.id === 'B1' ? 5 : 20;
+          const currentCap = s.colony.buildings.reduce((sum: number, b: any) => {
+            if (!b.active || b.uid === uid) return sum;
+            if (b.defId === 'B1') return sum + 5;
+            if (b.defId === 'B2') return sum + 20;
+            return sum;
+          }, s.colony.planetType && ALL_PLANETS.find(p => p.id === s.colony!.planetType)?.buffs.initialPopCap || 5);
+          if (s.colony.population.total > currentCap - removedCap) {
+            result = { success: false, message: `拆除后人口上限不足（当前${s.colony.population.total}人，拆除后上限${currentCap - removedCap}）` };
+            return prev;
+          }
+        }
         s.colony = { ...s.colony, buildings: s.colony.buildings.filter((b: any) => b.uid !== uid) };
-        ships[0] = s; return { ...prev, ships };
+        ships[0] = s; result = { success: true, message: '已拆除' }; return { ...prev, ships };
       },
     });
+    return result;
   }, [dispatch]);
 
   // 奇观系统
@@ -504,6 +517,7 @@ export function processColonyTurn(ship: Mothership, _turn: number): void {
   }
 
   // ===== 电能计算（在产出计算之前） =====
+  if (colony.energy === undefined) colony.energy = 0;
   let totalPowerGen = 0;
   for (const inst of colony.buildings) {
     if (!inst.active) continue;
@@ -626,6 +640,10 @@ export function processColonyTurn(ship: Mothership, _turn: number): void {
       if (hasB26) { b26Bonus = 0.5; for (const l of colony.leaders) { const bm = getLeaderDef(l.id)?.levelExtras[l.level - 1]?.b26Mult; if (bm) b26Bonus = Math.max(b26Bonus, bm - 1); } }
       output = Math.ceil(base * (1 + pm + lb + b26Bonus + rpBonus));
       totalRP += output;
+    } else if (def.outputType === 'power') {
+      // 电能产出已在电能计算环节处理，此处仅作防御性保底
+      output = Math.floor((def.baseOutput || 0) + (def.popFactor || 0) * effPop);
+      // 不累加到任何全局变量（电能已在 colony.energy 中）
     }
   }
 
