@@ -119,9 +119,9 @@ export default function ColonyPanel(props: ColonyPanelProps) {
   const [recruitQty, setRecruitQty] = useState(1);
   const [planetName, setPlanetName] = useState('');
   const [scoutPool, setScoutPool] = useState<PlanetTypeId[] | null>(null);
-  const [buildCatFilter, setBuildCatFilter] = useState<string>('all');
+  const [buildCatFilter, setBuildCatFilter] = useState<string>('housing');
   const [popCatFilter, setPopCatFilter] = useState<string>('all');
-  const [liveBuildFilter, setLiveBuildFilter] = useState<string>('housing'); // 已建成建筑筛选：默认显示居住
+  const [liveBuildFilter, setLiveBuildFilter] = useState<string>('all'); // 已建成建筑筛选：默认显示全部
 
   const showMsg = (m: string, t: 'success' | 'error') => { setMessage(m); setMsgType(t); setTimeout(() => setMessage(''), 4000); };
 
@@ -495,7 +495,7 @@ export default function ColonyPanel(props: ColonyPanelProps) {
             {/* 类型筛选标签（可点击） */}
             {liveBuildings.length > 0 && (
               <div className="flex flex-wrap gap-1 mb-3">
-                {['housing','food','alloy','stardust','trade','material','functional','power'].map((cat) => (
+                {['all','housing','food','alloy','stardust','trade','material','functional','power'].map((cat) => (
                   <button key={cat} onClick={() => setLiveBuildFilter(cat)}
                     className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-colors ${liveBuildFilter === cat ? 'bg-green-600 text-white' : 'bg-slate-700/80 text-slate-400 hover:bg-slate-600'}`}>
                     {CAT_LABELS[cat] || cat}
@@ -504,10 +504,10 @@ export default function ColonyPanel(props: ColonyPanelProps) {
                 ))}
               </div>
             )}
-            {liveBuildings.filter((b:any) => { const d=getBuildingDef(b.defId); return d?.category === liveBuildFilter; }).length === 0 && liveBuildings.length > 0 && (
+            {liveBuildFilter !== 'all' && liveBuildings.filter((b:any) => { const d=getBuildingDef(b.defId); return d?.category === liveBuildFilter; }).length === 0 && liveBuildings.length > 0 && (
               <p className="text-slate-500 text-sm mb-2">暂无「{CAT_LABELS[liveBuildFilter] || liveBuildFilter}」类型建筑</p>
             )}
-            {liveBuildings.filter((b:any) => { const d=getBuildingDef(b.defId); return d?.category === liveBuildFilter; }).map((inst: any) => {
+            {(liveBuildFilter === 'all' ? liveBuildings : liveBuildings.filter((b:any) => { const d=getBuildingDef(b.defId); return d?.category === liveBuildFilter; })).map((inst: any) => {
               const def = getBuildingDef(inst.defId);
               if (!def) return (
                 <div key={inst.uid} className="bg-slate-900/60 border border-purple-700/40 rounded-lg p-3 mb-2 flex justify-between items-center">
@@ -587,14 +587,14 @@ export default function ColonyPanel(props: ColonyPanelProps) {
           <div>
             <h4 className="text-sm font-bold text-cyan-400 mb-2">建造新建筑</h4>
             <div className="flex flex-wrap gap-1 mb-3">
-              {['all','housing','food','alloy','stardust','trade','material','functional','power'].map((cat) => (
+              {['housing','food','alloy','stardust','trade','material','functional','power'].map((cat) => (
                 <button key={cat} onClick={() => setBuildCatFilter(cat)}
                   className={`px-2.5 py-1 rounded-lg text-sm font-bold transition-colors ${buildCatFilter === cat ? 'bg-cyan-600 text-white' : 'bg-slate-700/80 text-slate-400 hover:bg-slate-600'}`}>
                   {cat === 'all' ? '全部' : (CAT_LABELS[cat] || cat)}
                 </button>
               ))}
             </div>
-            {getBuildableBuildings(colony.techState?.researched || []).filter((d) => buildCatFilter === 'all' || d.category === buildCatFilter).map((def) => {
+            {getBuildableBuildings(colony.techState?.researched || []).filter((d) => d.category === buildCatFilter).map((def) => {
               const count = colony.buildings.filter((b) => b.defId === def.id).length;
               const limited = !!(def.maxCount && count >= def.maxCount);
               return (
@@ -864,7 +864,7 @@ export default function ColonyPanel(props: ColonyPanelProps) {
                       return (
                         <div key={i} className="bg-slate-800/60 border border-slate-700 rounded-lg p-3 flex justify-between items-center gap-3">
                           <img
-                            src={`/leaders/${ld.id}.png`}
+                            src={`/leaders/${ld.id}.jpg`}
                             alt={ld.name}
                             onError={(e) => { (e.target as HTMLImageElement).style.display='none'; }}
                             className={`w-16 h-16 rounded-lg object-cover flex-shrink-0 border-2 ${ld.rarity==='SSR'?'border-amber-400 shadow-[0_0_10px_rgba(251,191,36,0.6)]':ld.rarity==='SR'?'border-purple-400':'border-blue-400'}`}
