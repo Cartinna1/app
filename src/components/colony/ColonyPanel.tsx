@@ -553,6 +553,9 @@ export default function ColonyPanel(props: ColonyPanelProps) {
                       <span className="text-sm text-red-400 ml-2">⚠ 人口不足（需≥{def.minPop}人）</span>
                     )}
                     {!liveOut && !(def.minPop > 0 && inst.assignedPop > 0 && inst.assignedPop < def.minPop) && <span className="text-sm text-slate-600 ml-2">{getOutputDesc(def)}</span>}
+                    {def.powerConsumption !== undefined && def.powerConsumption > 0 && (
+                      <span className="text-sm text-amber-500 ml-2">⚡ {def.powerConsumption}</span>
+                    )}
                   </div>
                   <button onClick={() => { const r = onDemolishBuilding(inst.uid); showMsg(r.message, r.success ? 'success' : 'error'); }} className="px-2 py-1 bg-red-700 hover:bg-red-600 rounded text-xs font-bold flex-shrink-0 ml-3">拆除</button>
                 </div>
@@ -645,6 +648,9 @@ export default function ColonyPanel(props: ColonyPanelProps) {
                     {def.maxCount && <span className="text-slate-600">| 上限{def.maxCount} (已建{count})</span>}
                     {!def.maxCount && <span className="text-slate-600">| 已建{count}座</span>}
                     {def.minPop > 0 && <span className="text-slate-600">| 需要{def.minPop}-{def.maxPop}人入驻</span>}
+                    {def.powerConsumption !== undefined && def.powerConsumption > 0 && (
+                      <span className="text-amber-500">| ⚡ {def.powerConsumption}</span>
+                    )}
                   </div>
                 </div>
               );
