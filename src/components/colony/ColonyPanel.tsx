@@ -138,7 +138,7 @@ export default function ColonyPanel(props: ColonyPanelProps) {
     if (!colony?.techState || colony.techState.currentResearch) return [];
     const available = getAvailableTechs(colony.techState.researched);
     if (available.length > 0) {
-      return [...available].sort(() => Math.random() - 0.5).slice(0, 2).map((t) => ({ id: t.id, name: t.name, desc: t.description, cost: t.costRP, turns: t.researchTurns, isRepeatable: false, repeatLevel: 0 }));
+      return [...available].sort(() => Math.random() - 0.5).slice(0, 2).map((t) => ({ id: t.id, name: t.name, desc: t.description, cost: t.costRP, turns: t.researchTurns, isRepeatable: false, repeatLevel: 0, unlocksBuilding: t.unlocksBuilding, leaderCapBonus: t.leaderCapBonus }));
     }
     // 全部研究完：显示循环科技
     const levels = colony.techState.repeatableLevels || {};
