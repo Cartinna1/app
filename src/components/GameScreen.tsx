@@ -499,6 +499,16 @@ export default function GameScreen({
             </button>
           );
         })}
+        {/* 日志 */}
+        <button
+          onClick={() => setActiveTab('goldlog')}
+          className={`flex-shrink-0 flex flex-col items-center gap-0.5 px-2 py-1 rounded-md transition-all min-w-[48px] min-h-[48px] justify-center ${
+            activeTab === 'goldlog' ? 'text-cyan-400' : 'text-slate-400'
+          }`}
+        >
+          <Receipt size={18} />
+          <span className="text-[10px] font-bold whitespace-nowrap">日志</span>
+        </button>
         {/* 存档 */}
         <button
           onClick={() => setActiveTab('save')}

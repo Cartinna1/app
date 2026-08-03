@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import type { RawMaterial, Mothership } from '@/types/game';
-import { Package, TrendingUp, TrendingDown, Warehouse } from 'lucide-react';
+import { TrendingUp, TrendingDown, Warehouse } from 'lucide-react';
 
 interface MaterialMarketProps {
   materials: RawMaterial[];
@@ -66,8 +66,14 @@ export default function MaterialMarket({ materials, ship, shipIndex, onBuy }: Ma
                     : 'bg-slate-900/40 border-slate-800 opacity-50'
                 }`}
               >
-                <div className="text-xs text-slate-400 mb-1">{mat.name}</div>
-                <div className={`text-lg font-bold ${qty > 0 ? 'text-yellow-400' : 'text-slate-600'}`}>
+                <img
+                  src={`/materials/${mat.id}.png`}
+                  alt={mat.name}
+                  onError={(e) => { (e.target as HTMLImageElement).style.display='none'; }}
+                  className="w-16 h-16 mx-auto rounded-lg object-cover mb-1.5 border border-slate-700"
+                />
+                <div className="text-xs text-slate-400 mb-0.5">{mat.name}</div>
+                <div className={`text-base font-bold ${qty > 0 ? 'text-yellow-400' : 'text-slate-600'}`}>
                   {qty}
                 </div>
                 <div className="text-[10px] text-slate-500">{mat.currentPrice}金币/单位</div>
@@ -90,8 +96,13 @@ export default function MaterialMarket({ materials, ship, shipIndex, onBuy }: Ma
           return (
             <div key={mat.id} className="bg-slate-900/60 border border-slate-700 rounded-xl p-3 md:p-4">
               <div className="flex items-center justify-between mb-2 md:mb-3">
-                <div className="flex items-center gap-2">
-                  <Package size={16} className="text-cyan-400" />
+                <div className="flex items-center gap-2.5">
+                  <img
+                    src={`/materials/${mat.id}.png`}
+                    alt={mat.name}
+                    onError={(e) => { (e.target as HTMLImageElement).style.display='none'; }}
+                    className="w-12 h-12 md:w-14 md:h-14 rounded-lg object-cover border border-slate-700 flex-shrink-0"
+                  />
                   <h3 className="font-bold text-slate-100 text-sm md:text-base">{mat.name}</h3>
                 </div>
                 <div className={`flex items-center gap-1 text-xs md:text-sm ${change >= 0 ? 'text-cyan-400' : 'text-red-400'}`}>
