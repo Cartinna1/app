@@ -157,12 +157,12 @@ export function useGameState() {
     [gameState.ships, dispatch]
   );
 
-  // 星尘购买随机原料（2星尘→10个随机原料）
+  // 星尘购买随机原料（4星尘→10个随机原料）
   const buyRandomMats = useCallback(
     (): { success: boolean; message: string } => {
       const ship = gameState.ships[0];
       if (!ship) return { success: false, message: '舰队不存在' };
-      if (ship.stardust < 2) return { success: false, message: '星尘不足（需要2星尘）' };
+      if (ship.stardust < 4) return { success: false, message: '星尘不足（需要4星尘）' };
       const matIds = ['carbon', 'gold_ore', 'oil', 'dark_matter', 'silicon', 'quantum'];
       const matNames: Record<string, string> = { carbon: '碳块', gold_ore: '黄金', oil: '石油', dark_matter: '暗物质', silicon: '硅片', quantum: '量子簇' };
       let result = { success: false, message: '' };
@@ -171,7 +171,7 @@ export function useGameState() {
         updater: (prev) => {
           const ships = [...prev.ships];
           const s = { ...ships[0] };
-          s.stardust -= 2;
+          s.stardust -= 4;
           s.materials = { ...s.materials };
           const drops: string[] = [];
           for (let i = 0; i < 10; i++) {
@@ -213,19 +213,19 @@ export function useGameState() {
     [gameState.ships, dispatch]
   );
 
-  // 星尘兑换金币（1星尘→5000金币）
+  // 星尘兑换金币（2星尘→5000金币）
   const buyGoldWithStardust = useCallback(
     (): { success: boolean; message: string } => {
       const ship = gameState.ships[0];
       if (!ship) return { success: false, message: '舰队不存在' };
-      if (ship.stardust < 1) return { success: false, message: '星尘不足（需要1星尘）' };
+      if (ship.stardust < 2) return { success: false, message: '星尘不足（需要2星尘）' };
       let result = { success: false, message: '' };
       dispatch({
         type: 'FUNCTIONAL_UPDATE',
         updater: (prev) => {
           const ships = [...prev.ships];
           const s = { ...ships[0] };
-          s.stardust -= 1;
+          s.stardust -= 2;
           s.gold += 5000;
           if (s.bankrupt && s.gold > 0) s.bankrupt = false;
           s.goldLog = [{ turn: prev.turn, amount: 5000, reason: '星尘集市兑换金币', balanceAfter: s.gold }, ...s.goldLog].slice(0, 200);
@@ -244,14 +244,14 @@ export function useGameState() {
     (): { success: boolean; message: string } => {
       const ship = gameState.ships[0];
       if (!ship) return { success: false, message: '舰队不存在' };
-      if (ship.stardust < 1) return { success: false, message: '星尘不足（需要1星尘）' };
+      if (ship.stardust < 15) return { success: false, message: '星尘不足（需要15星尘）' };
       let result = { success: false, message: '' };
       dispatch({
         type: 'FUNCTIONAL_UPDATE',
         updater: (prev) => {
           const ships = [...prev.ships];
           const s = { ...ships[0] };
-          s.stardust -= 1;
+          s.stardust -= 15;
           const newType = rollPolicy();
           const newEffect = POLICY_EFFECTS[newType];
           const newRemaining = Math.floor(Math.random() * 3) + 3;

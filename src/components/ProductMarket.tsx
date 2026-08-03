@@ -647,9 +647,9 @@ export default function ProductMarket({ ship, shipIndex, products, materials, st
             {/* 随机10原料 */}
             <button
               onClick={handleBuyRandomMats}
-              disabled={ship.stardust < 2}
+              disabled={ship.stardust < 4}
               className={`text-left rounded-lg border p-2.5 transition-all ${
-                ship.stardust >= 2
+                ship.stardust >= 4
                   ? 'bg-slate-800/60 border-slate-700 hover:border-amber-500 cursor-pointer'
                   : 'bg-slate-800/30 border-slate-800 opacity-50 cursor-not-allowed'
               }`}
@@ -659,16 +659,16 @@ export default function ProductMarket({ ship, shipIndex, products, materials, st
                   <Package size={14} className="text-amber-400" />
                   <span className="text-xs text-slate-200 font-bold">随机10个原料</span>
                 </div>
-                <span className="text-xs text-purple-400 font-bold">2星尘</span>
+                <span className="text-xs text-purple-400 font-bold">4星尘</span>
               </div>
             </button>
 
             {/* 售价+10% 5回合 */}
             <button
-              onClick={() => handleBuySellBonus(5, 10, 1)}
-              disabled={ship.stardust < 1}
+              onClick={() => handleBuySellBonus(5, 10, 8)}
+              disabled={ship.stardust < 8}
               className={`text-left rounded-lg border p-2.5 transition-all ${
-                ship.stardust >= 1
+                ship.stardust >= 8
                   ? 'bg-slate-800/60 border-slate-700 hover:border-green-500 cursor-pointer'
                   : 'bg-slate-800/30 border-slate-800 opacity-50 cursor-not-allowed'
               }`}
@@ -679,16 +679,16 @@ export default function ProductMarket({ ship, shipIndex, products, materials, st
                   <span className="text-xs text-slate-200 font-bold">产品售价+10%</span>
                   <span className="text-[10px] text-slate-500">(5回合)</span>
                 </div>
-                <span className="text-xs text-purple-400 font-bold">1星尘</span>
+                <span className="text-xs text-purple-400 font-bold">8星尘</span>
               </div>
             </button>
 
             {/* 售价+25% 5回合 */}
             <button
-              onClick={() => handleBuySellBonus(5, 25, 2)}
-              disabled={ship.stardust < 2}
+              onClick={() => handleBuySellBonus(5, 25, 15)}
+              disabled={ship.stardust < 15}
               className={`text-left rounded-lg border p-2.5 transition-all ${
-                ship.stardust >= 2
+                ship.stardust >= 15
                   ? 'bg-slate-800/60 border-slate-700 hover:border-emerald-500 cursor-pointer'
                   : 'bg-slate-800/30 border-slate-800 opacity-50 cursor-not-allowed'
               }`}
@@ -699,16 +699,16 @@ export default function ProductMarket({ ship, shipIndex, products, materials, st
                   <span className="text-xs text-slate-200 font-bold">产品售价+25%</span>
                   <span className="text-[10px] text-slate-500">(5回合)</span>
                 </div>
-                <span className="text-xs text-purple-400 font-bold">2星尘</span>
+                <span className="text-xs text-purple-400 font-bold">15星尘</span>
               </div>
             </button>
 
             {/* 兑换5000金币 */}
             <button
               onClick={handleBuyGoldWithStardust}
-              disabled={ship.stardust < 1}
+              disabled={ship.stardust < 2}
               className={`text-left rounded-lg border p-2.5 transition-all ${
-                ship.stardust >= 1
+                ship.stardust >= 2
                   ? 'bg-slate-800/60 border-slate-700 hover:border-yellow-500 cursor-pointer'
                   : 'bg-slate-800/30 border-slate-800 opacity-50 cursor-not-allowed'
               }`}
@@ -718,16 +718,16 @@ export default function ProductMarket({ ship, shipIndex, products, materials, st
                   <Coins size={14} className="text-yellow-400" />
                   <span className="text-xs text-slate-200 font-bold">兑换5000金币</span>
                 </div>
-                <span className="text-xs text-purple-400 font-bold">1星尘</span>
+                <span className="text-xs text-purple-400 font-bold">2星尘</span>
               </div>
             </button>
 
             {/* 强制刷新贸易政策 */}
             <button
               onClick={handleRerollPolicy}
-              disabled={ship.stardust < 1}
+              disabled={ship.stardust < 15}
               className={`text-left rounded-lg border p-2.5 transition-all md:col-span-2 ${
-                ship.stardust >= 1
+                ship.stardust >= 15
                   ? 'bg-slate-800/60 border-slate-700 hover:border-blue-500 cursor-pointer'
                   : 'bg-slate-800/30 border-slate-800 opacity-50 cursor-not-allowed'
               }`}
@@ -738,7 +738,7 @@ export default function ProductMarket({ ship, shipIndex, products, materials, st
                   <span className="text-xs text-slate-200 font-bold">强制刷新贸易政策</span>
                   <span className="text-[10px] text-slate-500">(立即生效)</span>
                 </div>
-                <span className="text-xs text-purple-400 font-bold">1星尘</span>
+                <span className="text-xs text-purple-400 font-bold">15星尘</span>
               </div>
             </button>
           </div>
