@@ -798,29 +798,39 @@ export default function ColonyPanel(props: ColonyPanelProps) {
                 <p className="text-sm text-slate-500 text-center py-4">所有科技已研究完毕，没有可用科技。</p>
               )}
               {researchOptions.map((tech: any) => (
-                <div key={tech.id} className={`bg-slate-900/60 border rounded-lg p-3 flex justify-between items-center ${colony.techState!.researchPoints >= tech.cost ? (tech.isRepeatable ? 'border-pink-700/40' : 'border-purple-700/40') : 'border-slate-800 opacity-50'}`}>
-                  <div>
-                    <div className="flex items-center gap-2">
-                      <span className={`text-sm font-bold ${tech.isRepeatable ? 'text-pink-300' : 'text-purple-300'}`}>{tech.name}</span>
-                      {tech.isRepeatable && <span className="text-xs px-1.5 py-0.5 rounded bg-pink-900/30 text-pink-400 border border-pink-700/30">循环</span>}
-                      <span className="text-sm text-slate-500">{tech.turns}回合 | {tech.cost}点</span>
-                    </div>
-                    <p className="text-sm text-slate-400 mt-1">{tech.desc}</p>
+                <div key={tech.id} className={`bg-slate-900/60 border rounded-lg p-4 flex gap-4 ${colony.techState!.researchPoints >= tech.cost ? (tech.isRepeatable ? 'border-pink-700/40' : 'border-purple-700/40') : 'border-slate-800 opacity-50'}`}>
+                  <img
+                    src={`/techs/${tech.id}.png`}
+                    alt={tech.name}
+                    onError={(e) => { (e.target as HTMLImageElement).style.display='none'; }}
+                    className="w-[200px] h-[200px] rounded-lg object-cover border border-slate-700 flex-shrink-0"
+                  />
+                  <div className="flex-1 min-w-0 flex flex-col justify-between">
+                    <div>
+                      <div className="flex items-center gap-2 mb-2">
+                        <span className={`text-base font-bold ${tech.isRepeatable ? 'text-pink-300' : 'text-purple-300'}`}>{tech.name}</span>
+                        {tech.isRepeatable && <span className="text-xs px-1.5 py-0.5 rounded bg-pink-900/30 text-pink-400 border border-pink-700/30">循环</span>}
+                        <span className="text-sm text-slate-500">{tech.turns}回合 · {tech.cost}点</span>
+                      </div>
+                      <p className="text-sm text-slate-400 mb-2 leading-relaxed">{tech.desc}</p>
                       {tech.unlocksBuilding && (() => {
                         const bd = getBuildingDef(tech.unlocksBuilding);
-                        return bd ? <p className="text-sm text-cyan-400 mt-0.5">🏗 解锁: {bd.name} — {getBuildingEffect(bd)}</p> : null;
+                        return bd ? <p className="text-sm text-cyan-400">🏗 解锁: {bd.name} — {getBuildingEffect(bd)}</p> : null;
                       })()}
-                      {tech.leaderCapBonus && <span className="text-sm text-amber-400 ml-2">领袖上限 +{tech.leaderCapBonus}</span>}
+                      {tech.leaderCapBonus && <p className="text-sm text-amber-400 mt-1">👥 领袖上限 +{tech.leaderCapBonus}</p>}
+                    </div>
+                    <div className="flex justify-end mt-2">
+                      <button onClick={() => { const r = onStartResearch(tech.id); showMsg(r.message, r.success ? 'success' : 'error'); }}
+                        disabled={colony.techState!.researchPoints < tech.cost}
+                        className={`px-4 py-2 rounded text-sm font-bold text-white transition-colors ${
+                          tech.isRepeatable
+                            ? 'bg-pink-700 hover:bg-pink-600 disabled:bg-slate-700'
+                            : 'bg-purple-700 hover:bg-purple-600 disabled:bg-slate-700'
+                        }`}>研究</button>
+                    </div>
                   </div>
-                  <button onClick={() => { const r = onStartResearch(tech.id); showMsg(r.message, r.success ? 'success' : 'error'); }}
-                    disabled={colony.techState!.researchPoints < tech.cost}
-                    className={`px-3 py-1.5 rounded text-sm font-bold text-white transition-colors ${
-                      tech.isRepeatable
-                        ? 'bg-pink-700 hover:bg-pink-600 disabled:bg-slate-700'
-                        : 'bg-purple-700 hover:bg-purple-600 disabled:bg-slate-700'
-                    }`}>研究</button>
-                  </div>
-                ))}
+                </div>
+              ))}
               </div>
             </div>
           )}
