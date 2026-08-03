@@ -21,39 +21,55 @@ function getBuffList(planet: PlanetDef): { name: string; desc: string; color: st
   const list: { name: string; desc: string; color: string }[] = [];
   // 按照文档中的 BUFF 名称
   if (planet.id === 'desert') {
-    list.push({ name: '烈日熔炉', desc: '电弧熔炼炉/星核熔炉产量+40%', color: 'text-orange-400' });
-    list.push({ name: '硅砂富矿', desc: '硅片产量+30%', color: 'text-blue-400' });
-    list.push({ name: '水源匮乏', desc: '食物产量-25%', color: 'text-red-400' });
+    list.push({ name: '烈日熔炼', desc: '合金建筑（电弧熔炼炉/纳米铸造阵列/星核熔炉）产量 +50%', color: 'text-orange-400' });
+    list.push({ name: '烈日光伏', desc: '太阳能阵列发电量 +50%', color: 'text-yellow-400' });
+    list.push({ name: '荒漠贫瘠', desc: '食物建筑（气雾栽培舱/蛋白质重组塔/生态穹顶）产量 −30%', color: 'text-red-400' });
+    list.push({ name: '酷暑制冷', desc: '所有建筑电能消耗 +10%', color: 'text-red-400' });
   } else if (planet.id === 'ocean') {
-    list.push({ name: '海洋丰收', desc: '食物产量+80%', color: 'text-green-400' });
-    list.push({ name: '陆地稀缺', desc: '建筑各项成本+10%', color: 'text-amber-400' });
+    list.push({ name: '深海馈赠', desc: '食物建筑（气雾栽培舱/蛋白质重组塔/生��穹顶）产量 +60%', color: 'text-green-400' });
+    list.push({ name: '港湾贸易', desc: '星际贸易节点与泛星系金融交易所金币收入 +20%', color: 'text-yellow-400' });
+    list.push({ name: '水上施工', desc: '所有建筑造价 +20%', color: 'text-amber-400' });
+    list.push({ name: '盐雾腐蚀', desc: '所有建筑电能消耗 +20%', color: 'text-red-400' });
   } else if (planet.id === 'polar') {
-    list.push({ name: '低温超导', desc: '科技研究速度减1回合', color: 'text-blue-400' });
-    list.push({ name: '极光捕尘', desc: '星尘产量+30%', color: 'text-purple-400' });
-    list.push({ name: '严寒维生', desc: '每个人口食物消耗+1', color: 'text-red-400' });
-    list.push({ name: '冻土施工', desc: '建筑建造回合+1', color: 'text-amber-400' });
+    list.push({ name: '极光星尘', desc: '星尘捕获网与共鸣尖塔产出 +30%', color: 'text-purple-400' });
+    list.push({ name: '低温超导', desc: '科研所需回合 −1', color: 'text-blue-400' });
+    list.push({ name: '热能消耗', desc: '每位殖民者每回合多消耗 1 食物', color: 'text-red-400' });
+    list.push({ name: '冰封基建', desc: '所有建筑多花 1 回合建造', color: 'text-amber-400' });
   } else if (planet.id === 'arid') {
-    list.push({ name: '贵金属富集', desc: '黄金/合金产量+60%', color: 'text-yellow-400' });
-    list.push({ name: '植被贫瘠', desc: '食物产量-40%', color: 'text-red-400' });
+    list.push({ name: '熔岩炼金', desc: '合金建筑（电弧熔炼炉/纳米铸造阵列/星核熔炉）产量 +60%', color: 'text-orange-400' });
+    list.push({ name: '地脉黄金', desc: '贵金属提取器与地核熔炼厂黄金产出 +60%', color: 'text-yellow-400' });
+    list.push({ name: '不毛之地', desc: '食物建筑（气雾栽培舱/蛋白质重组塔/生态穹顶）产量 −20%', color: 'text-red-400' });
+    list.push({ name: '漫天沙尘', desc: '太阳能阵列发电量 −20%', color: 'text-red-400' });
   } else if (planet.id === 'terran') {
-    list.push({ name: '宜居典范', desc: '人口初始上限10，自带3人口', color: 'text-green-400' });
+    list.push({ name: '文明摇篮', desc: '殖民地开局人口上限 10，自带 5 位殖民者', color: 'text-green-400' });
+    list.push({ name: '温和日照', desc: '太阳能阵列发电量 +20%', color: 'text-yellow-400' });
+    list.push({ name: '环保红线', desc: '所有建筑造价 +10%', color: 'text-amber-400' });
+    list.push({ name: '贫矿地壳', desc: '合金建筑（电弧熔炼炉/纳米铸造阵列/星核熔炉）产量 −20%', color: 'text-red-400' });
   } else if (planet.id === 'alpine') {
-    list.push({ name: '稀薄大气观测', desc: '研究实验室科研点数+80%', color: 'text-purple-400' });
-    list.push({ name: '山体矿脉', desc: '碳块+30%/黄金+20%', color: 'text-yellow-400' });
-    list.push({ name: '地形障碍', desc: '建筑成本+20%', color: 'text-amber-400' });
+    list.push({ name: '苍穹智识', desc: '研究实验室与量子实验室产出 +80%', color: 'text-purple-400' });
+    list.push({ name: '地脉碳矿', desc: '碳沉积采集器与碳基合成器碳块产出 +40%', color: 'text-yellow-400' });
+    list.push({ name: '山地高昂', desc: '所有建筑造价 +20%', color: 'text-amber-400' });
+    list.push({ name: '山峰蔽日', desc: '太阳能阵列发电量 −20%', color: 'text-red-400' });
   } else if (planet.id === 'savannah') {
-    list.push({ name: '平原劲风', desc: '石油产量+80%', color: 'text-amber-400' });
-    list.push({ name: '游牧智慧', desc: '领袖招募费用-1星尘', color: 'text-purple-400' });
-    list.push({ name: '旱季缺水', desc: '食物产量-20%', color: 'text-red-400' });
+    list.push({ name: '地底油海', desc: '碳氢化合物泵站与地壳深钻平台石油产出 +80%', color: 'text-amber-400' });
+    list.push({ name: '旷野日照', desc: '太阳能阵列发电量 +20%', color: 'text-yellow-400' });
+    list.push({ name: '旱季饥荒', desc: '食物建筑（气雾栽培舱/蛋白质重组塔/生态穹顶）产量 −20%', color: 'text-red-400' });
+    list.push({ name: '地广人稀', desc: '所有建筑多花 1 回合建造', color: 'text-amber-400' });
   } else if (planet.id === 'tropical') {
-    list.push({ name: '丛林沃土', desc: '食物+60%/碳块+100%', color: 'text-green-400' });
-    list.push({ name: '暴雨侵蚀', desc: '建筑成本+10%', color: 'text-amber-400' });
+    list.push({ name: '雨林丰收', desc: '食物建筑（气雾栽培舱/蛋白质重组塔/生态穹顶）产量 +60%', color: 'text-green-400' });
+    list.push({ name: '碳木丛生', desc: '碳沉积采集器与碳基合成器碳块产出 +100%', color: 'text-yellow-400' });
+    list.push({ name: '丛林施工', desc: '所有建筑造价 +20%', color: 'text-amber-400' });
+    list.push({ name: '浓云密布', desc: '太阳能阵列发电量 −30%', color: 'text-red-400' });
   } else if (planet.id === 'tundra') {
-    list.push({ name: '冻土封存', desc: '量子簇/暗物质+40%', color: 'text-purple-400' });
-    list.push({ name: '缓慢启动', desc: '招募人口需2700金币', color: 'text-red-400' });
+    list.push({ name: '量子永冻', desc: '量子谐振器与晶格锻炉量子簇产出 +60%', color: 'text-purple-400' });
+    list.push({ name: '暗质潜藏', desc: '暗物质捕获阱与压缩阱产出 +60%', color: 'text-purple-400' });
+    list.push({ name: '苦寒征召', desc: '招募每人口费用增加 500 金币', color: 'text-red-400' });
+    list.push({ name: '冻土贫瘠', desc: '食物建筑（气雾栽培舱/蛋白质重组塔/生态穹顶）产量 −10%', color: 'text-red-400' });
   } else if (planet.id === 'ruin') {
-    list.push({ name: '远古档案', desc: '初始拥有一座纳米铸造阵列', color: 'text-cyan-400' });
-    list.push({ name: '全息残响', desc: '居住舱人口上限+3', color: 'text-slate-400' });
+    list.push({ name: '文明遗珍', desc: '开局拥有纳米铸造阵列、碳基材料合成器、暗物质压缩阱各一座', color: 'text-cyan-400' });
+    list.push({ name: '古城穹庐', desc: '每栋居住舱额外提供 3 人口上限', color: 'text-slate-400' });
+    list.push({ name: '废墟清障', desc: '所有建筑多花 1 回合建造', color: 'text-amber-400' });
+    list.push({ name: '电网老化', desc: '所有建筑电能消耗 +10%', color: 'text-red-400' });
   }
   return list;
 }
@@ -330,7 +346,9 @@ export default function ColonyPanel(props: ColonyPanelProps) {
               }
               return sum;
             }, 0);
-            // L21 负载平衡
+            // 星球太��能修正（仅B29）
+            const planetGenMult = planet?.buffs.powerGenMult || 1;
+            const displayGen = Math.floor(totalGen * (planetGenMult !== 1 ? planetGenMult : 1));
             let l21Bonus = 0;
             for (const l of colony.leaders || []) {
               const ld = getLeaderDef(l.id);
@@ -341,7 +359,9 @@ export default function ColonyPanel(props: ColonyPanelProps) {
               if (!d || d.outputType === 'power') return sum;
               return sum + (d.powerConsumption || 0);
             }, 0);
-            const totalUse = l21Bonus > 0 ? Math.ceil(rawUse * (1 - l21Bonus)) : rawUse;
+            const planetUseMult = planet?.buffs.powerUseMult || 1;
+            const useAfterL21 = l21Bonus > 0 ? Math.ceil(rawUse * (1 - l21Bonus)) : rawUse;
+            const totalUse = Math.ceil(useAfterL21 * planetUseMult);
             const netPwr = (colony.energy ?? 0);
             const hasL22Lv3 = colony.leaders?.some(l => l.id === 'L22' && l.level >= 3);
             return (
@@ -349,7 +369,10 @@ export default function ColonyPanel(props: ColonyPanelProps) {
                 <div className="flex justify-between items-center">
                   <div>
                     <p className="text-sm font-bold text-slate-300">⚡ 电能</p>
-                    <p className="text-xs text-slate-500">发电 {totalGen} − 消耗 {totalUse}{l21Bonus > 0 ? ` (L21 -${Math.round(l21Bonus*100)}%)` : ''}</p>
+                    <p className="text-xs text-slate-500">
+                      发电 {displayGen}{planetGenMult !== 1 ? (planetGenMult > 1 ? ` (星球×${planetGenMult})` : ` (星球×${planetGenMult})`) : ''}
+                      {' − '}消耗 {totalUse}{l21Bonus > 0 ? ` (L21 -${Math.round(l21Bonus*100)}%)` : ''}{planetUseMult !== 1 ? ` (星球×${planetUseMult})` : ''}
+                    </p>
                   </div>
                   <div className="text-right">
                     <p className={`text-xl font-bold ${netPwr < 0 ? 'text-red-400' : 'text-green-400'}`}>{netPwr >= 0 ? '+' : ''}{netPwr}</p>

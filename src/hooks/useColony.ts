@@ -519,22 +519,22 @@ export function processColonyTurn(ship: Mothership, _turn: number): void {
   // ===== 电能计算（在产出计算之前） =====
   if (colony.energy === undefined) colony.energy = 0;
   let totalPowerGen = 0;
+  const powerGenPlanetMult = planetDef?.buffs.powerGenMult || 1;
   for (const inst of colony.buildings) {
     if (!inst.active) continue;
     const def = getBuildingDef(inst.defId);
     if (!def || def.outputType !== 'power') continue;
     if (inst.assignedPop < def.minPop) continue;
     let base = (def.baseOutput || 0) + (def.popFactor || 0) * inst.assignedPop;
-    // L22 余晖脉冲加成（Lv1→B29+30%, Lv2→B29+B30各+30%, Lv3→同上+黑障保护）
+    // L22 余晖脉冲加成
     for (const l of colony.leaders) {
       const ld = getLeaderDef(l.id);
       if (ld?.id === 'L22') {
-        const lv = l.level;
-        if ((def.id === 'B29' && lv >= 1) || (def.id === 'B30' && lv >= 2)) {
-          base *= 1.30;
-        }
+        if ((def.id === 'B29' && l.level >= 1) || (def.id === 'B30' && l.level >= 2)) base *= 1.30;
       }
     }
+    // 星球修正（仅太阳能阵列B29）
+    if (def.id === 'B29' && powerGenPlanetMult !== 1) base *= powerGenPlanetMult;
     totalPowerGen += Math.floor(base);
   }
   let totalPowerUse = 0;
@@ -551,7 +551,10 @@ export function processColonyTurn(ship: Mothership, _turn: number): void {
     if (ld?.id === 'L21') { l21Bonus = [0.10, 0.15, 0.25][l.level - 1] || 0; }
   }
   const effectiveUse = l21Bonus > 0 ? Math.ceil(totalPowerUse * (1 - l21Bonus)) : totalPowerUse;
-  const netEnergy = totalPowerGen - effectiveUse;
+  // 星球电能消耗修正
+  const planetPowerUseMult = planetDef?.buffs.powerUseMult || 1;
+  const finalUse = Math.ceil(effectiveUse * planetPowerUseMult);
+  const netEnergy = totalPowerGen - finalUse;
   // L22 Lv3 余晖脉冲——停电保护
   const hasL22Lv3 = colony.leaders.some(l => l.id === 'L22' && l.level >= 3);
   // 电能累积（容量上限 50，防止无限堆）
@@ -627,7 +630,8 @@ export function processColonyTurn(ship: Mothership, _turn: number): void {
       totalStardust += output;
     } else if (def.outputType === 'gold') {
       output = Math.floor(Math.random() * ((def.goldOutputMax || 0) - (def.goldOutputMin || 0) + 1)) + (def.goldOutputMin || 0);
-      output = Math.ceil(output * (1 + lb + rpBonus));
+      const tm = planetDef?.buffs.tradeMult ? (planetDef.buffs.tradeMult - 1) : 0;
+      output = Math.ceil(output * (1 + lb + rpBonus + tm));
       totalGold += output;
     } else if (def.outputType === 'material' && def.outputMaterialId) {
       const base = (def.popFactor || 0) * effPop;

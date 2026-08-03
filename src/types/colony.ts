@@ -33,6 +33,12 @@ export interface PlanetBuff {
   recruitCostDelta?: number;
   /** 领袖招募费用变动（正数=增加） */
   leaderCostDelta?: number;
+  /** 电力建筑产量倍率（B29/B30/B31） */
+  powerGenMult?: number;
+  /** 建筑电能消耗倍率 */
+  powerUseMult?: number;
+  /** 贸易建筑金币收入倍率（B11/B12） */
+  tradeMult?: number;
   /** 特殊建筑或效果描述 */
   specialEffects?: string[];
 }
