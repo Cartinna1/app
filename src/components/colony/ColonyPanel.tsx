@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo, useEffect, useRef } from 'react';
 import type { Mothership } from '@/types/game';
 import type { PlanetTypeId, PlanetDef } from '@/types/colony';
 import { getBuildableBuildings, getBuildingDef, getBuildingEffect } from '@/data/colony/buildings';
@@ -122,14 +122,12 @@ interface ColonyPanelProps {
   onHandleWonderEvent: (choice: 'A' | 'B') => { success: boolean; message: string };
   onCompleteWonder: () => { success: boolean; message: string };
   canStartWonder: () => { success: boolean; reasons: string[] };
-  expeditionVideoVisible: boolean;
-  onCloseExpeditionVideo: () => void;
 }
 
 type ColonyTab = 'overview' | 'buildings' | 'population' | 'research' | 'leaders' | 'wonders';
 
 export default function ColonyPanel(props: ColonyPanelProps) {
-  const { ship, onUnlockColony, onSelectPlanet, onRescrollPlanets, generateScoutingPool, onBuild, onRecruitPop, onAssignPop, onStartResearch, onRecruitLeader, onUpgradeLeader, onRollAndRecruit, onCancelBuilding, onDemolishBuilding, onSelectWonder, onSubmitWonderResources, onHandleWonderEvent, onCompleteWonder, canStartWonder, expeditionVideoVisible, onCloseExpeditionVideo } = props;
+  const { ship, onUnlockColony, onSelectPlanet, onRescrollPlanets, generateScoutingPool, onBuild, onRecruitPop, onAssignPop, onStartResearch, onRecruitLeader, onUpgradeLeader, onRollAndRecruit, onCancelBuilding, onDemolishBuilding, onSelectWonder, onSubmitWonderResources, onHandleWonderEvent, onCompleteWonder, canStartWonder } = props;
   const colony = ship.colony;
   const [tab, setTab] = useState<ColonyTab>('overview');
   const [message, setMessage] = useState('');
@@ -139,7 +137,17 @@ export default function ColonyPanel(props: ColonyPanelProps) {
   const [scoutPool, setScoutPool] = useState<PlanetTypeId[] | null>(null);
   const [buildCatFilter, setBuildCatFilter] = useState<string>('housing');
   const [popCatFilter, setPopCatFilter] = useState<string>('all');
-  const [liveBuildFilter, setLiveBuildFilter] = useState<string>('housing'); // 已建成建筑筛选
+  const [liveBuildFilter, setLiveBuildFilter] = useState<string>('housing');
+  const [showExpeditionVideo, setShowExpeditionVideo] = useState(false);
+  const prevColonyPhase = useRef(colony?.phase);
+
+  // 监听殖民地解锁，触发远征视频
+  useEffect(() => {
+    if (prevColonyPhase.current === undefined && colony?.phase === 'scouting') {
+      setShowExpeditionVideo(true);
+    }
+    prevColonyPhase.current = colony?.phase;
+  }, [colony?.phase]);
 
   const showMsg = (m: string, t: 'success' | 'error') => { setMessage(m); setMsgType(t); setTimeout(() => setMessage(''), 4000); };
 
@@ -284,8 +292,8 @@ export default function ColonyPanel(props: ColonyPanelProps) {
 
   return (
     <>
-      {/* 远征视频全屏覆盖 */}
-      {expeditionVideoVisible && (
+      {/* 远���视频全屏覆盖 */}
+      {showExpeditionVideo && (
         <div className="fixed inset-0 z-50 bg-black flex items-center justify-center">
           <video
             src="/video/expedition.mp4"
@@ -293,11 +301,11 @@ export default function ColonyPanel(props: ColonyPanelProps) {
             autoPlay
             muted
             playsInline
-            onEnded={onCloseExpeditionVideo}
+            onEnded={() => setShowExpeditionVideo(false)}
             onError={(e) => console.error('视频加载失败:', e)}
           />
           <button
-            onClick={onCloseExpeditionVideo}
+            onClick={() => setShowExpeditionVideo(false)}
             className="absolute bottom-8 right-8 px-6 py-3 bg-white/10 hover:bg-white/20 text-white rounded-lg text-lg font-bold border border-white/30 backdrop-blur transition-colors"
           >
             跳过 ▸
