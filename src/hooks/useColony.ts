@@ -59,6 +59,13 @@ export function useColony(
         const initialPop = planetDef.buffs.initialPop || 0;
         // 遗落星球赠送 B7/B20/B21
         const buildings: BuildingInstance[] = [];
+        if (planetId === 'ruin') {
+          buildings.push(
+            { defId: 'B7', uid: 'B7_ruin_1', assignedPop: 0, buildProgress: 3, active: true },
+            { defId: 'B20', uid: 'B20_ruin_1', assignedPop: 0, buildProgress: 3, active: true },
+            { defId: 'B21', uid: 'B21_ruin_1', assignedPop: 0, buildProgress: 4, active: true },
+          );
+        }
         s.colony = {
           ...s.colony,
           phase: 'active',
