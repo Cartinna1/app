@@ -291,8 +291,10 @@ export default function ColonyPanel(props: ColonyPanelProps) {
             src="/video/expedition.mp4"
             className="max-w-full max-h-full"
             autoPlay
+            muted
+            playsInline
             onEnded={onCloseExpeditionVideo}
-            controls={false}
+            onError={(e) => console.error('视频加载失败:', e)}
           />
           <button
             onClick={onCloseExpeditionVideo}
