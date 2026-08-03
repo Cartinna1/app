@@ -1,4 +1,4 @@
-import { useCallback } from 'react';
+import { useCallback, useState } from 'react';
 import type { GameState, Mothership } from '@/types/game';
 import type { Colony, PlanetTypeId, BuildingInstance } from '@/types/colony';
 import { ALL_PLANETS } from '@/data/colony/planets';
@@ -14,6 +14,7 @@ export function useColony(
   dispatch: React.Dispatch<{ type: 'FUNCTIONAL_UPDATE'; updater: (state: GameState) => GameState }>
 ) {
   const ship = gameState.ships[0];
+  const [expeditionVideoVisible, setExpeditionVideoVisible] = useState(false);
 
   /** 解锁殖民功能 */
   const unlockColony = useCallback((): { success: boolean; message: string } => {
@@ -32,8 +33,12 @@ export function useColony(
         return { ...prev, ships };
       },
     });
+    setExpeditionVideoVisible(true);
     return { success: true, message: '远征军已出发！预计2回合后抵达目标星系。' };
   }, [ship, dispatch]);
+
+  /** 关闭远征视频 */
+  const closeExpeditionVideo = useCallback(() => setExpeditionVideoVisible(false), []);
 
   /** 选择星球 */
   const selectPlanet = useCallback((planetId: PlanetTypeId, name: string): { success: boolean; message: string } => {
@@ -476,6 +481,7 @@ export function useColony(
     recruitLeader, upgradeLeader, rollAndRecruit, clearRecruitPool,
     cancelBuilding, demolishBuilding,
     selectWonder, submitWonderResources, handleWonderEvent, canStartWonder, completeWonder,
+    expeditionVideoVisible, closeExpeditionVideo,
   };
 }
 

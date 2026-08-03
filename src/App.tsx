@@ -49,6 +49,8 @@ function App() {
     handleWonderEvent,
     canStartWonder,
     completeWonder,
+    expeditionVideoVisible,
+    closeExpeditionVideo,
     buyAlloy,
     buyFood,
     buyRelic,
@@ -142,6 +144,8 @@ function App() {
       onHandleWonderEvent={handleWonderEvent}
       onCompleteWonder={completeWonder}
       canStartWonder={canStartWonder}
+      expeditionVideoVisible={expeditionVideoVisible}
+      onCloseExpeditionVideo={closeExpeditionVideo}
       onBuyAlloy={buyAlloy}
       onBuyFood={buyFood}
       onBuyRelic={buyRelic}

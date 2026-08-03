@@ -122,12 +122,14 @@ interface ColonyPanelProps {
   onHandleWonderEvent: (choice: 'A' | 'B') => { success: boolean; message: string };
   onCompleteWonder: () => { success: boolean; message: string };
   canStartWonder: () => { success: boolean; reasons: string[] };
+  expeditionVideoVisible: boolean;
+  onCloseExpeditionVideo: () => void;
 }
 
 type ColonyTab = 'overview' | 'buildings' | 'population' | 'research' | 'leaders' | 'wonders';
 
 export default function ColonyPanel(props: ColonyPanelProps) {
-  const { ship, onUnlockColony, onSelectPlanet, onRescrollPlanets, generateScoutingPool, onBuild, onRecruitPop, onAssignPop, onStartResearch, onRecruitLeader, onUpgradeLeader, onRollAndRecruit, onCancelBuilding, onDemolishBuilding, onSelectWonder, onSubmitWonderResources, onHandleWonderEvent, onCompleteWonder, canStartWonder } = props;
+  const { ship, onUnlockColony, onSelectPlanet, onRescrollPlanets, generateScoutingPool, onBuild, onRecruitPop, onAssignPop, onStartResearch, onRecruitLeader, onUpgradeLeader, onRollAndRecruit, onCancelBuilding, onDemolishBuilding, onSelectWonder, onSubmitWonderResources, onHandleWonderEvent, onCompleteWonder, canStartWonder, expeditionVideoVisible, onCloseExpeditionVideo } = props;
   const colony = ship.colony;
   const [tab, setTab] = useState<ColonyTab>('overview');
   const [message, setMessage] = useState('');
@@ -281,7 +283,26 @@ export default function ColonyPanel(props: ColonyPanelProps) {
   ];
 
   return (
-    <div className="space-y-4">
+    <>
+      {/* 远征视频全屏覆盖 */}
+      {expeditionVideoVisible && (
+        <div className="fixed inset-0 z-50 bg-black flex items-center justify-center">
+          <video
+            src="/video/expedition.mp4"
+            className="max-w-full max-h-full"
+            autoPlay
+            onEnded={onCloseExpeditionVideo}
+            controls={false}
+          />
+          <button
+            onClick={onCloseExpeditionVideo}
+            className="absolute bottom-8 right-8 px-6 py-3 bg-white/10 hover:bg-white/20 text-white rounded-lg text-lg font-bold border border-white/30 backdrop-blur transition-colors"
+          >
+            跳过 ▸
+          </button>
+        </div>
+      )}
+      <div className="space-y-4">
       <div className="flex items-center gap-4">
         {colony.planetType && <img src={`/planets/${colony.planetType}.png`} alt={planet?.name} className="w-16 h-16 rounded-xl object-cover border border-slate-700 flex-shrink-0" />}
         <div>
@@ -1030,5 +1051,6 @@ export default function ColonyPanel(props: ColonyPanelProps) {
         />
       )}
     </div>
+    </>
   );
 }

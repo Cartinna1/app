@@ -86,6 +86,8 @@ interface GameScreenProps {
   onHandleWonderEvent: (choice: 'A' | 'B') => { success: boolean; message: string };
   onCompleteWonder: () => { success: boolean; message: string };
   canStartWonder: () => { success: boolean; reasons: string[] };
+  expeditionVideoVisible: boolean;
+  onCloseExpeditionVideo: () => void;
   onBuyAlloy: (type: 'gold' | 'stardust', qty: number) => boolean;
   onBuyFood: (type: 'gold' | 'alloy', qty: number) => boolean;
   onBuyRelic: (relicId: string) => { success: boolean; message: string };
@@ -162,6 +164,8 @@ export default function GameScreen({
             onHandleWonderEvent,
             onCompleteWonder,
             canStartWonder,
+            expeditionVideoVisible,
+            onCloseExpeditionVideo,
   onBuyAlloy,
   onBuyFood,
   onBuyRelic,
@@ -439,6 +443,8 @@ export default function GameScreen({
               onHandleWonderEvent={onHandleWonderEvent}
               onCompleteWonder={onCompleteWonder}
               canStartWonder={canStartWonder}
+              expeditionVideoVisible={expeditionVideoVisible}
+              onCloseExpeditionVideo={onCloseExpeditionVideo}
             />
           )}
           {activeTab === 'redeem' && (
