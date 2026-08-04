@@ -1054,7 +1054,6 @@ export default function ColonyPanel(props: ColonyPanelProps) {
           shipMaterials={ship.materials}
           onSelectWonder={(id) => onSelectWonder(id)}
           onSubmitResources={() => onSubmitWonderResources()}
-          onHandleEvent={() => {}}
           onCompleteWonder={() => onCompleteWonder()}
           onShowMsg={showMsg}
         />

@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { getWonderDef } from '@/data/colony/wonders';
+import { getWonderDef, ALL_WONDERS } from '@/data/colony/wonders';
 import type { Colony } from '@/types/colony';
 
 interface Props {
@@ -14,7 +14,6 @@ interface Props {
   shipMaterials: Record<string, number>;
   onSelectWonder: (id: string) => { success: boolean; message: string };
   onSubmitResources: () => { success: boolean; message: string };
-  onHandleEvent: (choice: 'A' | 'B') => { success: boolean; message: string };
   onCompleteWonder: () => { success: boolean; message: string };
   onShowMsg: (msg: string, type: 'success' | 'error') => void;
 }
@@ -22,7 +21,7 @@ interface Props {
 export default function WonderPanel({
   colony, researchedCount, hasT25, conditionsMet,
   shipGold, shipAlloy, shipStardust, shipFood, shipMaterials,
-  onSelectWonder, onSubmitResources, onHandleEvent, onCompleteWonder, onShowMsg,
+  onSelectWonder, onSubmitResources, onCompleteWonder, onShowMsg,
 }: Props) {
   const ws = colony.wonder;
   const [selectedId, setSelectedId] = useState<string | null>(null);

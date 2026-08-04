@@ -43,7 +43,7 @@ export function useWonder(
         const s = { ...ships[0], colony: { ...ships[0].colony! } };
         const newWS: WonderState = {
           phase: 'building', selectedWonderId: wonderId as WonderState['selectedWonderId'],
-          currentStage: 0, stageProgress: 0, eventPending: null,
+          currentStage: 0, stageProgress: 0,
           totalTurnsSpent: 0, eventHistory: [], submittedThisTurn: false,
         };
         s.colony = { ...s.colony, wonder: newWS };
@@ -65,7 +65,6 @@ export function useWonder(
         const s = { ...ships[0], colony: { ...ships[0].colony! } };
         const ws = s.colony.wonder;
         if (!ws || !ws.selectedWonderId) { result = { success: false, message: '尚未选择奇观' }; return prev; }
-        if (ws.eventPending) { result = { success: false, message: '有事件待处理，请先处理事件' }; return prev; }
         if (ws.submittedThisTurn) { result = { success: false, message: '本回合已提交资源，请结束回合后再来' }; return prev; }
 
         const wonder = getWonderDef(ws.selectedWonderId);
@@ -163,7 +162,6 @@ export function processWonderTurn(ship: any, _turn: number): void {
     stageProgress: newProgress,
     totalTurnsSpent: newTotal,
     submittedThisTurn: false,
-    eventPending: null,
     eventHistory: [...ws.eventHistory, `第${newTotal}回合：${wonder.stages[ws.currentStage]?.name || ''}进度 +1`],
   };
 
