@@ -46,7 +46,6 @@ function App() {
     demolishBuilding,
     selectWonder,
     submitWonderResources,
-    handleWonderEvent,
     canStartWonder,
     completeWonder,
     buyAlloy,
@@ -139,7 +138,6 @@ function App() {
       onDemolishBuilding={demolishBuilding}
       onSelectWonder={selectWonder}
       onSubmitWonderResources={submitWonderResources}
-      onHandleWonderEvent={handleWonderEvent}
       onCompleteWonder={completeWonder}
       canStartWonder={canStartWonder}
       onBuyAlloy={buyAlloy}

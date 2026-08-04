@@ -197,29 +197,15 @@ export type WonderPhase =
   | 'selecting'     // 可选择奇观
   | 'building';     // 建设中
 
-export type WonderEventType =
-  | 'tech_breakthrough'
-  | 'construction_accident'
-  | 'faction_intervention'
-  | 'unexpected_discovery'
-  | 'plague_outbreak'
-  | 'sabotage'
-  | 'leader_sacrifice';
 
-export interface WonderEventDef {
-  id: WonderEventType;
-  name: string;
-  description: string;
-  optionA: { label: string; effect: string };
-  optionB: { label: string; effect: string };
-}
+
+
 
 export interface WonderState {
   phase: WonderPhase;
   selectedWonderId: WonderId | null;
   currentStage: number;         // 0-based, 当前阶段索引
   stageProgress: number;        // 当前阶段已完成回合数
-  eventPending: WonderEventType | null;  // 当前待处理事件
   totalTurnsSpent: number;      // 已花费的回合总数
   eventHistory: string[];       // 事件历史文本
   submittedThisTurn: boolean;   // 本回合是否已提交资源

@@ -83,7 +83,6 @@ interface GameScreenProps {
   onDemolishBuilding: (uid: string) => { success: boolean; message: string };
   onSelectWonder: (wonderId: string) => { success: boolean; message: string };
   onSubmitWonderResources: () => { success: boolean; message: string };
-  onHandleWonderEvent: (choice: 'A' | 'B') => { success: boolean; message: string };
   onCompleteWonder: () => { success: boolean; message: string };
   canStartWonder: () => { success: boolean; reasons: string[] };
   onBuyAlloy: (type: 'gold' | 'stardust', qty: number) => boolean;
@@ -159,7 +158,6 @@ export default function GameScreen({
             onDemolishBuilding,
             onSelectWonder,
             onSubmitWonderResources,
-            onHandleWonderEvent,
             onCompleteWonder,
             canStartWonder,
   onBuyAlloy,
@@ -436,7 +434,6 @@ export default function GameScreen({
               onDemolishBuilding={onDemolishBuilding}
               onSelectWonder={onSelectWonder}
               onSubmitWonderResources={onSubmitWonderResources}
-              onHandleWonderEvent={onHandleWonderEvent}
               onCompleteWonder={onCompleteWonder}
               canStartWonder={canStartWonder}
             />

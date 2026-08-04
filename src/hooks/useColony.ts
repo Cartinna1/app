@@ -475,14 +475,14 @@ export function useColony(
   }, [dispatch]);
 
   // 奇观系统
-  const { selectWonder, submitWonderResources, handleWonderEvent, canStartWonder, completeWonder } = useWonder(gameState, dispatch);
+  const { selectWonder, submitWonderResources, canStartWonder, completeWonder } = useWonder(gameState, dispatch);
 
   return {
     unlockColony, selectPlanet, rescrollPlanets, generateScoutingPool,
     buildColonyBuilding, recruitPop, assignPop, startResearch,
     recruitLeader, upgradeLeader, rollAndRecruit, clearRecruitPool,
     cancelBuilding, demolishBuilding,
-    selectWonder, submitWonderResources, handleWonderEvent, canStartWonder, completeWonder,
+    selectWonder, submitWonderResources, canStartWonder, completeWonder,
   };
 }
 

@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { ALL_WONDERS, getWonderDef, WONDER_EVENTS } from '@/data/colony/wonders';
+import { getWonderDef } from '@/data/colony/wonders';
 import type { Colony } from '@/types/colony';
 
 interface Props {
@@ -216,7 +216,6 @@ export default function WonderPanel({
     checkRes(stage.research, colony.techState?.researchPoints || 0, '科研点'),
   ].filter(Boolean);
 
-  const eventDef = ws.eventPending ? WONDER_EVENTS.find(e => e.id === ws.eventPending) : null;
 
   return (
     <div className="space-y-4">
@@ -268,7 +267,7 @@ export default function WonderPanel({
             </div>
           ) : (
             <button
-              disabled={ws.submittedThisTurn || ws.eventPending !== null}
+              disabled={ws.submittedThisTurn}
               onClick={() => {
                 if (!allPassed) { onShowMsg('资源不足，无法缴纳', 'error'); return; }
                 const r = onSubmitResources();
@@ -277,47 +276,16 @@ export default function WonderPanel({
               className={`w-full px-4 py-3 rounded-lg text-lg font-bold transition-colors ${
                 ws.submittedThisTurn
                   ? 'bg-green-900/40 border border-green-700/50 text-green-400 cursor-not-allowed'
-                  : ws.eventPending !== null
-                  ? 'bg-slate-700 text-slate-500 cursor-not-allowed'
                   : allPassed
                   ? 'bg-cyan-600 hover:bg-cyan-500 text-white'
                   : 'bg-slate-700 text-slate-500 cursor-not-allowed'
               }`}
             >
-              {ws.submittedThisTurn ? '✓ 已提交 — 请结束游戏回合以推进建设' : ws.eventPending !== null ? '⚠ 请先处理事件' : allPassed ? `提交资源 · 推进「${stage.name}」` : '资源不足，无法提交'}
+              {ws.submittedThisTurn ? '✓ 已提交 — 请结束游戏回合以推进建设' : allPassed ? `提交资源 · 推进「${stage.name}」` : '资源不足，无法提交'}
             </button>
           )}
         </div>
       </div>
-
-      {/* 事件处理 */}
-      {eventDef && (
-        <div className="bg-red-900/20 border border-red-700/40 rounded-xl p-5">
-          <h3 className="text-lg font-bold text-red-400 mb-2">⚠ 事件：{eventDef.name}</h3>
-          <p className="text-sm text-slate-300 mb-4 leading-relaxed">{eventDef.description}</p>
-          <div className="flex gap-3">
-            <button
-              onClick={() => {
-                const r = onHandleEvent('A');
-                onShowMsg(r.message, r.success ? 'success' : 'error');
-              }}
-              className="flex-1 px-4 py-3 bg-cyan-700 hover:bg-cyan-600 rounded-lg text-sm font-bold text-white transition-colors"
-            >
-              【方案A】{eventDef.optionA.label} → {eventDef.optionA.effect}
-            </button>
-            <button
-              onClick={() => {
-                const r = onHandleEvent('B');
-                onShowMsg(r.message, r.success ? 'success' : 'error');
-              }}
-              className="flex-1 px-4 py-3 bg-slate-700 hover:bg-slate-600 rounded-lg text-sm font-bold text-slate-200 transition-colors"
-            >
-              【方案B】{eventDef.optionB.label} → {eventDef.optionB.effect}
-            </button>
-          </div>
-        </div>
-      )}
-
       {/* 建设日志 */}
       <div className="bg-slate-900/60 border border-slate-700 rounded-xl p-4">
         <h4 className="text-sm font-bold text-slate-400 mb-2">建设日志</h4>
