@@ -395,6 +395,8 @@ export default function ColonyPanel(props: ColonyPanelProps) {
                 else omMap[bid] = (omMap[bid] || 0) + b;
               }
             }
+            // 循环科技加成
+            const rl = colony.techState?.repeatableLevels || {};
             const bonusLines: { label: string; value: number; detail: string }[] = [];
             const matLines: { k: string; v: number; detail: string }[] = [];
             const MAT_CN: Record<string, string> = { oil:'石油', gold_ore:'金矿', carbon:'碳块', dark_matter:'暗物质', quantum:'量子簇', silicon:'硅片' };
@@ -411,36 +413,48 @@ export default function ColonyPanel(props: ColonyPanelProps) {
               const ep = Math.min(inst.assignedPop, efm > 0 ? efm : inst.assignedPop);
               const base = (d.baseOutput||0)+(d.popFactor||0)*ep;
               const lb = ((omMap[inst.defId]||0)+(d.category==='material'?omMat:0)+omAll)/100;
+              let rpb = 0;
+              if (d.outputType === 'food') rpb = (rl.RP_FOOD || 0) * 0.05;
+              else if (d.outputType === 'alloy') rpb = (rl.RP_ALLOY || 0) * 0.05;
+              else if (d.outputType === 'stardust') rpb = (rl.RP_STARDUST || 0) * 0.05;
+              else if (d.outputType === 'gold') rpb = (rl.RP_TRADE || 0) * 0.05;
+              else if (d.outputType === 'material') rpb = (rl.RP_MATERIAL || 0) * 0.05;
+              else if (d.outputType === 'research') rpb = (rl.RP_RESEARCH || 0) * 0.10;
               if (d.outputType === 'food') {
                 const pm = pod?.foodMult ? (pod.foodMult-1) : 0;
-                const v = Math.ceil(base*(1+pm+lb));
+                const v = Math.ceil(base*(1+pm+lb+rpb));
                 const parts: string[] = [`${d.name}:${base}`];
                 if (pod?.foodMult) parts.push(`星球${pod.foodMult>1?'+':''}${Math.round(pm*100)}%`);
                 if (lb>0) parts.push(`领袖+${Math.round(lb*100)}%`);
+                if (rpb>0) parts.push(`循环+${Math.round(rpb*100)}%`);
                 bonusLines.push({ label: '食物', value: v, detail: parts.join(' ') });
               } else if (d.outputType === 'alloy') {
                 const pm = pod?.alloyMult ? (pod.alloyMult-1) : 0;
-                const v = Math.ceil(base*(1+pm+lb));
+                const v = Math.ceil(base*(1+pm+lb+rpb));
                 const parts: string[] = [`${d.name}:${base}`];
                 if (pod?.alloyMult) parts.push(`星球${pod.alloyMult>1?'+':''}${Math.round(pm*100)}%`);
                 if (lb>0) parts.push(`领袖+${Math.round(lb*100)}%`);
+                if (rpb>0) parts.push(`循环+${Math.round(rpb*100)}%`);
                 bonusLines.push({ label: '合金', value: v, detail: parts.join(' ') });
               } else if (d.outputType === 'stardust') {
                 const pm = pod?.stardustMult ? (pod.stardustMult-1) : 0;
-                const v = Math.ceil(base*(1+pm+lb));
+                const v = Math.ceil(base*(1+pm+lb+rpb));
                 const parts: string[] = [`${d.name}:${base}`];
                 if (pod?.stardustMult) parts.push(`星球${pod.stardustMult>1?'+':''}${Math.round(pm*100)}%`);
                 if (lb>0) parts.push(`领袖+${Math.round(lb*100)}%`);
+                if (rpb>0) parts.push(`循环+${Math.round(rpb*100)}%`);
                 bonusLines.push({ label: '星尘', value: v, detail: parts.join(' ') });
               } else if (d.outputType === 'gold') {
-                const v = Math.ceil(Math.floor(((d.goldOutputMin||0)+(d.goldOutputMax||0))/2)*(1+lb));
+                const v = Math.ceil(Math.floor(((d.goldOutputMin||0)+(d.goldOutputMax||0))/2)*(1+lb+rpb));
                 const parts: string[] = [`${d.name}`];
                 if (lb>0) parts.push(`领袖+${Math.round(lb*100)}%`);
+                if (rpb>0) parts.push(`循环+${Math.round(rpb*100)}%`);
                 bonusLines.push({ label: '金币', value: v, detail: parts.join(' ') });
               } else if (d.outputType === 'research') {
-                const v = Math.ceil(base*(1+lb));
+                const v = Math.ceil(base*(1+lb+rpb));
                 const parts: string[] = [`${d.name}:${base}`];
                 if (lb>0) parts.push(`领袖+${Math.round(lb*100)}%`);
+                if (rpb>0) parts.push(`循环+${Math.round(rpb*100)}%`);
                 bonusLines.push({ label: '科研', value: v, detail: parts.join(' ') });
               } else if (d.outputType === 'material' && d.outputMaterialId) {
                 const pm = pod?.materialMults?.[d.outputMaterialId] ? (pod.materialMults[d.outputMaterialId]-1) : 0;
@@ -519,6 +533,7 @@ export default function ColonyPanel(props: ColonyPanelProps) {
             else mlMap[bid] = (mlMap[bid] || 0) + b;
           }
         }
+        const rlv = colony.techState?.repeatableLevels || {};
         return (
         <div className="space-y-3">
           {/* 已建成（合并同类） */}
@@ -561,12 +576,19 @@ export default function ColonyPanel(props: ColonyPanelProps) {
                 const ep = Math.min(inst.assignedPop, efm > 0 ? efm : inst.assignedPop);
                 const b = (def.baseOutput||0)+(def.popFactor||0)*ep;
                 const lb = ((mlMap[inst.defId]||0)+(def.category==='material'?mlMat:0)+mlAll)/100;
+                let rpb = 0;
+                if (def.outputType === 'food') rpb = (rlv.RP_FOOD || 0) * 0.05;
+                else if (def.outputType === 'alloy') rpb = (rlv.RP_ALLOY || 0) * 0.05;
+                else if (def.outputType === 'stardust') rpb = (rlv.RP_STARDUST || 0) * 0.05;
+                else if (def.outputType === 'gold') rpb = (rlv.RP_TRADE || 0) * 0.05;
+                else if (def.outputType === 'material') rpb = (rlv.RP_MATERIAL || 0) * 0.05;
+                else if (def.outputType === 'research') rpb = (rlv.RP_RESEARCH || 0) * 0.10;
                 let v=0, un='', detail='';
-                if (def.outputType === 'food') { const pm = planet?.buffs.foodMult ? (planet.buffs.foodMult-1) : 0; v=Math.ceil(b*(1+pm+lb)); un='食物'; detail=`${b}${pm!==0?'星球'+(pm>0?'+':'')+Math.round(pm*100)+'%':''}${lb>0?'领袖+'+Math.round(lb*100)+'%':''}`; }
-                else if (def.outputType === 'alloy') { const pm = planet?.buffs.alloyMult ? (planet.buffs.alloyMult-1) : 0; v=Math.ceil(b*(1+pm+lb)); un='合金'; detail=`${b}${pm!==0?'星球'+(pm>0?'+':'')+Math.round(pm*100)+'%':''}${lb>0?'领袖+'+Math.round(lb*100)+'%':''}`; }
-                else if (def.outputType === 'stardust') { const pm = planet?.buffs.stardustMult ? (planet.buffs.stardustMult-1) : 0; v=Math.ceil(b*(1+pm+lb)); un='星尘'; detail=`${b}${pm!==0?'星球'+(pm>0?'+':'')+Math.round(pm*100)+'%':''}${lb>0?'领袖+'+Math.round(lb*100)+'%':''}`; }
-                else if (def.outputType === 'gold') { v=Math.ceil(Math.floor(((def.goldOutputMin||0)+(def.goldOutputMax||0))/2)*(1+lb)); un='金币'; detail=`${lb>0?'领袖+'+Math.round(lb*100)+'%':''}`; }
-                else if (def.outputType === 'research') { v=Math.ceil(b*(1+lb)); un='科研'; detail=`${b}${lb>0?'领袖+'+Math.round(lb*100)+'%':''}`; }
+                if (def.outputType === 'food') { const pm = planet?.buffs.foodMult ? (planet.buffs.foodMult-1) : 0; v=Math.ceil(b*(1+pm+lb+rpb)); un='食物'; detail=`${b}${pm!==0?'星球'+(pm>0?'+':'')+Math.round(pm*100)+'%':''}${lb>0?'领袖+'+Math.round(lb*100)+'%':''}${rpb>0?'循环+'+Math.round(rpb*100)+'%':''}`; }
+                else if (def.outputType === 'alloy') { const pm = planet?.buffs.alloyMult ? (planet.buffs.alloyMult-1) : 0; v=Math.ceil(b*(1+pm+lb+rpb)); un='合金'; detail=`${b}${pm!==0?'星球'+(pm>0?'+':'')+Math.round(pm*100)+'%':''}${lb>0?'领袖+'+Math.round(lb*100)+'%':''}${rpb>0?'循环+'+Math.round(rpb*100)+'%':''}`; }
+                else if (def.outputType === 'stardust') { const pm = planet?.buffs.stardustMult ? (planet.buffs.stardustMult-1) : 0; v=Math.ceil(b*(1+pm+lb+rpb)); un='星尘'; detail=`${b}${pm!==0?'星球'+(pm>0?'+':'')+Math.round(pm*100)+'%':''}${lb>0?'领袖+'+Math.round(lb*100)+'%':''}${rpb>0?'循环+'+Math.round(rpb*100)+'%':''}`; }
+                else if (def.outputType === 'gold') { v=Math.ceil(Math.floor(((def.goldOutputMin||0)+(def.goldOutputMax||0))/2)*(1+lb+rpb)); un='金币'; detail=`${lb>0?'领袖+'+Math.round(lb*100)+'%':''}${rpb>0?'循环+'+Math.round(rpb*100)+'%':''}`; }
+                else if (def.outputType === 'research') { v=Math.ceil(b*(1+lb+rpb)); un='科研'; detail=`${b}${lb>0?'领袖+'+Math.round(lb*100)+'%':''}${rpb>0?'循环+'+Math.round(rpb*100)+'%':''}`; }
                 else if (def.outputType === 'material' && def.outputMaterialId) {
                   const mc: Record<string,string> = { oil:'石油', gold_ore:'金矿', carbon:'碳块', dark_matter:'暗物质', quantum:'量子簇', silicon:'硅片' };
                   const pm = planet?.buffs.materialMults?.[def.outputMaterialId] ? (planet.buffs.materialMults[def.outputMaterialId]-1) : 0;

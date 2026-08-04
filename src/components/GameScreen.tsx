@@ -644,15 +644,23 @@ function OverviewTab({
             const d = getBuildingDef(inst.defId);
             if (!d || !d.outputType) continue;
             const lb = ((lbMap[inst.defId]||0)+(d.category==='material'?lMat:0)+lAll)/100;
+            const rl = c.techState?.repeatableLevels || {};
+            let rp = 0;
+            if (d.outputType === 'food') rp = (rl.RP_FOOD || 0) * 0.05;
+            else if (d.outputType === 'alloy') rp = (rl.RP_ALLOY || 0) * 0.05;
+            else if (d.outputType === 'stardust') rp = (rl.RP_STARDUST || 0) * 0.05;
+            else if (d.outputType === 'gold') rp = (rl.RP_TRADE || 0) * 0.05;
+            else if (d.outputType === 'material') rp = (rl.RP_MATERIAL || 0) * 0.05;
+            else if (d.outputType === 'research') rp = (rl.RP_RESEARCH || 0) * 0.10;
             const base = (d.baseOutput||0)+(d.popFactor||0)*inst.assignedPop;
-            if (d.outputType === 'food') { const pm = pd?.buffs.foodMult ? (pd.buffs.foodMult-1) : 0; colFood += Math.ceil(base*(1+pm+lb)); }
-            else if (d.outputType === 'alloy') { const pm = pd?.buffs.alloyMult ? (pd.buffs.alloyMult-1) : 0; colAlloy += Math.ceil(base*(1+pm+lb)); }
-            else if (d.outputType === 'stardust') { const pm = pd?.buffs.stardustMult ? (pd.buffs.stardustMult-1) : 0; colStardust += Math.ceil(base*(1+pm+lb)); }
-            else if (d.outputType === 'gold') { const o = Math.floor(((d.goldOutputMin||0)+(d.goldOutputMax||0))/2); colGold += Math.ceil(o*(1+lb)); }
-            else if (d.outputType === 'research') { colRP += Math.ceil(base*(1+lb)); }
+            if (d.outputType === 'food') { const pm = pd?.buffs.foodMult ? (pd.buffs.foodMult-1) : 0; colFood += Math.ceil(base*(1+pm+lb+rp)); }
+            else if (d.outputType === 'alloy') { const pm = pd?.buffs.alloyMult ? (pd.buffs.alloyMult-1) : 0; colAlloy += Math.ceil(base*(1+pm+lb+rp)); }
+            else if (d.outputType === 'stardust') { const pm = pd?.buffs.stardustMult ? (pd.buffs.stardustMult-1) : 0; colStardust += Math.ceil(base*(1+pm+lb+rp)); }
+            else if (d.outputType === 'gold') { const o = Math.floor(((d.goldOutputMin||0)+(d.goldOutputMax||0))/2); colGold += Math.ceil(o*(1+lb+rp)); }
+            else if (d.outputType === 'research') { colRP += Math.ceil(base*(1+lb+rp)); }
             else if (d.outputType === 'material' && d.outputMaterialId) {
               const pm = pd?.buffs.materialMults?.[d.outputMaterialId] ? (pd.buffs.materialMults[d.outputMaterialId]-1) : 0;
-              colMats[d.outputMaterialId] = (colMats[d.outputMaterialId]||0) + Math.ceil(base*(1+pm+lb));
+              colMats[d.outputMaterialId] = (colMats[d.outputMaterialId]||0) + Math.ceil(base*(1+pm+lb+rp));
             }
           }
           // 领袖特殊效果
@@ -681,8 +689,8 @@ function OverviewTab({
               <div><span className="text-slate-500">食物总消耗:</span> <span className="text-red-400 font-bold">-{actualCrewCost+colFoodCost}{colFoodCost>0?` (船员${actualCrewCost}+殖民${colFoodCost})`:` (船员)`}</span></div>
               <div><span className="text-slate-500">食物净增减:</span> <span className={(colFood+modFood - actualCrewCost - colFoodCost) >= 0 ? 'text-green-400 font-bold' : 'text-red-400 font-bold'}>{colFood+modFood - actualCrewCost - colFoodCost >= 0 ? '+' : ''}{colFood+modFood - actualCrewCost - colFoodCost}</span></div>
               <div><span className="text-slate-500">当前食物:</span> <span className={ship.food >= 0 ? 'text-green-400 font-bold' : 'text-red-400 font-bold'}>{ship.food}</span></div>
-              {colAlloy > 0 && <div><span className="text-slate-500">合金产出:</span> <span className="text-slate-300 font-bold">+{colAlloy} (殖民地)</span></div>}
-              {colStardust > 0 && <div><span className="text-slate-500">星尘产出:</span> <span className="text-purple-400 font-bold">+{colStardust} (殖民地)</span></div>}
+              {colAlloy > 0 && <div><span className="text-slate-500">合金产出:</span> <span className="text-slate-300 font-bold">+{colAlloy}{ship.modules?.some(m => m.active && m.id === 'eternal_core') ? ' + 5(母舰)' : ''} (殖民地)</span></div>}
+              {colStardust > 0 && <div><span className="text-slate-500">星尘产出:</span> <span className="text-purple-400 font-bold">+{colStardust}{ship.modules?.some(m => m.active && m.id === 'dyson_collector') ? ' + 3(母舰)' : ''} (殖民地)</span></div>}
               {colGold > 0 && <div><span className="text-slate-500">金币产出:</span> <span className="text-yellow-400 font-bold">+{colGold} (殖民地)</span></div>}
               {colRP > 0 && <div><span className="text-slate-500">科研产出:</span> <span className="text-cyan-400 font-bold">+{colRP} (殖民地)</span></div>}
               {(() => { const mc: Record<string,string> = { oil:'石油', gold_ore:'金矿', carbon:'碳块', dark_matter:'暗物质', quantum:'量子簇', silicon:'硅片' }; return Object.entries(colMats).map(([k,v]) => v>0 && <div key={k}><span className="text-slate-500">{mc[k]||k}:</span> <span className="text-amber-400 font-bold">+{v} (殖民地)</span></div>); })()}
