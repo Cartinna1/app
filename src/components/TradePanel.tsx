@@ -219,8 +219,8 @@ export default function TradePanel({ factions, ship, factionPrices, factionSellM
                     {!isCurrent && <span className="text-xs text-slate-500 flex-shrink-0">距离 {dist} | {turns}回合</span>}
                   </div>
                   {!isCurrent && !isTraveling && (
-                    <button onClick={() => setSelectedTarget(f.id)} className={`mt-2 text-xs px-3 py-1 rounded transition-colors ${selectedTarget === f.id ? 'bg-cyan-600 text-white' : 'bg-slate-700 text-slate-300 hover:bg-slate-600'}`}>
-                      {selectedTarget === f.id ? '已选择' : '选择跃迁'}
+                    <button onClick={() => setSelectedTarget(f.id)} className={`mt-2 text-sm px-4 py-2 rounded-lg font-bold transition-colors ${selectedTarget === f.id ? 'bg-cyan-600 text-white' : 'bg-slate-700 text-slate-300 hover:bg-slate-600'}`}>
+                      {selectedTarget === f.id ? '✓ 已选择' : '选择跃迁'}
                     </button>
                   )}
                 </div>
