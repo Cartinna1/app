@@ -198,17 +198,26 @@ export default function TradePanel({ factions, ship, factionPrices, factionSellM
               const fPrice = factionPrices[f.id] || f.basePrice;
               return (
                 <div key={f.id} className={`rounded-lg border p-3 ${isCurrent ? 'border-cyan-500 bg-cyan-900/20' : 'border-slate-700 bg-slate-800/40'}`}>
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <Globe size={14} className={isCurrent ? 'text-cyan-400' : 'text-slate-500'} />
-                      <span className={`text-sm font-bold ${isCurrent ? 'text-cyan-400' : 'text-slate-200'}`}>{f.name}</span>
-                      {isCurrent && <span className="text-[10px] bg-cyan-600 text-white px-1.5 py-0.5 rounded">当前</span>}
-                      {tier > 0 && <span className="text-[10px] bg-green-600 text-white px-1.5 py-0.5 rounded">{tier}档</span>}
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="flex items-center gap-3 min-w-0 flex-1">
+                      <img
+                        src={`/factions/${f.id}.png`}
+                        alt={f.name}
+                        onError={(e) => { (e.target as HTMLImageElement).style.display='none'; }}
+                        className="w-[60px] h-[60px] md:w-[100px] md:h-[100px] rounded-lg object-cover border border-slate-700 flex-shrink-0"
+                      />
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className={`text-sm font-bold ${isCurrent ? 'text-cyan-400' : 'text-slate-200'}`}>{f.name}</span>
+                          {isCurrent && <span className="text-[10px] bg-cyan-600 text-white px-1.5 py-0.5 rounded">当前</span>}
+                          {tier > 0 && <span className="text-[10px] bg-green-600 text-white px-1.5 py-0.5 rounded">{tier}档</span>}
+                        </div>
+                        <p className="text-xs text-slate-400 mt-1">{f.specialtyName} | 市场价 <span className="text-yellow-400">{fPrice}</span> <span className="text-slate-600">(基价{f.basePrice})</span></p>
+                        {fs && fs.invested > 0 && <p className="text-xs text-green-400 mt-0.5">已投资 {fs.invested.toLocaleString()} 金币</p>}
+                      </div>
                     </div>
-                    {!isCurrent && <span className="text-xs text-slate-500">距离 {dist} | {turns}回合</span>}
+                    {!isCurrent && <span className="text-xs text-slate-500 flex-shrink-0">距离 {dist} | {turns}回合</span>}
                   </div>
-                  <p className="text-xs text-slate-400 mt-1">{f.specialtyName} | 市场价 <span className="text-yellow-400">{fPrice}</span> <span className="text-slate-600">(基价{f.basePrice})</span></p>
-                  {fs && fs.invested > 0 && <p className="text-xs text-green-400 mt-0.5">已投资 {fs.invested.toLocaleString()} 金币</p>}
                   {!isCurrent && !isTraveling && (
                     <button onClick={() => setSelectedTarget(f.id)} className={`mt-2 text-xs px-3 py-1 rounded transition-colors ${selectedTarget === f.id ? 'bg-cyan-600 text-white' : 'bg-slate-700 text-slate-300 hover:bg-slate-600'}`}>
                       {selectedTarget === f.id ? '已选择' : '选择跃迁'}
@@ -231,7 +240,14 @@ export default function TradePanel({ factions, ship, factionPrices, factionSellM
           <div className="bg-slate-900/60 border border-slate-700 rounded-xl p-5">
             <h3 className="text-lg font-bold text-slate-200 mb-4 flex items-center gap-2"><ShoppingCart size={18} className="text-green-400" /> 购买特产</h3>
             {currentFaction && (
-              <div className="bg-slate-800/60 rounded-lg p-4 mb-4">
+              <div className="bg-slate-800/60 rounded-lg p-4 mb-4 flex gap-4 items-start">
+                <img
+                  src={`/specialty/${currentFaction.id}.png`}
+                  alt={currentFaction.specialtyName}
+                  onError={(e) => { (e.target as HTMLImageElement).style.display='none'; }}
+                  className="w-[80px] h-[80px] md:w-[150px] md:h-[150px] rounded-lg object-cover border border-slate-700 flex-shrink-0"
+                />
+                <div className="flex-1 min-w-0">
                 <p className="text-sm text-slate-300 mb-1"><span className="text-cyan-400 font-bold">{currentFaction.name}</span> 的特产</p>
                 <p className="text-lg font-bold text-white">{currentFaction.specialtyName}</p>
                 <p className="text-xs text-slate-500">{currentFaction.specialtyDescription}</p>
@@ -240,6 +256,7 @@ export default function TradePanel({ factions, ship, factionPrices, factionSellM
                   <div><p className="text-xs text-slate-500">你的购买价</p><p className="text-xl font-bold text-yellow-400">{buyPrice.toLocaleString()} 金</p></div>
                   {currentDiscount > 0 && <div><p className="text-xs text-green-400">投资优惠</p><p className="text-sm text-green-400 font-bold">-{(currentDiscount * 100).toFixed(0)}%</p></div>}
                   <div><p className="text-xs text-slate-500">基价</p><p className="text-sm text-slate-500 line-through">{currentFaction.basePrice.toLocaleString()} 金</p></div>
+                </div>
                 </div>
               </div>
             )}
@@ -274,8 +291,14 @@ export default function TradePanel({ factions, ship, factionPrices, factionSellM
                     const isLocal = ts.currentFactionId === fid;
                     return (
                       <div key={fid} className={`rounded-lg p-3 ${sellFaction === fid ? 'border border-yellow-500 bg-yellow-900/10' : isLocal ? 'border border-red-700/30 bg-red-950/10' : 'border border-slate-700 bg-slate-800/40'}`}>
-                        <div className="flex items-center justify-between">
-                          <div>
+                        <div className="flex items-center justify-between gap-3">
+                          <img
+                            src={`/specialty/${fid}.png`}
+                            alt={f.specialtyName}
+                            onError={(e) => { (e.target as HTMLImageElement).style.display='none'; }}
+                            className="w-[60px] h-[60px] md:w-[150px] md:h-[150px] rounded-lg object-cover border border-slate-700 flex-shrink-0"
+                          />
+                          <div className="flex-1 min-w-0">
                             <p className="text-sm font-bold text-slate-200">{f.specialtyName}</p>
                             <p className="text-xs text-slate-500">来自 {f.name} | 库存 {count} | 距离 {dist}</p>
                             {isLocal && <p className="text-xs text-red-400 mt-0.5">本地特产不可在本地出售，请跃迁到其他势力</p>}

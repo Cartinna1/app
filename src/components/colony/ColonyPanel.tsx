@@ -652,21 +652,28 @@ export default function ColonyPanel(props: ColonyPanelProps) {
               const count = colony.buildings.filter((b) => b.defId === def.id).length;
               const limited = !!(def.maxCount && count >= def.maxCount);
               return (
-                <div key={def.id} className={`bg-slate-900/60 border rounded-lg p-3 mb-2 ${limited ? 'opacity-50 border-slate-800' : 'border-slate-700'}`}>
-                  <div className="flex justify-between items-start mb-2">
-                    <div>
-                      <span className={`text-sm ${CAT_COLORS[def.category] || 'text-slate-500'} px-1.5 py-0.5 rounded mr-1`}>{CAT_LABELS[def.category] || def.category}</span>
-                      <span className="text-sm text-slate-200 font-bold">{def.name}</span>
-                      <span className="text-sm text-cyan-400 ml-2">{getOutputDesc(def)}</span>
+                <div key={def.id} className={`bg-slate-900/60 border rounded-lg p-3 mb-2 flex gap-3 ${limited ? 'opacity-50 border-slate-800' : 'border-slate-700'}`}>
+                  <img
+                    src={`/buildings/${def.id}.png`}
+                    alt={def.name}
+                    onError={(e) => { (e.target as HTMLImageElement).style.display='none'; }}
+                    className="w-[80px] h-[80px] md:w-[250px] md:h-[250px] rounded-lg object-cover border border-slate-700 flex-shrink-0"
+                  />
+                  <div className="flex-1 min-w-0">
+                    <div className="flex justify-between items-start mb-2">
+                      <div>
+                        <span className={`text-sm ${CAT_COLORS[def.category] || 'text-slate-500'} px-1.5 py-0.5 rounded mr-1`}>{CAT_LABELS[def.category] || def.category}</span>
+                        <span className="text-sm text-slate-200 font-bold">{def.name}</span>
+                        <span className="text-sm text-cyan-400 ml-2">{getOutputDesc(def)}</span>
+                      </div>
+                      <button onClick={() => { const r = onBuild(def.id); showMsg(r.message, r.success ? 'success' : 'error'); }}
+                        disabled={limited}
+                        className="px-3 py-1.5 bg-cyan-700 hover:bg-cyan-600 disabled:bg-slate-700 disabled:text-slate-500 rounded text-sm font-bold text-white">
+                        {limited ? '已达上限' : '建造'}
+                      </button>
                     </div>
-                    <button onClick={() => { const r = onBuild(def.id); showMsg(r.message, r.success ? 'success' : 'error'); }}
-                      disabled={limited}
-                      className="px-3 py-1.5 bg-cyan-700 hover:bg-cyan-600 disabled:bg-slate-700 disabled:text-slate-500 rounded text-sm font-bold text-white">
-                      {limited ? '已达上限' : '建造'}
-                    </button>
-                  </div>
-                  <p className="text-sm text-slate-500 mb-1">{def.description}</p>
-                  <div className="flex flex-wrap gap-x-3 gap-y-0.5 text-sm">
+                    <p className="text-sm text-slate-500 mb-1">{def.description}</p>
+                    <div className="flex flex-wrap gap-x-3 gap-y-0.5 text-sm">
                     {(() => {
                       const costMult = planet?.buffs.buildCostMult || 1;
                       const actualGoldCost = Math.ceil(def.costGold * costMult);
@@ -705,6 +712,7 @@ export default function ColonyPanel(props: ColonyPanelProps) {
                     {def.powerConsumption !== undefined && def.powerConsumption > 0 && (
                       <span className="text-amber-500">| ⚡ {def.powerConsumption}</span>
                     )}
+                  </div>
                   </div>
                 </div>
               );
