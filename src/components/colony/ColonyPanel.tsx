@@ -617,7 +617,6 @@ export default function ColonyPanel(props: ColonyPanelProps) {
                       <span className="text-sm text-amber-500 ml-2">⚡ {def.powerConsumption}</span>
                     )}
                   </div>
-                  </div>
                   <button onClick={() => { const r = onDemolishBuilding(inst.uid); showMsg(r.message, r.success ? 'success' : 'error'); }} className="px-2 py-1 bg-red-700 hover:bg-red-600 rounded text-xs font-bold flex-shrink-0">拆除</button>
                 </div>
               );
