@@ -45,9 +45,9 @@ export const FULL_BUILDINGS: BuildingDef[] = [
   { id: 'B28', name: '克隆中心', description: '生物克隆设施，加速人口增长。存在伦理争议——但在殖民前线，实用主义压倒一切。', category: 'functional', costGold: 30000, buildTurns: 3, maxCount: 1, minPop: 1, maxPop: 1, requiresTech: 'T22', powerConsumption: 3 },
 
   // ===== 电能生产 =====
-  { id: 'B29', name: '太阳能阵列', description: '铺设在殖民地外围的巨型光伏矩阵，利用恒星辐射为基地提供基础电力。转化效率不高，但建造简单、无需原料。', category: 'power', costGold: 5000, costMaterials: { silicon: 50 }, buildTurns: 2, maxCount: 4, minPop: 1, maxPop: 3, outputType: 'power', baseOutput: 5, popFactor: 5, powerConsumption: 0 },
-  { id: 'B30', name: '聚变电站', description: '磁约束等离子体核心反应炉，将轻元素直接转化为巨量热能发电。殖民地从矿石社会迈向工业文明的真正标志。', category: 'power', costGold: 15000, costAlloy: 100, costMaterials: { quantum: 50 }, buildTurns: 4, maxCount: 2, minPop: 2, maxPop: 5, outputType: 'power', baseOutput: 8, popFactor: 8, requiresTech: 'T26', powerConsumption: 0 },
-  { id: 'B31', name: '反物质反应堆', description: '悬浮在真空舱内的反质子环——每一毫克反物质湮灭释放的能量足以驱动整座城市。建造代价极高，但让电能不再成为制约。', category: 'power', costGold: 60000, costMaterials: { dark_matter: 150 }, buildTurns: 6, maxCount: 1, minPop: 3, maxPop: 8, outputType: 'power', baseOutput: 12, popFactor: 12, requiresTech: 'T27', powerConsumption: 0 },
+  { id: 'B29', name: '太阳能阵列', description: '铺设在殖民地外围的巨型光伏矩阵，利用恒星辐射为基地提供基础电力。转化效率不高，但建造简单、无需原料。电能产出 = 5 + 5×人口。', category: 'power', costGold: 10000, costMaterials: { silicon: 300 }, buildTurns: 2, minPop: 1, maxPop: 3, outputType: 'power', baseOutput: 5, popFactor: 5, powerConsumption: 0 },
+  { id: 'B30', name: '聚变电站', description: '磁约束等离子体核心反应炉，将轻元素直接转化为巨量热能发电。殖民地从矿石社会迈向工业文明的真正标志。电能产出 = 8 + 8×人口。', category: 'power', costGold: 25000, costMaterials: { quantum: 150 }, buildTurns: 4, maxCount: 3, minPop: 2, maxPop: 5, outputType: 'power', baseOutput: 8, popFactor: 8, requiresTech: 'T26', powerConsumption: 0 },
+  { id: 'B31', name: '反物质反应堆', description: '悬浮在真空舱内的反质子环——每一毫克反物质湮灭释放的能量足以驱动整座城市。建造代价极高，但让电能不再成为制约。电能产出 = 12 + 12×人口。', category: 'power', costGold: 80000, costMaterials: { dark_matter: 300 }, buildTurns: 6, maxCount: 2, minPop: 3, maxPop: 8, outputType: 'power', baseOutput: 12, popFactor: 12, requiresTech: 'T27', powerConsumption: 0 },
 ];
 
 /** 根据ID获取建筑定义 */

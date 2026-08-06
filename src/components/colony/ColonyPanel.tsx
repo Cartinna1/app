@@ -597,8 +597,14 @@ export default function ColonyPanel(props: ColonyPanelProps) {
                 if (v>0) liveOut = `产出: ${v} ${un}/回合 (${detail})`;
               }
               return (
-                <div key={inst.uid} className="bg-slate-900/60 border border-green-700/40 rounded-lg p-3 mb-2 flex justify-between items-center">
-                  <div>
+                <div key={inst.uid} className="bg-slate-900/60 border border-green-700/40 rounded-lg p-3 mb-2 flex justify-between items-center gap-3">
+                  <img
+                    src={`/buildings/${def.id}.png`}
+                    alt={def.name}
+                    onError={(e) => { (e.target as HTMLImageElement).style.display='none'; }}
+                    className="w-[60px] h-[60px] md:w-[80px] md:h-[80px] rounded-lg object-cover border border-slate-700 flex-shrink-0"
+                  />
+                  <div className="flex-1 min-w-0">
                     {catTag}
                     <span className="text-sm text-green-300 font-bold">{def.name}</span>
                     <span className="text-sm text-slate-500 ml-2">{maxLabel}</span>
@@ -611,7 +617,8 @@ export default function ColonyPanel(props: ColonyPanelProps) {
                       <span className="text-sm text-amber-500 ml-2">⚡ {def.powerConsumption}</span>
                     )}
                   </div>
-                  <button onClick={() => { const r = onDemolishBuilding(inst.uid); showMsg(r.message, r.success ? 'success' : 'error'); }} className="px-2 py-1 bg-red-700 hover:bg-red-600 rounded text-xs font-bold flex-shrink-0 ml-3">拆除</button>
+                  </div>
+                  <button onClick={() => { const r = onDemolishBuilding(inst.uid); showMsg(r.message, r.success ? 'success' : 'error'); }} className="px-2 py-1 bg-red-700 hover:bg-red-600 rounded text-xs font-bold flex-shrink-0">拆除</button>
                 </div>
               );
             })}
@@ -711,6 +718,9 @@ export default function ColonyPanel(props: ColonyPanelProps) {
                     {def.minPop > 0 && <span className="text-slate-600">| 需要{def.minPop}-{def.maxPop}人入驻</span>}
                     {def.powerConsumption !== undefined && def.powerConsumption > 0 && (
                       <span className="text-amber-500">| ⚡ {def.powerConsumption}</span>
+                    )}
+                    {def.outputType === 'power' && (
+                      <span className="text-cyan-400">| 产出 = {def.baseOutput} + {def.popFactor}×人口</span>
                     )}
                   </div>
                   </div>
