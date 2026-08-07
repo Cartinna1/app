@@ -952,7 +952,7 @@ export default function ColonyPanel(props: ColonyPanelProps) {
                             src={`/leaders/${ld.id}.jpg`}
                             alt={ld.name}
                             onError={(e) => { (e.target as HTMLImageElement).style.display='none'; }}
-                            className={`w-16 h-16 rounded-lg object-cover flex-shrink-0 border-2 ${ld.rarity==='SSR'?'border-amber-400 shadow-[0_0_10px_rgba(251,191,36,0.6)]':ld.rarity==='SR'?'border-purple-400':'border-blue-400'}`}
+                            className={`w-[80px] h-[80px] md:w-[250px] md:h-[250px] rounded-lg object-cover flex-shrink-0 border-2 ${ld.rarity==='SSR'?'border-amber-400 shadow-[0_0_10px_rgba(251,191,36,0.6)]':ld.rarity==='SR'?'border-purple-400':'border-blue-400'}`}
                           />
                           <div className="flex-1 mr-2 min-w-0">
                             <span className={`text-sm font-bold ${rc}`}>{ld.rarity}级</span>
@@ -1024,7 +1024,7 @@ export default function ColonyPanel(props: ColonyPanelProps) {
                         src={`/leaders/${ld.id}.jpg`}
                         alt={ld.name}
                         onError={(e) => { (e.target as HTMLImageElement).style.display='none'; }}
-                        className={`w-16 h-16 rounded-lg object-cover flex-shrink-0 border-2 ${l.rarity==='SSR'?'border-amber-400 shadow-[0_0_10px_rgba(251,191,36,0.6)]':l.rarity==='SR'?'border-purple-400':'border-blue-400'}`}
+                        className={`w-[80px] h-[80px] md:w-[250px] md:h-[250px] rounded-lg object-cover flex-shrink-0 border-2 ${l.rarity==='SSR'?'border-amber-400 shadow-[0_0_10px_rgba(251,191,36,0.6)]':l.rarity==='SR'?'border-purple-400':'border-blue-400'}`}
                       />
                       <div className="flex-1 min-w-0">
                       <div className="flex justify-between items-start mb-1">
