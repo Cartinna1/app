@@ -57,24 +57,26 @@ export function useSave(
     try {
       const saveData = JSON.parse(data);
       if (!validateSaveData(saveData)) return false;
+      // 校验通过后安全类型转换
+      const d = saveData as Record<string, any>;
       const state: GameState = {
         phase: 'playing',
-        turn: saveData.turn || 1,
-        currentShipIndex: saveData.currentShipIndex || 0,
-                ships: saveData.ships || [],
-        stocks: saveData.stocks || [],
-        materials: saveData.materials || [],
-        products: saveData.products || [],
-        eventLog: saveData.eventLog || [],
-        redeemedCodes: saveData.redeemedCodes || [],
-        factions: saveData.factions || FACTIONS,
-        factionPrices: saveData.factionPrices || refreshFactionPrices(),
-        factionSellMultipliers: saveData.factionSellMultipliers || {},
-        factionPolicy: saveData.factionPolicy || { type: 'normal', effect: POLICY_EFFECTS['normal'] },
-        policyRemainingTurns: saveData.policyRemainingTurns || 0,
-        stardustMarket: saveData.stardustMarket || { currentRelicId: null, soldRelicIds: [] },
-        gameWon: saveData.gameWon || false,
-        wonWonderName: saveData.wonWonderName || '',
+        turn: d.turn || 1,
+        currentShipIndex: d.currentShipIndex || 0,
+        ships: d.ships || [],
+        stocks: d.stocks || [],
+        materials: d.materials || [],
+        products: d.products || [],
+        eventLog: d.eventLog || [],
+        redeemedCodes: d.redeemedCodes || [],
+        factions: d.factions || FACTIONS,
+        factionPrices: d.factionPrices || refreshFactionPrices(),
+        factionSellMultipliers: d.factionSellMultipliers || {},
+        factionPolicy: d.factionPolicy || { type: 'normal', effect: POLICY_EFFECTS['normal'] },
+        policyRemainingTurns: d.policyRemainingTurns || 0,
+        stardustMarket: d.stardustMarket || { currentRelicId: null, soldRelicIds: [] },
+        gameWon: d.gameWon || false,
+        wonWonderName: d.wonWonderName || '',
       };
       dispatch({ type: 'LOAD_SAVE', state });
       return true;
@@ -121,24 +123,26 @@ export function useSave(
           const saveData = JSON.parse(text);
           if (!validateSaveData(saveData)) { resolve(false); return; }
           localStorage.setItem(SAVE_KEY, text);
+          // 校验通过后安全类型转换
+          const d = saveData as Record<string, any>;
           const state: GameState = {
             phase: 'playing',
-            turn: saveData.turn || 1,
-            currentShipIndex: saveData.currentShipIndex || 0,
-                        ships: saveData.ships || [],
-            stocks: saveData.stocks || [],
-            materials: saveData.materials || [],
-            products: saveData.products || [],
-            eventLog: saveData.eventLog || [],
-            redeemedCodes: saveData.redeemedCodes || [],
-            factions: saveData.factions || FACTIONS,
-            factionPrices: saveData.factionPrices || refreshFactionPrices(),
-            factionSellMultipliers: saveData.factionSellMultipliers || {},
-            factionPolicy: saveData.factionPolicy || { type: 'normal', effect: POLICY_EFFECTS['normal'] },
-            policyRemainingTurns: saveData.policyRemainingTurns || 0,
-            stardustMarket: saveData.stardustMarket || { currentRelicId: null, soldRelicIds: [] },
-            gameWon: saveData.gameWon || false,
-            wonWonderName: saveData.wonWonderName || '',
+            turn: d.turn || 1,
+            currentShipIndex: d.currentShipIndex || 0,
+            ships: d.ships || [],
+            stocks: d.stocks || [],
+            materials: d.materials || [],
+            products: d.products || [],
+            eventLog: d.eventLog || [],
+            redeemedCodes: d.redeemedCodes || [],
+            factions: d.factions || FACTIONS,
+            factionPrices: d.factionPrices || refreshFactionPrices(),
+            factionSellMultipliers: d.factionSellMultipliers || {},
+            factionPolicy: d.factionPolicy || { type: 'normal', effect: POLICY_EFFECTS['normal'] },
+            policyRemainingTurns: d.policyRemainingTurns || 0,
+            stardustMarket: d.stardustMarket || { currentRelicId: null, soldRelicIds: [] },
+            gameWon: d.gameWon || false,
+            wonWonderName: d.wonWonderName || '',
           };
           dispatch({ type: 'LOAD_SAVE', state });
           resolve(true);

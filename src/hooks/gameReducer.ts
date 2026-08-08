@@ -66,7 +66,7 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
       return { ...state, stocks: action.stocks, materials: action.materials, products: action.products };
 
     case 'LOAD_SAVE': {
-      if (action.state.seed)       const loaded = action.state as GameState;
+      const loaded = action.state as GameState;
       if (!loaded.stardustMarket) {
         loaded.stardustMarket = { currentRelicId: null, soldRelicIds: [] };
       }

@@ -132,7 +132,7 @@ export function useEvent(
       ships[shipIndex] = s;
       return ships;
     },
-    [rng]
+    []
   );
 
   // 掷一个 outcome，应用所有加成，返回处理后的 ResourceChange + outcome 信息
@@ -197,7 +197,7 @@ export function useEvent(
 
       return { res, description: outcome.description, message: outcome.message, subMessage };
     },
-    [gameState, rng]
+    [gameState]
   );
 
   // 判断事件是否为"有风险的事件"——只要任意选项的任意outcome包含资源损失就算
@@ -268,7 +268,7 @@ export function useEvent(
       drawingRef.current = false;
       return event;
     },
-    [gameState, dispatch, setActiveEvent, setEventDodged, rng]
+    [gameState, dispatch, setActiveEvent, setEventDodged]
   );
 
   // 选择选项（支持多级嵌套）
@@ -328,7 +328,7 @@ export function useEvent(
         accumulator: newAcc,
       };
     },
-    [gameState, rng, processOutcome]
+    [gameState, processOutcome]
   );
 
   // 清除躲避提示
