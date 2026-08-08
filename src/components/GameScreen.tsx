@@ -207,12 +207,6 @@ export default function GameScreen({
             <div className="flex items-center gap-2 md:gap-6">
               {/* 船只信息 - 桌面端完整显示 */}
               <div className="hidden md:flex items-center gap-2 bg-slate-800/60 px-3 py-1.5 rounded-lg border border-slate-700">
-                <img
-                  src={`/motherships/${currentShip.id}.png`}
-                  alt={currentShip.name}
-                  onError={(e) => { (e.target as HTMLImageElement).style.display='none'; }}
-                  className="w-8 h-8 md:w-10 md:h-10 rounded object-cover border border-slate-700 flex-shrink-0"
-                />
                 <Rocket size={14} className="text-cyan-400" />
                 <span className="text-cyan-400 text-xs font-bold">{currentShip.name}</span>
                 <span className="text-slate-500 text-xs">|</span>
@@ -292,6 +286,12 @@ export default function GameScreen({
             {currentShip && (
               <div className="bg-slate-800/80 rounded-lg p-3">
                 <div className="flex items-center gap-2 mb-2">
+                  <img
+                    src={`/motherships/${currentShip.id}.png`}
+                    alt={currentShip.name}
+                    onError={(e) => { (e.target as HTMLImageElement).style.display='none'; }}
+                    className="w-16 h-16 rounded object-cover border border-slate-700 flex-shrink-0"
+                  />
                   <Rocket size={18} className="text-cyan-400" />
                   <span className="font-bold text-sm">{currentShip.name}</span>
                 </div>
