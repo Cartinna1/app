@@ -329,10 +329,10 @@ export default function GameScreen({
 
         {/* ===== 主内容区 ===== */}
         <main className="flex-1 p-3 md:p-6 overflow-auto min-h-[calc(100vh-120px)] md:min-h-[calc(100vh-60px)]">
-          {activeTab === 'overview' && (
+          <div className={activeTab === 'overview' ? '' : 'hidden'}>
             <OverviewTab gameState={gameState} ship={currentShip} getShipTotalAssets={getShipTotalAssets} />
-          )}
-          {activeTab === 'stocks' && (
+          </div>
+          <div className={activeTab === 'stocks' ? '' : 'hidden'}>
             <StockMarket
               stocks={gameState.stocks}
               ship={currentShip}
@@ -341,24 +341,24 @@ export default function GameScreen({
               onBuy={onBuyStock}
               onSell={onSellStock}
             />
-          )}
-          {activeTab === 'materials' && (
+          </div>
+          <div className={activeTab === 'materials' ? '' : 'hidden'}>
             <MaterialMarket
               materials={gameState.materials}
               ship={currentShip}
               shipIndex={0}
               onBuy={onBuyMaterial}
             />
-          )}
-          {activeTab === 'production' && (
+          </div>
+          <div className={activeTab === 'production' ? '' : 'hidden'}>
             <ProductionPanel
               ship={currentShip}
               shipIndex={0}
               materials={gameState.materials}
               onStartProduction={onStartProduction}
             />
-          )}
-          {activeTab === 'products' && (
+          </div>
+          <div className={activeTab === 'products' ? '' : 'hidden'}>
             <ProductMarket
               ship={currentShip}
               shipIndex={0}
@@ -375,8 +375,8 @@ export default function GameScreen({
               onBuyAlloy={onBuyAlloy}
               onBuyFood={onBuyFood}
             />
-          )}
-          {activeTab === 'events' && (
+          </div>
+          <div className={activeTab === 'events' ? '' : 'hidden'}>
             <EventPanel
               activeEvent={activeEvent}
               eventDodged={eventDodged}
@@ -392,15 +392,18 @@ export default function GameScreen({
               onClearActiveEvent={onClearActiveEvent}
               onClearDodged={onClearEventDodged}
             />
-          )}
-          {activeTab === 'loan' && currentShip && (
+          </div>
+          {currentShip && (
+          <div className={activeTab === 'loan' ? '' : 'hidden'}>
             <LoanPanel
               ship={currentShip}
               onTakeLoan={onTakeLoan}
               onRepayLoan={onRepayLoan}
             />
+          </div>
           )}
-          {activeTab === 'trade' && currentShip && (
+          {currentShip && (
+          <div className={activeTab === 'trade' ? '' : 'hidden'}>
             <TradePanel
               factions={gameState.factions}
               ship={currentShip}
@@ -415,8 +418,10 @@ export default function GameScreen({
               onInvest={onInvestFaction}
               onGatherIntel={onGatherIntel}
             />
+          </div>
           )}
-          {activeTab === 'colony' && currentShip && (
+          {currentShip && (
+          <div className={activeTab === 'colony' ? '' : 'hidden'}>
             <ColonyPanel
               ship={currentShip}
               onUnlockColony={onUnlockColony}
@@ -437,34 +442,39 @@ export default function GameScreen({
               onCompleteWonder={onCompleteWonder}
               canStartWonder={canStartWonder}
             />
+          </div>
           )}
-          {activeTab === 'redeem' && (
+          <div className={activeTab === 'redeem' ? '' : 'hidden'}>
             <RedeemCode
               shipIndex={0}
               redeemedCodes={gameState.redeemedCodes}
               onRedeem={onRedeemCode}
             />
-          )}
-          {activeTab === 'goldlog' && currentShip && (
+          </div>
+          {currentShip && (
+          <div className={activeTab === 'goldlog' ? '' : 'hidden'}>
             <GoldLogViewer
               goldLog={currentShip.goldLog}
               currentGold={currentShip.gold}
             />
+          </div>
           )}
-          {activeTab === 'module' && currentShip && (
+          {currentShip && (
+          <div className={activeTab === 'module' ? '' : 'hidden'}>
             <ModulePanel
               ship={currentShip}
               onInstallModule={onInstallModule}
               onUseManualModule={onUseManualModule}
             />
+          </div>
           )}
-          {activeTab === 'save' && (
+          <div className={activeTab === 'save' ? '' : 'hidden'}>
             <SaveManager
               onExport={onExportSave}
               onImport={onImportSave}
               onReset={onResetGame}
             />
-          )}
+          </div>
         </main>
       </div>
 
