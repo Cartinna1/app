@@ -66,14 +66,14 @@ export default function ShipSelection({ onSelect, onLoad, hasSave }: ShipSelecti
               <button
                 key={ship.id}
                 onClick={() => { setSelectedShipId(ship.id); setError(''); }}
-                className={`relative rounded-xl border-2 p-4 md:p-5 text-left transition-all duration-200 ${
+className={`relative rounded-xl border-2 p-4 md:p-5 pr-20 md:pr-24 text-left transition-all duration-200 ${
                   isSelected
                     ? `${colors.border} ${colors.bg} shadow-lg scale-[1.01] md:scale-[1.02]`
                     : `border-slate-700 bg-slate-900/60 ${colors.hover} hover:border-slate-500 hover:bg-slate-800/60`
                 }`}
               >
-{isSelected && (
-                  <div className={`absolute top-2 right-2 md:top-3 md:right-3 w-5 h-5 md:w-6 md:h-6 rounded-full ${colors.bg} ${colors.border} border-2 flex items-center justify-center`}>
+                {isSelected && (
+                  <div className={`absolute top-2 right-2 md:top-3 md:right-3 w-5 h-5 md:w-6 md:h-6 rounded-full ${colors.bg} ${colors.border} border-2 flex items-center justify-center z-10`}>
                   <Check size={12} className={colors.icon} />
                   </div>
                 )}
@@ -81,7 +81,7 @@ export default function ShipSelection({ onSelect, onLoad, hasSave }: ShipSelecti
                   src={`/motherships/${ship.id}.png`}
                   alt={ship.name}
                   onError={(e) => { (e.target as HTMLImageElement).style.display='none'; }}
-                  className="absolute top-2 right-2 md:top-3 md:right-3 w-12 h-12 md:w-16 md:h-16 rounded-lg object-cover border border-slate-700 bg-slate-800/80 p-0.5"
+                  className="absolute top-3 right-3 md:top-4 md:right-4 w-12 h-12 md:w-14 md:h-14 rounded-lg object-cover border border-slate-700 bg-slate-800/80 p-0.5"
                 />
 
                 <div className="flex items-center gap-2 md:gap-3 mb-2 md:mb-3">
