@@ -230,7 +230,7 @@ export default function ColonyPanel(props: ColonyPanelProps) {
             return (
               <div key={pid} className="bg-slate-900/60 border border-slate-700 rounded-xl overflow-hidden">
                 <div className="h-28 bg-slate-800 overflow-hidden">
-                  <img src={`/planets/${pid}.jpg`} alt={p.name} className="w-full h-full object-cover" />
+                  <img src={`/planets/${pid}.png`} alt={p.name} className="w-full h-full object-cover" />
                 </div>
                 <div className="p-4">
                 <h4 className="font-bold text-slate-100 mb-2">{p.name}</h4>
@@ -280,7 +280,7 @@ export default function ColonyPanel(props: ColonyPanelProps) {
   return (
     <div className="space-y-4">
       <div className="flex items-center gap-4">
-        {colony.planetType && <img src={`/planets/${colony.planetType}.jpg`} alt={planet?.name} className="w-16 h-16 rounded-xl object-cover border border-slate-700 flex-shrink-0" />}
+        {colony.planetType && <img src={`/planets/${colony.planetType}.png`} alt={planet?.name} className="w-16 h-16 rounded-xl object-cover border border-slate-700 flex-shrink-0" />}
         <div>
           <h2 className="text-xl font-bold text-white">星际殖民 · {colony.planetName}</h2>
           <p className="text-sm text-slate-400">星球类型：{planet?.name || '未知'} | 人口：{colony.population.total}/{colony.population.cap} | 空闲：{colony.population.available}</p>
