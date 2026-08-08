@@ -1035,12 +1035,12 @@ export default function ColonyPanel(props: ColonyPanelProps) {
                         </div>
                         {l.level < 3 && (
                           <button onClick={() => {
-                            const cost = l.level===1?20:45;
+                            const cost = l.level===1?50:100;
                             if (ship.stardust<cost) { showMsg('星尘不足', 'error'); return; }
                             const r=onUpgradeLeader(i); showMsg(r.message,r.success?'success':'error');
-                          }} disabled={ship.stardust<(l.level===1?20:45)}
+                          }} disabled={ship.stardust<(l.level===1?50:100)}
                             className="px-3 py-1.5 bg-yellow-700 hover:bg-yellow-600 disabled:bg-slate-700 rounded text-sm font-bold ml-2 flex-shrink-0">
-                            升级({l.level===1?20:45}星尘)
+                            升级({l.level===1?50:100}星尘)
                           </button>
                         )}
                       </div>

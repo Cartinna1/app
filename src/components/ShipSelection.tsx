@@ -72,11 +72,17 @@ export default function ShipSelection({ onSelect, onLoad, hasSave }: ShipSelecti
                     : `border-slate-700 bg-slate-900/60 ${colors.hover} hover:border-slate-500 hover:bg-slate-800/60`
                 }`}
               >
-                {isSelected && (
+{isSelected && (
                   <div className={`absolute top-2 right-2 md:top-3 md:right-3 w-5 h-5 md:w-6 md:h-6 rounded-full ${colors.bg} ${colors.border} border-2 flex items-center justify-center`}>
-                    <Check size={12} className={colors.icon} />
+                  <Check size={12} className={colors.icon} />
                   </div>
                 )}
+                <img
+                  src={`/motherships/${ship.id}.png`}
+                  alt={ship.name}
+                  onError={(e) => { (e.target as HTMLImageElement).style.display='none'; }}
+                  className="absolute top-2 right-2 md:top-3 md:right-3 w-12 h-12 md:w-16 md:h-16 rounded-lg object-cover border border-slate-700 bg-slate-800/80 p-0.5"
+                />
 
                 <div className="flex items-center gap-2 md:gap-3 mb-2 md:mb-3">
                   <div className={`p-1.5 md:p-2 rounded-lg ${isSelected ? colors.bg : 'bg-slate-800'}`}>
