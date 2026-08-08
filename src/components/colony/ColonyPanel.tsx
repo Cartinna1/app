@@ -598,7 +598,7 @@ export default function ColonyPanel(props: ColonyPanelProps) {
               return (
                 <div key={inst.uid} className="bg-slate-900/60 border border-green-700/40 rounded-lg p-3 mb-2 flex justify-between items-center gap-3">
                   <img
-                    src={`/buildings/${def.id}.png`}
+                    src={`/buildings/${def.id}.jpg`}
                     alt={def.name}
                     onError={(e) => { (e.target as HTMLImageElement).style.display='none'; }}
                     className="w-[60px] h-[60px] md:w-[80px] md:h-[80px] rounded-lg object-cover border border-slate-700 flex-shrink-0"
@@ -659,7 +659,7 @@ export default function ColonyPanel(props: ColonyPanelProps) {
               return (
                 <div key={def.id} className={`bg-slate-900/60 border rounded-lg p-3 mb-2 flex gap-3 ${limited ? 'opacity-50 border-slate-800' : 'border-slate-700'}`}>
                   <img
-                    src={`/buildings/${def.id}.png`}
+                    src={`/buildings/${def.id}.jpg`}
                     alt={def.name}
                     onError={(e) => { (e.target as HTMLImageElement).style.display='none'; }}
                     className="w-[80px] h-[80px] md:w-[250px] md:h-[250px] rounded-lg object-cover border border-slate-700 flex-shrink-0"
