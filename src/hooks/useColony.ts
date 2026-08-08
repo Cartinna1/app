@@ -97,7 +97,15 @@ export function useColony(
         const s = { ...ships[0] };
         s.gold -= UNLOCK_COST;
         if (s.colony && s.colony.phase === 'selecting') {
-          s.colony = { ...s.colony, scoutingPool: undefined };
+          // 重新生成星球池
+          const pool = [...ALL_PLANETS];
+          const result: PlanetTypeId[] = [];
+          for (let i = 0; i < 3; i++) {
+            const idx = Math.floor(Math.random() * pool.length);
+            result.push(pool[idx].id);
+            pool.splice(idx, 1);
+          }
+          s.colony = { ...s.colony, scoutingPool: result };
         }
         ships[0] = s;
         return { ...prev, ships };
@@ -498,6 +506,15 @@ export function processColonyTurn(ship: Mothership, _turn: number): void {
     colony.scoutTurnsRemaining -= 1;
     if (colony.scoutTurnsRemaining <= 0) {
       colony.phase = 'selecting';
+      // 生成星球池并存入状态，避免切 Tab 丢失
+      const pool = [...ALL_PLANETS];
+      const result: PlanetTypeId[] = [];
+      for (let i = 0; i < 3; i++) {
+        const idx = Math.floor(Math.random() * pool.length);
+        result.push(pool[idx].id);
+        pool.splice(idx, 1);
+      }
+      colony.scoutingPool = result;
     }
     return;
   }

@@ -133,7 +133,6 @@ export default function ColonyPanel(props: ColonyPanelProps) {
   const [msgType, setMsgType] = useState<'success' | 'error'>('success');
   const [recruitQty, setRecruitQty] = useState(1);
   const [planetName, setPlanetName] = useState('');
-  const [scoutPool, setScoutPool] = useState<PlanetTypeId[] | null>(null);
   const [buildCatFilter, setBuildCatFilter] = useState<string>('housing');
   const [popCatFilter, setPopCatFilter] = useState<string>('all');
   const [liveBuildFilter, setLiveBuildFilter] = useState<string>('housing');
@@ -142,7 +141,6 @@ export default function ColonyPanel(props: ColonyPanelProps) {
   // 离开选择星球阶段时清理状态
   useEffect(() => {
     if (!colony || colony.phase !== 'selecting') {
-      setScoutPool(null);
       setPlanetName('');
     }
   }, [colony?.phase]);
@@ -218,13 +216,14 @@ export default function ColonyPanel(props: ColonyPanelProps) {
 
   // ===== 选择星球 =====
   if (colony.phase === 'selecting') {
-    if (!scoutPool) { const pool = generateScoutingPool(); setScoutPool(pool); return null; }
+    const pool = colony.scoutingPool;
+    if (!pool || pool.length === 0) { const p = generateScoutingPool(); colony.scoutingPool = p; return null; }
     return (
       <div className="space-y-4">
         <h2 className="text-xl font-bold text-white">选择殖民星球</h2>
         <p className="text-sm text-slate-400">远征军为你找到了3颗候选星球。请为你的殖民地挑选一颗并命名。</p>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-          {scoutPool.map((pid) => {
+          {pool.map((pid) => {
             const p = getPlanetById(pid);
             if (!p) return null;
             const buffs = getBuffList(p);
@@ -256,7 +255,7 @@ export default function ColonyPanel(props: ColonyPanelProps) {
         <div className="flex gap-2">
           <input value={planetName} onChange={(e) => setPlanetName(e.target.value.slice(0, 16))} placeholder="输入星球名称 (3-16字符)"
             className="flex-1 bg-slate-800 border border-slate-600 rounded-lg px-3 py-2 text-sm text-slate-200" />
-          <button onClick={() => { const r = onRescrollPlanets(); showMsg(r.message, r.success ? 'success' : 'error'); setScoutPool(null); }}
+          <button onClick={() => { const r = onRescrollPlanets(); showMsg(r.message, r.success ? 'success' : 'error'); }}
             disabled={ship.gold < 30000}
             className="px-4 py-2 bg-slate-700 hover:bg-slate-600 disabled:opacity-50 rounded-lg text-sm text-slate-200">重新探索 (30,000G)</button>
         </div>
