@@ -268,7 +268,6 @@ export interface GameState {
   phase: 'select' | 'playing' | 'ended';
   turn: number;
   currentShipIndex: number;
-  seed: string;
   ships: Mothership[];
   stocks: Stock[];
   materials: RawMaterial[];
@@ -300,7 +299,6 @@ export interface SaveData {
   products: Product[];
   turn: number;
   currentShipIndex: number;
-  seed: string;
   eventLog: { turn: number; event: string; detail: string }[];
   redeemedCodes: string[];
 }

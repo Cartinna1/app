@@ -2,7 +2,6 @@ import { useCallback } from 'react';
 import type { GameState } from '@/types/game';
 
 export function useStock(
-  _gameState: GameState,
   dispatch: React.Dispatch<{ type: 'FUNCTIONAL_UPDATE'; updater: (state: GameState) => GameState }>
 ) {
   const buyStock = useCallback(

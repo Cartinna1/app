@@ -3,7 +3,6 @@ import type { GameState } from '@/types/game';
 import { RECIPES } from '@/data/gameData';
 
 export function useProduction(
-  _gameState: GameState,
   dispatch: React.Dispatch<{ type: 'FUNCTIONAL_UPDATE'; updater: (state: GameState) => GameState }>
 ) {
   // 原料购买

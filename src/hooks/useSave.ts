@@ -1,9 +1,18 @@
 import { useCallback } from 'react';
 import type { GameState, Mothership } from '@/types/game';
 import { FACTIONS, POLICY_EFFECTS, refreshFactionPrices } from '@/data/factions';
-import { setSeed, resetPRNG } from '@/utils/prng';
 
 const SAVE_KEY = 'aviation_career_save';
+
+/** 存档结构校验（防止损坏/恶意存档导致崩溃） */
+function validateSaveData(data: unknown): data is Record<string, unknown> {
+  if (!data || typeof data !== 'object' || Array.isArray(data)) return false;
+  const d = data as Record<string, unknown>;
+  // 必需字段存在性检查
+  if (typeof d.turn !== 'number') return false;
+  if (!Array.isArray(d.ships)) return false;
+  return true;
+}
 
 export function useSave(
   dispatch: React.Dispatch<
@@ -24,8 +33,7 @@ export function useSave(
             products: prev.products,
             turn: prev.turn,
             currentShipIndex: prev.currentShipIndex,
-            seed: prev.seed,
-            eventLog: prev.eventLog,
+                        eventLog: prev.eventLog,
             redeemedCodes: prev.redeemedCodes,
             factions: prev.factions,
             factionPrices: prev.factionPrices,
@@ -48,13 +56,12 @@ export function useSave(
     if (!data) return false;
     try {
       const saveData = JSON.parse(data);
-      if (saveData.seed) setSeed(saveData.seed);
+      if (!validateSaveData(saveData)) return false;
       const state: GameState = {
         phase: 'playing',
         turn: saveData.turn || 1,
         currentShipIndex: saveData.currentShipIndex || 0,
-        seed: saveData.seed || '',
-        ships: saveData.ships || [],
+                ships: saveData.ships || [],
         stocks: saveData.stocks || [],
         materials: saveData.materials || [],
         products: saveData.products || [],
@@ -112,14 +119,13 @@ export function useSave(
         try {
           const text = e.target?.result as string;
           const saveData = JSON.parse(text);
-          if (saveData.seed) setSeed(saveData.seed);
+          if (!validateSaveData(saveData)) { resolve(false); return; }
           localStorage.setItem(SAVE_KEY, text);
           const state: GameState = {
             phase: 'playing',
             turn: saveData.turn || 1,
             currentShipIndex: saveData.currentShipIndex || 0,
-            seed: saveData.seed || '',
-            ships: saveData.ships || [],
+                        ships: saveData.ships || [],
             stocks: saveData.stocks || [],
             materials: saveData.materials || [],
             products: saveData.products || [],
@@ -145,8 +151,7 @@ export function useSave(
 
   const resetGame = useCallback(() => {
     localStorage.removeItem(SAVE_KEY);
-    resetPRNG();
-    dispatch({ type: 'RESET_GAME' });
+        dispatch({ type: 'RESET_GAME' });
   }, [dispatch]);
 
   return { autoSave, hasSave, loadSave, exportSave, importSave, resetGame };

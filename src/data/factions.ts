@@ -91,18 +91,18 @@ export function getBuyPrice(factionId: string, invested: number, factionPrices: 
 
 // 计算每回合的固定卖出乘数（整回合内不变）
 // 距离系数 0.05：综合盈利概率≈60%
-// 固定随机因子 0.85~1.15（每回合用 rng() 生成，保证同步）
+// 固定随机因子 0.85~1.15（每回合用 Math.random() 生成，保证同步）
 export function calculateSellMultipliers(
   currentFactionId: string,
   policy: { type: TradePolicy; effect: PolicyEffect },
-  rng: () => number
+  
 ): Record<string, number> {
   const multipliers: Record<string, number> = {};
   for (const f of FACTIONS) {
     const dist = getDistance(currentFactionId, f.id);
     const distanceBonus = 1 + dist * 0.05; // 每距离+5%
     const policyMult = policy.effect.multiplier;
-    const localVariance = 0.85 + rng() * 0.3; // 0.85 ~ 1.15，固定整回合
+    const localVariance = 0.85 + Math.random() * 0.3; // 0.85 ~ 1.15，固定整回合
     multipliers[f.id] = Math.round(distanceBonus * policyMult * localVariance * 100) / 100;
   }
   return multipliers;

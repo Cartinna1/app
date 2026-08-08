@@ -28,14 +28,14 @@ export function useGameState() {
   const [gameState, dispatch] = useReducer(gameReducer, initialGameState);
 
   // 子 Hook（dispatch 引用稳定，不会导致函数重建）
-  const { buyStock, sellStock } = useStock(gameState, dispatch);
-  const { buyMaterial, startProduction, sellProduct, sellProductQty } = useProduction(gameState, dispatch);
+  const { buyStock, sellStock } = useStock(dispatch);
+  const { buyMaterial, startProduction, sellProduct, sellProductQty } = useProduction(dispatch);
   const { activeEvent, eventDodged, drawEvent, chooseOption: chooseEventOption, applyResources: applyEventResources, clearActiveEvent, clearDodged: clearEventDodged } = useEvent(gameState, dispatch);
   const { takeLoan, repayLoan } = useLoan(gameState, dispatch);
-  const { travelToFaction, buySpecialty, sellSpecialty, exploreFaction, investFaction, gatherIntel } = useTrade(gameState, dispatch);
+  const { travelToFaction, buySpecialty, sellSpecialty, exploreFaction, investFaction, gatherIntel } = useTrade(dispatch);
   const { autoSave, hasSave, loadSave, exportSave, importSave, resetGame } = useSave(dispatch);
   const { redeemCode } = useRedeem(gameState, dispatch);
-  const { installModule, useManualModule } = useModule(gameState, dispatch);
+  const { installModule, useManualModule } = useModule(dispatch);
   const { unlockColony, selectPlanet, rescrollPlanets, generateScoutingPool, buildColonyBuilding, recruitPop, assignPop, startResearch, recruitLeader, upgradeLeader, rollAndRecruit, clearRecruitPool, cancelBuilding, demolishBuilding, selectWonder, submitWonderResources, canStartWonder, completeWonder } = useColony(gameState, dispatch);
   const { nextTurn, fluctuatePrices } = useTurn(gameState, dispatch, autoSave);
 

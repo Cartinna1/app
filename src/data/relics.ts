@@ -116,12 +116,11 @@ export const ALL_RELICS: Relic[] = [
 ];
 
 // 随机生成一个遗物（用于星尘集市每日刷新）
-import { rng } from '@/utils/prng';
 
 export function rollRelic(excludeIds: string[] = []): Relic | null {
   const pool = ALL_RELICS.filter((r) => !excludeIds.includes(r.id));
   if (pool.length === 0) return null;
-  return pool[Math.floor(rng() * pool.length)];
+  return pool[Math.floor(Math.random() * pool.length)];
 }
 
 // 根据ID获取遗物

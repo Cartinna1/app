@@ -1,7 +1,6 @@
 import type { GameState, GameAction, Mothership } from '@/types/game';
 import { FACTIONS, POLICY_EFFECTS, refreshFactionPrices, calculateSellMultipliers } from '@/data/factions';
 import { createMotherships, createStocks, createMaterials, createProducts } from '@/data/gameData';
-import { setSeed, rng } from '@/utils/prng';
 
 // ==================== 初始状态 ====================
 
@@ -9,8 +8,7 @@ export const initialGameState: GameState = {
   phase: 'select',
   turn: 1,
   currentShipIndex: 0,
-  seed: '',
-  ships: [],
+    ships: [],
   stocks: [],
   materials: [],
   products: [],
@@ -41,8 +39,7 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
         ...state,
         phase: 'playing',
         turn: 1,
-        seed: '',
-        ships: [myShip],
+                ships: [myShip],
         stocks,
         materials,
         products,
@@ -53,8 +50,7 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
         factionSellMultipliers: calculateSellMultipliers(
           myShip.tradeStatus.currentFactionId,
           { type: 'normal', effect: POLICY_EFFECTS['normal'] },
-          rng
-        ),
+                  ),
         factionPolicy: { type: 'normal', effect: POLICY_EFFECTS['normal'] },
         policyRemainingTurns: 0,
         stardustMarket: { currentRelicId: null, soldRelicIds: [] },
@@ -70,8 +66,7 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
       return { ...state, stocks: action.stocks, materials: action.materials, products: action.products };
 
     case 'LOAD_SAVE': {
-      if (action.state.seed) setSeed(action.state.seed);
-      const loaded = action.state as GameState;
+      if (action.state.seed)       const loaded = action.state as GameState;
       if (!loaded.stardustMarket) {
         loaded.stardustMarket = { currentRelicId: null, soldRelicIds: [] };
       }

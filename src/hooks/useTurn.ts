@@ -3,7 +3,6 @@ import type { GameState, Mothership, Stock, RawMaterial, Product } from '@/types
 import { RECIPES, MAT_MAX_UP, PRODUCT_PRICE_LIMITS } from '@/data/gameData';
 import { FACTIONS, getInvestmentTier, getIncomeCap, rollPolicy, POLICY_EFFECTS, refreshFactionPrices, calculateSellMultipliers } from '@/data/factions';
 import { rollRelic } from '@/data/relics';
-import { rng } from '@/utils/prng';
 import { processColonyTurn } from './useColony';
 
 // 板块列表（用于生成板块风气）
@@ -90,12 +89,12 @@ export function useTurn(
         // 1. 先计算板块风气（每回合一次性生成，同板块共享）
         const sectorBiases: Record<string, number> = {};
         SECTORS.forEach((sector) => {
-          sectorBiases[sector] = (rng() - 0.5) * 2 * 0.05; // ±5%
+          sectorBiases[sector] = (Math.random() - 0.5) * 2 * 0.05; // ±5%
         });
 
         // 2. 股票波动（四因子：基础随机 + 均值回归 + 动量 + 板块联动 + 供需）
         const stocks = prev.stocks.map((s) => {
-          const baseChange = (rng() - 0.5) * 2 * s.volatility;
+          const baseChange = (Math.random() - 0.5) * 2 * s.volatility;
           const deviation = (s.currentPrice - s.basePrice) / s.basePrice;
           const meanReversion = -deviation * 0.2; // 减弱回拉（旧0.4→新0.2）
           const lastChange = s.prices.length >= 2 ? (s.prices[s.prices.length - 1] - s.prices[s.prices.length - 2]) / s.prices[s.prices.length - 2] : 0;
@@ -114,7 +113,7 @@ export function useTurn(
           // 价格保护：下限 basePrice*0.2，上限 basePrice*3.0
           const rawPrice = Math.round(s.currentPrice * (1 + totalChange));
           const newPrice = Math.max(Math.round(s.basePrice * 0.2), Math.min(Math.round(s.basePrice * 3.0), rawPrice));
-          return { ...s, prices: [...s.prices, newPrice], currentPrice: newPrice };
+          return { ...s, prices: [...s.prices, newPrice].slice(-30), currentPrice: newPrice };
         });
 
         // 3. 原料波动：每回合价格完全独立，直接基于基准价计算
@@ -125,12 +124,12 @@ export function useTurn(
           const maxUp = MAT_MAX_UP[m.id] || 2.0;
 
           let multiplier: number;
-          if (rng() < 0.5) {
+          if (Math.random() < 0.5) {
             // 50%概率跌：基准价 × (1 - 随机0%~15%)
-            multiplier = 1 - rng() * MAT_MAX_DOWN;
+            multiplier = 1 - Math.random() * MAT_MAX_DOWN;
           } else {
             // 50%概率涨：基准价 × (1 + 随机0%~maxUp%)
-            multiplier = 1 + rng() * maxUp;
+            multiplier = 1 + Math.random() * maxUp;
           }
 
           let newPrice = Math.round(base * multiplier);
@@ -145,7 +144,7 @@ export function useTurn(
           const lowerLimit = Math.round(base * (1 - MAT_MAX_DOWN));
           newPrice = Math.max(lowerLimit, Math.min(upperLimit, newPrice));
           newPrice = Math.max(10, newPrice);
-          return { ...m, prices: [...m.prices, newPrice], currentPrice: newPrice };
+          return { ...m, prices: [...m.prices, newPrice].slice(-30), currentPrice: newPrice };
         });
 
         // 4. 产品波动：每回合价格完全独立，直接基于基准价计算
@@ -155,12 +154,12 @@ export function useTurn(
           const limits = PRODUCT_PRICE_LIMITS[p.id] || { maxUp: 0.20, maxDown: 0.15 };
 
           let multiplier: number;
-          if (rng() < 0.5) {
+          if (Math.random() < 0.5) {
             // 50%概率跌：基准价 × (1 - 随机0%~maxDown%)
-            multiplier = 1 - rng() * limits.maxDown;
+            multiplier = 1 - Math.random() * limits.maxDown;
           } else {
             // 50%概率涨：基准价 × (1 + 随机0%~maxUp%)
-            multiplier = 1 + rng() * limits.maxUp;
+            multiplier = 1 + Math.random() * limits.maxUp;
           }
 
           let newPrice = Math.round(base * multiplier);
@@ -216,7 +215,7 @@ export function useTurn(
           // 2. 深空采矿阵列：每回合 +10 随机基础原料
           if (hasModule('mining_array')) {
             const basicMats = ['carbon', 'gold_ore', 'oil', 'silicon'];
-            const picked = basicMats[Math.floor(rng() * basicMats.length)];
+            const picked = basicMats[Math.floor(Math.random() * basicMats.length)];
             s.materials = { ...s.materials, [picked]: (s.materials[picked] || 0) + 10 };
           }
 
@@ -280,8 +279,8 @@ export function useTurn(
           // 奇点探求者原料（ship.id === 4）
           if (s.id === 4) {
             const matIds = ['carbon', 'gold_ore', 'oil', 'dark_matter', 'silicon', 'quantum'];
-            const pickedMat = matIds[Math.floor(rng() * matIds.length)];
-            const amount = Math.floor(rng() * 3) + 2;
+            const pickedMat = matIds[Math.floor(Math.random() * matIds.length)];
+            const amount = Math.floor(Math.random() * 3) + 2;
             s.materials = { ...s.materials };
             s.materials[pickedMat] = (s.materials[pickedMat] || 0) + amount;
           }
@@ -291,7 +290,7 @@ export function useTurn(
             const matIds = ['carbon', 'gold_ore', 'oil', 'dark_matter', 'silicon', 'quantum'];
             s.materials = { ...s.materials };
             for (let i = 0; i < 3; i++) {
-              const picked = matIds[Math.floor(rng() * matIds.length)];
+              const picked = matIds[Math.floor(Math.random() * matIds.length)];
               s.materials[picked] = (s.materials[picked] || 0) + 1;
             }
           }
@@ -388,7 +387,7 @@ export function useTurn(
             const tier = getInvestmentTier(fs.invested);
             const incomeCap = getIncomeCap(tier);
             if (incomeCap > 0) {
-              const income = famineHalve(Math.floor(rng() * incomeCap) + 1);
+              const income = famineHalve(Math.floor(Math.random() * incomeCap) + 1);
               s.gold += income;
               checkBankrupt();
               const factionName = FACTIONS.find((f) => f.id === fid)?.name || '未知';
@@ -440,12 +439,12 @@ export function useTurn(
         if (remaining <= 0) {
           newPolicyType = rollPolicy();
           newPolicyEffect = POLICY_EFFECTS[newPolicyType];
-          remaining = Math.floor(rng() * 3) + 3;
+          remaining = Math.floor(Math.random() * 3) + 3;
         }
 
         const newPrices = refreshFactionPrices();
         const currentFid = ships[0]?.tradeStatus?.currentFactionId || FACTIONS[0].id;
-        const sellMultipliers = calculateSellMultipliers(currentFid, { type: newPolicyType, effect: newPolicyEffect }, rng);
+        const sellMultipliers = calculateSellMultipliers(currentFid, { type: newPolicyType, effect: newPolicyEffect });
 
         // 星尘集市：每回合刷新一个遗物
         const newRelic = rollRelic(prev.stardustMarket.soldRelicIds);

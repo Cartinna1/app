@@ -1,5 +1,4 @@
 import type { Mothership, Stock, RawMaterial, Product, Recipe } from '@/types/game';
-import { rng } from '@/utils/prng';
 import { FACTIONS } from './factions';
 
 // ==================== 母舰数据 ====================
@@ -298,7 +297,7 @@ export function createStocks(): Stock[] {
 function generateInitialPrices(base: number, volatility: number, count: number): number[] {
   const prices: number[] = [base];
   for (let i = 1; i < count; i++) {
-    const change = (rng() - 0.5) * 2 * volatility;
+    const change = (Math.random() - 0.5) * 2 * volatility;
     const newPrice = Math.max(10, Math.round(prices[i - 1] * (1 + change)));
     prices.push(newPrice);
   }
@@ -331,7 +330,7 @@ export function createMaterials(): RawMaterial[] {
     // 初始价格在基准价 ±10% 范围内随机
     const lower = Math.round(m.basePrice * 0.9);
     const upper = Math.round(m.basePrice * 1.1);
-    const initial = lower + Math.floor(rng() * (upper - lower + 1));
+    const initial = lower + Math.floor(Math.random() * (upper - lower + 1));
     const prices: number[] = [];
     for (let i = 0; i < 10; i++) {
       prices.push(initial);
@@ -442,7 +441,7 @@ export function createProducts(): Product[] {
     // 初始价格在基准价 ±10% 范围内随机
     const lower = Math.round(p.baseSellPrice * 0.9);
     const upper = Math.round(p.baseSellPrice * 1.1);
-    const initial = lower + Math.floor(rng() * (upper - lower + 1));
+    const initial = lower + Math.floor(Math.random() * (upper - lower + 1));
     const prices: number[] = [];
     for (let i = 0; i < 10; i++) prices.push(initial);
     return { ...p, sellPrices: prices, currentSellPrice: initial, priceMaxUp: limits.maxUp, priceMaxDown: limits.maxDown };

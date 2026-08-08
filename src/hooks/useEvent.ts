@@ -2,7 +2,6 @@ import { useState, useCallback, useRef, useLayoutEffect } from 'react';
 import type { GameState, GameAction, ChoiceEvent, EventOption, EventOutcome, ResourceChange, EventSubChoice } from '@/types/game';
 import { ALL_EVENTS } from '@/data/choiceEvents';
 import { RESOURCE_EVENTS } from '@/data/resourceEvents';
-import { rng } from '@/utils/prng';
 
 export interface EventResult {
   description: string;
@@ -100,7 +99,7 @@ export function useEvent(
       if (res.materialDrops) {
         s.materials = { ...s.materials };
         for (const drop of res.materialDrops) {
-          const amount = Math.floor(rng() * (drop.max - drop.min + 1)) + drop.min;
+          const amount = Math.floor(Math.random() * (drop.max - drop.min + 1)) + drop.min;
           s.materials[drop.materialId] = (s.materials[drop.materialId] || 0) + amount;
         }
       }
@@ -110,18 +109,18 @@ export function useEvent(
       if (res.grantTip === 'stock') {
         const pool = prev.stocks.filter((stk) => stk.volatility >= 0.12);
         if (pool.length > 0) {
-          const target = pool[Math.floor(rng() * pool.length)];
-          const dir = rng() > 0.3 ? '上涨' : '下跌';
-          const mag = Math.round(rng() * 15 + 5);
+          const target = pool[Math.floor(Math.random() * pool.length)];
+          const dir = Math.random() > 0.3 ? '上涨' : '下跌';
+          const mag = Math.round(Math.random() * 15 + 5);
           s.nextTurnStockTip = `「${target.name}」(${target.sector}) 下回合可能${dir} ${mag}%`;
         }
       }
       if (res.grantTip === 'material') {
         const pool = prev.materials;
         if (pool.length > 0) {
-          const target = pool[Math.floor(rng() * pool.length)];
-          const dir = rng() > 0.3 ? '上涨' : '下跌';
-          const mag = Math.round(rng() * 10 + 3);
+          const target = pool[Math.floor(Math.random() * pool.length)];
+          const dir = Math.random() > 0.3 ? '上涨' : '下跌';
+          const mag = Math.round(Math.random() * 10 + 3);
           s.nextTurnMatTip = `「${target.name}」下回合可能${dir} ${mag}%`;
         }
       }
@@ -167,7 +166,7 @@ export function useEvent(
       // 处理随机子结果（subOutcomes）
       let subMessage: string | undefined;
       if (outcome.subOutcomes && outcome.subOutcomes.length > 0) {
-        const subRoll = rng() * 100;
+        const subRoll = Math.random() * 100;
         let subCum = 0;
         for (const sub of outcome.subOutcomes) {
           subCum += sub.probability;
@@ -230,19 +229,19 @@ export function useEvent(
 
       // 先抽取事件
       let event: ChoiceEvent;
-      if (rng() < 0.4) {
+      if (Math.random() < 0.4) {
         const categories = ['combat', 'opportunity', 'disaster', 'social', 'mystery', 'business'];
-        const cat = categories[Math.floor(rng() * categories.length)];
+        const cat = categories[Math.floor(Math.random() * categories.length)];
         const pool = ALL_EVENTS.filter((e) => e.category === cat);
-        event = pool[Math.floor(rng() * pool.length)] || ALL_EVENTS[0];
+        event = pool[Math.floor(Math.random() * pool.length)] || ALL_EVENTS[0];
       } else {
-        event = RESOURCE_EVENTS[Math.floor(rng() * RESOURCE_EVENTS.length)] || RESOURCE_EVENTS[0];
+        event = RESOURCE_EVENTS[Math.floor(Math.random() * RESOURCE_EVENTS.length)] || RESOURCE_EVENTS[0];
       }
 
       // 如果是惩罚事件，判定闪避
       if (isPenaltyEvent(event)) {
         // 跃迁者闪避（30%概率）
-        if ((ship.eventDodgeChance || 0) > 0 && rng() < ship.eventDodgeChance) {
+        if ((ship.eventDodgeChance || 0) > 0 && Math.random() < ship.eventDodgeChance) {
           dispatch({ type: 'FUNCTIONAL_UPDATE', updater: (prev) => { const ships = [...prev.ships]; ships[0] = { ...ships[0], eventTriggeredThisTurn: true }; return { ...prev, ships }; } });
           setEventDodged('jumper');
           drawingRef.current = false;
@@ -251,7 +250,7 @@ export function useEvent(
 
         // 危机预知：50%概率闪避惩罚事件
         const hasCrisis = ship.relics.some((r) => r.id === 'r_010');
-        if (hasCrisis && rng() < 0.5) {
+        if (hasCrisis && Math.random() < 0.5) {
           dispatch({ type: 'FUNCTIONAL_UPDATE', updater: (prev) => { const ships = [...prev.ships]; ships[0] = { ...ships[0], eventTriggeredThisTurn: true }; return { ...prev, ships }; } });
           setEventDodged('crisis');
           drawingRef.current = false;
@@ -279,7 +278,7 @@ export function useEvent(
       if (!ship) return null;
 
       // 掷 outcome
-      const roll = rng() * 100;
+      const roll = Math.random() * 100;
       let cum = 0;
       let outcome = option.outcomes[option.outcomes.length - 1];
       for (const o of option.outcomes) {

@@ -3,7 +3,6 @@ import type { GameState } from '@/types/game';
 import { getModuleDef, isModuleInstalled, canAffordModule } from '@/data/modules';
 
 export function useModule(
-  _gameState: GameState,
   dispatch: React.Dispatch<{ type: 'FUNCTIONAL_UPDATE'; updater: (state: GameState) => GameState }>
 ) {
   // 安装装置

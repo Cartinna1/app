@@ -1,10 +1,8 @@
 import { useCallback } from 'react';
 import type { GameState } from '@/types/game';
 import { FACTIONS, getTravelTurns, getBuyPrice, getSellPrice, getInvestmentTier } from '@/data/factions';
-import { rng } from '@/utils/prng';
 
 export function useTrade(
-  _gameState: GameState,
   dispatch: React.Dispatch<{ type: 'FUNCTIONAL_UPDATE'; updater: (state: GameState) => GameState }>
 ) {
   // 跃迁
@@ -126,12 +124,12 @@ export function useTrade(
           if (s.tradeStatus.exploredThisTurn) { result = { success: false, message: '本回合已探索过，结束回合后可再次探索' }; return prev; }
           const matIds = ['carbon', 'gold_ore', 'oil', 'dark_matter', 'silicon', 'quantum'];
           const matNames: Record<string, string> = { carbon: '碳块', gold_ore: '黄金矿石', oil: '石油', dark_matter: '暗物质', silicon: '硅片', quantum: '量子簇' };
-          const dropCount = Math.floor(rng() * 3) + 1;
+          const dropCount = Math.floor(Math.random() * 3) + 1;
           s.materials = { ...s.materials };
           const drops: string[] = [];
           for (let i = 0; i < dropCount; i++) {
-            const mat = matIds[Math.floor(rng() * matIds.length)];
-            const amount = Math.floor(rng() * 4) + 1;
+            const mat = matIds[Math.floor(Math.random() * matIds.length)];
+            const amount = Math.floor(Math.random() * 4) + 1;
             s.materials[mat] = (s.materials[mat] || 0) + amount;
             drops.push(`${amount}单位${matNames[mat]}`);
           }
@@ -238,18 +236,18 @@ export function useTrade(
           if (s.tradeStatus.intelGatheredInFaction === currentFid) { result = { success: false, message: '在此势力已打探过消息，跃迁到新势力后可再次打探', goldChange: 0 }; return prev; }
           s.tradeStatus = { ...s.tradeStatus, intelGatheredInFaction: currentFid };
           const turnMultiplier = 1 + prev.turn * 0.08;
-          const roll = rng() * 100;
+          const roll = Math.random() * 100;
           let goldChange = 0;
           let story = '';
-          const pick = (arr: string[]) => arr[Math.floor(rng() * arr.length)];
-          if (roll < 2) { goldChange = Math.round((Math.floor(rng() * 3001) + 2000) * turnMultiplier); story = pick(intelStories.s1); }
-          else if (roll < 10) { goldChange = Math.round((Math.floor(rng() * 1001) + 1000) * turnMultiplier); story = pick(intelStories.s2); }
-          else if (roll < 25) { goldChange = Math.round((Math.floor(rng() * 501) + 500) * turnMultiplier); story = pick(intelStories.s3); }
-          else if (roll < 55) { goldChange = Math.round((Math.floor(rng() * 301) + 200) * turnMultiplier); story = pick(intelStories.s4); }
-          else if (roll < 75) { goldChange = -Math.round((Math.floor(rng() * 201) + 100) * turnMultiplier); story = pick(intelStories.s5); }
-          else if (roll < 90) { goldChange = -Math.round((Math.floor(rng() * 301) + 300) * turnMultiplier); story = pick(intelStories.s6); }
-          else if (roll < 98) { goldChange = -Math.round((Math.floor(rng() * 401) + 600) * turnMultiplier); story = pick(intelStories.s7); }
-          else { goldChange = -Math.round((Math.floor(rng() * 501) + 1000) * turnMultiplier); story = pick(intelStories.s8); }
+          const pick = (arr: string[]) => arr[Math.floor(Math.random() * arr.length)];
+          if (roll < 2) { goldChange = Math.round((Math.floor(Math.random() * 3001) + 2000) * turnMultiplier); story = pick(intelStories.s1); }
+          else if (roll < 10) { goldChange = Math.round((Math.floor(Math.random() * 1001) + 1000) * turnMultiplier); story = pick(intelStories.s2); }
+          else if (roll < 25) { goldChange = Math.round((Math.floor(Math.random() * 501) + 500) * turnMultiplier); story = pick(intelStories.s3); }
+          else if (roll < 55) { goldChange = Math.round((Math.floor(Math.random() * 301) + 200) * turnMultiplier); story = pick(intelStories.s4); }
+          else if (roll < 75) { goldChange = -Math.round((Math.floor(Math.random() * 201) + 100) * turnMultiplier); story = pick(intelStories.s5); }
+          else if (roll < 90) { goldChange = -Math.round((Math.floor(Math.random() * 301) + 300) * turnMultiplier); story = pick(intelStories.s6); }
+          else if (roll < 98) { goldChange = -Math.round((Math.floor(Math.random() * 401) + 600) * turnMultiplier); story = pick(intelStories.s7); }
+          else { goldChange = -Math.round((Math.floor(Math.random() * 501) + 1000) * turnMultiplier); story = pick(intelStories.s8); }
 
           // 饥荒buff：金币收益减半
           const famineHalve = (amt: number): number => {
@@ -269,8 +267,8 @@ export function useTrade(
 
           // 额外合金奖励：70%概率给3-5合金
           let alloyText = '';
-          if (rng() < 0.7) {
-            const alloyGain = Math.floor(rng() * 3) + 3; // 3-5
+          if (Math.random() < 0.7) {
+            const alloyGain = Math.floor(Math.random() * 3) + 3; // 3-5
             s.alloy += alloyGain;
             alloyText = `顺便回收了 ${alloyGain} 个合金。`;
           }
