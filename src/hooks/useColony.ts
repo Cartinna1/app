@@ -443,6 +443,23 @@ export function useColony(
       updater: (prev) => {
         const ships = [...prev.ships]; const s = { ...ships[0] };
         if (!s.colony) return prev;
+        const inst = s.colony.buildings.find((b: any) => b.uid === uid);
+        // 退还 40% 金币和 70% 原料
+        if (inst && inst.defId) {
+          const def = getBuildingDef(inst.defId);
+          if (def) {
+            const refundGold = Math.floor(def.costGold * 0.4);
+            s.gold += refundGold;
+            s.goldLog = [{ turn: prev.turn, amount: refundGold, reason: '取消建造返还', balanceAfter: s.gold }, ...s.goldLog].slice(0, 200);
+            if (def.costAlloy) s.alloy += Math.floor(def.costAlloy * 0.7);
+            s.materials = { ...s.materials };
+            if (def.costMaterials) {
+              for (const [matId, amt] of Object.entries(def.costMaterials)) {
+                s.materials[matId] = (s.materials[matId] || 0) + Math.floor(amt * 0.7);
+              }
+            }
+          }
+        }
         s.colony = { ...s.colony, buildings: s.colony.buildings.filter((b: any) => b.uid !== uid) };
         ships[0] = s; return { ...prev, ships };
       },
@@ -475,7 +492,20 @@ export function useColony(
             return prev;
           }
         }
-        s.colony = { ...s.colony, buildings: s.colony.buildings.filter((b: any) => b.uid !== uid) };
+        // 退还 40% 金币和 70% 原料
+        if (def) {
+          const refundGold = Math.floor(def.costGold * 0.4);
+          s.gold += refundGold;
+          s.goldLog = [{ turn: prev.turn, amount: refundGold, reason: '拆除建筑返还', balanceAfter: s.gold }, ...s.goldLog].slice(0, 200);
+          if (def.costAlloy) s.alloy += Math.floor(def.costAlloy * 0.7);
+          s.materials = { ...s.materials };
+          if (def.costMaterials) {
+            for (const [matId, amt] of Object.entries(def.costMaterials)) {
+              s.materials[matId] = (s.materials[matId] || 0) + Math.floor(amt * 0.7);
+            }
+          }
+        }
+        s.colony = { ...s.colony, buildings: s.colony.buildings.filter((b: any) => b.uid !== uid), population: { ...s.colony.population, available: s.colony.population.available + (inst.assignedPop || 0) } };
         ships[0] = s; result = { success: true, message: '已拆除' }; return { ...prev, ships };
       },
     });

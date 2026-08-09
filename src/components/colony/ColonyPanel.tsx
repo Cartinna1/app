@@ -894,7 +894,7 @@ export default function ColonyPanel(props: ColonyPanelProps) {
       {/* ===== 领袖 ===== */}
       {tab === 'leaders' && (
         <div className="space-y-4">
-          {!colony.buildings.some((b) => b.active && b.defId === 'B27') ? (
+          {!colony.buildings.some((b) => b.active && b.defId === 'B27') && colony.leaders.length === 0 ? (
             <div className="bg-slate-900/60 border border-slate-700 rounded-xl p-4 text-center">
               <Crown size={32} className="mx-auto mb-2 text-slate-600" />
               <p className="text-sm text-slate-400">需先建造星河议政厅(B27)解锁领袖功能</p>
