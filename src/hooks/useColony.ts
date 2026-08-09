@@ -477,20 +477,11 @@ export function useColony(
         const inst = s.colony.buildings.find((b: any) => b.uid === uid);
         if (!inst) { result = { success: false, message: '建筑不存在' }; return prev; }
         if (!inst.active) { result = { success: false, message: '只能拆除已建成的建筑' }; return prev; }
-        // 检查居住建筑拆除后人口上限
+        // 居住类建筑不可拆除
         const def = getBuildingDef(inst.defId);
         if (def && (def.id === 'B1' || def.id === 'B2')) {
-          const removedCap = def.id === 'B1' ? 5 : 20;
-          const currentCap = s.colony.buildings.reduce((sum: number, b: any) => {
-            if (!b.active || b.uid === uid) return sum;
-            if (b.defId === 'B1') return sum + 5;
-            if (b.defId === 'B2') return sum + 20;
-            return sum;
-          }, s.colony.planetType && ALL_PLANETS.find(p => p.id === s.colony!.planetType)?.buffs.initialPopCap || 5);
-          if (s.colony.population.total > currentCap - removedCap) {
-            result = { success: false, message: `拆除后人口上限不足（当前${s.colony.population.total}人，拆除后上限${currentCap - removedCap}）` };
-            return prev;
-          }
+          result = { success: false, message: `${def.name}是居住类基础建筑，不可拆除` };
+          return prev;
         }
         // 退还 40% 金币和 70% 原料
         if (def) {
