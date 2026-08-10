@@ -173,10 +173,10 @@ export default function TradePanel({ factions, ship, factionPrices, factionSellM
                     <span className={`text-sm font-bold ${rep < -20 ? 'text-red-400' : rep < 30 ? 'text-slate-300' : rep < 70 ? 'text-cyan-400' : 'text-amber-400'}`}>{tier.label}</span>
                     <span className={`text-base font-bold ${rep < 0 ? 'text-red-400' : rep > 0 ? 'text-green-400' : 'text-slate-400'}`}>{rep > 0 ? '+' : ''}{rep}</span>
                   </div>
-                  <div className="h-2 bg-slate-700 rounded-full relative mb-1.5">
+                  <div className="h-2 bg-slate-700 rounded-full relative mb-1.5 overflow-hidden">
                     <div className="absolute left-1/2 top-0 bottom-0 w-px bg-slate-500 z-10"></div>
                     <div className={`absolute top-0 bottom-0 rounded-full ${color}`}
-                      style={{ left: `${Math.min(offset, 100)}%`, width: `${Math.abs(rep) / 2}%` }}></div>
+                      style={{ left: `${Math.min(offset, 100)}%`, width: `${Math.min(Math.abs(rep) / 2, 100 - Math.min(offset, 100))}%` }}></div>
                   </div>
                   {effects.length > 0 && (
                     <div className="text-xs text-slate-400 leading-relaxed">{effects.join(' · ')}</div>
