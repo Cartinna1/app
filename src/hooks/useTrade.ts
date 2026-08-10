@@ -331,7 +331,7 @@ export function useTrade(
   }, [dispatch]);
 
   /** 黑市采购（仅走私合同可用） */
-  const blackMarketBuy = useCallback((shipIndex: number, factionId: string, itemId: string, qty: number): { success: boolean; message: string } => {
+  const blackMarketBuy = useCallback((shipIndex: number, factionId: string, _itemId: string, qty: number): { success: boolean; message: string } => {
     let result = { success: false, message: '' };
     dispatch({
       type: 'FUNCTIONAL_UPDATE',
