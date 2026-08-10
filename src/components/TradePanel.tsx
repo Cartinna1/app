@@ -344,30 +344,6 @@ export default function TradePanel({ factions, ship, factionPrices, factionSellM
       )}
 
       {/* 贩卖特产 */}
-        isTraveling && travelTarget ? <TravelLockOverlay turnsRemaining={ts.travelTurnsRemaining} targetName={travelTarget.name} /> : (
-          <div className="bg-slate-900/60 border border-slate-700 rounded-xl p-5">
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-lg font-bold text-slate-200 flex items-center gap-2"><BarChart3 size={18} className="text-blue-400" /> 投资 {currentFaction?.name}</h3>
-              <button onClick={() => setActiveTab('buy')} className="text-xs text-slate-400 hover:text-slate-300">← 返回购买</button>
-            </div>
-            <p className="text-sm text-slate-400 mb-4">向{currentFaction?.name || '当前势力'}换取声望。每<strong className="text-yellow-400">8000金币</strong>=1声望，每回合最多+10。</p>
-            <div className="mb-4 bg-slate-800/60 rounded-lg p-3">
-              <div className="flex justify-between text-xs text-slate-400 mb-1"><span>当前声望：<span className="text-amber-400 font-bold">{currentRep}</span>（{currentRepTier.label}）</span><span>每回合 +10 上限</span></div>
-              <div className="h-1.5 bg-slate-700 rounded-full relative">
-                <div className="absolute left-1/2 top-0 bottom-0 w-px bg-slate-500"></div>
-                <div className="absolute top-0 bottom-0 rounded-full bg-blue-500" style={{ left: `${Math.min(50 + currentRep/2, 100)}%`, width: `${Math.abs(currentRep)/2}%` }}></div>
-              </div>
-            </div>
-            <div className="flex items-center gap-2 mb-3">
-              <input type="text" inputMode="numeric" pattern="[0-9]*" value={investAmount} onChange={(e) => setInvestAmount(e.target.value.replace(/[^0-9]/g, ''))} placeholder="8000的倍数" className="flex-1 bg-slate-800 border border-slate-600 rounded-lg px-3 py-2 text-sm text-slate-200 placeholder-slate-600" />
-              <button onClick={() => setInvestAmount((Math.floor(ship.gold / 8000) * 8000).toString())} className="px-3 py-2 bg-slate-700 hover:bg-slate-600 rounded-lg text-xs text-slate-300">最大</button>
-            </div>
-            <button onClick={handleInvest} disabled={!investAmount || parseInt(investAmount) <= 0 || ship.gold <= 0} className="w-full py-2.5 bg-blue-700 hover:bg-blue-600 disabled:bg-slate-700 disabled:text-slate-500 rounded-lg font-bold text-white transition-colors flex items-center justify-center gap-2"><Coins size={16} /> 投资</button>
-          </div>
-        )
-      )}
-
-      {/* 贩卖特产 */}
       {activeTab === 'sell' && (
         isTraveling && travelTarget ? <TravelLockOverlay turnsRemaining={ts.travelTurnsRemaining} targetName={travelTarget.name} /> : (
           <div className="bg-slate-900/60 border border-slate-700 rounded-xl p-5">
