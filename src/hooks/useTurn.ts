@@ -506,10 +506,9 @@ export function useTurn(
           const tier = getReputationTier(r);
           if (!tier || tier.passiveIncomeMax <= 0) continue;
           const income = Math.floor(Math.random() * (tier.passiveIncomeMax - tier.passiveIncomeMin + 1)) + tier.passiveIncomeMin;
-          const goldLog = ships[0] ? [...(ships[0].goldLog || [])] : [];
+          
           if (ships[0]) {
-            ships[0].gold += income;
-            ships[0].goldLog = [{ turn: prev.turn, amount: income, reason: `「${fid}」声望被动收入`, balanceAfter: ships[0].gold }, ...ships[0].goldLog].slice(0, 200);
+            ships[0].gold += income; ships[0].goldLog = [{ turn: prev.turn, amount: income, reason: `「${fid}」声望被动收入`, balanceAfter: ships[0].gold }, ...ships[0].goldLog].slice(0, 200);
           }
         }
 

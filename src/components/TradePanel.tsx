@@ -466,7 +466,7 @@ export default function TradePanel({ factions, ship, factionPrices, factionSellM
                   {activeContracts.map((c) => (
                     <div key={c.id} className="flex items-center justify-between bg-green-900/30 rounded p-2 mb-1 text-xs">
                       <span className="text-green-400">{c.type==='smuggling'?'走私':'采购'} x{c.targetQty} | +{c.rewardGold}金 +{c.rewardRep}声望 | 过期:第{c.expiresTurn}回合</span>
-                      <button onClick={() => { const r = onCompleteContract(c.id); setMessage(r.message); setMsgType(r.success ? 'success' : 'error'); }} className="px-2 py-1 bg-green-700 hover:bg-green-600 rounded text-xs">提交</button>
+                      <button onClick={() => { const r = onCompleteContract(0, c.id); setMessage(r.message); setMsgType(r.success ? 'success' : 'error'); }} className="px-2 py-1 bg-green-700 hover:bg-green-600 rounded text-xs">提交</button>
                     </div>
                   ))}
                 </div>
@@ -477,6 +477,22 @@ export default function TradePanel({ factions, ship, factionPrices, factionSellM
               <div className="text-center text-sm text-slate-500 bg-slate-800/40 rounded-lg py-3">已在此势力打探过消息，跃迁到其他势力后才能再次打探</div>
             ) : (
               <button onClick={handleGatherIntel} className="w-full py-2.5 bg-orange-700 hover:bg-orange-600 rounded-lg font-bold text-white transition-colors flex items-center justify-center gap-2"><Radio size={16} /> 打探消息</button>
+            )}
+            {/* 黑市采购按钮 */}
+            {currentFaction && (
+              <div className="mt-3 pt-3 border-t border-slate-700">
+                <p className="text-xs text-slate-500 mb-2">黑市采购（2.5倍价格，不影响声望）</p>
+                <div className="flex gap-2">
+                  {['f01','f02','f03','f04','f05','f06','f07','f08','f09','f10'].map(fid => {
+                    const f = factions.find(ff => ff.id === fid);
+                    return f && (
+                      <button key={fid} onClick={() => { const r = onBlackMarketBuy(0, fid, f.specialtyName, 1); setMessage(r.message); setMsgType(r.success ? 'success' : 'error'); }} className="px-2 py-1 bg-purple-900/60 hover:bg-purple-800 text-xs rounded text-purple-300" title={`购买${f.specialtyName}`}>
+                        {f.name.slice(0,2)}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
             )}
           </div>
         )

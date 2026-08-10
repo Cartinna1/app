@@ -66,6 +66,9 @@ interface GameScreenProps {
   onExploreFaction: () => { success: boolean; message: string };
   onInvestFaction: (amount: number) => { success: boolean; message: string };
   onGatherIntel: () => { success: boolean; message: string; goldChange: number };
+  onAcceptContract: (contractId: string) => boolean;
+  onCompleteContract: (shipIndex: number, contractId: string) => { success: boolean; message: string };
+  onBlackMarketBuy: (shipIndex: number, factionId: string, itemId: string, qty: number) => { success: boolean; message: string };
   onInstallModule: (moduleId: string) => { success: boolean; message: string };
   onUseManualModule: (moduleId: string) => { success: boolean; message: string };
   onUnlockColony: () => { success: boolean; message: string };

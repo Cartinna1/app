@@ -1,7 +1,7 @@
 import { useCallback } from 'react';
-import type { GameState, FactionContract } from '@/types/game';
-import { FACTIONS, getTravelTurns, getBuyPrice, getSellPrice, getInvestmentTier, RELATION_MATRIX, getReputationTier } from '@/data/factions';
-import { RECIPES } from '@/data/gameData';
+import type { GameState } from '@/types/game';
+import { FACTIONS, getTravelTurns, getSellPrice, getInvestmentTier, RELATION_MATRIX, getReputationTier } from '@/data/factions';
+
 
 export function useTrade(
   dispatch: React.Dispatch<{ type: 'FUNCTIONAL_UPDATE'; updater: (state: GameState) => GameState }>
@@ -270,7 +270,7 @@ export function useTrade(
   }, [dispatch]);
 
   /** 提交合同（交付货物） */
-  const completeContract = useCallback((contractId: string): { success: boolean; message: string } => {
+  const completeContract = useCallback((shipIndex: number, contractId: string): { success: boolean; message: string } => {
     let result = { success: false, message: '' };
     dispatch({
       type: 'FUNCTIONAL_UPDATE',
@@ -331,7 +331,7 @@ export function useTrade(
   }, [dispatch]);
 
   /** 黑市采购（仅走私合同可用） */
-  const blackMarketBuy = useCallback((factionId: string, itemId: string, qty: number): { success: boolean; message: string } => {
+  const blackMarketBuy = useCallback((shipIndex: number, factionId: string, itemId: string, qty: number): { success: boolean; message: string } => {
     let result = { success: false, message: '' };
     dispatch({
       type: 'FUNCTIONAL_UPDATE',
