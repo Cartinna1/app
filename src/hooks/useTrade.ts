@@ -18,19 +18,21 @@ export function useTrade(
     const log = { ...repLog };
     const caps: Record<string, number> = { buy: 3, invest: 10, contract: 99 };
     const cap = caps[capKey] || 99;
-    const cur = log[factionId] || 0;
+    const logKey = `${factionId}_${capKey}`; // 区分动作类型的独立上限
+    const cur = log[logKey] || 0;
     const applied = delta > 0 ? Math.min(delta, cap - cur) : delta;
     if (applied === 0) return;
-    log[factionId] = cur + applied;
+    log[logKey] = cur + applied;
     rep[factionId] = Math.max(-100, Math.min(100, (rep[factionId] || 0) + applied));
     // 零和传导
     const rel = RELATION_MATRIX[factionId];
     if (rel && applied > 0) {
       for (const enemyId of rel.enemies) {
-        const eCur = log[enemyId] || 0;
+        const enemyLogKey = `${enemyId}_penalty`;
+        const eCur = log[enemyLogKey] || 0;
         const eApplied = Math.max(-5 - eCur, -1);
         if (eApplied >= 0) continue;
-        log[enemyId] = eCur + eApplied;
+        log[enemyLogKey] = eCur + eApplied;
         rep[enemyId] = Math.max(-100, Math.min(100, (rep[enemyId] || 0) + eApplied));
       }
     }
@@ -178,7 +180,7 @@ export function useTrade(
           const factionId = s.tradeStatus.currentFactionId;
           ensureRepFields(prev);
           const maxPerTurn = 10;
-          const used = (prev.factionRepLog || {})[factionId] || 0;
+          const used = (prev.factionRepLog || {})[factionId + '_invest'] || 0;
           if (used >= maxPerTurn) { result = { success: false, message: `本回合已投资${maxPerTurn}次，下次回合再来` }; return prev; }
           const repGain = 1; // 每次投资固定 +1 声望
           if (s.gold < 8000) { result = { success: false, message: '至少需要8000金币' }; return prev; }
