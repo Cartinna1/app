@@ -65,17 +65,7 @@ export default function TradePanel({ factions, ship, factionPrices, factionSellM
   };
 
   /** 获取合同目标物品名 */
-  const getContractItemName = (c: FactionContract): string => {
-    if (c.type === 'smuggling') {
-      const f = FACTIONS_DATA.find((ff) => ff.id === c.targetItemId);
-      return f ? `${f.specialtyName}（${f.name}）` : c.targetItemId;
-    } else {
-      const recipe = RECIPES.find((r) => r.id === c.targetItemId);
-      if (recipe) return recipe.productName;
-      const f = FACTIONS_DATA.find((ff) => ff.id === c.targetItemId);
-      return f ? `${f.specialtyName}（${f.name}特产）` : c.targetItemId;
-    }
-  };
+  
 
   const isTraveling = ts.travelTurnsRemaining > 0;
   const travelTarget = ts.targetFactionId ? factions.find((f) => f.id === ts.targetFactionId) : null;
@@ -115,10 +105,10 @@ export default function TradePanel({ factions, ship, factionPrices, factionSellM
   };
 
   const handleInvest = () => {
-    if (isNaN(amt) || amt <= 0) { setMessage('请输入有效的投资金额'); setMsgType('error'); return; }
-    const res = onInvest(amt);
+    if (ship.gold < 8000) { setMessage('金币不足，需要8000金币'); setMsgType('error'); return; }
+    const res = onInvest(8000);
     setMessage(res.message); setMsgType(res.success ? 'success' : 'error');
-    if (res.success) setInvestAmount('');
+    if (res.success) _removed_setInvestAmount('');
     setTimeout(() => setMessage(''), 5000);
   };
 
