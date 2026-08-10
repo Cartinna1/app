@@ -32,7 +32,7 @@ export function useGameState() {
   const { buyMaterial, startProduction, sellProduct, sellProductQty } = useProduction(dispatch);
   const { activeEvent, eventDodged, drawEvent, chooseOption: chooseEventOption, applyResources: applyEventResources, clearActiveEvent, clearDodged: clearEventDodged } = useEvent(gameState, dispatch);
   const { takeLoan, repayLoan } = useLoan(gameState, dispatch);
-  const { travelToFaction, buySpecialty, sellSpecialty, exploreFaction, investFaction, gatherIntel } = useTrade(dispatch);
+  const { travelToFaction, buySpecialty, sellSpecialty, exploreFaction, investFaction, gatherIntel, acceptContract, completeContract, blackMarketBuy } = useTrade(dispatch);
   const { autoSave, hasSave, loadSave, exportSave, importSave, resetGame } = useSave(dispatch);
   const { redeemCode } = useRedeem(gameState, dispatch);
   const { installModule, useManualModule } = useModule(dispatch);
@@ -363,6 +363,9 @@ export function useGameState() {
     exploreFaction,
     investFaction,
     gatherIntel,
+    acceptContract,
+    completeContract,
+    blackMarketBuy,
 
     // 合金购买
     buyAlloy,

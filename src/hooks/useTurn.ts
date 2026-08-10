@@ -1,7 +1,7 @@
 import { useCallback } from 'react';
 import type { GameState, Mothership, Stock, RawMaterial, Product } from '@/types/game';
 import { RECIPES, MAT_MAX_UP, PRODUCT_PRICE_LIMITS } from '@/data/gameData';
-import { FACTIONS, getInvestmentTier, getIncomeCap, rollPolicy, POLICY_EFFECTS, refreshFactionPrices, calculateSellMultipliers } from '@/data/factions';
+import { FACTIONS, getInvestmentTier, getIncomeCap, rollPolicy, POLICY_EFFECTS, refreshFactionPrices, calculateSellMultipliers, RELATION_MATRIX, getReputationTier } from '@/data/factions';
 import { rollRelic } from '@/data/relics';
 import { processColonyTurn } from './useColony';
 
@@ -463,11 +463,62 @@ export function useTurn(
           return { ...prev, ships, phase: 'ended' as const, eventLog: [{ turn: prev.turn, event: '游戏结束', detail: gameOverReason }, ...prev.eventLog] };
         }
 
+        // ===== 合同生成 =====
+        const factionContracts = [...(prev.factionContracts || [])];
+        // 过期清理
+        const alive = factionContracts.filter((c) => c.accepted ? c.expiresTurn >= prev.turn : true);
+        // 清理未接取的过期合同
+        const kept = alive.filter((c) => c.accepted || c.expiresTurn >= prev.turn);
+        // 每势力生成新合同
+        const contractFactions = new Set(kept.map((c) => c.factionId));
+        for (const f of prev.factions) {
+          const count = kept.filter((c) => c.factionId === f.id && !c.accepted).length;
+          if (count >= 3) continue;
+          if (Math.random() < 0.35 && !contractFactions.has(f.id)) {
+            const types: Array<'procurement' | 'smuggling'> = ['procurement', 'procurement', 'smuggling'];
+            const type = types[Math.floor(Math.random() * types.length)];
+            if (type === 'procurement') {
+              const recipes = RECIPES.filter((r) => !r.foodYield);
+              const recipe = recipes[Math.floor(Math.random() * recipes.length)];
+              const qty = Math.floor(Math.random() * 4) + 2; // 2-5
+              const tier = recipe.productionTurns <= 1 ? 0 : recipe.productionTurns <= 2 ? 1 : 2;
+              const rewards = [[5, 8, 3000, 5000], [8, 12, 6000, 10000], [10, 15, 12000, 20000]][tier];
+              const rewardGold = Math.floor(Math.random() * (rewards[3] - rewards[2] + 1)) + rewards[2];
+              const rewardRep = Math.floor(Math.random() * (rewards[1] - rewards[0] + 1)) + rewards[0];
+              const expires = prev.turn + Math.floor(Math.random() * 5) + 3; // 3-7
+              kept.push({ id: `c_${prev.turn}_${f.id}_${kept.length}`, factionId: f.id, type: 'procurement', accepted: false, targetItemId: recipe.id, targetQty: qty, rewardGold, rewardRep, expiresTurn: expires, blackMarketUsed: false });
+            } else {
+              const rel = RELATION_MATRIX[f.id];
+              if (!rel || !rel.enemies.length) continue;
+              const enemyId = rel.enemies[Math.floor(Math.random() * rel.enemies.length)];
+              if (enemyId === 'f07') continue;
+              const qty = Math.floor(Math.random() * 6) + 5; // 5-10
+              const rewardRep = Math.floor(Math.random() * 6) + 20; // 20-25
+              const expires = prev.turn + Math.floor(Math.random() * 4) + 5; // 5-8
+              kept.push({ id: `c_${prev.turn}_${f.id}_${kept.length}`, factionId: f.id, type: 'smuggling', accepted: false, targetItemId: enemyId, targetQty: qty, rewardGold: 0, rewardRep, expiresTurn: expires, blackMarketUsed: false });
+            }
+          }
+        }
+
+        // ===== 被动收入结算 =====
+        const rep = { ...prev.factionReputation };
+        for (const [fid, r] of Object.entries(rep)) {
+          const tier = getReputationTier(r);
+          if (!tier || tier.passiveIncomeMax <= 0) continue;
+          const income = Math.floor(Math.random() * (tier.passiveIncomeMax - tier.passiveIncomeMin + 1)) + tier.passiveIncomeMin;
+          const goldLog = ships[0] ? [...(ships[0].goldLog || [])] : [];
+          if (ships[0]) {
+            ships[0].gold += income;
+            ships[0].goldLog = [{ turn: prev.turn, amount: income, reason: `「${fid}」声望被动收入`, balanceAfter: ships[0].gold }, ...ships[0].goldLog].slice(0, 200);
+          }
+        }
+
         return {
           ...prev,
           ships,
           turn: prev.turn + 1,
-          factionRepLog: {}, // 重置本回合声望变化记录
+          factionRepLog: {},
+          factionContracts: kept,
           factionPrices: newPrices,
           factionSellMultipliers: sellMultipliers,
           factionPolicy: { type: newPolicyType, effect: newPolicyEffect },

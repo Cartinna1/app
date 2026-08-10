@@ -1,6 +1,6 @@
 import { useState } from 'react';
-import type { Mothership, Faction, TradePolicy, PolicyEffect } from '@/types/game';
-import { getDistance, getTravelTurns, getBuyPrice, getSellPrice, getInvestmentTier, getDiscountRate } from '@/data/factions';
+import type { Mothership, Faction, TradePolicy, PolicyEffect, FactionContract } from '@/types/game';
+import { getDistance, getTravelTurns, getBuyPrice, getSellPrice, getInvestmentTier, getDiscountRate, getReputationTier } from '@/data/factions';
 import { Globe, ShoppingCart, TrendingUp, Compass, Coins, Rocket, BarChart3, Radio, AlertTriangle } from 'lucide-react';
 
 interface TradePanelProps {
@@ -16,6 +16,11 @@ interface TradePanelProps {
   onExplore: () => { success: boolean; message: string };
   onInvest: (amount: number) => { success: boolean; message: string };
   onGatherIntel: () => { success: boolean; message: string; goldChange: number };
+  factionReputation: Record<string, number>;
+  factionContracts: FactionContract[];
+  onAcceptContract: (contractId: string) => boolean;
+  onCompleteContract: (contractId: string) => { success: boolean; message: string };
+  onBlackMarketBuy: (factionId: string, itemId: string, qty: number) => { success: boolean; message: string };
 }
 
 type TradeTab = 'overview' | 'buy' | 'sell' | 'explore' | 'invest' | 'intel';
@@ -32,7 +37,7 @@ function TravelLockOverlay({ turnsRemaining, targetName }: { turnsRemaining: num
   );
 }
 
-export default function TradePanel({ factions, ship, factionPrices, factionSellMultipliers, factionPolicy, policyRemainingTurns, onTravel, onBuy, onSell, onExplore, onInvest, onGatherIntel }: TradePanelProps) {
+export default function TradePanel({ factions, ship, factionPrices, factionSellMultipliers, factionPolicy, policyRemainingTurns, onTravel, onBuy, onSell, onExplore, onInvest, onGatherIntel, factionReputation, factionContracts, onAcceptContract, onCompleteContract, onBlackMarketBuy }: TradePanelProps) {
   const [activeTab, setActiveTab] = useState<TradeTab>('overview');
   const [selectedTarget, setSelectedTarget] = useState<string>('');
   const [buyQty, setBuyQty] = useState(1);
@@ -105,7 +110,7 @@ export default function TradePanel({ factions, ship, factionPrices, factionSellM
     { id: 'buy', label: '购买特产', icon: ShoppingCart },
     { id: 'sell', label: '贩卖特产', icon: TrendingUp },
     { id: 'explore', label: '探索', icon: Compass },
-    { id: 'invest', label: '投资建设', icon: BarChart3 },
+    { id: 'invest', label: '声望投资', icon: BarChart3 },
     { id: 'intel', label: '打探消息', icon: Radio },
   ];
 
@@ -126,6 +131,26 @@ export default function TradePanel({ factions, ship, factionPrices, factionSellM
           <div>
             <p className="text-xs text-cyan-400">当前停靠</p>
             <p className="text-lg font-bold text-white">{currentFaction?.name || '未知'}</p>
+            {/* 声望条 */}
+            {(() => {
+              const rep = factionReputation[currentFaction?.id || ''] || 0;
+              const tier = getReputationTier(rep);
+              const color = rep < 0 ? 'bg-red-500' : rep < 30 ? 'bg-slate-500' : rep < 70 ? 'bg-cyan-500' : 'bg-amber-500';
+              const offset = 50 + rep / 2; // -100..+100 映射到 0..100
+              return (
+                <div className="mt-2">
+                  <div className="flex items-center justify-between mb-1">
+                    <span className="text-xs text-slate-400">{tier.label}</span>
+                    <span className={`text-xs font-bold ${rep < 0 ? 'text-red-400' : 'text-amber-400'}`}>{rep}</span>
+                  </div>
+                  <div className="h-1.5 bg-slate-700 rounded-full relative">
+                    <div className="absolute left-1/2 top-0 bottom-0 w-px bg-slate-500"></div>
+                    <div className={`absolute top-0 bottom-0 rounded-full ${color}`}
+                      style={{ left: `${Math.min(offset, 100)}%`, width: `${Math.abs(rep) / 2}%` }}></div>
+                  </div>
+                </div>
+              );
+            })()}
           </div>
           {isTraveling && travelTarget && (
             <div className="ml-auto text-right">
@@ -418,6 +443,35 @@ export default function TradePanel({ factions, ship, factionPrices, factionSellM
                 </p>
               </div>
             )}
+
+            {/* 合同列表 */}
+            {currentFaction && (() => {
+              const factionContracts_list = factionContracts.filter((c) => c.factionId === currentFaction.id && !c.accepted);
+              const activeContracts = factionContracts.filter((c) => c.factionId === currentFaction.id && c.accepted);
+              if (factionContracts_list.length === 0 && activeContracts.length === 0) return null;
+              return (
+                <div className="rounded-lg p-4 mb-4 border bg-amber-900/20 border-amber-700/30">
+                  <p className="text-sm font-bold text-amber-400 mb-2">贸易合同</p>
+                  {factionContracts_list.map((c) => (
+                    <div key={c.id} className="flex items-center justify-between bg-slate-800/60 rounded p-2 mb-1 text-xs">
+                      <div className="flex-1">
+                        <span className={c.type==='smuggling'?'text-red-400':'text-cyan-400'}>{c.type==='smuggling'?'走私':'采购'}</span>
+                        <span className="text-slate-300 ml-1">x{c.targetQty}</span>
+                        <span className="text-slate-500 ml-1">| +{c.rewardGold}金 +{c.rewardRep}声望</span>
+                        <span className="text-slate-600 ml-1">| 过期:第{c.expiresTurn}回合</span>
+                      </div>
+                      <button onClick={() => onAcceptContract(c.id)} className="px-2 py-1 bg-amber-700 hover:bg-amber-600 rounded text-xs">接取</button>
+                    </div>
+                  ))}
+                  {activeContracts.map((c) => (
+                    <div key={c.id} className="flex items-center justify-between bg-green-900/30 rounded p-2 mb-1 text-xs">
+                      <span className="text-green-400">{c.type==='smuggling'?'走私':'采购'} x{c.targetQty} | +{c.rewardGold}金 +{c.rewardRep}声望 | 过期:第{c.expiresTurn}回合</span>
+                      <button onClick={() => { const r = onCompleteContract(c.id); setMessage(r.message); setMsgType(r.success ? 'success' : 'error'); }} className="px-2 py-1 bg-green-700 hover:bg-green-600 rounded text-xs">提交</button>
+                    </div>
+                  ))}
+                </div>
+              );
+            })()}
 
             {ts.intelGatheredInFaction === ts.currentFactionId ? (
               <div className="text-center text-sm text-slate-500 bg-slate-800/40 rounded-lg py-3">已在此势力打探过消息，跃迁到其他势力后才能再次打探</div>

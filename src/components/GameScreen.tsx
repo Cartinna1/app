@@ -141,6 +141,9 @@ export default function GameScreen({
   onExploreFaction,
   onInvestFaction,
   onGatherIntel,
+  onAcceptContract,
+  onCompleteContract,
+  onBlackMarketBuy,
   onInstallModule,
   onUseManualModule,
   onUnlockColony,
@@ -423,6 +426,11 @@ export default function GameScreen({
               onExplore={onExploreFaction}
               onInvest={onInvestFaction}
               onGatherIntel={onGatherIntel}
+              factionReputation={gameState.factionReputation || {}}
+              factionContracts={gameState.factionContracts || []}
+              onAcceptContract={onAcceptContract}
+              onCompleteContract={onCompleteContract}
+              onBlackMarketBuy={onBlackMarketBuy}
             />
           </div>
           )}

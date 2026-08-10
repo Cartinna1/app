@@ -85,6 +85,18 @@ stardustMarket: { currentRelicId: null, soldRelicIds: [] },
           isRebellion: s.isRebellion || false,
         }));
       }
+      // 兼容旧存档：声望/合同字段
+      if (!loaded.factionReputation) {
+        loaded.factionReputation = {};
+        // 旧投资迁移：每5000金币投资→+1声望，每势力上限+15
+        if (loaded.ships?.[0]?.tradeStatus?.factionStates) {
+          for (const [fid, fs] of Object.entries(loaded.ships[0].tradeStatus.factionStates)) {
+            loaded.factionReputation[fid] = Math.min(15, Math.floor((fs.invested || 0) / 5000));
+          }
+        }
+      }
+      if (!loaded.factionRepLog) loaded.factionRepLog = {};
+      if (!loaded.factionContracts) loaded.factionContracts = [];
       return loaded;
     }
 
