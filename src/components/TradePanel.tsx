@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import type { Mothership, Faction, TradePolicy, PolicyEffect, FactionContract } from '@/types/game';
-import { getDistance, getTravelTurns, getSellPrice, getReputationTier } from '@/data/factions';
+import { getDistance, getTravelTurns, getSellPrice, getReputationTier, FACTIONS as FACTIONS_DATA } from '@/data/factions';
+import { RECIPES } from '@/data/gameData';
 import { Globe, ShoppingCart, TrendingUp, Compass, Coins, Rocket, BarChart3, Radio, AlertTriangle } from 'lucide-react';
 
 interface TradePanelProps {
@@ -43,7 +44,6 @@ export default function TradePanel({ factions, ship, factionPrices, factionSellM
   const [buyQty, setBuyQty] = useState(1);
   const [sellFaction, setSellFaction] = useState('');
   const [sellQty, setSellQty] = useState(1);
-  const [investAmount, setInvestAmount] = useState('');
   const [message, setMessage] = useState('');
   const [msgType, setMsgType] = useState<'success' | 'error'>('success');
 
@@ -51,6 +51,32 @@ export default function TradePanel({ factions, ship, factionPrices, factionSellM
   const currentFaction = factions.find((f) => f.id === ts.currentFactionId);
   const currentRep = (factionReputation || {})[ts.currentFactionId] || 0;
   const currentRepTier = getReputationTier(currentRep);
+  /** 获取合同目标物品名 */
+  const getContractItemName = (c: FactionContract): string => {
+    if (c.type === 'smuggling') {
+      const f = FACTIONS_DATA.find((ff) => ff.id === c.targetItemId);
+      return f ? `${f.specialtyName}（${f.name}）` : c.targetItemId;
+    } else {
+      const recipe = RECIPES.find((r) => r.id === c.targetItemId);
+      if (recipe) return recipe.productName;
+      const f = FACTIONS_DATA.find((ff) => ff.id === c.targetItemId);
+      return f ? `${f.specialtyName}（${f.name}特产）` : c.targetItemId;
+    }
+  };
+
+  /** 获取合同目标物品名 */
+  const getContractItemName = (c: FactionContract): string => {
+    if (c.type === 'smuggling') {
+      const f = FACTIONS_DATA.find((ff) => ff.id === c.targetItemId);
+      return f ? `${f.specialtyName}（${f.name}）` : c.targetItemId;
+    } else {
+      const recipe = RECIPES.find((r) => r.id === c.targetItemId);
+      if (recipe) return recipe.productName;
+      const f = FACTIONS_DATA.find((ff) => ff.id === c.targetItemId);
+      return f ? `${f.specialtyName}（${f.name}特产）` : c.targetItemId;
+    }
+  };
+
   const isTraveling = ts.travelTurnsRemaining > 0;
   const travelTarget = ts.targetFactionId ? factions.find((f) => f.id === ts.targetFactionId) : null;
 
@@ -89,7 +115,6 @@ export default function TradePanel({ factions, ship, factionPrices, factionSellM
   };
 
   const handleInvest = () => {
-    const amt = parseInt(investAmount);
     if (isNaN(amt) || amt <= 0) { setMessage('请输入有效的投资金额'); setMsgType('error'); return; }
     const res = onInvest(amt);
     setMessage(res.message); setMsgType(res.success ? 'success' : 'error');
@@ -334,11 +359,8 @@ export default function TradePanel({ factions, ship, factionPrices, factionSellM
                 <div className="absolute top-0 bottom-0 rounded-full bg-blue-500" style={{ left: `${Math.min(50 + currentRep/2, 100)}%`, width: `${Math.abs(currentRep)/2}%` }}></div>
               </div>
             </div>
-            <div className="flex items-center gap-2 mb-3">
-              <div className="flex-1 bg-slate-800 border border-slate-600 rounded-lg px-3 py-2 text-sm text-slate-200">8000 金币（固定1次=1声望）</div>
-              <button onClick={() => setInvestAmount((Math.floor(ship.gold / 8000) * 8000).toString())} className="px-3 py-2 bg-slate-700 hover:bg-slate-600 rounded-lg text-xs text-slate-300">最大</button>
-            </div>
-            <button onClick={handleInvest} disabled={!investAmount || parseInt(investAmount) <= 0 || ship.gold <= 0} className="w-full py-2.5 bg-blue-700 hover:bg-blue-600 disabled:bg-slate-700 disabled:text-slate-500 rounded-lg font-bold text-white transition-colors flex items-center justify-center gap-2"><Coins size={16} /> 投资</button>
+            <p className="text-xs text-slate-500 mb-3">每次点击投资按钮固定消耗 <span className="text-yellow-400 font-bold">8000金币</span> 获得 <span className="text-amber-400 font-bold">+1声望</span>，本回合最多 10 次。</p>
+            <button onClick={handleInvest} disabled={ship.gold < 8000} className="w-full py-2.5 bg-blue-700 hover:bg-blue-600 disabled:bg-slate-700 disabled:text-slate-500 rounded-lg font-bold text-white transition-colors flex items-center justify-center gap-2"><Coins size={16} /> 投资 8000 金币（+1声望）</button>
           </div>
         )
       )}
@@ -473,6 +495,7 @@ export default function TradePanel({ factions, ship, factionPrices, factionSellM
                     <div key={c.id} className="flex items-center justify-between bg-slate-800/60 rounded p-2 mb-1 text-xs">
                       <div className="flex-1">
                         <span className={c.type==='smuggling'?'text-red-400':'text-cyan-400'}>{c.type==='smuggling'?'走私':'采购'}</span>
+                        <span className="text-slate-100 font-bold ml-1">{getContractItemName(c)}</span>
                         <span className="text-slate-300 ml-1">x{c.targetQty}</span>
                         <span className="text-slate-500 ml-1">| +{c.rewardGold}金 +{c.rewardRep}声望</span>
                         <span className="text-slate-600 ml-1">| 过期:第{c.expiresTurn}回合</span>
@@ -482,7 +505,7 @@ export default function TradePanel({ factions, ship, factionPrices, factionSellM
                   ))}
                   {activeContracts.map((c) => (
                     <div key={c.id} className="flex items-center justify-between bg-green-900/30 rounded p-2 mb-1 text-xs">
-                      <span className="text-green-400">{c.type==='smuggling'?'走私':'采购'} x{c.targetQty} | +{c.rewardGold}金 +{c.rewardRep}声望 | 过期:第{c.expiresTurn}回合</span>
+                      <span className="text-green-400">{c.type==='smuggling'?'走私':'采购'} <span className="font-bold">{getContractItemName(c)}</span> x{c.targetQty} | +{c.rewardGold}金 +{c.rewardRep}声望 | 过期:第{c.expiresTurn}回合</span>
                       <button onClick={() => { const r = onCompleteContract(c.id); setMessage(r.message); setMsgType(r.success ? 'success' : 'error'); }} className="px-2 py-1 bg-green-700 hover:bg-green-600 rounded text-xs">提交</button>
                     </div>
                   ))}
