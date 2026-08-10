@@ -108,7 +108,7 @@ export default function TradePanel({ factions, ship, factionPrices, factionSellM
     if (ship.gold < 8000) { setMessage('金币不足，需要8000金币'); setMsgType('error'); return; }
     const res = onInvest(8000);
     setMessage(res.message); setMsgType(res.success ? 'success' : 'error');
-    if (res.success) _removed_setInvestAmount('');
+    
     setTimeout(() => setMessage(''), 5000);
   };
 
