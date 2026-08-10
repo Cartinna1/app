@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import type { Mothership, Faction, TradePolicy, PolicyEffect } from '@/types/game';
-import { getDistance, getTravelTurns, getBuyPrice, getSellPrice, getInvestmentTier, getDiscountRate, getReputationTier, type ReputationTier } from '@/data/factions';
+import { getDistance, getTravelTurns, getBuyPrice, getSellPrice, getInvestmentTier, getDiscountRate } from '@/data/factions';
 import { Globe, ShoppingCart, TrendingUp, Compass, Coins, Rocket, BarChart3, Radio, AlertTriangle } from 'lucide-react';
 
 interface TradePanelProps {

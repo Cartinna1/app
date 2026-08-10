@@ -77,6 +77,9 @@ export function useSave(
         stardustMarket: d.stardustMarket || { currentRelicId: null, soldRelicIds: [] },
         gameWon: d.gameWon || false,
         wonWonderName: d.wonWonderName || '',
+        factionReputation: d.factionReputation || {},
+        factionRepLog: {},
+        factionContracts: d.factionContracts || [],
       };
       dispatch({ type: 'LOAD_SAVE', state });
       return true;
@@ -143,6 +146,9 @@ export function useSave(
             stardustMarket: d.stardustMarket || { currentRelicId: null, soldRelicIds: [] },
             gameWon: d.gameWon || false,
             wonWonderName: d.wonWonderName || '',
+            factionReputation: d.factionReputation || {},
+            factionRepLog: {},
+            factionContracts: d.factionContracts || [],
           };
           dispatch({ type: 'LOAD_SAVE', state });
           resolve(true);

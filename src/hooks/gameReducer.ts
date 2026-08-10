@@ -22,6 +22,9 @@ export const initialGameState: GameState = {
   stardustMarket: { currentRelicId: null, soldRelicIds: [] },
   gameWon: false,
   wonWonderName: '',
+  factionReputation: {},
+  factionRepLog: {},
+  factionContracts: [],
 };
 
 // ==================== Reducer ====================
