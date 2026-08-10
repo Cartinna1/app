@@ -53,8 +53,11 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
                   ),
         factionPolicy: { type: 'normal', effect: POLICY_EFFECTS['normal'] },
         policyRemainingTurns: 0,
-        stardustMarket: { currentRelicId: null, soldRelicIds: [] },
-      };
+stardustMarket: { currentRelicId: null, soldRelicIds: [] },
+  factionReputation: {},
+  factionRepLog: {},
+  factionContracts: [],
+};
     }
 
     case 'FUNCTIONAL_UPDATE': {

@@ -467,6 +467,7 @@ export function useTurn(
           ...prev,
           ships,
           turn: prev.turn + 1,
+          factionRepLog: {}, // 重置本回合声望变化记录
           factionPrices: newPrices,
           factionSellMultipliers: sellMultipliers,
           factionPolicy: { type: newPolicyType, effect: newPolicyEffect },

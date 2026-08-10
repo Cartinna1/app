@@ -19,11 +19,27 @@ export interface TradeStatus {
   targetFactionId: string | null; // 跃迁目标
   travelTurnsRemaining: number; // 剩余跃迁回合数
   inventory: Record<string, number>; // 特产库存（factionId -> 数量）
-  factionStates: Record<string, FactionState>; // 各势力投资状态
+  factionStates: Record<string, FactionState>; // 各势力投资状态（待 Phase3 迁移）
   exploredThisTurn: boolean; // 本回合是否已探索过
   intelGatheredInFaction: string | null; // 在哪个势力打探过消息（抵达新势力后重置）
   lastExploreResult?: string; // 本回合探索结果（显示用，回合结束清除）
   lastIntelResult?: { message: string; goldChange: number }; // 本回合打探结果（显示用，回合结束清除）
+}
+
+// ==================== 势力声望与合同 ====================
+
+/** 贸易合同 */
+export interface FactionContract {
+  id: string;              // 唯一标识
+  factionId: string;       // 发布势力
+  type: 'procurement' | 'smuggling';
+  accepted: boolean;       // 是否已接取
+  targetItemId: string;    // 目标物品ID
+  targetQty: number;       // 需求数量
+  rewardGold: number;      // 金币奖励（走私为0）
+  rewardRep: number;       // 声望奖励
+  expiresTurn: number;     // 过期回合
+  blackMarketUsed: boolean; // 走私是否通过黑市采购
 }
 
 // 贸易政策类型
@@ -282,6 +298,10 @@ export interface GameState {
   stardustMarket: StardustMarket; // 星尘集市
   gameWon: boolean;
   wonWonderName: string;
+  // ===== 势力声望与合同 =====
+  factionReputation: Record<string, number>; // 各势力声望(-100~100)
+  factionRepLog: Record<string, number>;     // 本回合各势力声望变化（用于上限管控，回合结算清空）
+  factionContracts: FactionContract[];       // 活跃合同列表
 }
 
 export type GameAction =

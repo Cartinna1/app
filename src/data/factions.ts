@@ -165,3 +165,40 @@ export function getBuffDescription(tier: number): string {
     default: return '投资后可获得优惠';
   }
 }
+
+// ==================== 势力声望 ====================
+
+/** 势力关系矩阵：{ factionId → { allies: string[], enemies: string[] } } */
+export const RELATION_MATRIX: Record<string, { allies: string[]; enemies: string[] }> = {
+  f01: { allies: ['f05', 'f07'], enemies: ['f03'] },
+  f02: { allies: ['f09'], enemies: ['f10'] },
+  f03: { allies: [], enemies: ['f01', 'f08'] },
+  f04: { allies: ['f10'], enemies: ['f09'] },
+  f05: { allies: ['f01', 'f07'], enemies: ['f06'] },
+  f06: { allies: ['f08', 'f10'], enemies: ['f05'] },
+  f07: { allies: ['f01', 'f05'], enemies: [] },
+  f08: { allies: ['f06'], enemies: ['f03', 'f09'] },
+  f09: { allies: ['f02'], enemies: ['f04', 'f08'] },
+  f10: { allies: ['f04', 'f06'], enemies: ['f02'] },
+};
+
+/** 声望层级定义 */
+export interface ReputationTier {
+  min: number; max: number; label: string; discount: number; passiveIncomeMin: number; passiveIncomeMax: number;
+}
+export const REPUTATION_TIERS: ReputationTier[] = [
+  { min: -100, max: -51, label: '宿敌', discount: 0, passiveIncomeMin: 0, passiveIncomeMax: 0 },
+  { min: -50, max: -21, label: '敌意', discount: -0.40, passiveIncomeMin: 0, passiveIncomeMax: 0 },
+  { min: -20, max: -1, label: '不信任', discount: -0.20, passiveIncomeMin: 0, passiveIncomeMax: 0 },
+  { min: 0, max: 9, label: '中立', discount: 0, passiveIncomeMin: 0, passiveIncomeMax: 0 },
+  { min: 10, max: 29, label: '友善', discount: 0.10, passiveIncomeMin: 300, passiveIncomeMax: 500 },
+  { min: 30, max: 49, label: '盟友', discount: 0.20, passiveIncomeMin: 700, passiveIncomeMax: 900 },
+  { min: 50, max: 69, label: '亲密', discount: 0.30, passiveIncomeMin: 1300, passiveIncomeMax: 1600 },
+  { min: 70, max: 89, label: '忠诚', discount: 0.35, passiveIncomeMin: 2500, passiveIncomeMax: 3500 },
+  { min: 90, max: 100, label: '尊崇', discount: 0.38, passiveIncomeMin: 3500, passiveIncomeMax: 4500 },
+];
+
+/** 根据声望值获取层级 */
+export function getReputationTier(rep: number): ReputationTier {
+  return REPUTATION_TIERS.find(t => rep >= t.min && rep <= t.max) || REPUTATION_TIERS[0];
+}

@@ -1,10 +1,43 @@
 import { useCallback } from 'react';
 import type { GameState } from '@/types/game';
-import { FACTIONS, getTravelTurns, getBuyPrice, getSellPrice, getInvestmentTier } from '@/data/factions';
+import { FACTIONS, getTravelTurns, getBuyPrice, getSellPrice, getInvestmentTier, RELATION_MATRIX } from '@/data/factions';
 
 export function useTrade(
   dispatch: React.Dispatch<{ type: 'FUNCTIONAL_UPDATE'; updater: (state: GameState) => GameState }>
 ) {
+  /** 应用声望变化（带回合上限管控和零和传导） */
+  function applyRepChange(
+    prev: GameState,
+    factionId: string,
+    delta: number,
+    repLog: Record<string, number>,
+    isTradeAction: boolean
+  ) {
+    const rep = { ...prev.factionReputation };
+    const log = { ...repLog };
+    // 上限检查
+    const cur = log[factionId] || 0;
+    const capKey = isTradeAction ? 'buy' : 'other';
+    const cap = capKey === 'buy' ? 3 : 99;
+    const applied = delta > 0 ? Math.min(delta, cap - cur) : delta;
+    if (applied === 0) return; // 已达上限
+    log[factionId] = cur + applied;
+    rep[factionId] = Math.max(-100, Math.min(100, (rep[factionId] || 0) + applied));
+    // 零和传导：惩罚敌人
+    const rel = RELATION_MATRIX[factionId];
+    if (rel && applied > 0) {
+      for (const enemyId of rel.enemies) {
+        const eCur = log[enemyId] || 0;
+        const eApplied = Math.max(-5 - eCur, -1);
+        if (eApplied >= 0) continue;
+        log[enemyId] = eCur + eApplied;
+        rep[enemyId] = Math.max(-100, Math.min(100, (rep[enemyId] || 0) + eApplied));
+      }
+    }
+    prev.factionReputation = rep;
+    prev.factionRepLog = log;
+  }
+
   // 跃迁
   const travelToFaction = useCallback(
     (shipIndex: number, targetFactionId: string): { success: boolean; message: string } => {
@@ -64,6 +97,10 @@ export function useTrade(
           s.tradeStatus = { ...s.tradeStatus };
           s.tradeStatus.inventory = { ...s.tradeStatus.inventory };
           s.tradeStatus.inventory[faction.id] = (s.tradeStatus.inventory[faction.id] || 0) + quantity;
+          // 声望变更（买特产 +3 / 回合）
+          if (prev.factionReputation === undefined) prev.factionReputation = {};
+          if (prev.factionRepLog === undefined) prev.factionRepLog = {};
+          applyRepChange(prev, faction.id, 3, prev.factionRepLog, true);
           ships[shipIndex] = s;
           result = { success: true, message: `购买${faction.specialtyName} x${quantity}，花费${totalCost}金币` };
           return { ...prev, ships };

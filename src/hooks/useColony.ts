@@ -561,6 +561,17 @@ export function processColonyTurn(ship: Mothership, _turn: number): void {
     colony.buildings = [...colony.buildings];
   }
 
+  // ===== 领袖加成（提前计算，用于电能） =====
+  let lAllBonus = 0;
+  for (const l of colony.leaders) {
+    const ld = getLeaderDef(l.id);
+    if (!ld) continue;
+    const bonuses = ld.levelBonuses[l.level - 1] || {};
+    for (const [bid, b] of Object.entries(bonuses)) {
+      if (bid === 'ALL') lAllBonus += b;
+    }
+  }
+
   // ===== 电能计算（在产出计算之前） =====
   if (colony.energy === undefined) colony.energy = 0;
   let totalPowerGen = 0;
@@ -580,6 +591,8 @@ export function processColonyTurn(ship: Mothership, _turn: number): void {
     }
     // 星球修正（仅太阳能阵列B29）
     if (def.id === 'B29' && powerGenPlanetMult !== 1) base *= powerGenPlanetMult;
+    // 领袖全员加成
+    if (lAllBonus > 0) base *= (1 + lAllBonus / 100);
     totalPowerGen += Math.floor(base);
   }
   let totalPowerUse = 0;
@@ -611,7 +624,7 @@ export function processColonyTurn(ship: Mothership, _turn: number): void {
   // 建筑产出计算
   // 计算领袖加成映射 (buildingId → bonus%)
   const leaderBonusMap: Record<string, number> = {};
-  let lAllBonus = 0, lMatBonus = 0;
+  lAllBonus = 0; let lMatBonus = 0;
   for (const l of colony.leaders) {
     const ld = getLeaderDef(l.id);
     if (!ld) continue;
