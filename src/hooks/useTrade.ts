@@ -46,6 +46,17 @@ export function useTrade(
     if (!prev.factionContracts) prev.factionContracts = [];
   }
 
+  function checkRepBlock(prev: GameState, factionId: string, action: string): string | null {
+    const rep = (prev.factionReputation || {})[factionId] || 0;
+    if (rep <= -51) return '宿敌势力拒绝与你交易';
+    if (rep >= -50 && rep <= -21) {
+      if (action === 'buy' || action === 'invest') return null;
+      return '敌意势力拒绝此项操作';
+    }
+    if (rep < 0 && action === 'intel') return '该势力不信任你，无法打探消息';
+    return null;
+  }
+
   // 跃迁
   const travelToFaction = useCallback(
     (shipIndex: number, targetFactionId: string): { success: boolean; message: string } => {
@@ -264,8 +275,7 @@ export function useTrade(
         const idx = contracts.findIndex((c) => c.id === contractId);
         if (idx === -1) return prev;
         const contract = contracts[idx];
-        const repBlockC = checkRepBlock(prev, contract.factionId, 'contract'); if (repBlockC) return prev;
-        const contract = contracts[idx];
+        if (!contract) return prev;
         const repBlockC = checkRepBlock(prev, contract.factionId, 'contract'); if (repBlockC) return prev;
         contracts[idx] = { ...contracts[idx], accepted: true };
         success = true;
