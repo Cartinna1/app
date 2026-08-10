@@ -1,6 +1,6 @@
 import { useCallback } from 'react';
 import type { GameState } from '@/types/game';
-import { FACTIONS, getTravelTurns, getSellPrice, getInvestmentTier, RELATION_MATRIX, getReputationTier } from '@/data/factions';
+import { FACTIONS, getTravelTurns, getSellPrice, RELATION_MATRIX, getReputationTier } from '@/data/factions';
 
 
 export function useTrade(
@@ -165,7 +165,7 @@ export function useTrade(
       return result;
     }, [dispatch]);
 
-  // 投资（声望+金币兑换）
+  // 声望投资：8000金币=1声望，每回合上限+10
   const investFaction = useCallback(
     (shipIndex: number, amount: number): { success: boolean; message: string } => {
       let result: { success: boolean; message: string } = { success: false, message: '' };
@@ -176,20 +176,14 @@ export function useTrade(
           if (amount <= 0) { result = { success: false, message: '投资金额必须大于0' }; return prev; }
           if (s.gold < amount) { result = { success: false, message: '金币不足' }; return prev; }
           const factionId = s.tradeStatus.currentFactionId;
-          // 保留旧投资数据（兼容），同时也要更新声望
-          const fs = s.tradeStatus.factionStates[factionId] || { factionId, invested: 0, investmentTier: 0 };
-          const newInvested = Math.min(80000, fs.invested + amount);
-          const actualAmount = newInvested - fs.invested;
-          if (actualAmount <= 0) { result = { success: false, message: '投资已达上限' }; return prev; }
-          s.gold -= actualAmount;
-          const factionName = FACTIONS.find((f) => f.id === factionId)?.name || '未知';
-          s.goldLog = [{ turn: prev.turn, amount: -actualAmount, reason: `投资「${factionName}」`, balanceAfter: s.gold }, ...s.goldLog].slice(0, 200);
-          s.tradeStatus = { ...s.tradeStatus };
-          s.tradeStatus.factionStates = { ...s.tradeStatus.factionStates };
-          s.tradeStatus.factionStates[factionId] = { factionId, invested: newInvested, investmentTier: getInvestmentTier(newInvested) };
-          // 声望变更（每8000金币+1，上限10/回合）
           ensureRepFields(prev);
-          const repGain = Math.min(10, Math.floor(actualAmount / 8000));
+          const repGain = Math.min(10, Math.floor(amount / 8000));
+          if (repGain <= 0) { result = { success: false, message: '至少投资8000金币才能获得声望' }; return prev; }
+          const actualAmount = repGain * 8000;
+          if (s.gold < actualAmount) { result = { success: false, message: `金币不足，至少需要${actualAmount}` }; return prev; }
+          s.gold -= actualAmount;
+          const factionName = FACTIONS.find((f) => f.id === factionId)?.name || factionId;
+          s.goldLog = [{ turn: prev.turn, amount: -actualAmount, reason: `投资「${factionName}」`, balanceAfter: s.gold }, ...s.goldLog].slice(0, 200);
           applyRepChange(prev, factionId, repGain, prev.factionRepLog, 'invest');
           ships[shipIndex] = s;
           const repNow = prev.factionReputation[factionId] || 0;
@@ -220,6 +214,8 @@ export function useTrade(
         updater: (prev) => {
           const ships = [...prev.ships]; const s = { ...ships[shipIndex] };
           const currentFid = s.tradeStatus.currentFactionId;
+          const currentRep = (prev.factionReputation || {})[currentFid] || 0;
+          if (currentRep < -20) { result = { success: false, message: '该势力不信任你，无法打探消息', goldChange: 0 }; return prev; }
           if (s.tradeStatus.intelGatheredInFaction === currentFid) { result = { success: false, message: '在此势力已打探过消息，跃迁到新势力后可再次打探', goldChange: 0 }; return prev; }
           s.tradeStatus = { ...s.tradeStatus, intelGatheredInFaction: currentFid };
           const turnMultiplier = 1 + prev.turn * 0.08;

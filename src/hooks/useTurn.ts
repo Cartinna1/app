@@ -508,7 +508,8 @@ export function useTurn(
           const income = Math.floor(Math.random() * (tier.passiveIncomeMax - tier.passiveIncomeMin + 1)) + tier.passiveIncomeMin;
           
           if (ships[0]) {
-            ships[0].gold += income; ships[0].goldLog = [{ turn: prev.turn, amount: income, reason: `「${fid}」声望被动收入`, balanceAfter: ships[0].gold }, ...ships[0].goldLog].slice(0, 200);
+            const factionName = FACTIONS.find((f) => f.id === fid)?.name || fid;
+            ships[0].gold += income; ships[0].goldLog = [{ turn: prev.turn, amount: income, reason: `「${factionName}」声望被动收入`, balanceAfter: ships[0].gold }, ...ships[0].goldLog].slice(0, 200);
           }
         }
 
