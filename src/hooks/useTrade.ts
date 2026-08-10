@@ -54,6 +54,7 @@ export function useTrade(
         type: 'FUNCTIONAL_UPDATE',
         updater: (prev) => {
           const ships = [...prev.ships]; const s = { ...ships[shipIndex] };
+          const repBlockT = checkRepBlock(prev, targetFactionId, 'travel'); if (repBlockT) { result = { success: false, message: repBlockT }; return prev; }
           s.tradeStatus = { ...s.tradeStatus };
           if (s.tradeStatus.travelTurnsRemaining > 0) { result = { success: false, message: '正在跃迁中' }; return prev; }
           if (s.tradeStatus.currentFactionId === targetFactionId) { result = { success: false, message: '已在此势力' }; return prev; }
@@ -114,6 +115,7 @@ export function useTrade(
         updater: (prev) => {
           const ships = [...prev.ships]; const s = { ...ships[shipIndex] };
           if (quantity <= 0) { result = { success: false, message: '数量必须大于0' }; return prev; }
+          const repBlockS = checkRepBlock(prev, s.tradeStatus.currentFactionId, 'sell'); if (repBlockS) { result = { success: false, message: repBlockS }; return prev; }
           if (s.tradeStatus.currentFactionId === factionId) { result = { success: false, message: '不能在本地势力出售' }; return prev; }
           const invCount = s.tradeStatus.inventory[factionId] || 0;
           if (invCount < quantity) { result = { success: false, message: '库存不足' }; return prev; }
@@ -146,6 +148,7 @@ export function useTrade(
         type: 'FUNCTIONAL_UPDATE',
         updater: (prev) => {
           const ships = [...prev.ships]; const s = { ...ships[shipIndex] };
+          const repBlockEx = checkRepBlock(prev, s.tradeStatus.currentFactionId, 'explore'); if (repBlockEx) { result = { success: false, message: repBlockEx }; return prev; }
           if (s.tradeStatus.exploredThisTurn) { result = { success: false, message: '本回合已探索过' }; return prev; }
           const matIds = ['carbon', 'gold_ore', 'oil', 'dark_matter', 'silicon', 'quantum'];
           const matNames: Record<string, string> = { carbon: '碳块', gold_ore: '黄金矿石', oil: '石油', dark_matter: '暗物质', silicon: '硅片', quantum: '量子簇' };
@@ -218,8 +221,7 @@ export function useTrade(
         updater: (prev) => {
           const ships = [...prev.ships]; const s = { ...ships[shipIndex] };
           const currentFid = s.tradeStatus.currentFactionId;
-          const currentRep = (prev.factionReputation || {})[currentFid] || 0;
-          if (currentRep < -20) { result = { success: false, message: '该势力不信任你，无法打探消息', goldChange: 0 }; return prev; }
+          const repBlockI = checkRepBlock(prev, currentFid, 'intel'); if (repBlockI) { result = { success: false, message: repBlockI, goldChange: 0 }; return prev; }
           if (s.tradeStatus.intelGatheredInFaction === currentFid) { result = { success: false, message: '在此势力已打探过消息，跃迁到新势力后可再次打探', goldChange: 0 }; return prev; }
           s.tradeStatus = { ...s.tradeStatus, intelGatheredInFaction: currentFid };
           const turnMultiplier = 1 + prev.turn * 0.08;
@@ -261,6 +263,10 @@ export function useTrade(
         const contracts = [...(prev.factionContracts || [])];
         const idx = contracts.findIndex((c) => c.id === contractId);
         if (idx === -1) return prev;
+        const contract = contracts[idx];
+        const repBlockC = checkRepBlock(prev, contract.factionId, 'contract'); if (repBlockC) return prev;
+        const contract = contracts[idx];
+        const repBlockC = checkRepBlock(prev, contract.factionId, 'contract'); if (repBlockC) return prev;
         contracts[idx] = { ...contracts[idx], accepted: true };
         success = true;
         return { ...prev, factionContracts: contracts };
