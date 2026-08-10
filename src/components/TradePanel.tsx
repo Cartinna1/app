@@ -232,7 +232,7 @@ export default function TradePanel({ factions, ship, factionPrices, factionSellM
               const dist = currentFaction ? getDistance(currentFaction.id, f.id) : 0;
               const isCurrent = f.id === ts.currentFactionId;
               const turns = currentFaction ? getTravelTurns(currentFaction.id, f.id) : 0;
-              const fs = ts.factionStates[f.id];
+              
               const fPrice = factionPrices[f.id] || f.basePrice;
               const fRep = (factionReputation || {})[f.id] || 0;
               const fRepTier = getReputationTier(fRep);
@@ -299,7 +299,7 @@ export default function TradePanel({ factions, ship, factionPrices, factionSellM
                         </span>
                       )}
                     </p></div>
-                  {currentDiscount > 0 && <div><p className="text-xs text-green-400">投资优惠</p><p className="text-sm text-green-400 font-bold">-{(currentDiscount * 100).toFixed(0)}%</p></div>}
+                  {currentRepTier.discount > 0 && <div><p className="text-xs text-green-400">投资优惠</p><p className="text-sm text-green-400 font-bold">-{(currentRepTier.discount * 100).toFixed(0)}%</p></div>}
                   <div><p className="text-xs text-slate-500">基价</p><p className="text-sm text-slate-500 line-through">{currentFaction.basePrice.toLocaleString()} 金</p></div>
                 </div>
                 </div>
