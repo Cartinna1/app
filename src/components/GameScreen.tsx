@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import type { GameState, EventOption, ResourceChange, ChoiceEvent } from '@/types/game';
 import type { DodgeReason } from '@/hooks/useEvent';
 import type { PlanetTypeId } from '@/types/colony';
@@ -25,6 +25,8 @@ import {
   Flame,
   Swords,
   Home,
+  Volume2,
+  VolumeX,
 } from 'lucide-react';
 import StockMarket from './StockMarket';
 import MaterialMarket from './MaterialMarket';
@@ -182,6 +184,47 @@ export default function GameScreen({
 }: GameScreenProps) {
   const [activeTab, setActiveTab] = useState<TabId>('overview');
   const [showConfirmNext, setShowConfirmNext] = useState(false);
+  const [bgmMuted, setBgmMuted] = useState(() => localStorage.getItem('bgm_muted') === 'true');
+  const bgmRef = useRef<HTMLAudioElement | null>(null);
+
+  // 背景音乐：首次用户交互时启动
+  useEffect(() => {
+    if (bgmRef.current) return;
+    const audio = new Audio('/bgm.mp3');
+    audio.loop = true;
+    audio.volume = 0.3;
+    bgmRef.current = audio;
+
+    const startOnInteraction = () => {
+      if (localStorage.getItem('bgm_muted') !== 'true') {
+        audio.play().catch(() => {});
+      }
+      document.removeEventListener('click', startOnInteraction);
+    };
+    document.addEventListener('click', startOnInteraction, { once: true });
+
+    return () => {
+      audio.pause();
+      audio.src = '';
+    };
+  }, []);
+
+  // 静音切换
+  useEffect(() => {
+    const a = bgmRef.current;
+    if (!a) return;
+    if (bgmMuted) {
+      a.pause();
+    } else {
+      a.play().catch(() => {});
+    }
+  }, [bgmMuted]);
+
+  const toggleMute = () => {
+    const next = !bgmMuted;
+    setBgmMuted(next);
+    localStorage.setItem('bgm_muted', String(next));
+  };
 
   const currentShip = gameState.ships[0];
   const totalAssets = currentShip ? getShipTotalAssets(currentShip) : 0;
@@ -337,6 +380,21 @@ export default function GameScreen({
               );
             })}
           </nav>
+
+          {/* 背景音乐开关 */}
+          <div className="mt-auto p-4 border-t border-slate-700/50">
+            <button
+              onClick={toggleMute}
+              className={`flex items-center gap-2 w-full px-3 py-2 rounded-lg text-xs transition-colors ${
+                bgmMuted
+                  ? 'text-slate-500 hover:text-slate-300 hover:bg-slate-800'
+                  : 'text-cyan-400 bg-cyan-900/20 hover:bg-cyan-900/40'
+              }`}
+            >
+              {bgmMuted ? <VolumeX size={16} /> : <Volume2 size={16} />}
+              <span>{bgmMuted ? '音乐已关闭' : '背景音乐'}</span>
+            </button>
+          </div>
         </aside>
 
         {/* ===== 主内容区 ===== */}
