@@ -563,6 +563,16 @@ export default function GameScreen({
           <Zap size={18} />
           <span className="text-[10px] font-bold whitespace-nowrap">结束</span>
         </button>
+        {/* 移动端背景音乐开关 */}
+        <button
+          onClick={toggleMute}
+          className={`flex-shrink-0 flex flex-col items-center gap-0.5 px-2 py-1 rounded-md transition-all min-w-[48px] min-h-[48px] justify-center ${
+            bgmMuted ? 'text-slate-500' : 'text-cyan-400'
+          }`}
+        >
+          {bgmMuted ? <VolumeX size={18} /> : <Volume2 size={18} />}
+          <span className="text-[10px] font-bold whitespace-nowrap">{bgmMuted ? '静音' : '音乐'}</span>
+        </button>
         {tabs.slice(0, 11).map((tab) => {
           const Icon = tab.icon;
           const isActive = activeTab === tab.id;
