@@ -125,12 +125,21 @@ export default function TradePanel({ factions, ship, factionPrices, factionSellM
       {/* 当前位置 + 贸易政策 */}
       <div className="bg-cyan-900/20 border border-cyan-700/40 rounded-xl p-4">
         <div className="flex items-center gap-3 mb-3">
-          <Globe size={20} className="text-cyan-400" />
-          <div>
+          <Globe size={20} className="text-cyan-400 flex-shrink-0" />
+          <div className="flex-1 min-w-0">
             <p className="text-xs text-cyan-400">当前停靠</p>
             <p className="text-lg font-bold text-white">{currentFaction?.name || '未知'}</p>
-            {/* 声望条 */}
-            {(() => {
+          </div>
+          {isTraveling && travelTarget && (
+            <div className="text-right">
+              <p className="text-xs text-yellow-400">跃迁中</p>
+              <p className="text-sm text-slate-300">前往 {travelTarget.name}</p>
+              <p className="text-xs text-slate-500">剩余 {ts.travelTurnsRemaining} 回合</p>
+            </div>
+          )}
+        </div>
+        {/* 声望条 */}
+        {(() => {
               const rep = factionReputation[currentFaction?.id || ''] || 0;
               const tier = getReputationTier(rep);
               const color = rep < 0 ? 'bg-red-500' : rep < 30 ? 'bg-slate-500' : rep < 70 ? 'bg-cyan-500' : 'bg-amber-500';
@@ -144,34 +153,25 @@ export default function TradePanel({ factions, ship, factionPrices, factionSellM
                 effects.push(`每回合+${tier.passiveIncomeMin}~${tier.passiveIncomeMax}金币`);
               }
               return (
-                <div className="mt-2">
-                  <div className="flex items-center justify-between mb-1">
-                    <span className="text-xs text-slate-400">{tier.label}</span>
-                    <span className={`text-xs font-bold ${rep < 0 ? 'text-red-400' : 'text-amber-400'}`}>{rep}</span>
+                <div>
+                  <div className="flex items-center justify-between mb-1.5">
+                    <span className={`text-sm font-bold ${rep < -20 ? 'text-red-400' : rep < 30 ? 'text-slate-300' : rep < 70 ? 'text-cyan-400' : 'text-amber-400'}`}>{tier.label}</span>
+                    <span className={`text-base font-bold ${rep < 0 ? 'text-red-400' : rep > 0 ? 'text-green-400' : 'text-slate-400'}`}>{rep > 0 ? '+' : ''}{rep}</span>
                   </div>
-                  <div className="h-1.5 bg-slate-700 rounded-full relative">
-                    <div className="absolute left-1/2 top-0 bottom-0 w-px bg-slate-500"></div>
+                  <div className="h-2 bg-slate-700 rounded-full relative mb-1.5">
+                    <div className="absolute left-1/2 top-0 bottom-0 w-px bg-slate-500 z-10"></div>
                     <div className={`absolute top-0 bottom-0 rounded-full ${color}`}
                       style={{ left: `${Math.min(offset, 100)}%`, width: `${Math.abs(rep) / 2}%` }}></div>
                   </div>
                   {effects.length > 0 && (
-                    <div className="mt-1 text-[10px] text-slate-500">{effects.join(' · ')}</div>
+                    <div className="text-xs text-slate-400 leading-relaxed">{effects.join(' · ')}</div>
                   )}
                 </div>
               );
             })()}
-          </div>
-          {isTraveling && travelTarget && (
-            <div className="ml-auto text-right">
-              <p className="text-xs text-yellow-400">跃迁中</p>
-              <p className="text-sm text-slate-300">前往 {travelTarget.name}</p>
-              <p className="text-xs text-slate-500">剩余 {ts.travelTurnsRemaining} 回合</p>
-            </div>
-          )}
-        </div>
         {/* 声望投资快捷按钮 */}
         {currentFaction && !isTraveling && currentFaction.id === ts.currentFactionId && (
-          <button onClick={() => setActiveTab('buy-invest')} className="ml-auto px-3 py-1 bg-blue-900/40 hover:bg-blue-800/60 border border-blue-700/40 rounded text-xs text-blue-300">💰 投资 {currentFaction.name}</button>
+          <button onClick={() => setActiveTab('buy-invest')} className="mt-3 w-full py-1.5 bg-blue-900/40 hover:bg-blue-800/60 border border-blue-700/40 rounded text-xs text-blue-300">💰 投资 {currentFaction.name}</button>
         )}
 
         {/* 贸易政策横幅 */}
@@ -248,11 +248,11 @@ export default function TradePanel({ factions, ship, factionPrices, factionSellM
                       />
                       <div className="min-w-0 flex-1">
                         <div className="flex items-center gap-2 flex-wrap">
-                          <span className={`text-sm font-bold ${isCurrent ? 'text-cyan-400' : 'text-slate-200'}`}>{f.name}</span>
+                          <span className={`text-base font-bold ${isCurrent ? 'text-cyan-400' : 'text-slate-100'}`}>{f.name}</span>
                           {isCurrent && <span className="text-[10px] bg-cyan-600 text-white px-1.5 py-0.5 rounded">当前</span>}
-                          <span className={`text-[10px] px-1.5 py-0.5 rounded font-bold ${fRep < -20 ? 'bg-red-900/60 text-red-300' : fRep < 30 ? 'bg-slate-700 text-slate-300' : fRep < 70 ? 'bg-cyan-700 text-cyan-100' : 'bg-amber-600 text-white'}`}>{fRepTier.label} {fRep}</span>
+                          <span className={`text-xs px-1.5 py-0.5 rounded font-bold ${fRep < -20 ? 'bg-red-900/60 text-red-300' : fRep < 30 ? 'bg-slate-700 text-slate-300' : fRep < 70 ? 'bg-cyan-700 text-cyan-100' : 'bg-amber-600 text-white'}`}>{fRepTier.label} <span className={fRep < 0 ? 'text-red-400' : fRep > 0 ? 'text-green-300' : ''}>{fRep}</span></span>
                         </div>
-                        <p className="text-xs text-slate-400 mt-1">{f.specialtyName} | 市场价 <span className="text-yellow-400">{fPrice}</span> <span className="text-slate-600">(基价{f.basePrice})</span></p>
+                        <p className="text-sm text-slate-300 mt-1">{f.specialtyName} | 市场价 <span className="text-yellow-400">{fPrice}</span> <span className="text-slate-600">(基价{f.basePrice})</span></p>
                       </div>
                     </div>
                     {!isCurrent && <span className="text-xs text-slate-500 flex-shrink-0">距离 {dist} | {turns}回合</span>}
@@ -328,14 +328,14 @@ export default function TradePanel({ factions, ship, factionPrices, factionSellM
             </div>
             <p className="text-sm text-slate-400 mb-4">向{currentFaction?.name || '当前势力'}换取声望。每<strong className="text-yellow-400">8000金币</strong>=1声望，每回合最多+10。</p>
             <div className="mb-4 bg-slate-800/60 rounded-lg p-3">
-              <div className="flex justify-between text-xs text-slate-400 mb-1"><span>当前声望：<span className="text-amber-400 font-bold">{currentRep}</span>（{currentRepTier.label}）</span><span>每回合 +10 上限</span></div>
+              <div className="flex justify-between text-xs text-slate-400 mb-1"><span>当前声望：<span className="text-amber-400 font-bold">{currentRep}</span>（{currentRepTier.label}）</span><span>每回合最多 10 次</span></div>
               <div className="h-1.5 bg-slate-700 rounded-full relative">
                 <div className="absolute left-1/2 top-0 bottom-0 w-px bg-slate-500"></div>
                 <div className="absolute top-0 bottom-0 rounded-full bg-blue-500" style={{ left: `${Math.min(50 + currentRep/2, 100)}%`, width: `${Math.abs(currentRep)/2}%` }}></div>
               </div>
             </div>
             <div className="flex items-center gap-2 mb-3">
-              <input type="text" inputMode="numeric" pattern="[0-9]*" value={investAmount} onChange={(e) => setInvestAmount(e.target.value.replace(/[^0-9]/g, ''))} placeholder="8000的倍数" className="flex-1 bg-slate-800 border border-slate-600 rounded-lg px-3 py-2 text-sm text-slate-200 placeholder-slate-600" />
+              <div className="flex-1 bg-slate-800 border border-slate-600 rounded-lg px-3 py-2 text-sm text-slate-200">8000 金币（固定1次=1声望）</div>
               <button onClick={() => setInvestAmount((Math.floor(ship.gold / 8000) * 8000).toString())} className="px-3 py-2 bg-slate-700 hover:bg-slate-600 rounded-lg text-xs text-slate-300">最大</button>
             </div>
             <button onClick={handleInvest} disabled={!investAmount || parseInt(investAmount) <= 0 || ship.gold <= 0} className="w-full py-2.5 bg-blue-700 hover:bg-blue-600 disabled:bg-slate-700 disabled:text-slate-500 rounded-lg font-bold text-white transition-colors flex items-center justify-center gap-2"><Coins size={16} /> 投资</button>

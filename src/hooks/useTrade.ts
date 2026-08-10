@@ -177,10 +177,12 @@ export function useTrade(
           if (s.gold < amount) { result = { success: false, message: '金币不足' }; return prev; }
           const factionId = s.tradeStatus.currentFactionId;
           ensureRepFields(prev);
-          const repGain = Math.min(10, Math.floor(amount / 8000));
-          if (repGain <= 0) { result = { success: false, message: '至少投资8000金币才能获得声望' }; return prev; }
-          const actualAmount = repGain * 8000;
-          if (s.gold < actualAmount) { result = { success: false, message: `金币不足，至少需要${actualAmount}` }; return prev; }
+          const maxPerTurn = 10;
+          const used = (prev.factionRepLog || {})[factionId] || 0;
+          if (used >= maxPerTurn) { result = { success: false, message: `本回合已投资${maxPerTurn}次，下次回合再来` }; return prev; }
+          const repGain = 1; // 每次投资固定 +1 声望
+          if (s.gold < 8000) { result = { success: false, message: '至少需要8000金币' }; return prev; }
+          const actualAmount = 8000;
           s.gold -= actualAmount;
           const factionName = FACTIONS.find((f) => f.id === factionId)?.name || factionId;
           s.goldLog = [{ turn: prev.turn, amount: -actualAmount, reason: `投资「${factionName}」`, balanceAfter: s.gold }, ...s.goldLog].slice(0, 200);
