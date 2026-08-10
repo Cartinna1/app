@@ -29,6 +29,9 @@ function App() {
     exploreFaction,
     investFaction,
     gatherIntel,
+    acceptContract,
+    completeContract,
+    blackMarketBuy,
     installModule,
     useManualModule,
     unlockColony,
@@ -121,6 +124,9 @@ function App() {
       onExploreFaction={() => exploreFaction(0)}
       onInvestFaction={(amt) => investFaction(0, amt)}
       onGatherIntel={() => gatherIntel(0)}
+      onAcceptContract={(contractId) => acceptContract(contractId)}
+      onCompleteContract={(contractId) => completeContract(0, contractId)}
+      onBlackMarketBuy={(fid, itemId, qty) => blackMarketBuy(0, fid, itemId, qty)}
       onInstallModule={(moduleId) => installModule(0, moduleId)}
       onUseManualModule={(moduleId) => useManualModule(0, moduleId)}
       onUnlockColony={unlockColony}

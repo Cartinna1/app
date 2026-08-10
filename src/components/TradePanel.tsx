@@ -466,7 +466,7 @@ export default function TradePanel({ factions, ship, factionPrices, factionSellM
                   {activeContracts.map((c) => (
                     <div key={c.id} className="flex items-center justify-between bg-green-900/30 rounded p-2 mb-1 text-xs">
                       <span className="text-green-400">{c.type==='smuggling'?'走私':'采购'} x{c.targetQty} | +{c.rewardGold}金 +{c.rewardRep}声望 | 过期:第{c.expiresTurn}回合</span>
-                      <button onClick={() => { const r = onCompleteContract(0, c.id); setMessage(r.message); setMsgType(r.success ? 'success' : 'error'); }} className="px-2 py-1 bg-green-700 hover:bg-green-600 rounded text-xs">提交</button>
+                      <button onClick={() => { const r = onCompleteContract(c.id); setMessage(r.message); setMsgType(r.success ? 'success' : 'error'); }} className="px-2 py-1 bg-green-700 hover:bg-green-600 rounded text-xs">提交</button>
                     </div>
                   ))}
                 </div>
@@ -486,7 +486,7 @@ export default function TradePanel({ factions, ship, factionPrices, factionSellM
                   {['f01','f02','f03','f04','f05','f06','f07','f08','f09','f10'].map(fid => {
                     const f = factions.find(ff => ff.id === fid);
                     return f && (
-                      <button key={fid} onClick={() => { const r = onBlackMarketBuy(0, fid, f.specialtyName, 1); setMessage(r.message); setMsgType(r.success ? 'success' : 'error'); }} className="px-2 py-1 bg-purple-900/60 hover:bg-purple-800 text-xs rounded text-purple-300" title={`购买${f.specialtyName}`}>
+                      <button key={fid} onClick={() => { const r = onBlackMarketBuy(fid, f.specialtyName, 1); setMessage(r.message); setMsgType(r.success ? 'success' : 'error'); }} className="px-2 py-1 bg-purple-900/60 hover:bg-purple-800 text-xs rounded text-purple-300" title={`购买${f.specialtyName}`}>
                         {f.name.slice(0,2)}
                       </button>
                     );
