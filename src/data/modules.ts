@@ -1,7 +1,7 @@
 import type { ModuleDefinition } from '@/types/game';
 
 /**
- * 母舰装置定义 — 共12种
+ * 母舰装置定义 — 共15种
  * 每种只能造1个
  */
 export const MODULE_DEFINITIONS: ModuleDefinition[] = [
@@ -40,41 +40,6 @@ export const MODULE_DEFINITIONS: ModuleDefinition[] = [
     effectType: 'per_turn',
     cooldown: 0,
     effectDescription: '每回合 +60 食物',
-  },
-  {
-    id: 'alloy_furnace',
-    name: '小型合金熔炉',
-    description: '消耗任意5个原料，产出3合金（冷却1回合）',
-    costFood: 50,
-    costAlloy: 0,
-    costStardust: 0,
-    effectType: 'manual',
-    cooldown: 1,
-    effectDescription: '消耗任意5个原料 → +3合金（冷却1回合）',
-  },
-  {
-    id: 'micro_alloy_furnace',
-    name: '微型合金熔炉',
-    description: '消耗2个碳块+2个石油，产出2合金（冷却1回合）',
-    costFood: 0,
-    costGold: 3000,
-    costAlloy: 0,
-    costStardust: 0,
-    effectType: 'manual',
-    cooldown: 1,
-    effectDescription: '消耗2碳块+2石油 → +2合金（冷却1回合）',
-  },
-  {
-    id: 'mega_alloy_furnace',
-    name: '巨型合金熔炉',
-    description: '消耗任意10个原料，产出8合金（冷却1回合）',
-    costFood: 0,
-    costGold: 50000,
-    costAlloy: 200,
-    costStardust: 20,
-    effectType: 'manual',
-    cooldown: 1,
-    effectDescription: '消耗任意10个原料 → +8合金（冷却1回合）',
   },
   {
     id: 'reserve_bay',
@@ -145,29 +110,16 @@ export const MODULE_DEFINITIONS: ModuleDefinition[] = [
     effectDescription: '生产回合 -1（最少1回合）',
   },
 
-  // ===== 高级装置 =====
-  {
-    id: 'time_fold_engine',
-    name: '时间折叠引擎',
-    description: '通过折叠局部时空，在同一回合内创造额外的生产窗口。每回合生产产品次数+3。',
-    costFood: 0,
-    costAlloy: 150,
-    costStardust: 0,
-    costMaterials: { dark_matter: 150 },
-    effectType: 'passive',
-    cooldown: 0,
-    effectDescription: '每回合生产次数 +3',
-  },
   {
     id: 'stardust_pool',
     name: '星尘催化池',
-    description: '消耗6合金，手动转化为1星尘（无冷却）',
+    description: '消耗500合金，手动转化为10星尘（冷却2回合）',
     costFood: 0,
     costAlloy: 400,
     costStardust: 0,
     effectType: 'manual',
-    cooldown: 0,
-    effectDescription: '消耗6合金 → +1 星尘（无冷却）',
+    cooldown: 2,
+    effectDescription: '消耗500合金 → +10 星尘（冷却2回合）',
   },
   {
     id: 'dyson_collector',
@@ -192,21 +144,53 @@ export const MODULE_DEFINITIONS: ModuleDefinition[] = [
     effectDescription: '消耗30星尘 → 所有产品和原料数量翻倍（冷却5回合）',
   },
   {
-    id: 'eternal_core',
-    name: '永恒合金核心',
-    description: '每回合直接产出5合金',
+    id: 'prod_scheduler',
+    name: '量产调度终端',
+    description: '加装自动化调度系统，优化产线排程，让母舰每回合能多进行一次产品生产。',
     costFood: 0,
-    costAlloy: 260,
-    costStardust: 30,
-    effectType: 'per_turn',
+    costAlloy: 100,
+    costStardust: 0,
+    effectType: 'passive',
     cooldown: 0,
-    effectDescription: '每回合 +5 合金',
+    effectDescription: '每回合生产产品上限 +1',
+  },
+  {
+    id: 'parallel_matrix',
+    name: '并行生产矩阵',
+    description: '多轴并行加工矩阵，同时运行多条产线，进一步提升母舰产能。',
+    costFood: 0,
+    costAlloy: 300,
+    costStardust: 0,
+    effectType: 'passive',
+    cooldown: 0,
+    effectDescription: '每回合生产产品上限 +2',
+  },
+  {
+    id: 'automation_hub',
+    name: '全自动量产中枢',
+    description: '由中央AI统筹的无人化量产中枢，将母舰产能推向极限。',
+    costFood: 0,
+    costAlloy: 500,
+    costStardust: 0,
+    effectType: 'passive',
+    cooldown: 0,
+    effectDescription: '每回合生产产品上限 +3',
   },
 ];
 
 // 获取装置定义
 export function getModuleDef(id: string): ModuleDefinition | undefined {
   return MODULE_DEFINITIONS.find((m) => m.id === id);
+}
+
+// 计算生产上限总加成（遗物时空稳定锚 +2、三个量产装置 +1/+2/+3，可叠加）
+export function getProductionLimitBonus(ship: { installedModuleIds: string[]; relics: { id: string }[] }): number {
+  let bonus = 0;
+  if (ship.relics.some((r) => r.id === '100003' || r.id === 'r_003')) bonus += 2;
+  if (ship.installedModuleIds.includes('prod_scheduler')) bonus += 1;
+  if (ship.installedModuleIds.includes('parallel_matrix')) bonus += 2;
+  if (ship.installedModuleIds.includes('automation_hub')) bonus += 3;
+  return bonus;
 }
 
 // 检查是否已安装

@@ -781,7 +781,7 @@ function OverviewTab({
               <div><span className="text-slate-500">食物总消耗:</span> <span className="text-red-400 font-bold">-{actualCrewCost+colFoodCost}{colFoodCost>0?` (船员${actualCrewCost}+殖民${colFoodCost})`:` (船员)`}</span></div>
               <div><span className="text-slate-500">食物净增减:</span> <span className={(colFood+modFood - actualCrewCost - colFoodCost) >= 0 ? 'text-green-400 font-bold' : 'text-red-400 font-bold'}>{colFood+modFood - actualCrewCost - colFoodCost >= 0 ? '+' : ''}{colFood+modFood - actualCrewCost - colFoodCost}</span></div>
               <div><span className="text-slate-500">当前食物:</span> <span className={ship.food >= 0 ? 'text-green-400 font-bold' : 'text-red-400 font-bold'}>{ship.food}</span></div>
-              {colAlloy > 0 && <div><span className="text-slate-500">合金产出:</span> <span className="text-slate-300 font-bold">+{colAlloy}{ship.modules?.some(m => m.active && m.id === 'eternal_core') ? ' + 5(母舰)' : ''} (殖民地)</span></div>}
+              {colAlloy > 0 && <div><span className="text-slate-500">合金产出:</span> <span className="text-slate-300 font-bold">+{colAlloy} (殖民地)</span></div>}
               {colStardust > 0 && <div><span className="text-slate-500">星尘产出:</span> <span className="text-purple-400 font-bold">+{colStardust}{ship.modules?.some(m => m.active && m.id === 'dyson_collector') ? ' + 3(母舰)' : ''} (殖民地)</span></div>}
               {colGold > 0 && <div><span className="text-slate-500">金币产出:</span> <span className="text-yellow-400 font-bold">+{colGold} (殖民地)</span></div>}
               {colRP > 0 && <div><span className="text-slate-500">科研产出:</span> <span className="text-cyan-400 font-bold">+{colRP} (殖民地)</span></div>}

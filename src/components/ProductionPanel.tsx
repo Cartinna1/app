@@ -1,6 +1,7 @@
 import { useState, useMemo } from 'react';
 import type { Mothership, RawMaterial } from '@/types/game';
 import { RECIPES } from '@/data/gameData';
+import { getProductionLimitBonus } from '@/data/modules';
 import { Factory, Check, AlertCircle, Clock, Wheat } from 'lucide-react';
 
 interface ProductionPanelProps {
@@ -14,6 +15,7 @@ export default function ProductionPanel({ ship, shipIndex, materials: _materials
   void _materials;
   const [messages, setMessages] = useState<Record<string, string>>({});
   const [filterTurn, setFilterTurn] = useState<number>(1);
+  const maxProd = ship.maxProductionsPerTurn + getProductionLimitBonus(ship);
 
   const matNames: Record<string, string> = {
     carbon: '碳块',
@@ -74,8 +76,8 @@ export default function ProductionPanel({ ship, shipIndex, materials: _materials
       <div className="flex items-center gap-2 md:gap-4 mb-3 md:mb-4 text-sm">
         <div className="text-sm">
           <span className="text-slate-400">本回合生产: </span>
-          <span className={`font-bold ${ship.productionsThisTurn >= ship.maxProductionsPerTurn ? 'text-red-400' : 'text-cyan-400'}`}>
-            {ship.productionsThisTurn} / {ship.maxProductionsPerTurn}
+          <span className={`font-bold ${ship.productionsThisTurn >= maxProd ? 'text-red-400' : 'text-cyan-400'}`}>
+            {ship.productionsThisTurn} / {maxProd}
           </span>
           <span className="text-slate-500 ml-1">次</span>
         </div>
@@ -98,7 +100,7 @@ export default function ProductionPanel({ ship, shipIndex, materials: _materials
           <span className="text-sm text-purple-400">跃迁者: 生产回合-{ship.productionSpeedBonus}</span>
         )}
       </div>
-      {ship.productionsThisTurn >= ship.maxProductionsPerTurn && (
+      {ship.productionsThisTurn >= maxProd && (
         <p className="text-sm text-red-400 mb-4">⚠ 本回合生产次数已用完，结束回合后可继续生产</p>
       )}
 

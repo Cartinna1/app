@@ -68,66 +68,12 @@ export function useModule(
 
           // 处理各手动装置的具体逻辑
           switch (moduleId) {
-            case 'alloy_furnace': {
-              const matEntries = Object.entries(s.materials).filter(([, v]) => (v as number) > 0);
-              const totalMats = matEntries.reduce((sum, [, v]) => sum + (v as number), 0);
-              if (totalMats < 5) { result = { success: false, message: `原料总数不足（当前 ${totalMats}，需要 5）` }; return prev; }
-              s.materials = { ...s.materials };
-              let remaining = 5;
-              const shuffled = [...matEntries].sort(() => Math.random() - 0.5);
-              for (const [matId, count] of shuffled) {
-                if (remaining <= 0) break;
-                const deduct = Math.min(remaining, count as number);
-                s.materials[matId] = (s.materials[matId] || 0) - deduct;
-                if (s.materials[matId] <= 0) delete s.materials[matId];
-                remaining -= deduct;
-              }
-              const extraAlloy = s.relics.some((r) => r.id === 'r_008') ? 1 : 0;
-              s.alloy += 3 + extraAlloy;
-              mod.cooldown = def.cooldown;
-              result = { success: true, message: `消耗 5 个原料，产出 ${3 + extraAlloy} 合金` };
-              break;
-            }
-            case 'micro_alloy_furnace': {
-              if ((s.materials.carbon || 0) < 2) { result = { success: false, message: '需要 2 个碳块' }; return prev; }
-              if ((s.materials.oil || 0) < 2) { result = { success: false, message: '需要 2 个石油' }; return prev; }
-              s.materials = { ...s.materials };
-              s.materials.carbon = (s.materials.carbon || 0) - 2;
-              if (s.materials.carbon <= 0) delete s.materials.carbon;
-              s.materials.oil = (s.materials.oil || 0) - 2;
-              if (s.materials.oil <= 0) delete s.materials.oil;
-              const extraAlloy = s.relics.some((r) => r.id === 'r_008') ? 1 : 0;
-              s.alloy += 2 + extraAlloy;
-              mod.cooldown = def.cooldown;
-              result = { success: true, message: `消耗 2 碳块 + 2 石油，产出 ${2 + extraAlloy} 合金` };
-              break;
-            }
-            case 'mega_alloy_furnace': {
-              const matEntries = Object.entries(s.materials).filter(([, v]) => (v as number) > 0);
-              const totalMats = matEntries.reduce((sum, [, v]) => sum + (v as number), 0);
-              if (totalMats < 10) { result = { success: false, message: `原料总数不足（当前 ${totalMats}，需要 10）` }; return prev; }
-              s.materials = { ...s.materials };
-              let remaining = 10;
-              const shuffled = [...matEntries].sort(() => Math.random() - 0.5);
-              for (const [matId, count] of shuffled) {
-                if (remaining <= 0) break;
-                const deduct = Math.min(remaining, count as number);
-                s.materials[matId] = (s.materials[matId] || 0) - deduct;
-                if (s.materials[matId] <= 0) delete s.materials[matId];
-                remaining -= deduct;
-              }
-              const extraAlloy = s.relics.some((r) => r.id === 'r_008') ? 1 : 0;
-              s.alloy += 8 + extraAlloy;
-              mod.cooldown = def.cooldown;
-              result = { success: true, message: `消耗 10 个原料，产出 ${8 + extraAlloy} 合金` };
-              break;
-            }
             case 'stardust_pool': {
-              if (s.alloy < 6) { result = { success: false, message: '需要 6 合金' }; return prev; }
-              s.alloy -= 6;
-              s.stardust += 1;
+              if (s.alloy < 500) { result = { success: false, message: '需要 500 合金' }; return prev; }
+              s.alloy -= 500;
+              s.stardust += 10;
               mod.cooldown = def.cooldown;
-              result = { success: true, message: '消耗 6 合金，转化为 1 星尘' };
+              result = { success: true, message: '消耗 500 合金，转化为 10 星尘' };
               break;
             }
             case 'quantum_reactor': {

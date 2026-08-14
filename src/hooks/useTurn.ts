@@ -222,9 +222,6 @@ export function useTurn(
           // 4. 戴森粒子收集器：每回合 +3 星尘
           if (hasModule('dyson_collector')) s.stardust += 3;
 
-          // 5. 永恒合金核心：每回合 +5 合金
-          if (hasModule('eternal_core')) s.alloy += 5;
-
           // 6. 手动装置冷却倒计时
           s.modules = s.modules.map((m) => m.cooldown > 0 ? { ...m, cooldown: m.cooldown - 1 } : m);
 

@@ -9,9 +9,17 @@ interface ModulePanelProps {
   onUseManualModule: (moduleId: string) => { success: boolean; message: string };
 }
 
+const TYPE_TABS = [
+  { id: 'all', label: '全部' },
+  { id: 'per_turn', label: '每回合' },
+  { id: 'passive', label: '被动' },
+  { id: 'manual', label: '操作' },
+];
+
 export default function ModulePanel({ ship, onInstallModule, onUseManualModule }: ModulePanelProps) {
   const [message, setMessage] = useState('');
   const [messageType, setMessageType] = useState<'success' | 'error'>('success');
+  const [activeType, setActiveType] = useState<string>('all');
 
   const handleInstall = (moduleId: string) => {
     const result = onInstallModule(moduleId);
@@ -85,7 +93,7 @@ export default function ModulePanel({ ship, onInstallModule, onUseManualModule }
       {/* 已安装装置 */}
       {ship.modules.length > 0 && (
         <div className="mb-4 md:mb-6">
-          <h3 className="text-sm font-bold text-slate-300 mb-2">已安装 ({ship.modules.length}/12)</h3>
+          <h3 className="text-sm font-bold text-slate-300 mb-2">已安装 ({ship.modules.length}/{MODULE_DEFINITIONS.length})</h3>
           <div className="space-y-2">
             {ship.modules.map((mod) => {
               const def = MODULE_DEFINITIONS.find((d) => d.id === mod.id);
@@ -107,21 +115,12 @@ export default function ModulePanel({ ship, onInstallModule, onUseManualModule }
                       let canUse = !onCooldown;
                       let reason = '';
                       if (canUse) {
-                        const mats = ship.materials || {};
-                        if (mod.id === 'alloy_furnace') {
-                          const totalMats = Object.values(mats).reduce((sum, v) => sum + (v || 0), 0);
-                          if (totalMats < 5) { canUse = false; reason = '原料不足(需5)'; }
-                        } else if (mod.id === 'micro_alloy_furnace') {
-                          if ((mats.carbon || 0) < 2 || (mats.oil || 0) < 2) { canUse = false; reason = '需2碳+2油'; }
-                        } else if (mod.id === 'mega_alloy_furnace') {
-                          const totalMats = Object.values(mats).reduce((sum, v) => sum + (v || 0), 0);
-                          if (totalMats < 10) { canUse = false; reason = '原料不足(需10)'; }
-                        } else if (mod.id === 'stardust_pool') {
-                          if (ship.alloy < 60) { canUse = false; reason = '合金不足'; }
+                        if (mod.id === 'stardust_pool') {
+                          if (ship.alloy < 500) { canUse = false; reason = '合金不足(需500)'; }
                         } else if (mod.id === 'quantum_reactor') {
-                          if (ship.food < 300) { canUse = false; reason = '食物不足(需300)'; }
+                          if (ship.food < 50) { canUse = false; reason = '食物不足(需50)'; }
                         } else if (mod.id === 'void_replicator') {
-                          if (ship.stardust < 30) { canUse = false; reason = '星尘不足'; }
+                          if (ship.stardust < 30) { canUse = false; reason = '星尘不足(需30)'; }
                         }
                       }
                       return (
@@ -150,9 +149,34 @@ export default function ModulePanel({ ship, onInstallModule, onUseManualModule }
 
       {/* 可用装置列表 */}
       <h3 className="text-sm font-bold text-slate-300 mb-2">可用装置</h3>
+
+      {/* 类型筛选 - 横向滚动 */}
+      <div className="flex gap-1.5 mb-3 overflow-x-auto pb-1 scrollbar-hide">
+        {TYPE_TABS.map((tab) => {
+          const count = tab.id === 'all'
+            ? MODULE_DEFINITIONS.filter((d) => !isModuleInstalled(ship, d.id)).length
+            : MODULE_DEFINITIONS.filter((d) => !isModuleInstalled(ship, d.id) && d.effectType === tab.id).length;
+          return (
+            <button
+              key={tab.id}
+              onClick={() => setActiveType(tab.id)}
+              className={`flex-shrink-0 px-2.5 py-1 rounded-md text-xs font-bold border transition-all ${
+                activeType === tab.id
+                  ? 'bg-cyan-600/30 text-cyan-400 border-cyan-500/60'
+                  : 'bg-slate-800 text-slate-400 border-slate-700 hover:border-slate-500'
+              }`}
+            >
+              {tab.label}
+              <span className="ml-1 text-slate-500">({count})</span>
+            </button>
+          );
+        })}
+      </div>
+
       <div className="space-y-2 md:space-y-3">
         {MODULE_DEFINITIONS
           .filter((def) => !isModuleInstalled(ship, def.id))
+          .filter((def) => activeType === 'all' || def.effectType === activeType)
           .sort((a, b) => {
             const affordA = canAffordModule(ship, a);
             const affordB = canAffordModule(ship, b);

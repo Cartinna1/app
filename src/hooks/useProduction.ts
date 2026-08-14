@@ -1,6 +1,7 @@
 import { useCallback } from 'react';
 import type { GameState } from '@/types/game';
 import { RECIPES } from '@/data/gameData';
+import { getProductionLimitBonus } from '@/data/modules';
 
 export function useProduction(
   dispatch: React.Dispatch<{ type: 'FUNCTIONAL_UPDATE'; updater: (state: GameState) => GameState }>
@@ -45,8 +46,7 @@ export function useProduction(
         updater: (prev) => {
           const ships = [...prev.ships];
           const ship = { ...ships[shipIndex] };
-          const hasTimeFold = ship.installedModuleIds.includes('time_fold_engine');
-          const maxProd = ship.maxProductionsPerTurn + (ship.relics.some((r) => r.id === '100003' || r.id === 'r_003') ? 2 : 0) + (hasTimeFold ? 3 : 0);
+          const maxProd = ship.maxProductionsPerTurn + getProductionLimitBonus(ship);
           if (ship.productionsThisTurn >= maxProd) return prev;
           const recipe = RECIPES.find((r) => r.id === recipeId);
           if (!recipe) return prev;
