@@ -10,6 +10,7 @@ interface ProductMarketProps {
   products: Product[];
   materials: { id: string; name: string; currentPrice: number; basePrice: number }[];
   stardustMarket: StardustMarket;
+  currentTurn: number;
   onSellQty: (shipIndex: number, productId: string, qty?: number) => { totalRevenue: number; count: number; avgMatCost: number; unitPrice: number } | null;
   onBuyRelic: (relicId: string) => { success: boolean; message: string };
   onBuyRandomMats?: () => { success: boolean; message: string };
@@ -32,7 +33,7 @@ interface ProductGroup {
   productionTurns: number;
 }
 
-export default function ProductMarket({ ship, shipIndex, products, materials, stardustMarket, onSellQty, onBuyRelic, onBuyRandomMats, onBuySellBonus, onBuyGoldWithStardust, onRerollPolicy, onBuyFoodWithStardust, onBuyAlloy, onBuyFood }: ProductMarketProps) {
+export default function ProductMarket({ ship, shipIndex, products, materials, stardustMarket, currentTurn, onSellQty, onBuyRelic, onBuyRandomMats, onBuySellBonus, onBuyGoldWithStardust, onRerollPolicy, onBuyFoodWithStardust, onBuyAlloy, onBuyFood }: ProductMarketProps) {
   const [quantities, setQuantities] = useState<Record<string, number>>({});
   const [messages, setMessages] = useState<Record<string, string>>({});
   const [msgTypes, setMsgTypes] = useState<Record<string, 'success' | 'error'>>({});
@@ -288,7 +289,7 @@ export default function ProductMarket({ ship, shipIndex, products, materials, st
               const currentMatCost = getCurrentMatCost(group.productId, materials);
               const matProfitPerUnit = unitSellPrice - group.avgMatCost;
               const baseProfitPerUnit = unitSellPrice - baseRef;
-              const isUrgent = group.earliestExpire <= 2;
+              const isUrgent = group.earliestExpire - currentTurn <= 2;
               const msg = messages[group.productId] || '';
 
               return (
@@ -315,7 +316,7 @@ export default function ProductMarket({ ship, shipIndex, products, materials, st
                         </div>
                         <div className="flex items-center gap-2 md:gap-3 mt-1 text-[10px] md:text-xs">
                           <span className={isUrgent ? 'text-red-400 font-bold' : 'text-yellow-400'}>
-                            {isUrgent ? '\u26a0 ' : ''}最早{group.earliestExpire}回合后过期
+                            {isUrgent ? '\u26a0 ' : ''}剩余 {Math.max(0, group.earliestExpire - currentTurn)} 回合过期
                           </span>
                           {totalBonus > 0 && (
                             <span className="text-purple-400">

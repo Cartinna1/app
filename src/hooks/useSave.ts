@@ -33,7 +33,7 @@ export function useSave(
             products: prev.products,
             turn: prev.turn,
             currentShipIndex: prev.currentShipIndex,
-                        eventLog: prev.eventLog,
+            eventLog: prev.eventLog,
             redeemedCodes: prev.redeemedCodes,
             factions: prev.factions,
             factionPrices: prev.factionPrices,
@@ -41,6 +41,10 @@ export function useSave(
             factionPolicy: prev.factionPolicy,
             policyRemainingTurns: prev.policyRemainingTurns,
             stardustMarket: prev.stardustMarket,
+            gameWon: prev.gameWon,
+            wonWonderName: prev.wonWonderName,
+            factionReputation: prev.factionReputation,
+            factionContracts: prev.factionContracts,
           };
           localStorage.setItem(SAVE_KEY, JSON.stringify(saveData));
         } catch { /* ignore */ }

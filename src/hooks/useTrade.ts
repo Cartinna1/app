@@ -1,6 +1,7 @@
 import { useCallback } from 'react';
 import type { GameState } from '@/types/game';
 import { FACTIONS, getTravelTurns, getSellPrice, RELATION_MATRIX, getReputationTier } from '@/data/factions';
+import { RECIPES } from '@/data/gameData';
 
 
 export function useTrade(
@@ -265,7 +266,7 @@ export function useTrade(
 
   // ==================== 合同系统 ====================
 
-  /** 接取合同 */
+  /** 接取合同（接取后从当前回合重新计算完成期限） */
   const acceptContract = useCallback((contractId: string): boolean => {
     let success = false;
     dispatch({
@@ -277,7 +278,18 @@ export function useTrade(
         const contract = contracts[idx];
         if (!contract) return prev;
         const repBlockC = checkRepBlock(prev, contract.factionId, 'contract'); if (repBlockC) return prev;
-        contracts[idx] = { ...contracts[idx], accepted: true };
+        // 接取后独立计算完成期限
+        let newExpires: number;
+        if (contract.type === 'procurement') {
+          const recipe = RECIPES.find((r) => r.id === contract.targetItemId);
+          const prodTurns = recipe?.productionTurns || 1;
+          // 完成期限 = 生产回合×数量 + 4~7 缓冲（覆盖生产 + 跃迁交付）
+          newExpires = prev.turn + prodTurns * contract.targetQty + Math.floor(Math.random() * 4) + 4;
+        } else {
+          // 走私：接取后 7~10 回合完成
+          newExpires = prev.turn + Math.floor(Math.random() * 4) + 7;
+        }
+        contracts[idx] = { ...contracts[idx], accepted: true, expiresTurn: newExpires };
         success = true;
         return { ...prev, factionContracts: contracts };
       },

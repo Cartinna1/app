@@ -19,6 +19,7 @@ interface TradePanelProps {
   onGatherIntel: () => { success: boolean; message: string; goldChange: number };
   factionReputation: Record<string, number>;
   factionContracts: FactionContract[];
+  currentTurn: number;
   onAcceptContract: (contractId: string) => boolean;
   onCompleteContract: (contractId: string) => { success: boolean; message: string };
   onBlackMarketBuy: (factionId: string, itemId: string, qty: number) => { success: boolean; message: string };
@@ -38,7 +39,7 @@ function TravelLockOverlay({ turnsRemaining, targetName }: { turnsRemaining: num
   );
 }
 
-export default function TradePanel({ factions, ship, factionPrices, factionSellMultipliers, factionPolicy, policyRemainingTurns, onTravel, onBuy, onSell, onExplore, onInvest, onGatherIntel, factionReputation, factionContracts, onAcceptContract, onCompleteContract, onBlackMarketBuy }: TradePanelProps) {
+export default function TradePanel({ factions, ship, factionPrices, factionSellMultipliers, factionPolicy, policyRemainingTurns, onTravel, onBuy, onSell, onExplore, onInvest, onGatherIntel, factionReputation, factionContracts, currentTurn, onAcceptContract, onCompleteContract, onBlackMarketBuy }: TradePanelProps) {
   const [activeTab, setActiveTab] = useState<TradeTab>('overview');
   const [selectedTarget, setSelectedTarget] = useState<string>('');
   const [buyQty, setBuyQty] = useState('1');
@@ -497,14 +498,14 @@ export default function TradePanel({ factions, ship, factionPrices, factionSellM
                         <span className="text-slate-100 font-bold ml-1">{getContractItemName(c)}</span>
                         <span className="text-slate-300 ml-1">x{c.targetQty}</span>
                         <span className="text-slate-500 ml-1">| +{c.rewardGold}金 +{c.rewardRep}声望</span>
-                        <span className="text-slate-600 ml-1">| 过期:第{c.expiresTurn}回合</span>
+                        <span className="text-slate-600 ml-1">| 剩余 {Math.max(0, c.expiresTurn - currentTurn)} 回合可接取</span>
                       </div>
                       <button onClick={() => onAcceptContract(c.id)} className="px-2 py-1 bg-amber-700 hover:bg-amber-600 rounded text-xs">接取</button>
                     </div>
                   ))}
                   {activeContracts.map((c) => (
                     <div key={c.id} className="flex items-center justify-between bg-green-900/30 rounded p-2 mb-1 text-xs">
-                      <span className="text-green-400">{c.type==='smuggling'?'走私':'采购'} <span className="font-bold">{getContractItemName(c)}</span> x{c.targetQty} | +{c.rewardGold}金 +{c.rewardRep}声望 | 过期:第{c.expiresTurn}回合</span>
+                      <span className="text-green-400">{c.type==='smuggling'?'走私':'采购'} <span className="font-bold">{getContractItemName(c)}</span> x{c.targetQty} | +{c.rewardGold}金 +{c.rewardRep}声望 | 剩余 {Math.max(0, c.expiresTurn - currentTurn)} 回合完成</span>
                       <button onClick={() => { const r = onCompleteContract(c.id); setMessage(r.message); setMsgType(r.success ? 'success' : 'error'); }} className="px-2 py-1 bg-green-700 hover:bg-green-600 rounded text-xs">提交</button>
                     </div>
                   ))}

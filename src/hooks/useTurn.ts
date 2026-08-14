@@ -482,9 +482,8 @@ export function useTurn(
               const rewards = [[5, 8, 3000, 5000], [8, 12, 6000, 10000], [10, 15, 12000, 20000]][tier];
               const rewardGold = Math.floor(Math.random() * (rewards[3] - rewards[2] + 1)) + rewards[2];
               const rewardRep = Math.floor(Math.random() * (rewards[1] - rewards[0] + 1)) + rewards[0];
-              const prodTurns = recipe.productionTurns || 1;
-              // 耗时=生产回合×数量+回合缓冲(保证有足够时间)
-              const expires = prev.turn + (prodTurns * qty) + Math.floor(Math.random() * 4) + 4;
+              // 可接取窗口：生成后 5-8 回合内可接取，接取后再独立计算完成期限
+              const expires = prev.turn + 5 + Math.floor(Math.random() * 4);
               kept.push({ id: `c_${prev.turn}_${f.id}_${kept.length}`, factionId: f.id, type: 'procurement', accepted: false, targetItemId: recipe.id, targetQty: qty, rewardGold, rewardRep, expiresTurn: expires, blackMarketUsed: false });
             } else {
               const rel = RELATION_MATRIX[f.id];
@@ -493,7 +492,8 @@ export function useTurn(
               if (enemyId === 'f07') continue;
               const qty = Math.floor(Math.random() * 6) + 5; // 5-10
               const rewardRep = Math.floor(Math.random() * 6) + 20; // 20-25
-              const expires = prev.turn + Math.floor(Math.random() * 4) + 7; // 7-10
+              // 可接取窗口：生成后 5-8 回合内可接取，接取后再独立计算完成期限
+              const expires = prev.turn + 5 + Math.floor(Math.random() * 4);
               kept.push({ id: `c_${prev.turn}_${f.id}_${kept.length}`, factionId: f.id, type: 'smuggling', accepted: false, targetItemId: enemyId, targetQty: qty, rewardGold: 0, rewardRep, expiresTurn: expires, blackMarketUsed: false });
             }
           }

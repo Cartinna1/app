@@ -11,7 +11,7 @@ export const MODULE_DEFINITIONS: ModuleDefinition[] = [
     name: '生物合成厨房',
     description: '每回合自动产出 15 食物，维持船员生存的基础设施',
     costFood: 0,
-    costAlloy: 15,
+    costAlloy: 5,
     costStardust: 0,
     effectType: 'per_turn',
     cooldown: 0,
@@ -22,9 +22,9 @@ export const MODULE_DEFINITIONS: ModuleDefinition[] = [
     name: '纳米机器人农场',
     description: '部署纳米机器人群体自动化种植，每回合产出30食物',
     costFood: 0,
-    costAlloy: 50,
+    costGold: 10000,
+    costAlloy: 0,
     costStardust: 0,
-    costMaterials: { gold_ore: 50 },
     effectType: 'per_turn',
     cooldown: 0,
     effectDescription: '每回合 +30 食物',
@@ -34,9 +34,10 @@ export const MODULE_DEFINITIONS: ModuleDefinition[] = [
     name: '六维奇点农场',
     description: '利用六维空间特性进行超高效农业，每回合产出60食物（生物合成厨房的终极升级版）',
     costFood: 0,
-    costAlloy: 100,
+    costGold: 20000,
+    costAlloy: 0,
     costStardust: 0,
-    costMaterials: { gold_ore: 90 },
+    costMaterials: { dark_matter: 5 },
     effectType: 'per_turn',
     cooldown: 0,
     effectDescription: '每回合 +60 食物',
@@ -203,7 +204,7 @@ export function canAffordModule(
   ship: { food: number; alloy: number; stardust: number; gold: number; materials: Record<string, number> },
   def: ModuleDefinition
 ): boolean {
-  if (ship.food < def.costFood) return false;
+  if (def.costFood > 0 && ship.food < def.costFood) return false;
   if (ship.alloy < def.costAlloy) return false;
   if (ship.stardust < def.costStardust) return false;
   if (def.costGold && ship.gold < def.costGold) return false;

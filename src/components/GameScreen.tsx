@@ -435,6 +435,7 @@ export default function GameScreen({
               products={gameState.products}
               materials={gameState.materials}
               stardustMarket={gameState.stardustMarket}
+              currentTurn={gameState.turn}
               onSellQty={onSellProductQty}
               onBuyRelic={onBuyRelic}
               onBuyRandomMats={onBuyRandomMats}
@@ -489,6 +490,7 @@ export default function GameScreen({
               onGatherIntel={onGatherIntel}
               factionReputation={gameState.factionReputation || {}}
               factionContracts={gameState.factionContracts || []}
+              currentTurn={gameState.turn}
               onAcceptContract={onAcceptContract}
               onCompleteContract={onCompleteContract}
               onBlackMarketBuy={onBlackMarketBuy}
