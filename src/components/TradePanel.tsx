@@ -41,9 +41,9 @@ function TravelLockOverlay({ turnsRemaining, targetName }: { turnsRemaining: num
 export default function TradePanel({ factions, ship, factionPrices, factionSellMultipliers, factionPolicy, policyRemainingTurns, onTravel, onBuy, onSell, onExplore, onInvest, onGatherIntel, factionReputation, factionContracts, onAcceptContract, onCompleteContract, onBlackMarketBuy }: TradePanelProps) {
   const [activeTab, setActiveTab] = useState<TradeTab>('overview');
   const [selectedTarget, setSelectedTarget] = useState<string>('');
-  const [buyQty, setBuyQty] = useState(1);
+  const [buyQty, setBuyQty] = useState('1');
   const [sellFaction, setSellFaction] = useState('');
-  const [sellQty, setSellQty] = useState(1);
+  const [sellQty, setSellQty] = useState('1');
   const [message, setMessage] = useState('');
   const [msgType, setMsgType] = useState<'success' | 'error'>('success');
 
@@ -76,6 +76,13 @@ export default function TradePanel({ factions, ship, factionPrices, factionSellM
   const marketPrice = currentFaction ? (factionPrices[currentFaction.id] || currentFaction.basePrice) : 0;
   const buyPrice = currentFaction && currentRepTier ? Math.ceil(marketPrice * (1 - currentRepTier.discount)) : marketPrice;
 
+  // 解析输入数量（字符串 → 数字，非法/空返回 0）
+  const buyQtyNum = parseInt(buyQty, 10) || 0;
+  const sellQtyNum = parseInt(sellQty, 10) || 0;
+  // 可买最大数量（基于金币）与可卖最大数量（基于库存）
+  const maxBuyQty = buyPrice > 0 ? Math.floor(ship.gold / buyPrice) : 0;
+  const maxSellQty = ts.inventory[sellFaction] || 0;
+
   const handleTravel = () => {
     if (!selectedTarget) { setMessage('请选择目标势力'); setMsgType('error'); return; }
     const res = onTravel(selectedTarget);
@@ -85,16 +92,16 @@ export default function TradePanel({ factions, ship, factionPrices, factionSellM
   };
 
   const handleBuy = () => {
-    const res = onBuy(buyQty);
+    const res = onBuy(buyQtyNum);
     setMessage(res.message); setMsgType(res.success ? 'success' : 'error');
     setTimeout(() => setMessage(''), 5000);
   };
 
   const handleSell = () => {
     if (!sellFaction) { setMessage('请选择要卖出的特产来源'); setMsgType('error'); return; }
-    const res = onSell(sellFaction, sellQty);
+    const res = onSell(sellFaction, sellQtyNum);
     setMessage(res.message); setMsgType(res.success ? 'success' : 'error');
-    if (res.success) { setSellFaction(''); setSellQty(1); }
+    if (res.success) { setSellFaction(''); setSellQty('1'); }
     setTimeout(() => setMessage(''), 5000);
   };
 
@@ -322,12 +329,13 @@ export default function TradePanel({ factions, ship, factionPrices, factionSellM
             )}
             <div className="flex items-center gap-3 mb-4">
               <label className="text-sm text-slate-400">数量：</label>
-              <input type="text" inputMode="numeric" pattern="[0-9]*" value={buyQty || ''} onChange={(e) => { const v = e.target.value.replace(/[^0-9]/g, ''); setBuyQty(v === '' ? 0 : parseInt(v)); }} className="w-24 bg-slate-800 border border-slate-600 rounded-lg px-3 py-2 text-sm text-slate-200" />
-              <span className="text-sm text-slate-500">= {(buyPrice * buyQty).toLocaleString()} 金币</span>
+              <input type="text" inputMode="numeric" pattern="[0-9]*" value={buyQty} onChange={(e) => setBuyQty(e.target.value.replace(/[^0-9]/g, ''))} className="w-24 bg-slate-800 border border-slate-600 rounded-lg px-3 py-2 text-sm text-slate-200" />
+              <button onClick={() => setBuyQty(String(maxBuyQty))} className="px-2.5 py-1.5 bg-slate-700 hover:bg-slate-600 rounded-lg text-xs text-slate-300 transition-colors">最大</button>
+              <span className="text-sm text-slate-500">= {(buyPrice * buyQtyNum).toLocaleString()} 金币</span>
             </div>
-            <button onClick={handleBuy} disabled={ship.gold < buyPrice * buyQty || ship.bankrupt}
+            <button onClick={handleBuy} disabled={ship.gold < buyPrice * buyQtyNum || buyQtyNum <= 0 || ship.bankrupt}
               className="w-full py-2.5 bg-green-700 hover:bg-green-600 disabled:bg-slate-700 disabled:text-slate-500 rounded-lg font-bold text-white transition-colors">
-              {ship.bankrupt ? '破产中无法购买' : `购买 (${(buyPrice * buyQty).toLocaleString()} 金币)`}
+              {ship.bankrupt ? '破产中无法购买' : `购买 (${(buyPrice * buyQtyNum).toLocaleString()} 金币)`}
             </button>
           </div>
         )
@@ -391,7 +399,7 @@ export default function TradePanel({ factions, ship, factionPrices, factionSellM
                               <p className={`text-xs ${profit >= 0 ? 'text-green-400' : 'text-red-400'}`}>{profit >= 0 ? '+' : ''}{profit}利润/个</p>
                             </>}
                             <button
-                              onClick={() => { if (!isLocal) { setSellFaction(fid); setSellQty(1); } }}
+                              onClick={() => { if (!isLocal) { setSellFaction(fid); setSellQty('1'); } }}
                               disabled={isLocal}
                               className={`text-xs px-2 py-1 rounded mt-1 ${sellFaction === fid ? 'bg-yellow-600 text-white' : isLocal ? 'bg-slate-800 text-slate-600 cursor-not-allowed' : 'bg-slate-700 text-slate-300 hover:bg-slate-600'}`}
                             >
@@ -407,14 +415,15 @@ export default function TradePanel({ factions, ship, factionPrices, factionSellM
                   <>
                     <div className="flex items-center gap-3 mb-4">
                       <label className="text-sm text-slate-400">数量：</label>
-                      <input type="text" inputMode="numeric" pattern="[0-9]*" value={sellQty || ''}
-                        onChange={(e) => { const v = e.target.value.replace(/[^0-9]/g, ''); if (v === '') { setSellQty(0); return; } const n = parseInt(v); const max = ts.inventory[sellFaction] || 0; setSellQty(Math.min(max, n)); }}
+                      <input type="text" inputMode="numeric" pattern="[0-9]*" value={sellQty}
+                        onChange={(e) => setSellQty(e.target.value.replace(/[^0-9]/g, ''))}
                         className="w-24 bg-slate-800 border border-slate-600 rounded-lg px-3 py-2 text-sm text-slate-200" />
+                      <button onClick={() => setSellQty(String(maxSellQty))} className="px-2.5 py-1.5 bg-slate-700 hover:bg-slate-600 rounded-lg text-xs text-slate-300 transition-colors">最大</button>
                       <span className="text-sm text-slate-500">
-                        = {(() => { const f = factions.find((fa) => fa.id === sellFaction); if (!f) return 0; return (getSellPrice(sellFaction, factionPrices, factionSellMultipliers) * sellQty).toLocaleString(); })()} 金币
+                        = {(() => { const f = factions.find((fa) => fa.id === sellFaction); if (!f) return 0; return (getSellPrice(sellFaction, factionPrices, factionSellMultipliers) * sellQtyNum).toLocaleString(); })()} 金币
                       </span>
                     </div>
-                    <button onClick={handleSell} className="w-full py-2.5 bg-yellow-700 hover:bg-yellow-600 rounded-lg font-bold text-white transition-colors">确认卖出</button>
+                    <button onClick={handleSell} disabled={sellQtyNum <= 0 || sellQtyNum > maxSellQty} className="w-full py-2.5 bg-yellow-700 hover:bg-yellow-600 disabled:bg-slate-700 disabled:text-slate-500 rounded-lg font-bold text-white transition-colors">确认卖出</button>
                   </>
                 )}
               </>
