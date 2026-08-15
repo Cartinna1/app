@@ -38,6 +38,7 @@ import SaveManager from './SaveManager';
 import LoanPanel from './LoanPanel';
 import TradePanel from './TradePanel';
 import { getInvestmentTier, getBuffDescription } from '@/data/factions';
+import { RECIPES } from '@/data/gameData';
 import GoldLogViewer from './GoldLogViewer';
 import ModulePanel from './ModulePanel';
 import ColonyPanel from './colony/ColonyPanel';
@@ -699,6 +700,44 @@ function OverviewTab({
           </div>
         )}
       </div>
+
+      {/* 进行中的合同 */}
+      {(() => {
+        const activeContracts = (gameState.factionContracts || []).filter((c) => c.accepted);
+        if (activeContracts.length === 0) return null;
+        return (
+          <div className="mb-4 md:mb-6 bg-amber-900/20 border border-amber-700/30 rounded-xl p-3 md:p-4">
+            <h3 className="text-xs text-amber-400 font-bold mb-3 flex items-center gap-2">
+              <Receipt size={14} className="text-amber-400" /> 进行中的合同 ({activeContracts.length})
+            </h3>
+            <div className="space-y-2">
+              {activeContracts.map((c) => {
+                const pubFaction = gameState.factions.find((f) => f.id === c.factionId);
+                let itemName = c.targetItemId;
+                if (c.type === 'procurement') {
+                  const r = RECIPES.find((rr) => rr.id === c.targetItemId);
+                  if (r) itemName = r.productName;
+                } else {
+                  const targetF = gameState.factions.find((f) => f.id === c.targetItemId);
+                  if (targetF) itemName = `${targetF.specialtyName}（${targetF.name}）`;
+                }
+                const remain = Math.max(0, c.expiresTurn - gameState.turn);
+                return (
+                  <div key={c.id} className="flex items-center gap-2 bg-slate-800/60 rounded-lg px-3 py-2">
+                    <span className={`text-[10px] px-1.5 py-0.5 rounded font-bold flex-shrink-0 ${c.type === 'smuggling' ? 'bg-red-900/50 text-red-300' : 'bg-cyan-900/50 text-cyan-300'}`}>{c.type === 'smuggling' ? '走私' : '采购'}</span>
+                    <div className="flex-1 min-w-0">
+                      <span className="text-xs md:text-sm text-slate-200 font-bold">{itemName} ×{c.targetQty}</span>
+                      <span className="text-[10px] md:text-xs text-slate-500 ml-2">← {pubFaction?.name || c.factionId}</span>
+                    </div>
+                    <span className={`text-[10px] md:text-xs flex-shrink-0 ${remain <= 2 ? 'text-red-400 font-bold' : 'text-slate-400'}`}>剩余 {remain} 回合</span>
+                    <span className="text-[10px] md:text-xs text-slate-500 flex-shrink-0">{c.rewardGold > 0 ? `+${c.rewardGold}金 ` : ''}+{c.rewardRep}声望</span>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        );
+      })()}
 
       {/* 资源收支明细 */}
       {(() => {

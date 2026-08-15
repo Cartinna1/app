@@ -45,6 +45,8 @@ export default function TradePanel({ factions, ship, factionPrices, factionSellM
   const [buyQty, setBuyQty] = useState('1');
   const [sellFaction, setSellFaction] = useState('');
   const [sellQty, setSellQty] = useState('1');
+  const [blackFaction, setBlackFaction] = useState<string>('');
+  const [blackQty, setBlackQty] = useState('1');
   const [message, setMessage] = useState('');
   const [msgType, setMsgType] = useState<'success' | 'error'>('success');
 
@@ -84,6 +86,15 @@ export default function TradePanel({ factions, ship, factionPrices, factionSellM
   const maxBuyQty = buyPrice > 0 ? Math.floor(ship.gold / buyPrice) : 0;
   const maxSellQty = ts.inventory[sellFaction] || 0;
 
+  // 黑市采购：选中势力、单价、总价
+  const blackFactionData = blackFaction ? factions.find((f) => f.id === blackFaction) : null;
+  const blackBasePrice = blackFactionData ? (factionPrices[blackFaction] || blackFactionData.basePrice) : 0;
+  const blackPrice = Math.ceil(blackBasePrice * 2.5);
+  const blackQtyNum = parseInt(blackQty, 10) || 0;
+  const blackTotal = blackPrice * blackQtyNum;
+  const canBlackBuy = !!(blackFactionData && blackQtyNum > 0 && ship.gold >= blackTotal);
+  const maxBlackQty = blackPrice > 0 ? Math.floor(ship.gold / blackPrice) : 0;
+
   const handleTravel = () => {
     if (!selectedTarget) { setMessage('请选择目标势力'); setMsgType('error'); return; }
     const res = onTravel(selectedTarget);
@@ -103,6 +114,14 @@ export default function TradePanel({ factions, ship, factionPrices, factionSellM
     const res = onSell(sellFaction, sellQtyNum);
     setMessage(res.message); setMsgType(res.success ? 'success' : 'error');
     if (res.success) { setSellFaction(''); setSellQty('1'); }
+    setTimeout(() => setMessage(''), 5000);
+  };
+
+  const handleBlackBuy = () => {
+    if (!blackFactionData) { setMessage('请先选择势力'); setMsgType('error'); return; }
+    const res = onBlackMarketBuy(blackFaction, blackFactionData.specialtyName, blackQtyNum);
+    setMessage(res.message); setMsgType(res.success ? 'success' : 'error');
+    if (res.success) setBlackQty('1');
     setTimeout(() => setMessage(''), 5000);
   };
 
@@ -518,20 +537,52 @@ export default function TradePanel({ factions, ship, factionPrices, factionSellM
             ) : (
               <button onClick={handleGatherIntel} className="w-full py-2.5 bg-orange-700 hover:bg-orange-600 rounded-lg font-bold text-white transition-colors flex items-center justify-center gap-2"><Radio size={16} /> 打探消息</button>
             )}
-            {/* 黑市采购按钮 */}
+            {/* 黑市采购 */}
             {currentFaction && (
               <div className="mt-3 pt-3 border-t border-slate-700">
                 <p className="text-xs text-slate-500 mb-2">黑市采购（2.5倍价格，不影响声望）</p>
-                <div className="flex gap-2">
+                {/* 势力选择 */}
+                <div className="flex gap-1.5 mb-3 overflow-x-auto pb-1 scrollbar-hide">
                   {['f01','f02','f03','f04','f05','f06','f07','f08','f09','f10'].map(fid => {
                     const f = factions.find(ff => ff.id === fid);
-                    return f && (
-                      <button key={fid} onClick={() => { const r = onBlackMarketBuy(fid, f.specialtyName, 1); setMessage(r.message); setMsgType(r.success ? 'success' : 'error'); }} className="px-2 py-1 bg-purple-900/60 hover:bg-purple-800 text-xs rounded text-purple-300" title={`购买${f.specialtyName}`}>
-                        {f.name.slice(0,2)}
+                    if (!f) return null;
+                    const isSel = blackFaction === fid;
+                    return (
+                      <button key={fid} onClick={() => { setBlackFaction(fid); setBlackQty('1'); }}
+                        className={`flex-shrink-0 px-2.5 py-1.5 rounded-md text-xs font-bold border transition-all ${isSel ? 'bg-purple-700 text-white border-purple-500' : 'bg-purple-900/60 text-purple-300 border-slate-700 hover:border-purple-500'}`}>
+                        {isSel ? f.name : f.name.slice(0, 2)}
                       </button>
                     );
                   })}
                 </div>
+                {/* 详情 + 购买（仅选中时显示） */}
+                {blackFactionData && (
+                  <div className="bg-slate-800/60 rounded-lg p-3">
+                    <div className="flex items-center gap-3 mb-3">
+                      <img
+                        src={`/specialty/${blackFactionData.id}.png`}
+                        alt={blackFactionData.specialtyName}
+                        onError={(e) => { (e.target as HTMLImageElement).style.display='none'; }}
+                        className="w-12 h-12 rounded-lg object-cover border border-slate-700 flex-shrink-0"
+                      />
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-bold text-slate-200">{blackFactionData.name}</p>
+                        <p className="text-xs text-slate-400">特产：{blackFactionData.specialtyName}</p>
+                        <p className="text-xs text-slate-500 mt-0.5">单价 <span className="text-purple-300 font-bold">{blackPrice.toLocaleString()}</span> 金币（市场价 {blackBasePrice.toLocaleString()} × 2.5）</p>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2 mb-3">
+                      <label className="text-xs text-slate-400">数量：</label>
+                      <input type="text" inputMode="numeric" pattern="[0-9]*" value={blackQty} onChange={(e) => setBlackQty(e.target.value.replace(/[^0-9]/g, ''))} className="w-24 bg-slate-900 border border-slate-600 rounded-lg px-3 py-2 text-sm text-slate-200" />
+                      <button onClick={() => setBlackQty(String(maxBlackQty))} disabled={maxBlackQty <= 0} className="px-2.5 py-1.5 bg-slate-700 hover:bg-slate-600 disabled:bg-slate-800 disabled:text-slate-600 rounded-lg text-xs text-slate-300 transition-colors">最大</button>
+                      <span className="text-xs text-slate-500 ml-1">总价 <span className="text-purple-300 font-bold">{blackTotal.toLocaleString()}</span> 金币</span>
+                    </div>
+                    <button onClick={handleBlackBuy} disabled={!canBlackBuy}
+                      className="w-full py-2 bg-purple-700 hover:bg-purple-600 disabled:bg-slate-700 disabled:text-slate-500 rounded-lg text-sm font-bold text-white transition-colors">
+                      {blackQtyNum <= 0 ? '请输入数量' : ship.gold < blackTotal ? `金币不足，需 ${blackTotal.toLocaleString()}` : `确认购买（${blackTotal.toLocaleString()} 金币）`}
+                    </button>
+                  </div>
+                )}
               </div>
             )}
           </div>
