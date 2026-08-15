@@ -9,6 +9,7 @@ interface TradePanelProps {
   ship: Mothership;
   factionPrices: Record<string, number>;
   factionSellMultipliers: Record<string, number>;
+  blackMarketMultiplier: number;
   factionPolicy: { type: TradePolicy; effect: PolicyEffect };
   policyRemainingTurns: number;
   onTravel: (targetFactionId: string) => { success: boolean; message: string };
@@ -39,7 +40,7 @@ function TravelLockOverlay({ turnsRemaining, targetName }: { turnsRemaining: num
   );
 }
 
-export default function TradePanel({ factions, ship, factionPrices, factionSellMultipliers, factionPolicy, policyRemainingTurns, onTravel, onBuy, onSell, onExplore, onInvest, onGatherIntel, factionReputation, factionContracts, currentTurn, onAcceptContract, onCompleteContract, onBlackMarketBuy }: TradePanelProps) {
+export default function TradePanel({ factions, ship, factionPrices, factionSellMultipliers, blackMarketMultiplier, factionPolicy, policyRemainingTurns, onTravel, onBuy, onSell, onExplore, onInvest, onGatherIntel, factionReputation, factionContracts, currentTurn, onAcceptContract, onCompleteContract, onBlackMarketBuy }: TradePanelProps) {
   const [activeTab, setActiveTab] = useState<TradeTab>('overview');
   const [selectedTarget, setSelectedTarget] = useState<string>('');
   const [buyQty, setBuyQty] = useState('1');
@@ -89,7 +90,7 @@ export default function TradePanel({ factions, ship, factionPrices, factionSellM
   // 黑市采购：选中势力、单价、总价
   const blackFactionData = blackFaction ? factions.find((f) => f.id === blackFaction) : null;
   const blackBasePrice = blackFactionData ? (factionPrices[blackFaction] || blackFactionData.basePrice) : 0;
-  const blackPrice = Math.ceil(blackBasePrice * 2.5);
+  const blackPrice = Math.ceil(blackBasePrice * (blackMarketMultiplier || 3.2));
   const blackQtyNum = parseInt(blackQty, 10) || 0;
   const blackTotal = blackPrice * blackQtyNum;
   const canBlackBuy = !!(blackFactionData && blackQtyNum > 0 && ship.gold >= blackTotal);
@@ -540,7 +541,7 @@ export default function TradePanel({ factions, ship, factionPrices, factionSellM
             {/* 黑市采购 */}
             {currentFaction && (
               <div className="mt-3 pt-3 border-t border-slate-700">
-                <p className="text-xs text-slate-500 mb-2">黑市采购（2.5倍价格，不影响声望）</p>
+                <p className="text-xs text-slate-500 mb-2">黑市采购（当前 {blackMarketMultiplier || 3.2} 倍价格，不影响声望）</p>
                 {/* 势力选择 */}
                 <div className="flex gap-1.5 mb-3 overflow-x-auto pb-1 scrollbar-hide">
                   {['f01','f02','f03','f04','f05','f06','f07','f08','f09','f10'].map(fid => {
@@ -568,7 +569,7 @@ export default function TradePanel({ factions, ship, factionPrices, factionSellM
                       <div className="flex-1 min-w-0">
                         <p className="text-sm font-bold text-slate-200">{blackFactionData.name}</p>
                         <p className="text-xs text-slate-400">特产：{blackFactionData.specialtyName}</p>
-                        <p className="text-xs text-slate-500 mt-0.5">单价 <span className="text-purple-300 font-bold">{blackPrice.toLocaleString()}</span> 金币（市场价 {blackBasePrice.toLocaleString()} × 2.5）</p>
+                        <p className="text-xs text-slate-500 mt-0.5">单价 <span className="text-purple-300 font-bold">{blackPrice.toLocaleString()}</span> 金币（市场价 {blackBasePrice.toLocaleString()} × {blackMarketMultiplier || 3.2}）</p>
                       </div>
                     </div>
                     <div className="flex items-center gap-2 mb-3">

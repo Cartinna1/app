@@ -293,6 +293,7 @@ export interface GameState {
   factions: Faction[]; // 10个星际势力
   factionPrices: Record<string, number>; // 每回合各势力特产的实际价格（浮动）
   factionSellMultipliers: Record<string, number>; // 每回合各势力特产的固定卖出乘数（同回合内不变）
+  blackMarketMultiplier: number; // 黑市采购倍率（每回合随机 3.2~4.5，1位小数）
   factionPolicy: { type: TradePolicy; effect: PolicyEffect }; // 当前全星系贸易政策
   policyRemainingTurns: number; // 当前政策剩余持续回合数
   stardustMarket: StardustMarket; // 星尘集市

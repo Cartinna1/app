@@ -481,6 +481,7 @@ export default function GameScreen({
               ship={currentShip}
               factionPrices={gameState.factionPrices}
               factionSellMultipliers={gameState.factionSellMultipliers}
+              blackMarketMultiplier={gameState.blackMarketMultiplier}
               factionPolicy={gameState.factionPolicy}
               policyRemainingTurns={gameState.policyRemainingTurns}
               onTravel={onTravelToFaction}

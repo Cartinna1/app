@@ -442,6 +442,8 @@ export function useTurn(
         const newPrices = refreshFactionPrices();
         const currentFid = ships[0]?.tradeStatus?.currentFactionId || FACTIONS[0].id;
         const sellMultipliers = calculateSellMultipliers(currentFid, { type: newPolicyType, effect: newPolicyEffect });
+        // 黑市倍率：每回合随机 3.2~4.5（保留1位小数）
+        const blackMarketMultiplier = Math.round((3.2 + Math.random() * 1.3) * 10) / 10;
 
         // 星尘集市：每回合刷新一个遗物
         const newRelic = rollRelic(prev.stardustMarket.soldRelicIds);
@@ -520,6 +522,7 @@ export function useTurn(
           factionContracts: kept,
           factionPrices: newPrices,
           factionSellMultipliers: sellMultipliers,
+          blackMarketMultiplier,
           factionPolicy: { type: newPolicyType, effect: newPolicyEffect },
           policyRemainingTurns: remaining,
           stardustMarket: {

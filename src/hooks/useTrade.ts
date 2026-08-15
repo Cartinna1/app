@@ -368,7 +368,8 @@ export function useTrade(
         const faction = prev.factions.find((f) => f.id === factionId);
         if (!faction) { result = { success: false, message: '势力不存在' }; return prev; }
         const basePrice = prev.factionPrices[factionId] || faction.basePrice;
-        const cost = Math.ceil(basePrice * 2.5 * qty); // 黑市2.5倍
+        const mult = prev.blackMarketMultiplier || 3.2; // 黑市倍率（每回合随机 3.2~4.5）
+        const cost = Math.ceil(basePrice * mult * qty);
         if (s.gold < cost) { result = { success: false, message: `金币不足，需${cost}` }; return prev; }
         s.gold -= cost;
         s.goldLog = [{ turn: prev.turn, amount: -cost, reason: `黑市采购「${faction.specialtyName}」x${qty}`, balanceAfter: s.gold }, ...s.goldLog].slice(0, 200);

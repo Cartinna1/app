@@ -17,6 +17,7 @@ export const initialGameState: GameState = {
   factions: FACTIONS,
   factionPrices: {},
   factionSellMultipliers: {},
+  blackMarketMultiplier: 3.2,
   factionPolicy: { type: 'normal', effect: POLICY_EFFECTS['normal'] },
   policyRemainingTurns: 0,
   stardustMarket: { currentRelicId: null, soldRelicIds: [] },
@@ -54,6 +55,7 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
           myShip.tradeStatus.currentFactionId,
           { type: 'normal', effect: POLICY_EFFECTS['normal'] },
                   ),
+        blackMarketMultiplier: 3.2,
         factionPolicy: { type: 'normal', effect: POLICY_EFFECTS['normal'] },
         policyRemainingTurns: 0,
 stardustMarket: { currentRelicId: null, soldRelicIds: [] },
@@ -97,6 +99,8 @@ stardustMarket: { currentRelicId: null, soldRelicIds: [] },
       }
       if (!loaded.factionRepLog) loaded.factionRepLog = {};
       if (!loaded.factionContracts) loaded.factionContracts = [];
+      // 兼容旧存档：黑市倍率字段
+      if (!loaded.blackMarketMultiplier) loaded.blackMarketMultiplier = 3.2;
       return loaded;
     }
 
