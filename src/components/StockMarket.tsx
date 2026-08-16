@@ -119,12 +119,19 @@ export default function StockMarket({ stocks, ship, shipIndex, currentTurn, onBu
     if (!selectedStock || tradeQty <= 0) return;
     setMessage('');
     if (tradeMode === 'buy') {
+      const feeMult = ship.id === 2 ? 1.0 : ship.id === 0 ? 1.0 - 0.5 * 0.03 : 1.03;
+      const totalCost = Math.round(selectedStock.currentPrice * tradeQty * feeMult);
+      if (ship.gold < totalCost) {
+        setMessage(`金币不足，需${totalCost.toLocaleString()}金币`);
+        setMessageType('error');
+        setTimeout(() => setMessage(''), 5000);
+        return;
+      }
       const result = onBuy(shipIndex, selectedStock.id, tradeQty);
       if (result.error) {
         setMessage(result.error);
         setMessageType('error');
       } else {
-        const totalCost = Math.round(selectedStock.currentPrice * tradeQty * 1.03);
         setMessage(`成功买入 ${tradeQty} 股 ${selectedStock.name}，总花费 ${totalCost.toLocaleString()} 金币（含手续费）`);
         setMessageType('success');
       }
@@ -133,18 +140,10 @@ export default function StockMarket({ stocks, ship, shipIndex, currentTurn, onBu
       if (result.error) {
         setMessage(result.error);
         setMessageType('error');
-      } else if (result.profit !== undefined) {
+      } else {
         const revenue = Math.round(selectedStock.currentPrice * tradeQty * 0.97);
-        if (result.profit > 0) {
-          setMessage(`成功卖出 ${tradeQty} 股 ${selectedStock.name}，收入 ${revenue.toLocaleString()} 金币，盈利 +${result.profit.toLocaleString()} 金币（+${result.profitRate}%）`);
-          setMessageType('profit');
-        } else if (result.profit < 0) {
-          setMessage(`成功卖出 ${tradeQty} 股 ${selectedStock.name}，收入 ${revenue.toLocaleString()} 金币，亏损 ${result.profit.toLocaleString()} 金币（${result.profitRate}%）`);
-          setMessageType('loss');
-        } else {
-          setMessage(`成功卖出 ${tradeQty} 股 ${selectedStock.name}，收入 ${revenue.toLocaleString()} 金币，持平`);
-          setMessageType('success');
-        }
+        setMessage(`成功卖出 ${tradeQty} 股 ${selectedStock.name}，收入 ${revenue.toLocaleString()} 金币`);
+        setMessageType('success');
       }
     }
     setTimeout(() => setMessage(''), 5000);
@@ -400,21 +399,27 @@ function MobileTradePanel({
     if (tradeQty <= 0) return;
     setMessage('');
     if (tradeMode === 'buy') {
+      const feeMult = ship.id === 2 ? 1.0 : ship.id === 0 ? 1.0 - 0.5 * 0.03 : 1.03;
+      const totalCost = Math.round(stock.currentPrice * tradeQty * feeMult);
+      if (ship.gold < totalCost) {
+        setMessage(`金币不足，需${totalCost.toLocaleString()}金币`);
+        setMessageType('error');
+        setTimeout(() => setMessage(''), 5000);
+        return;
+      }
       const result = onBuy(shipIndex, stock.id, tradeQty);
       if (result.error) { setMessage(result.error); setMessageType('error'); }
       else {
-        const totalCost = Math.round(stock.currentPrice * tradeQty * 1.03);
         setMessage(`成功买入 ${tradeQty} 股，总花费 ${totalCost.toLocaleString()} 金币`);
         setMessageType('success');
       }
     } else {
       const result = onSell(shipIndex, stock.id, tradeQty);
       if (result.error) { setMessage(result.error); setMessageType('error'); }
-      else if (result.profit !== undefined) {
+      else {
         const revenue = Math.round(stock.currentPrice * tradeQty * 0.97);
-        if (result.profit > 0) { setMessage(`卖出收入 ${revenue.toLocaleString()} 金币，盈利 +${result.profit.toLocaleString()}`); setMessageType('profit'); }
-        else if (result.profit < 0) { setMessage(`卖出收入 ${revenue.toLocaleString()} 金币，亏损 ${result.profit.toLocaleString()}`); setMessageType('loss'); }
-        else { setMessage(`卖出收入 ${revenue.toLocaleString()} 金币，持平`); setMessageType('success'); }
+        setMessage(`卖出收入 ${revenue.toLocaleString()} 金币`);
+        setMessageType('success');
       }
     }
     setTimeout(() => setMessage(''), 5000);
@@ -562,12 +567,6 @@ function TradeDetailPanel({
               <span className="text-slate-400">买入成本</span>
               <span className="text-slate-300">{costs[stock.id].toFixed(1)} 金币/股</span>
             </div>
-            <div className="flex justify-between">
-              <span className="text-slate-400">盈亏预估</span>
-              <span className={stock.currentPrice > costs[stock.id] ? 'text-cyan-400' : 'text-red-400'}>
-                {stock.currentPrice > costs[stock.id] ? '+' : ''}{(((stock.currentPrice - costs[stock.id]) / costs[stock.id]) * 100).toFixed(1)}%
-              </span>
-            </div>
             {cd.cooling && (
               <div className="flex justify-between text-orange-400">
                 <span className="flex items-center gap-1"><Clock size={12} />冷却中</span>
@@ -599,25 +598,6 @@ function TradeDetailPanel({
             : `收入: ${Math.round(stock.currentPrice * tradeQty * 0.97).toLocaleString()} 金币（含3%手续费）`
           }
         </div>
-        {tradeMode === 'sell' && holdings[stock.id] > 0 && costs[stock.id] && (
-          <div className="mt-2 bg-slate-800/60 rounded-lg p-2">
-            {(() => {
-              const avgCost = costs[stock.id];
-              const sellP = stock.currentPrice;
-              const grossRevenue = Math.round(sellP * tradeQty * 0.97);
-              const costBasis = Math.round(avgCost * tradeQty);
-              const profit = grossRevenue - costBasis;
-              const profitRate = costBasis > 0 ? Math.round((profit / costBasis) * 10000) / 100 : 0;
-              return (
-                <div className="text-xs">
-                  <div className="flex justify-between mb-0.5"><span className="text-slate-500">卖出收入（x0.97）</span><span className="text-slate-300">{grossRevenue.toLocaleString()} 金</span></div>
-                  <div className="flex justify-between mb-0.5"><span className="text-slate-500">成本基准</span><span className="text-slate-300">{costBasis.toLocaleString()} 金</span></div>
-                  <div className="flex justify-between"><span className="text-slate-500">预估盈亏</span><span className={`font-bold ${profit >= 0 ? 'text-green-400' : 'text-red-400'}`}>{profit >= 0 ? '+' : ''}{profit.toLocaleString()} ({profit >= 0 ? '+' : ''}{profitRate}%)</span></div>
-                </div>
-              );
-            })()}
-          </div>
-        )}
       </div>
 
       <button

@@ -51,7 +51,7 @@ export function useTrade(
     const rep = (prev.factionReputation || {})[factionId] || 0;
     if (rep <= -51) return '宿敌势力拒绝与你交易';
     if (rep >= -50 && rep <= -21) {
-      if (action === 'buy' || action === 'invest') return null;
+      if (action === 'buy' || action === 'invest' || action === 'travel') return null;
       return '敌意势力拒绝此项操作';
     }
     if (rep < 0 && action === 'intel') return '该势力不信任你，无法打探消息';
@@ -95,12 +95,17 @@ export function useTrade(
           if (quantity <= 0) { result = { success: false, message: '数量必须大于0' }; return prev; }
           const faction = prev.factions.find((f) => f.id === s.tradeStatus.currentFactionId);
           if (!faction) { result = { success: false, message: '找不到势力' }; return prev; }
-          // 声望折扣（替代旧投资折扣）
+          // 库存校验
+          const available = prev.buyStocks?.[faction.id] ?? 0;
+          if (quantity > available) { result = { success: false, message: `库存不足，本回合仅剩${available}个` }; return prev; }
+          // 价格：市场价 × 声望折扣 × 涨价buff
           const rep = prev.factionReputation?.[faction.id] || 0;
           const tier = getReputationTier(rep);
           let price = prev.factionPrices[faction.id] || faction.basePrice;
           if (rep < -20) price = Math.ceil(price * (1 - tier.discount)); // 负声望涨价
           else if (tier.discount > 0) price = Math.ceil(price * (1 - tier.discount)); // 正声望打折
+          const buyBuffMult = (prev.buyBuffs?.[faction.id] || []).reduce((m, b) => m * b.multiplier, 1);
+          price = Math.ceil(price * buyBuffMult);
           const totalCost = price * quantity;
           if (s.gold < totalCost) { result = { success: false, message: `金币不足，需${totalCost}` }; return prev; }
           s.gold -= totalCost;
@@ -108,10 +113,22 @@ export function useTrade(
           s.tradeStatus = { ...s.tradeStatus };
           s.tradeStatus.inventory = { ...s.tradeStatus.inventory };
           s.tradeStatus.inventory[faction.id] = (s.tradeStatus.inventory[faction.id] || 0) + quantity;
+          // 扣库存
+          prev.buyStocks = { ...(prev.buyStocks || {}) };
+          prev.buyStocks[faction.id] = available - quantity;
+          // 触发涨价判定（本回合累计购买 ≥ 初始库存 80%）
+          const maxStock = prev.buyStockMax?.[faction.id] || 0;
+          const used = maxStock - prev.buyStocks[faction.id];
+          const triggered = maxStock > 0 && !prev.buyTriggered?.[faction.id] && used >= maxStock * 0.8;
+          if (triggered) {
+            prev.buyTriggered = { ...(prev.buyTriggered || {}), [faction.id]: true };
+            prev.buyBuffs = { ...(prev.buyBuffs || {}) };
+            prev.buyBuffs[faction.id] = [...(prev.buyBuffs[faction.id] || []), { multiplier: 1.6, expiresTurn: prev.turn + 3 }];
+          }
           ensureRepFields(prev);
           applyRepChange(prev, faction.id, 3, prev.factionRepLog, 'buy');
           ships[shipIndex] = s;
-          result = { success: true, message: `购买${faction.specialtyName} x${quantity}，花费${totalCost}金币` };
+          result = { success: true, message: `购买${faction.specialtyName} x${quantity}，花费${totalCost}金币${triggered ? '。⚠ 购买量已达本回合库存80%，下回合起购买价上涨60%（持续3回合）' : ''}` };
           return { ...prev, ships };
         },
       });
@@ -129,14 +146,19 @@ export function useTrade(
           if (quantity <= 0) { result = { success: false, message: '数量必须大于0' }; return prev; }
           const repBlockS = checkRepBlock(prev, s.tradeStatus.currentFactionId, 'sell'); if (repBlockS) { result = { success: false, message: repBlockS }; return prev; }
           if (s.tradeStatus.currentFactionId === factionId) { result = { success: false, message: '不能在本地势力出售' }; return prev; }
+          const curFid = s.tradeStatus.currentFactionId;
+          // 需求校验（按停靠势力，不分特产种类）
+          const remaining = prev.sellDemands?.[curFid] ?? 0;
+          if (quantity > remaining) { result = { success: false, message: `本回合需求已满足，仅剩${remaining}个配额` }; return prev; }
           const invCount = s.tradeStatus.inventory[factionId] || 0;
           if (invCount < quantity) { result = { success: false, message: '库存不足' }; return prev; }
           const faction = prev.factions.find((f) => f.id === factionId);
           if (!faction) { result = { success: false, message: '找不到势力' }; return prev; }
           const sellPrice = getSellPrice(factionId, prev.factionPrices, prev.factionSellMultipliers);
+          const sellBuffMult = (prev.sellBuffs?.[curFid] || []).reduce((m, b) => m * b.multiplier, 1);
           const relicBonus = s.relics.some((r) => r.id === 'r_014') ? 1.1 : 1;
           const tradeHubBonus = s.installedModuleIds.includes('trade_hub') ? 1.15 : 1;
-          const totalRevenue = Math.round(sellPrice * quantity * relicBonus * tradeHubBonus);
+          const totalRevenue = Math.round(sellPrice * quantity * relicBonus * tradeHubBonus * sellBuffMult);
           s.gold += totalRevenue;
           if (s.bankrupt && s.gold > 0) s.bankrupt = false;
           s.goldLog = [{ turn: prev.turn, amount: totalRevenue, reason: `卖出「${faction.specialtyName}」x${quantity}`, balanceAfter: s.gold }, ...s.goldLog].slice(0, 200);
@@ -144,8 +166,20 @@ export function useTrade(
           s.tradeStatus.inventory = { ...s.tradeStatus.inventory };
           s.tradeStatus.inventory[factionId] = invCount - quantity;
           if (s.tradeStatus.inventory[factionId] === 0) delete s.tradeStatus.inventory[factionId];
+          // 扣需求
+          prev.sellDemands = { ...(prev.sellDemands || {}) };
+          prev.sellDemands[curFid] = remaining - quantity;
+          // 触发降价判定（本回合累计卖出 ≥ 初始需求 70%）
+          const maxDemand = prev.sellDemandMax?.[curFid] || 0;
+          const sold = maxDemand - prev.sellDemands[curFid];
+          const triggered = maxDemand > 0 && !prev.sellTriggered?.[curFid] && sold >= maxDemand * 0.7;
+          if (triggered) {
+            prev.sellTriggered = { ...(prev.sellTriggered || {}), [curFid]: true };
+            prev.sellBuffs = { ...(prev.sellBuffs || {}) };
+            prev.sellBuffs[curFid] = [...(prev.sellBuffs[curFid] || []), { multiplier: 0.4, expiresTurn: prev.turn + 3 }];
+          }
           ships[shipIndex] = s;
-          result = { success: true, message: `卖出${faction.specialtyName} x${quantity}，获得${totalRevenue}金币` };
+          result = { success: true, message: `卖出${faction.specialtyName} x${quantity}，获得${totalRevenue}金币${triggered ? '。⚠ 卖出量已达本回合需求70%，下回合起收购价×0.4（持续3回合）' : ''}` };
           return { ...prev, ships };
         },
       });
@@ -368,8 +402,9 @@ export function useTrade(
         const faction = prev.factions.find((f) => f.id === factionId);
         if (!faction) { result = { success: false, message: '势力不存在' }; return prev; }
         const basePrice = prev.factionPrices[factionId] || faction.basePrice;
+        const buyBuffMult = (prev.buyBuffs?.[factionId] || []).reduce((m, b) => m * b.multiplier, 1); // 涨价buff（黑市也继承）
         const mult = prev.blackMarketMultiplier || 3.2; // 黑市倍率（每回合随机 3.2~4.5）
-        const cost = Math.ceil(basePrice * mult * qty);
+        const cost = Math.ceil(basePrice * buyBuffMult * mult * qty);
         if (s.gold < cost) { result = { success: false, message: `金币不足，需${cost}` }; return prev; }
         s.gold -= cost;
         s.goldLog = [{ turn: prev.turn, amount: -cost, reason: `黑市采购「${faction.specialtyName}」x${qty}`, balanceAfter: s.gold }, ...s.goldLog].slice(0, 200);

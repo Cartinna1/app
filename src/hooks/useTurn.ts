@@ -445,6 +445,32 @@ export function useTurn(
         // 黑市倍率：每回合随机 3.2~4.5（保留1位小数）
         const blackMarketMultiplier = Math.round((3.2 + Math.random() * 1.3) * 10) / 10;
 
+        // 市场库存/需求：每回合刷新
+        const buyStocks: Record<string, number> = {};
+        const buyStockMax: Record<string, number> = {};
+        const sellDemands: Record<string, number> = {};
+        const sellDemandMax: Record<string, number> = {};
+        for (const f of FACTIONS) {
+          const bs = 800 + Math.floor(Math.random() * 401); // 800~1200
+          const sd = 900 + Math.floor(Math.random() * 601); // 900~1500
+          buyStocks[f.id] = bs;
+          buyStockMax[f.id] = bs;
+          sellDemands[f.id] = sd;
+          sellDemandMax[f.id] = sd;
+        }
+        // 清理过期 buff（新回合 prev.turn+1 已过期的移除）
+        const nextTurn = prev.turn + 1;
+        const buyBuffs: Record<string, { multiplier: number; expiresTurn: number }[]> = {};
+        for (const [fid, list] of Object.entries(prev.buyBuffs || {})) {
+          const alive = list.filter((b) => b.expiresTurn >= nextTurn);
+          if (alive.length) buyBuffs[fid] = alive;
+        }
+        const sellBuffs: Record<string, { multiplier: number; expiresTurn: number }[]> = {};
+        for (const [fid, list] of Object.entries(prev.sellBuffs || {})) {
+          const alive = list.filter((b) => b.expiresTurn >= nextTurn);
+          if (alive.length) sellBuffs[fid] = alive;
+        }
+
         // 星尘集市：每回合刷新一个遗物
         const newRelic = rollRelic(prev.stardustMarket.soldRelicIds);
 
@@ -523,6 +549,14 @@ export function useTurn(
           factionPrices: newPrices,
           factionSellMultipliers: sellMultipliers,
           blackMarketMultiplier,
+          buyStocks,
+          buyStockMax,
+          sellDemands,
+          sellDemandMax,
+          buyTriggered: {},
+          sellTriggered: {},
+          buyBuffs,
+          sellBuffs,
           factionPolicy: { type: newPolicyType, effect: newPolicyEffect },
           policyRemainingTurns: remaining,
           stardustMarket: {

@@ -773,12 +773,13 @@ export function processColonyTurn(ship: Mothership, _turn: number): void {
     colony.techState.researchPoints += totalRP;
     colony.techState.researchSeed = (colony.techState.researchSeed || 0) + 1;
     if (colony.techState.currentResearch) {
-      const polarBonus = (planetDef && planetDef.id === 'polar') ? 1 : 0;
-      colony.techState.currentProgress += 1 + polarBonus;
+      const isPolar = planetDef && planetDef.id === 'polar';
+      colony.techState.currentProgress += 1;
       const tid = colony.techState.currentResearch;
       const tech = getTechById(tid);
       const rpt = REPEATABLE_TECHS.find(rt => rt.id === tid);
-      const targetTurns = tech ? tech.researchTurns : rpt ? rpt.researchTurns : 99;
+      let targetTurns = tech ? tech.researchTurns : rpt ? rpt.researchTurns : 99;
+      if (isPolar) targetTurns = Math.max(1, targetTurns - 1); // 极地：科研回合 -1（低温超导）
       if (colony.techState.currentProgress >= targetTurns) {
         if (rpt) {
           // 循环科技：叠加次数

@@ -18,6 +18,14 @@ export const initialGameState: GameState = {
   factionPrices: {},
   factionSellMultipliers: {},
   blackMarketMultiplier: 3.2,
+  buyStocks: {},
+  buyStockMax: {},
+  sellDemands: {},
+  sellDemandMax: {},
+  buyTriggered: {},
+  sellTriggered: {},
+  buyBuffs: {},
+  sellBuffs: {},
   factionPolicy: { type: 'normal', effect: POLICY_EFFECTS['normal'] },
   policyRemainingTurns: 0,
   stardustMarket: { currentRelicId: null, soldRelicIds: [] },
@@ -39,6 +47,19 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
       const stocks = createStocks();
       const materials = createMaterials();
       const products = createProducts();
+      // 初始化市场库存/需求（第1回合即可交易）
+      const buyStocks: Record<string, number> = {};
+      const buyStockMax: Record<string, number> = {};
+      const sellDemands: Record<string, number> = {};
+      const sellDemandMax: Record<string, number> = {};
+      for (const f of FACTIONS) {
+        const bs = 800 + Math.floor(Math.random() * 401); // 800~1200
+        const sd = 900 + Math.floor(Math.random() * 601); // 900~1500
+        buyStocks[f.id] = bs;
+        buyStockMax[f.id] = bs;
+        sellDemands[f.id] = sd;
+        sellDemandMax[f.id] = sd;
+      }
       return {
         ...state,
         phase: 'playing',
@@ -56,6 +77,14 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
           { type: 'normal', effect: POLICY_EFFECTS['normal'] },
                   ),
         blackMarketMultiplier: 3.2,
+        buyStocks,
+        buyStockMax,
+        sellDemands,
+        sellDemandMax,
+        buyTriggered: {},
+        sellTriggered: {},
+        buyBuffs: {},
+        sellBuffs: {},
         factionPolicy: { type: 'normal', effect: POLICY_EFFECTS['normal'] },
         policyRemainingTurns: 0,
 stardustMarket: { currentRelicId: null, soldRelicIds: [] },
@@ -101,6 +130,15 @@ stardustMarket: { currentRelicId: null, soldRelicIds: [] },
       if (!loaded.factionContracts) loaded.factionContracts = [];
       // 兼容旧存档：黑市倍率字段
       if (!loaded.blackMarketMultiplier) loaded.blackMarketMultiplier = 3.2;
+      // 兼容旧存档：市场库存/需求/buff 字段
+      if (!loaded.buyStocks) loaded.buyStocks = {};
+      if (!loaded.buyStockMax) loaded.buyStockMax = {};
+      if (!loaded.sellDemands) loaded.sellDemands = {};
+      if (!loaded.sellDemandMax) loaded.sellDemandMax = {};
+      if (!loaded.buyTriggered) loaded.buyTriggered = {};
+      if (!loaded.sellTriggered) loaded.sellTriggered = {};
+      if (!loaded.buyBuffs) loaded.buyBuffs = {};
+      if (!loaded.sellBuffs) loaded.sellBuffs = {};
       return loaded;
     }
 

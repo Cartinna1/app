@@ -294,6 +294,15 @@ export interface GameState {
   factionPrices: Record<string, number>; // 每回合各势力特产的实际价格（浮动）
   factionSellMultipliers: Record<string, number>; // 每回合各势力特产的固定卖出乘数（同回合内不变）
   blackMarketMultiplier: number; // 黑市采购倍率（每回合随机 3.2~4.5，1位小数）
+  // ===== 贸易市场库存/需求/价格buff =====
+  buyStocks: Record<string, number>;        // 每势力本回合剩余可购买库存
+  buyStockMax: Record<string, number>;      // 每势力本回合初始库存（80%涨价判定基准）
+  sellDemands: Record<string, number>;      // 每势力本回合剩余卖出需求
+  sellDemandMax: Record<string, number>;    // 每势力本回合初始需求（70%降价判定基准）
+  buyTriggered: Record<string, boolean>;    // 本回合该势力是否已触发涨价
+  sellTriggered: Record<string, boolean>;   // 本回合该势力是否已触发降价
+  buyBuffs: Record<string, { multiplier: number; expiresTurn: number }[]>; // 涨价buff（可叠加）
+  sellBuffs: Record<string, { multiplier: number; expiresTurn: number }[]>; // 降价buff（可叠加）
   factionPolicy: { type: TradePolicy; effect: PolicyEffect }; // 当前全星系贸易政策
   policyRemainingTurns: number; // 当前政策剩余持续回合数
   stardustMarket: StardustMarket; // 星尘集市

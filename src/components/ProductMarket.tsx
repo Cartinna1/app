@@ -41,15 +41,34 @@ export default function ProductMarket({ ship, shipIndex, products, materials, st
   const [relicMsgType, setRelicMsgType] = useState<'success' | 'error'>('success');
   const [shopMessage, setShopMessage] = useState('');
   const [shopMsgType, setShopMsgType] = useState<'success' | 'error'>('success');
-  const [stardustFoodQty, setStardustFoodQty] = useState(1);
-  const [goldAlloyQty, setGoldAlloyQty] = useState(1);
-  const [stardustAlloyQty, setStardustAlloyQty] = useState(1);
+  const [stardustFoodQty, setStardustFoodQty] = useState('1');
+  const [goldAlloyQty, setGoldAlloyQty] = useState('1');
+  const [stardustAlloyQty, setStardustAlloyQty] = useState('1');
   const [alloyMessage, setAlloyMessage] = useState('');
   const [alloyMsgType, setAlloyMsgType] = useState<'success' | 'error'>('success');
-  const [goldFoodQty, setGoldFoodQty] = useState(1);
-  const [alloyFoodQty, setAlloyFoodQty] = useState(1);
+  const [goldFoodQty, setGoldFoodQty] = useState('1');
+  const [alloyFoodQty, setAlloyFoodQty] = useState('1');
   const [foodMessage, setFoodMessage] = useState('');
   const [foodMsgType, setFoodMsgType] = useState<'success' | 'error'>('success');
+
+  // 解析数量（字符串 → 数字，非法/空返回 0）
+  const goldAlloyQtyNum = parseInt(goldAlloyQty, 10) || 0;
+  const stardustAlloyQtyNum = parseInt(stardustAlloyQty, 10) || 0;
+  const goldFoodQtyNum = parseInt(goldFoodQty, 10) || 0;
+  const alloyFoodQtyNum = parseInt(alloyFoodQty, 10) || 0;
+  const stardustFoodQtyNum = parseInt(stardustFoodQty, 10) || 0;
+
+  // 星尘加成二次确认（防误触）
+  const [confirmBonus, setConfirmBonus] = useState<string | null>(null);
+  const handleBonusClick = (key: string, action: () => void) => {
+    if (confirmBonus === key) {
+      setConfirmBonus(null);
+      action();
+    } else {
+      setConfirmBonus(key);
+      setTimeout(() => setConfirmBonus((cur) => (cur === key ? null : cur)), 3000);
+    }
+  };
 
   // 按productId分组合并
   const groups = useMemo<ProductGroup[]>(() => {
@@ -156,25 +175,25 @@ export default function ProductMarket({ ship, shipIndex, products, materials, st
   const handleBuyAlloy = (type: 'gold' | 'stardust') => {
     if (!onBuyAlloy) return;
     if (type === 'gold') {
-      const cost = 1200 * goldAlloyQty;
+      const cost = 1200 * goldAlloyQtyNum;
       if (ship.gold < cost) {
         setAlloyMessage(`金币不足（需要${cost.toLocaleString()}金币）`);
         setAlloyMsgType('error');
         setTimeout(() => setAlloyMessage(''), 3000);
         return;
       }
-      onBuyAlloy('gold', goldAlloyQty);
-      setAlloyMessage(`花费${cost.toLocaleString()}金币购买了${goldAlloyQty}个合金`);
+      onBuyAlloy('gold', goldAlloyQtyNum);
+      setAlloyMessage(`花费${cost.toLocaleString()}金币购买了${goldAlloyQtyNum}个合金`);
       setAlloyMsgType('success');
     } else {
-      if (ship.stardust < stardustAlloyQty) {
-        setAlloyMessage(`星尘不足（需要${stardustAlloyQty}星尘）`);
+      if (ship.stardust < stardustAlloyQtyNum) {
+        setAlloyMessage(`星尘不足（需要${stardustAlloyQtyNum}星尘）`);
         setAlloyMsgType('error');
         setTimeout(() => setAlloyMessage(''), 3000);
         return;
       }
-      onBuyAlloy('stardust', stardustAlloyQty);
-      setAlloyMessage(`花费${stardustAlloyQty}星尘购买了${stardustAlloyQty * 5}个合金`);
+      onBuyAlloy('stardust', stardustAlloyQtyNum);
+      setAlloyMessage(`花费${stardustAlloyQtyNum}星尘购买了${stardustAlloyQtyNum * 5}个合金`);
       setAlloyMsgType('success');
     }
     setTimeout(() => setAlloyMessage(''), 3000);
@@ -183,25 +202,25 @@ export default function ProductMarket({ ship, shipIndex, products, materials, st
   const handleBuyFood = (type: 'gold' | 'alloy') => {
     if (!onBuyFood) return;
     if (type === 'gold') {
-      const cost = 800 * goldFoodQty;
+      const cost = 800 * goldFoodQtyNum;
       if (ship.gold < cost) {
         setFoodMessage(`金币不足（需要${cost.toLocaleString()}金币）`);
         setFoodMsgType('error');
         setTimeout(() => setFoodMessage(''), 3000);
         return;
       }
-      onBuyFood('gold', goldFoodQty);
-      setFoodMessage(`花费${cost.toLocaleString()}金币购买了${goldFoodQty}个食物`);
+      onBuyFood('gold', goldFoodQtyNum);
+      setFoodMessage(`花费${cost.toLocaleString()}金币购买了${goldFoodQtyNum}个食物`);
       setFoodMsgType('success');
     } else {
-      if (ship.alloy < alloyFoodQty) {
-        setFoodMessage(`合金不足（需要${alloyFoodQty}合金）`);
+      if (ship.alloy < alloyFoodQtyNum) {
+        setFoodMessage(`合金不足（需要${alloyFoodQtyNum}合金）`);
         setFoodMsgType('error');
         setTimeout(() => setFoodMessage(''), 3000);
         return;
       }
-      onBuyFood('alloy', alloyFoodQty);
-      setFoodMessage(`花费${alloyFoodQty}合金购买了${alloyFoodQty * 2}个食物`);
+      onBuyFood('alloy', alloyFoodQtyNum);
+      setFoodMessage(`花费${alloyFoodQtyNum}合金购买了${alloyFoodQtyNum * 2}个食物`);
       setFoodMsgType('success');
     }
     setTimeout(() => setFoodMessage(''), 3000);
@@ -248,11 +267,11 @@ export default function ProductMarket({ ship, shipIndex, products, materials, st
 
   const handleBuyFoodWithStardust = () => {
     if (!onBuyFoodWithStardust) return;
-    if (ship.stardust < stardustFoodQty) {
-      showShopMsg(`星尘不足（需要${stardustFoodQty}星尘）`, 'error');
+    if (ship.stardust < stardustFoodQtyNum) {
+      showShopMsg(`星尘不足（需要${stardustFoodQtyNum}星尘）`, 'error');
       return;
     }
-    const res = onBuyFoodWithStardust(stardustFoodQty);
+    const res = onBuyFoodWithStardust(stardustFoodQtyNum);
     showShopMsg(res.message, res.success ? 'success' : 'error');
   };
 
@@ -428,17 +447,18 @@ export default function ProductMarket({ ship, shipIndex, products, materials, st
             </div>
             <div className="flex items-center gap-2 mb-2">
               <input
-                type="number"
-                min={1}
+                type="text"
+                inputMode="numeric"
+                pattern="[0-9]*"
                 value={goldAlloyQty}
-                onChange={(e) => setGoldAlloyQty(Math.max(1, parseInt(e.target.value) || 1))}
+                onChange={(e) => setGoldAlloyQty(e.target.value.replace(/[^0-9]/g, ''))}
                 className="w-16 bg-slate-800 border border-slate-600 rounded-lg px-2 py-1.5 text-sm text-slate-200 text-center focus:outline-none focus:border-cyan-500"
               />
               <button
                 onClick={() => handleBuyAlloy('gold')}
-                disabled={ship.gold < 1200 * goldAlloyQty}
+                disabled={goldAlloyQtyNum <= 0 || ship.gold < 1200 * goldAlloyQtyNum}
                 className={`flex-1 py-2 rounded-lg text-sm font-bold transition-colors ${
-                  ship.gold >= 1200 * goldAlloyQty
+                  goldAlloyQtyNum > 0 && ship.gold >= 1200 * goldAlloyQtyNum
                     ? 'bg-yellow-600 hover:bg-yellow-500 text-white'
                     : 'bg-slate-700 text-slate-500 cursor-not-allowed'
                 }`}
@@ -447,8 +467,8 @@ export default function ProductMarket({ ship, shipIndex, products, materials, st
               </button>
             </div>
             <div className="flex justify-between text-xs text-slate-500">
-              <span>花费: {(1200 * goldAlloyQty).toLocaleString()}金币</span>
-              <span>获得: {goldAlloyQty}合金</span>
+              <span>花费: {(1200 * goldAlloyQtyNum).toLocaleString()}金币</span>
+              <span>获得: {goldAlloyQtyNum}合金</span>
             </div>
           </div>
 
@@ -459,17 +479,18 @@ export default function ProductMarket({ ship, shipIndex, products, materials, st
             </div>
             <div className="flex items-center gap-2 mb-2">
               <input
-                type="number"
-                min={1}
+                type="text"
+                inputMode="numeric"
+                pattern="[0-9]*"
                 value={stardustAlloyQty}
-                onChange={(e) => setStardustAlloyQty(Math.max(1, parseInt(e.target.value) || 1))}
+                onChange={(e) => setStardustAlloyQty(e.target.value.replace(/[^0-9]/g, ''))}
                 className="w-16 bg-slate-800 border border-slate-600 rounded-lg px-2 py-1.5 text-sm text-slate-200 text-center focus:outline-none focus:border-cyan-500"
               />
               <button
                 onClick={() => handleBuyAlloy('stardust')}
-                disabled={ship.stardust < stardustAlloyQty}
+                disabled={stardustAlloyQtyNum <= 0 || ship.stardust < stardustAlloyQtyNum}
                 className={`flex-1 py-2 rounded-lg text-sm font-bold transition-colors ${
-                  ship.stardust >= stardustAlloyQty
+                  stardustAlloyQtyNum > 0 && ship.stardust >= stardustAlloyQtyNum
                     ? 'bg-purple-600 hover:bg-purple-500 text-white'
                     : 'bg-slate-700 text-slate-500 cursor-not-allowed'
                 }`}
@@ -478,8 +499,8 @@ export default function ProductMarket({ ship, shipIndex, products, materials, st
               </button>
             </div>
             <div className="flex justify-between text-xs text-slate-500">
-              <span>花费: {stardustAlloyQty}星尘</span>
-              <span>获得: {stardustAlloyQty * 5}合金</span>
+              <span>花费: {stardustAlloyQtyNum}星尘</span>
+              <span>获得: {stardustAlloyQtyNum * 5}合金</span>
             </div>
           </div>
         </div>
@@ -512,17 +533,18 @@ export default function ProductMarket({ ship, shipIndex, products, materials, st
             </div>
             <div className="flex items-center gap-2 mb-2">
               <input
-                type="number"
-                min={1}
+                type="text"
+                inputMode="numeric"
+                pattern="[0-9]*"
                 value={goldFoodQty}
-                onChange={(e) => setGoldFoodQty(Math.max(1, parseInt(e.target.value) || 1))}
+                onChange={(e) => setGoldFoodQty(e.target.value.replace(/[^0-9]/g, ''))}
                 className="w-16 bg-slate-800 border border-slate-600 rounded-lg px-2 py-1.5 text-sm text-slate-200 text-center focus:outline-none focus:border-green-500"
               />
               <button
                 onClick={() => handleBuyFood('gold')}
-                disabled={ship.gold < 800 * goldFoodQty}
+                disabled={goldFoodQtyNum <= 0 || ship.gold < 800 * goldFoodQtyNum}
                 className={`flex-1 py-1.5 rounded-lg text-xs font-bold transition-colors ${
-                  ship.gold >= 800 * goldFoodQty
+                  goldFoodQtyNum > 0 && ship.gold >= 800 * goldFoodQtyNum
                     ? 'bg-yellow-600 hover:bg-yellow-500 text-white'
                     : 'bg-slate-700 text-slate-500 cursor-not-allowed'
                 }`}
@@ -531,8 +553,8 @@ export default function ProductMarket({ ship, shipIndex, products, materials, st
               </button>
             </div>
             <div className="flex justify-between text-xs text-slate-500">
-              <span>花费: {(800 * goldFoodQty).toLocaleString()}金币</span>
-              <span>获得: {goldFoodQty}食物</span>
+              <span>花费: {(800 * goldFoodQtyNum).toLocaleString()}金币</span>
+              <span>获得: {goldFoodQtyNum}食物</span>
             </div>
           </div>
 
@@ -543,17 +565,18 @@ export default function ProductMarket({ ship, shipIndex, products, materials, st
             </div>
             <div className="flex items-center gap-2 mb-2">
               <input
-                type="number"
-                min={1}
+                type="text"
+                inputMode="numeric"
+                pattern="[0-9]*"
                 value={alloyFoodQty}
-                onChange={(e) => setAlloyFoodQty(Math.max(1, parseInt(e.target.value) || 1))}
+                onChange={(e) => setAlloyFoodQty(e.target.value.replace(/[^0-9]/g, ''))}
                 className="w-16 bg-slate-800 border border-slate-600 rounded-lg px-2 py-1.5 text-sm text-slate-200 text-center focus:outline-none focus:border-green-500"
               />
               <button
                 onClick={() => handleBuyFood('alloy')}
-                disabled={ship.alloy < alloyFoodQty}
+                disabled={alloyFoodQtyNum <= 0 || ship.alloy < alloyFoodQtyNum}
                 className={`flex-1 py-1.5 rounded-lg text-xs font-bold transition-colors ${
-                  ship.alloy >= alloyFoodQty
+                  alloyFoodQtyNum > 0 && ship.alloy >= alloyFoodQtyNum
                     ? 'bg-slate-600 hover:bg-slate-500 text-white'
                     : 'bg-slate-700 text-slate-500 cursor-not-allowed'
                 }`}
@@ -562,8 +585,8 @@ export default function ProductMarket({ ship, shipIndex, products, materials, st
               </button>
             </div>
             <div className="flex justify-between text-xs text-slate-500">
-              <span>花费: {alloyFoodQty}合金</span>
-              <span>获得: {alloyFoodQty * 2}食物</span>
+              <span>花费: {alloyFoodQtyNum}合金</span>
+              <span>获得: {alloyFoodQtyNum * 2}食物</span>
             </div>
           </div>
 
@@ -574,17 +597,18 @@ export default function ProductMarket({ ship, shipIndex, products, materials, st
             </div>
             <div className="flex items-center gap-2 mb-2">
               <input
-                type="number"
-                min={1}
+                type="text"
+                inputMode="numeric"
+                pattern="[0-9]*"
                 value={stardustFoodQty}
-                onChange={(e) => setStardustFoodQty(Math.max(1, parseInt(e.target.value) || 1))}
+                onChange={(e) => setStardustFoodQty(e.target.value.replace(/[^0-9]/g, ''))}
                 className="w-16 bg-slate-800 border border-slate-600 rounded-lg px-2 py-1.5 text-sm text-slate-200 text-center focus:outline-none focus:border-green-500"
               />
               <button
                 onClick={handleBuyFoodWithStardust}
-                disabled={ship.stardust < stardustFoodQty}
+                disabled={stardustFoodQtyNum <= 0 || ship.stardust < stardustFoodQtyNum}
                 className={`flex-1 py-1.5 rounded-lg text-xs font-bold transition-colors ${
-                  ship.stardust >= stardustFoodQty
+                  stardustFoodQtyNum > 0 && ship.stardust >= stardustFoodQtyNum
                     ? 'bg-purple-600 hover:bg-purple-500 text-white'
                     : 'bg-slate-700 text-slate-500 cursor-not-allowed'
                 }`}
@@ -593,8 +617,8 @@ export default function ProductMarket({ ship, shipIndex, products, materials, st
               </button>
             </div>
             <div className="flex justify-between text-xs text-slate-500">
-              <span>花费: {stardustFoodQty}星尘</span>
-              <span>获得: {stardustFoodQty * 20}食物</span>
+              <span>花费: {stardustFoodQtyNum}星尘</span>
+              <span>获得: {stardustFoodQtyNum * 20}食物</span>
             </div>
           </div>
         </div>
@@ -647,18 +671,20 @@ export default function ProductMarket({ ship, shipIndex, products, materials, st
           <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
             {/* 随机10原料 */}
             <button
-              onClick={handleBuyRandomMats}
+              onClick={() => handleBonusClick('randomMats', handleBuyRandomMats)}
               disabled={ship.stardust < 4}
               className={`text-left rounded-lg border p-2.5 transition-all ${
-                ship.stardust >= 4
-                  ? 'bg-slate-800/60 border-slate-700 hover:border-amber-500 cursor-pointer'
-                  : 'bg-slate-800/30 border-slate-800 opacity-50 cursor-not-allowed'
+                confirmBonus === 'randomMats'
+                  ? 'bg-amber-900/50 border-amber-500 cursor-pointer'
+                  : ship.stardust >= 4
+                    ? 'bg-slate-800/60 border-slate-700 hover:border-amber-500 cursor-pointer'
+                    : 'bg-slate-800/30 border-slate-800 opacity-50 cursor-not-allowed'
               }`}
             >
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
                   <Package size={14} className="text-amber-400" />
-                  <span className="text-xs text-slate-200 font-bold">随机10个原料</span>
+                  <span className="text-xs text-slate-200 font-bold">{confirmBonus === 'randomMats' ? '再次点击确认购买' : '随机10个原料'}</span>
                 </div>
                 <span className="text-xs text-purple-400 font-bold">4星尘</span>
               </div>
@@ -666,18 +692,20 @@ export default function ProductMarket({ ship, shipIndex, products, materials, st
 
             {/* 售价+10% 5回合 */}
             <button
-              onClick={() => handleBuySellBonus(5, 10, 8)}
+              onClick={() => handleBonusClick('bonus10', () => handleBuySellBonus(5, 10, 8))}
               disabled={ship.stardust < 8}
               className={`text-left rounded-lg border p-2.5 transition-all ${
-                ship.stardust >= 8
-                  ? 'bg-slate-800/60 border-slate-700 hover:border-green-500 cursor-pointer'
-                  : 'bg-slate-800/30 border-slate-800 opacity-50 cursor-not-allowed'
+                confirmBonus === 'bonus10'
+                  ? 'bg-green-900/50 border-green-500 cursor-pointer'
+                  : ship.stardust >= 8
+                    ? 'bg-slate-800/60 border-slate-700 hover:border-green-500 cursor-pointer'
+                    : 'bg-slate-800/30 border-slate-800 opacity-50 cursor-not-allowed'
               }`}
             >
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
                   <TrendingUp size={14} className="text-green-400" />
-                  <span className="text-xs text-slate-200 font-bold">产品售价+10%</span>
+                  <span className="text-xs text-slate-200 font-bold">{confirmBonus === 'bonus10' ? '再次点击确认购买' : '产品售价+10%'}</span>
                   <span className="text-[10px] text-slate-500">(5回合)</span>
                 </div>
                 <span className="text-xs text-purple-400 font-bold">8星尘</span>
@@ -686,18 +714,20 @@ export default function ProductMarket({ ship, shipIndex, products, materials, st
 
             {/* 售价+25% 5回合 */}
             <button
-              onClick={() => handleBuySellBonus(5, 25, 15)}
+              onClick={() => handleBonusClick('bonus25', () => handleBuySellBonus(5, 25, 15))}
               disabled={ship.stardust < 15}
               className={`text-left rounded-lg border p-2.5 transition-all ${
-                ship.stardust >= 15
-                  ? 'bg-slate-800/60 border-slate-700 hover:border-emerald-500 cursor-pointer'
-                  : 'bg-slate-800/30 border-slate-800 opacity-50 cursor-not-allowed'
+                confirmBonus === 'bonus25'
+                  ? 'bg-emerald-900/50 border-emerald-500 cursor-pointer'
+                  : ship.stardust >= 15
+                    ? 'bg-slate-800/60 border-slate-700 hover:border-emerald-500 cursor-pointer'
+                    : 'bg-slate-800/30 border-slate-800 opacity-50 cursor-not-allowed'
               }`}
             >
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
                   <TrendingUp size={14} className="text-emerald-400" />
-                  <span className="text-xs text-slate-200 font-bold">产品售价+25%</span>
+                  <span className="text-xs text-slate-200 font-bold">{confirmBonus === 'bonus25' ? '再次点击确认购买' : '产品售价+25%'}</span>
                   <span className="text-[10px] text-slate-500">(5回合)</span>
                 </div>
                 <span className="text-xs text-purple-400 font-bold">15星尘</span>
@@ -706,18 +736,20 @@ export default function ProductMarket({ ship, shipIndex, products, materials, st
 
             {/* 兑换5000金币 */}
             <button
-              onClick={handleBuyGoldWithStardust}
+              onClick={() => handleBonusClick('gold5000', handleBuyGoldWithStardust)}
               disabled={ship.stardust < 2}
               className={`text-left rounded-lg border p-2.5 transition-all ${
-                ship.stardust >= 2
-                  ? 'bg-slate-800/60 border-slate-700 hover:border-yellow-500 cursor-pointer'
-                  : 'bg-slate-800/30 border-slate-800 opacity-50 cursor-not-allowed'
+                confirmBonus === 'gold5000'
+                  ? 'bg-yellow-900/50 border-yellow-500 cursor-pointer'
+                  : ship.stardust >= 2
+                    ? 'bg-slate-800/60 border-slate-700 hover:border-yellow-500 cursor-pointer'
+                    : 'bg-slate-800/30 border-slate-800 opacity-50 cursor-not-allowed'
               }`}
             >
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
                   <Coins size={14} className="text-yellow-400" />
-                  <span className="text-xs text-slate-200 font-bold">兑换5000金币</span>
+                  <span className="text-xs text-slate-200 font-bold">{confirmBonus === 'gold5000' ? '再次点击确认购买' : '兑换5000金币'}</span>
                 </div>
                 <span className="text-xs text-purple-400 font-bold">2星尘</span>
               </div>
@@ -725,18 +757,20 @@ export default function ProductMarket({ ship, shipIndex, products, materials, st
 
             {/* 强制刷新贸易政策 */}
             <button
-              onClick={handleRerollPolicy}
+              onClick={() => handleBonusClick('rerollPolicy', handleRerollPolicy)}
               disabled={ship.stardust < 15}
               className={`text-left rounded-lg border p-2.5 transition-all md:col-span-2 ${
-                ship.stardust >= 15
-                  ? 'bg-slate-800/60 border-slate-700 hover:border-blue-500 cursor-pointer'
-                  : 'bg-slate-800/30 border-slate-800 opacity-50 cursor-not-allowed'
+                confirmBonus === 'rerollPolicy'
+                  ? 'bg-blue-900/50 border-blue-500 cursor-pointer'
+                  : ship.stardust >= 15
+                    ? 'bg-slate-800/60 border-slate-700 hover:border-blue-500 cursor-pointer'
+                    : 'bg-slate-800/30 border-slate-800 opacity-50 cursor-not-allowed'
               }`}
             >
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
                   <RefreshCw size={14} className="text-blue-400" />
-                  <span className="text-xs text-slate-200 font-bold">强制刷新贸易政策</span>
+                  <span className="text-xs text-slate-200 font-bold">{confirmBonus === 'rerollPolicy' ? '再次点击确认购买' : '强制刷新贸易政策'}</span>
                   <span className="text-[10px] text-slate-500">(立即生效)</span>
                 </div>
                 <span className="text-xs text-purple-400 font-bold">15星尘</span>
