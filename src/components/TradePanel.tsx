@@ -440,7 +440,7 @@ export default function TradePanel({ factions, ship, factionPrices, factionSellM
                           </div>
                           <div className="text-right">
                             {!isLocal && <>
-                              <p className="text-sm text-yellow-400 font-bold">{sellP.toLocaleString()}/个</p>
+                              <p className="text-sm text-yellow-400 font-bold">{Math.round(sellP * sellBuffMult).toLocaleString()}/个</p>
                             </>}
                             <button
                               onClick={() => { if (!isLocal) { setSellFaction(fid); setSellQty('1'); } }}
