@@ -5,6 +5,7 @@ import { RECIPES } from '@/data/gameData';
 
 
 export function useTrade(
+  gameState: GameState,
   dispatch: React.Dispatch<{ type: 'FUNCTIONAL_UPDATE'; updater: (state: GameState) => GameState }>
 ) {
   /** 应用声望变化（带回合上限管控和零和传导） */
@@ -77,12 +78,14 @@ export function useTrade(
   // 跃迁
   const travelToFaction = useCallback(
     (shipIndex: number, targetFactionId: string): { success: boolean; message: string } => {
+      const repBlockT = checkRepBlock(gameState, targetFactionId, 'travel');
+      if (repBlockT) return { success: false, message: repBlockT };
       let result: { success: boolean; message: string } = { success: false, message: '' };
       dispatch({
         type: 'FUNCTIONAL_UPDATE',
         updater: (prev) => {
           const ships = [...prev.ships]; const s = { ...ships[shipIndex] };
-          const repBlockT = checkRepBlock(prev, targetFactionId, 'travel'); if (repBlockT) { result = { success: false, message: repBlockT }; return prev; }
+          const repBlockT2 = checkRepBlock(prev, targetFactionId, 'travel'); if (repBlockT2) { result = { success: false, message: repBlockT2 }; return prev; }
           s.tradeStatus = { ...s.tradeStatus };
           if (s.tradeStatus.travelTurnsRemaining > 0) { result = { success: false, message: '正在跃迁中' }; return prev; }
           if (s.tradeStatus.currentFactionId === targetFactionId) { result = { success: false, message: '已在此势力' }; return prev; }
@@ -97,11 +100,17 @@ export function useTrade(
         },
       });
       return result;
-    }, [dispatch]);
+    }, [gameState, dispatch]);
 
   // 购买特产（含声望折扣）
   const buySpecialty = useCallback(
     (shipIndex: number, quantity: number): { success: boolean; message: string } => {
+      const ship0 = gameState.ships?.[shipIndex];
+      const curFid0 = ship0?.tradeStatus?.currentFactionId;
+      if (curFid0) {
+        const repBlockB0 = checkRepBlock(gameState, curFid0, 'buy');
+        if (repBlockB0) return { success: false, message: repBlockB0 };
+      }
       let result: { success: boolean; message: string } = { success: false, message: '' };
       dispatch({
         type: 'FUNCTIONAL_UPDATE',
@@ -150,11 +159,17 @@ export function useTrade(
         },
       });
       return result;
-    }, [dispatch]);
+    }, [gameState, dispatch]);
 
   // 出售特产
   const sellSpecialty = useCallback(
     (shipIndex: number, factionId: string, quantity: number): { success: boolean; message: string } => {
+      const ship0 = gameState.ships?.[shipIndex];
+      const curFid0 = ship0?.tradeStatus?.currentFactionId;
+      if (curFid0) {
+        const repBlockS0 = checkRepBlock(gameState, curFid0, 'sell');
+        if (repBlockS0) return { success: false, message: repBlockS0 };
+      }
       let result: { success: boolean; message: string } = { success: false, message: '' };
       dispatch({
         type: 'FUNCTIONAL_UPDATE',
@@ -201,11 +216,17 @@ export function useTrade(
         },
       });
       return result;
-    }, [dispatch]);
+    }, [gameState, dispatch]);
 
   // 探索
   const exploreFaction = useCallback(
     (shipIndex: number): { success: boolean; message: string } => {
+      const ship0 = gameState.ships?.[shipIndex];
+      const curFid0 = ship0?.tradeStatus?.currentFactionId;
+      if (curFid0) {
+        const repBlockEx0 = checkRepBlock(gameState, curFid0, 'explore');
+        if (repBlockEx0) return { success: false, message: repBlockEx0 };
+      }
       let result: { success: boolean; message: string } = { success: false, message: '' };
       dispatch({
         type: 'FUNCTIONAL_UPDATE',
@@ -231,11 +252,17 @@ export function useTrade(
         },
       });
       return result;
-    }, [dispatch]);
+    }, [gameState, dispatch]);
 
   // 声望投资：8000金币=1声望，每回合上限+10
   const investFaction = useCallback(
     (shipIndex: number, amount: number): { success: boolean; message: string } => {
+      const ship0 = gameState.ships?.[shipIndex];
+      const factionId0 = ship0?.tradeStatus?.currentFactionId;
+      if (factionId0) {
+        const repBlockInv0 = checkRepBlock(gameState, factionId0, 'invest');
+        if (repBlockInv0) return { success: false, message: repBlockInv0 };
+      }
       let result: { success: boolean; message: string } = { success: false, message: '' };
       dispatch({
         type: 'FUNCTIONAL_UPDATE',
@@ -263,7 +290,7 @@ export function useTrade(
         },
       });
       return result;
-    }, [dispatch]);
+    }, [gameState, dispatch]);
 
   // ==================== 打探消息 ====================
   const intelStories: Record<string, string[]> = {
@@ -279,6 +306,12 @@ export function useTrade(
 
   const gatherIntel = useCallback(
     (shipIndex: number): { success: boolean; message: string; goldChange: number } => {
+      const ship0 = gameState.ships?.[shipIndex];
+      const curFid0 = ship0?.tradeStatus?.currentFactionId;
+      if (curFid0) {
+        const repBlockI0 = checkRepBlock(gameState, curFid0, 'intel');
+        if (repBlockI0) return { success: false, message: repBlockI0, goldChange: 0 };
+      }
       let result: { success: boolean; message: string; goldChange: number } = { success: false, message: '', goldChange: 0 };
       dispatch({
         type: 'FUNCTIONAL_UPDATE',
@@ -314,12 +347,17 @@ export function useTrade(
         },
       });
       return result;
-    }, [dispatch]);
+    }, [gameState, dispatch]);
 
   // ==================== 合同系统 ====================
 
   /** 接取合同（接取后从当前回合重新计算完成期限） */
   const acceptContract = useCallback((contractId: string): { success: boolean; message: string } => {
+    const contract0 = (gameState.factionContracts || []).find((c) => c.id === contractId);
+    if (contract0) {
+      const repBlockC0 = checkRepBlock(gameState, contract0.factionId, 'contract');
+      if (repBlockC0) return { success: false, message: repBlockC0 };
+    }
     let result: { success: boolean; message: string } = { success: false, message: '' };
     dispatch({
       type: 'FUNCTIONAL_UPDATE',
@@ -347,7 +385,7 @@ export function useTrade(
       },
     });
     return result;
-  }, [dispatch]);
+  }, [gameState, dispatch]);
 
   /** 提交合同（交付货物） */
   const completeContract = useCallback((shipIndex: number, contractId: string): { success: boolean; message: string } => {
