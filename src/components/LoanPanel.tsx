@@ -1,9 +1,11 @@
 import { useState } from 'react';
-import type { Mothership, Loan } from '@/types/game';
+import type { Mothership, Loan, GameState } from '@/types/game';
+import { getLoanLimit, getLoanTierInfo } from '@/hooks/useLoan';
 import { Banknote, AlertTriangle, Clock, Coins, Check, ShieldAlert } from 'lucide-react';
 
 interface LoanPanelProps {
   ship: Mothership;
+  gameState: GameState;
   onTakeLoan: (principal: number, plan: { turns: number; rate: number }) => { success: boolean; message: string };
   onRepayLoan: (loanId: string) => { success: boolean; message: string };
 }
@@ -15,14 +17,16 @@ const LOAN_PLANS = [
   { turns: 15, rate: 0.9, label: '15回合', rateLabel: '到期总利率90%' },
 ];
 
-export default function LoanPanel({ ship, onTakeLoan, onRepayLoan }: LoanPanelProps) {
+export default function LoanPanel({ ship, gameState, onTakeLoan, onRepayLoan }: LoanPanelProps) {
   const [amount, setAmount] = useState('');
   const [selectedPlan, setSelectedPlan] = useState(0);
   const [message, setMessage] = useState('');
   const [msgType, setMsgType] = useState<'success' | 'error'>('success');
 
+  const loanLimit = getLoanLimit(gameState);
+  const tier = getLoanTierInfo(gameState);
   const totalLoans = ship.loans.reduce((sum, l) => sum + l.principal, 0);
-  const remainingCapacity = Math.max(0, 50000 - totalLoans);
+  const remainingCapacity = Math.max(0, loanLimit - totalLoans);
 
   const handleBorrow = () => {
     const principal = parseInt(amount);
@@ -59,7 +63,11 @@ export default function LoanPanel({ ship, onTakeLoan, onRepayLoan }: LoanPanelPr
           星际银行贷款
         </h2>
         <p className="text-sm text-slate-400">
-          最多贷款 50,000 金币。按时还款保持良好信用，违约将宣布破产！
+          当前信用额度 <span className="text-yellow-400 font-bold">{loanLimit.toLocaleString()}</span> 金币（{tier.name}）。
+          {tier.nextCondition
+            ? <> 下一档：<span className="text-slate-300">{tier.nextLimit?.toLocaleString()}</span> 金币 —— {tier.nextCondition}。</>
+            : <> 已达最高额度。</>}
+          按时还款保持良好信用，违约将宣布破产！
         </p>
       </div>
 

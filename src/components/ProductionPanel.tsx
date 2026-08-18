@@ -4,6 +4,16 @@ import { RECIPES } from '@/data/gameData';
 import { getProductionLimitBonus } from '@/data/modules';
 import { Factory, Check, AlertCircle, Clock, Wheat } from 'lucide-react';
 
+// 产品分类标签颜色（按生产回合数，与集会一致）
+const TURN_COLORS: Record<number, string> = {
+  1: 'bg-green-900/30 text-green-400',
+  2: 'bg-yellow-900/30 text-yellow-400',
+  3: 'bg-orange-900/30 text-orange-400',
+  4: 'bg-red-900/30 text-red-400',
+  5: 'bg-purple-900/30 text-purple-400',
+  6: 'bg-cyan-900/30 text-cyan-400',
+};
+
 interface ProductionPanelProps {
   ship: Mothership;
   shipIndex: number;
@@ -51,6 +61,9 @@ export default function ProductionPanel({ ship, shipIndex, materials: _materials
     { value: 1 as const, label: '1回合' },
     { value: 2 as const, label: '2回合' },
     { value: 3 as const, label: '3回合' },
+    { value: 4 as const, label: '4回合' },
+    { value: 5 as const, label: '5回合' },
+    { value: 6 as const, label: '6回合' },
   ];
 
   const handleProduce = (recipe: typeof RECIPES[0]) => {
@@ -183,11 +196,7 @@ export default function ProductionPanel({ ship, shipIndex, materials: _materials
                       可生产
                     </span>
                   )}
-                  <span className={`text-[10px] px-1.5 py-0.5 rounded font-bold ${
-                    recipe.productionTurns === 1 ? 'bg-green-900/30 text-green-400' :
-                    recipe.productionTurns === 2 ? 'bg-yellow-900/30 text-yellow-400' :
-                    'bg-red-900/30 text-red-400'
-                  }`}>
+                  <span className={`text-[10px] px-1.5 py-0.5 rounded font-bold ${TURN_COLORS[recipe.productionTurns] || 'bg-slate-800 text-slate-400'}`}>
                     {recipe.productionTurns}回合
                   </span>
                 </div>

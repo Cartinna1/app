@@ -4,6 +4,16 @@ import { INITIAL_PRODUCTS, RECIPES } from '@/data/gameData';
 import { getRelicById } from '@/data/relics';
 import { ShoppingCart, AlertTriangle, TrendingUp, TrendingDown, Package, Sparkles, Gem, Coins, RefreshCw, Zap } from 'lucide-react';
 
+// 产品分类标签颜色（按生产回合数，与生产中心一致）
+const TURN_COLORS: Record<number, string> = {
+  1: 'bg-green-900/30 text-green-400',
+  2: 'bg-yellow-900/30 text-yellow-400',
+  3: 'bg-orange-900/30 text-orange-400',
+  4: 'bg-red-900/30 text-red-400',
+  5: 'bg-purple-900/30 text-purple-400',
+  6: 'bg-cyan-900/30 text-cyan-400',
+};
+
 interface ProductMarketProps {
   ship: Mothership;
   shipIndex: number;
@@ -325,11 +335,7 @@ export default function ProductMarket({ ship, shipIndex, products, materials, st
                           <span className="text-[10px] md:text-xs bg-slate-800 text-slate-400 px-1.5 py-0.5 rounded">
                             {group.description}
                           </span>
-                          <span className={`text-[10px] md:text-xs px-1.5 py-0.5 rounded font-bold ${
-                            group.productionTurns === 1 ? 'bg-green-900/30 text-green-400' :
-                            group.productionTurns === 2 ? 'bg-yellow-900/30 text-yellow-400' :
-                            'bg-red-900/30 text-red-400'
-                          }`}>
+                          <span className={`text-[10px] md:text-xs px-1.5 py-0.5 rounded font-bold ${TURN_COLORS[group.productionTurns] || 'bg-slate-800 text-slate-400'}`}>
                             {group.productionTurns}回合生产
                           </span>
                         </div>

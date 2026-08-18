@@ -506,8 +506,15 @@ export function useTurn(
               const recipes = RECIPES.filter((r) => !r.foodYield);
               const recipe = recipes[Math.floor(Math.random() * recipes.length)];
               const qty = Math.floor(Math.random() * 4) + 2; // 2-5
-              const tier = recipe.productionTurns <= 1 ? 0 : recipe.productionTurns <= 2 ? 1 : 2;
-              const rewards = [[5, 8, 3000, 5000], [8, 12, 6000, 10000], [10, 15, 12000, 20000]][tier];
+              const tier = Math.min(5, Math.max(0, recipe.productionTurns - 1));
+              const rewards = [
+                [5, 8, 3000, 5000],       // 1回合
+                [8, 12, 6000, 10000],     // 2回合
+                [10, 15, 12000, 20000],   // 3回合
+                [12, 18, 30000, 50000],   // 4回合
+                [14, 22, 50000, 80000],   // 5回合
+                [16, 26, 70000, 110000],  // 6回合
+              ][tier];
               const rewardGold = Math.floor(Math.random() * (rewards[3] - rewards[2] + 1)) + rewards[2];
               const rewardRep = Math.floor(Math.random() * (rewards[1] - rewards[0] + 1)) + rewards[0];
               // 可接取窗口：生成后 5-8 回合内可接取，接取后再独立计算完成期限

@@ -88,7 +88,7 @@ export interface Product {
   baseSellPrice: number;
   sellPrices: number[];
   currentSellPrice: number;
-  productionTurns: number; // 生产所需回合数（1-3）
+  productionTurns: number; // 生产所需回合数（1-6，含重型配方4-6回合）
   priceMaxUp: number;      // 相对基准价，最多涨多少（如0.2=20%）
   priceMaxDown: number;    // 相对基准价，最多跌多少（如0.15=15%）
 }

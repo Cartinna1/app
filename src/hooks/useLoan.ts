@@ -1,14 +1,48 @@
 import { useCallback } from 'react';
 import type { GameState, Loan } from '@/types/game';
 
-const MAX_LOAN = 50000;
-
 // 贷款利率表：5回合40%，10回合60%，15回合90%
 export const LOAN_PLANS = [
   { turns: 5, rate: 0.4, label: '5回合', totalRate: '40%' },
   { turns: 10, rate: 0.6, label: '10回合', totalRate: '60%' },
   { turns: 15, rate: 0.9, label: '15回合', totalRate: '90%' },
 ];
+
+// 贷款额度分档（随游戏进度解锁）
+// 青铜 5万（初始） → 白银 20万（解锁殖民地） → 黄金 50万（人口≥50） → 白金 100万（任一势力声望=100）
+export interface LoanTier {
+  name: string;
+  limit: number;
+  nextName: string | null;
+  nextLimit: number | null;
+  nextCondition: string | null;
+}
+
+export function getLoanLimit(gameState: GameState): number {
+  const ship = gameState.ships[0];
+  if (!ship?.colony) return 50000; // 青铜
+  const pop = ship.colony.population?.total || 0;
+  const anyMax = Object.values(gameState.factionReputation || {}).some((r) => r >= 100);
+  if (anyMax) return 1000000; // 白金：满声望
+  if (pop >= 50) return 500000; // 黄金：50 人口
+  return 200000; // 白银
+}
+
+export function getLoanTierInfo(gameState: GameState): LoanTier {
+  const ship = gameState.ships[0];
+  if (!ship?.colony) {
+    return { name: '青铜', limit: 50000, nextName: '白银', nextLimit: 200000, nextCondition: '解锁殖民地' };
+  }
+  const pop = ship.colony.population?.total || 0;
+  const anyMax = Object.values(gameState.factionReputation || {}).some((r) => r >= 100);
+  if (anyMax) {
+    return { name: '白金', limit: 1000000, nextName: null, nextLimit: null, nextCondition: null };
+  }
+  if (pop >= 50) {
+    return { name: '黄金', limit: 500000, nextName: '白金', nextLimit: 1000000, nextCondition: '任一势力声望达到 100' };
+  }
+  return { name: '白银', limit: 200000, nextName: '黄金', nextLimit: 500000, nextCondition: '殖民地人口达到 50' };
+}
 
 export function useLoan(
   gameState: GameState,
@@ -19,7 +53,10 @@ export function useLoan(
       const ship = gameState.ships[shipIndex];
       if (ship?.bankrupt) return { success: false, message: '破产期间无法进行贷款！请先恢复资产为正数。' };
       if (principal <= 0) return { success: false, message: '贷款金额必须大于0' };
-      if (principal > MAX_LOAN) return { success: false, message: `最多贷款${MAX_LOAN}金币` };
+      const loanLimit = getLoanLimit(gameState);
+      const totalLoans = ship.loans.reduce((sum, l) => sum + l.principal, 0);
+      const remainingCapacity = loanLimit - totalLoans;
+      if (principal > remainingCapacity) return { success: false, message: `最多还能贷款${remainingCapacity}金币` };
 
       const totalInterest = Math.round(principal * plan.rate);
       const totalRepay = principal + totalInterest;
@@ -51,7 +88,7 @@ export function useLoan(
       });
       return { success: true, message: `贷款${principal}金币成功！${plan.turns}回合后到期，到期应还${totalRepay}金币` };
     },
-    [gameState.turn, dispatch]
+    [gameState, dispatch]
   );
 
   const repayLoan = useCallback(

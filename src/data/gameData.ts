@@ -373,6 +373,28 @@ export const RECIPES: Recipe[] = [
   // ===== 食物配方 =====
   { id: 'f01', productName: '合成营养块', description: '用基础原料合成的船员口粮，维持舰船日常消耗', inputs: [{ materialId: 'carbon', amount: 3 }, { materialId: 'oil', amount: 2 }], productionTurns: 2, foodYield: 20 },
   { id: 'f02', productName: '高级营养液', description: '富含量子微粒的高效营养液，一滴抵三餐', inputs: [{ materialId: 'carbon', amount: 5 }, { materialId: 'oil', amount: 3 }, { materialId: 'quantum', amount: 1 }], productionTurns: 3, foodYield: 40 },
+  // ===== 重型配方（4-6回合，消耗大量堆积原料，每档各6种对应6种原料为主要原料）=====
+  // 4回合
+  { id: 'p26', productName: '碳晶复合装甲', description: '以巨量碳块熔铸的船体装甲，坚不可摧', inputs: [{ materialId: 'carbon', amount: 150 }, { materialId: 'oil', amount: 20 }, { materialId: 'silicon', amount: 35 }], productionTurns: 4 },
+  { id: 'p27', productName: '光子计算核心', description: '集成海量硅片的光子运算核心', inputs: [{ materialId: 'silicon', amount: 75 }, { materialId: 'gold_ore', amount: 15 }, { materialId: 'carbon', amount: 60 }], productionTurns: 4 },
+  { id: 'p28', productName: '高能燃料精炼体', description: '原油深度精炼的高能聚合物燃料', inputs: [{ materialId: 'oil', amount: 40 }, { materialId: 'carbon', amount: 50 }, { materialId: 'silicon', amount: 45 }], productionTurns: 4 },
+  { id: 'p29', productName: '银河铸币母模', description: '用黄金铸造的银河硬通货压铸母版', inputs: [{ materialId: 'gold_ore', amount: 25 }, { materialId: 'quantum', amount: 8 }, { materialId: 'oil', amount: 20 }], productionTurns: 4 },
+  { id: 'p30', productName: '量子纠缠通信器', description: '量子簇编织的跨空间通信终端', inputs: [{ materialId: 'quantum', amount: 17 }, { materialId: 'silicon', amount: 40 }, { materialId: 'dark_matter', amount: 7 }], productionTurns: 4 },
+  { id: 'p31', productName: '暗能引擎核心', description: '暗物质驱动的曲速引擎核心', inputs: [{ materialId: 'dark_matter', amount: 15 }, { materialId: 'quantum', amount: 8 }, { materialId: 'gold_ore', amount: 13 }], productionTurns: 4 },
+  // 5回合
+  { id: 'p32', productName: '碳晶巨构模块', description: '由海量碳块压铸而成的超大型结构模块', inputs: [{ materialId: 'carbon', amount: 200 }, { materialId: 'oil', amount: 30 }, { materialId: 'silicon', amount: 40 }], productionTurns: 5 },
+  { id: 'p33', productName: '全息投影矩阵', description: '硅片阵列驱动的全息成像设备', inputs: [{ materialId: 'silicon', amount: 100 }, { materialId: 'gold_ore', amount: 20 }, { materialId: 'carbon', amount: 80 }], productionTurns: 5 },
+  { id: 'p34', productName: '曲速引擎燃料', description: '为曲速引擎量身打造的高能燃料', inputs: [{ materialId: 'oil', amount: 50 }, { materialId: 'carbon', amount: 70 }, { materialId: 'silicon', amount: 65 }], productionTurns: 5 },
+  { id: 'p35', productName: '星际纪念金币', description: '黄金铸造的限量星际纪念钱币', inputs: [{ materialId: 'gold_ore', amount: 33 }, { materialId: 'quantum', amount: 11 }, { materialId: 'oil', amount: 26 }], productionTurns: 5 },
+  { id: 'p36', productName: '量子计算阵列', description: '量子簇级联的超算阵列', inputs: [{ materialId: 'quantum', amount: 22 }, { materialId: 'silicon', amount: 55 }, { materialId: 'dark_matter', amount: 9 }], productionTurns: 5 },
+  { id: 'p37', productName: '暗物质聚变炉', description: '暗物质湮灭驱动的聚变反应炉', inputs: [{ materialId: 'dark_matter', amount: 20 }, { materialId: 'quantum', amount: 11 }, { materialId: 'gold_ore', amount: 17 }], productionTurns: 5 },
+  // 6回合
+  { id: 'p38', productName: '碳基生态培育舱', description: '碳基生态的独立生命培育舱体', inputs: [{ materialId: 'carbon', amount: 250 }, { materialId: 'oil', amount: 35 }, { materialId: 'silicon', amount: 55 }], productionTurns: 6 },
+  { id: 'p39', productName: '硅基智慧核心', description: '硅基生命的自主智慧运算核心', inputs: [{ materialId: 'silicon', amount: 125 }, { materialId: 'gold_ore', amount: 25 }, { materialId: 'carbon', amount: 100 }], productionTurns: 6 },
+  { id: 'p40', productName: '泰坦级能量核心', description: '泰坦级能量汇聚与存储核心', inputs: [{ materialId: 'oil', amount: 62 }, { materialId: 'carbon', amount: 90 }, { materialId: 'silicon', amount: 81 }], productionTurns: 6 },
+  { id: 'p41', productName: '黄金行星仪', description: '黄金精工打造的行星模型仪器', inputs: [{ materialId: 'gold_ore', amount: 42 }, { materialId: 'quantum', amount: 14 }, { materialId: 'oil', amount: 31 }], productionTurns: 6 },
+  { id: 'p42', productName: '量子奇点引擎', description: '逼近奇点的量子计算引擎', inputs: [{ materialId: 'quantum', amount: 28 }, { materialId: 'silicon', amount: 70 }, { materialId: 'dark_matter', amount: 11 }], productionTurns: 6 },
+  { id: 'p43', productName: '暗能奇点反应堆', description: '暗物质驱动的奇点级能源核心', inputs: [{ materialId: 'dark_matter', amount: 25 }, { materialId: 'quantum', amount: 14 }, { materialId: 'gold_ore', amount: 21 }], productionTurns: 6 },
 ];
 
 // 产品售价波动范围（每个产品独立）
@@ -402,6 +424,24 @@ export const PRODUCT_PRICE_LIMITS: Record<string, { maxUp: number; maxDown: numb
   p15: { maxUp: 0.15, maxDown: 0.25 }, // 反物质容器
   p20: { maxUp: 0.60, maxDown: 0.65 }, // 相位护盾发生器
   p13: { maxUp: 1.00, maxDown: 0.70 }, // 时间减缓场
+  p26: { maxUp: 0.25, maxDown: 0.20 }, // 碳晶复合装甲
+  p27: { maxUp: 0.25, maxDown: 0.20 }, // 光子计算核心
+  p28: { maxUp: 0.25, maxDown: 0.20 }, // 高能燃料精炼体
+  p29: { maxUp: 0.25, maxDown: 0.20 }, // 银河铸币母模
+  p30: { maxUp: 0.25, maxDown: 0.20 }, // 量子纠缠通信器
+  p31: { maxUp: 0.25, maxDown: 0.20 }, // 暗能引擎核心
+  p32: { maxUp: 0.30, maxDown: 0.25 }, // 碳晶巨构模块
+  p33: { maxUp: 0.30, maxDown: 0.25 }, // 全息投影矩阵
+  p34: { maxUp: 0.30, maxDown: 0.25 }, // 曲速引擎燃料
+  p35: { maxUp: 0.30, maxDown: 0.25 }, // 星际纪念金币
+  p36: { maxUp: 0.30, maxDown: 0.25 }, // 量子计算阵列
+  p37: { maxUp: 0.30, maxDown: 0.25 }, // 暗物质聚变炉
+  p38: { maxUp: 0.35, maxDown: 0.30 }, // 碳基生态培育舱
+  p39: { maxUp: 0.35, maxDown: 0.30 }, // 硅基智慧核心
+  p40: { maxUp: 0.35, maxDown: 0.30 }, // 泰坦级能量核心
+  p41: { maxUp: 0.35, maxDown: 0.30 }, // 黄金行星仪
+  p42: { maxUp: 0.35, maxDown: 0.30 }, // 量子奇点引擎
+  p43: { maxUp: 0.35, maxDown: 0.30 }, // 暗能奇点反应堆
 };
 
 export const INITIAL_PRODUCTS: Omit<Product, 'sellPrices' | 'currentSellPrice' | 'priceMaxUp' | 'priceMaxDown'>[] = [
@@ -433,6 +473,25 @@ export const INITIAL_PRODUCTS: Omit<Product, 'sellPrices' | 'currentSellPrice' |
   { id: 'p06', name: '暗物质炸弹', description: '军事级大规模杀伤武器', baseSellPrice: 3249, productionTurns: 3 },
   { id: 'p25', name: '跃迁燃料添加剂', description: '提升跃迁引擎效率的催化添加剂', baseSellPrice: 3160, productionTurns: 3 },
   { id: 'p13', name: '时间减缓场', description: '局部时间流速控制装置', baseSellPrice: 3723, productionTurns: 3 },
+  // 重型（4-6回合，18种：每档各6种对应6种原料）
+  { id: 'p26', name: '碳晶复合装甲', description: '以巨量碳块熔铸的船体装甲，坚不可摧', baseSellPrice: 19500, productionTurns: 4 },
+  { id: 'p27', name: '光子计算核心', description: '集成海量硅片的光子运算核心', baseSellPrice: 19500, productionTurns: 4 },
+  { id: 'p28', name: '高能燃料精炼体', description: '原油深度精炼的高能聚合物燃料', baseSellPrice: 19500, productionTurns: 4 },
+  { id: 'p29', name: '银河铸币母模', description: '用黄金铸造的银河硬通货压铸母版', baseSellPrice: 19600, productionTurns: 4 },
+  { id: 'p30', name: '量子纠缠通信器', description: '量子簇编织的跨空间通信终端', baseSellPrice: 19700, productionTurns: 4 },
+  { id: 'p31', name: '暗能引擎核心', description: '暗物质驱动的曲速引擎核心', baseSellPrice: 19500, productionTurns: 4 },
+  { id: 'p32', name: '碳晶巨构模块', description: '由海量碳块压铸而成的超大型结构模块', baseSellPrice: 26000, productionTurns: 5 },
+  { id: 'p33', name: '全息投影矩阵', description: '硅片阵列驱动的全息成像设备', baseSellPrice: 26000, productionTurns: 5 },
+  { id: 'p34', name: '曲速引擎燃料', description: '为曲速引擎量身打造的高能燃料', baseSellPrice: 26000, productionTurns: 5 },
+  { id: 'p35', name: '星际纪念金币', description: '黄金铸造的限量星际纪念钱币', baseSellPrice: 26100, productionTurns: 5 },
+  { id: 'p36', name: '量子计算阵列', description: '量子簇级联的超算阵列', baseSellPrice: 25900, productionTurns: 5 },
+  { id: 'p37', name: '暗物质聚变炉', description: '暗物质湮灭驱动的聚变反应炉', baseSellPrice: 26100, productionTurns: 5 },
+  { id: 'p38', name: '碳基生态培育舱', description: '碳基生态的独立生命培育舱体', baseSellPrice: 32500, productionTurns: 6 },
+  { id: 'p39', name: '硅基智慧核心', description: '硅基生命的自主智慧运算核心', baseSellPrice: 32500, productionTurns: 6 },
+  { id: 'p40', name: '泰坦级能量核心', description: '泰坦级能量汇聚与存储核心', baseSellPrice: 32500, productionTurns: 6 },
+  { id: 'p41', name: '黄金行星仪', description: '黄金精工打造的行星模型仪器', baseSellPrice: 32600, productionTurns: 6 },
+  { id: 'p42', name: '量子奇点引擎', description: '逼近奇点的量子计算引擎', baseSellPrice: 32600, productionTurns: 6 },
+  { id: 'p43', name: '暗能奇点反应堆', description: '暗物质驱动的奇点级能源核心', baseSellPrice: 32600, productionTurns: 6 },
 ];
 
 export function createProducts(): Product[] {

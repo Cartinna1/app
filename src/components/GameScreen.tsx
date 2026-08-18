@@ -46,6 +46,10 @@ import { getBuildingDef } from '@/data/colony/buildings';
 import { getPlanetById } from '@/data/colony/planets';
 import { getLeaderDef } from '@/data/colony/leaders';
 
+// 背景音乐曲目列表（放 public/ 目录下，按顺序自动循环播放）
+const BGM_LIST = ['/bgm1.mp3', '/bgm2.mp3', '/bgm3.mp3'];
+const BGM_VOLUME = 0.3;
+
 interface GameScreenProps {
   gameState: GameState;
   activeEvent: import('@/types/game').ChoiceEvent | null;
@@ -187,14 +191,27 @@ export default function GameScreen({
   const [showConfirmNext, setShowConfirmNext] = useState(false);
   const [bgmMuted, setBgmMuted] = useState(() => localStorage.getItem('bgm_muted') === 'true');
   const bgmRef = useRef<HTMLAudioElement | null>(null);
+  const bgmIndexRef = useRef(0);
 
-  // 背景音乐：首次用户交互时启动
+  // 背景音乐：多首曲目按顺序自动循环，首次用户交互时启动
   useEffect(() => {
     if (bgmRef.current) return;
-    const audio = new Audio('/bgm.mp3');
-    audio.loop = true;
-    audio.volume = 0.3;
+    const audio = new Audio();
+    audio.volume = BGM_VOLUME;
     bgmRef.current = audio;
+
+    // 播放指定索引的曲目
+    const playTrack = (index: number) => {
+      const i = ((index % BGM_LIST.length) + BGM_LIST.length) % BGM_LIST.length;
+      bgmIndexRef.current = i;
+      audio.src = BGM_LIST[i];
+      audio.play().catch(() => {});
+    };
+
+    // 一首播完自动切下一首（循环）
+    audio.addEventListener('ended', () => playTrack(bgmIndexRef.current + 1));
+    // 预加载第一首，等首次交互再播放
+    audio.src = BGM_LIST[0];
 
     const startOnInteraction = () => {
       if (localStorage.getItem('bgm_muted') !== 'true') {
@@ -469,6 +486,7 @@ export default function GameScreen({
           <div className={activeTab === 'loan' ? '' : 'hidden'}>
             <LoanPanel
               ship={currentShip}
+              gameState={gameState}
               onTakeLoan={onTakeLoan}
               onRepayLoan={onRepayLoan}
             />
