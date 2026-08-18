@@ -187,7 +187,8 @@ export interface ReputationTier {
   min: number; max: number; label: string; discount: number; passiveIncomeMin: number; passiveIncomeMax: number;
 }
 export const REPUTATION_TIERS: ReputationTier[] = [
-  { min: -100, max: -51, label: '宿敌', discount: 0, passiveIncomeMin: 0, passiveIncomeMax: 0 },
+  { min: -100, max: -91, label: '宿敌', discount: 0, passiveIncomeMin: 0, passiveIncomeMax: 0 },
+  { min: -90, max: -51, label: '恶意', discount: 0, passiveIncomeMin: 0, passiveIncomeMax: 0 },
   { min: -50, max: -21, label: '敌意', discount: -0.40, passiveIncomeMin: 0, passiveIncomeMax: 0 },
   { min: -20, max: -1, label: '不信任', discount: -0.20, passiveIncomeMin: 0, passiveIncomeMax: 0 },
   { min: 0, max: 9, label: '中立', discount: 0, passiveIncomeMin: 0, passiveIncomeMax: 0 },

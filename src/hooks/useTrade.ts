@@ -17,7 +17,7 @@ export function useTrade(
   ) {
     const rep = { ...prev.factionReputation };
     const log = { ...repLog };
-    const caps: Record<string, number> = { buy: 3, invest: 10, contract: 99 };
+    const caps: Record<string, number> = { buy: 2, invest: 10, contract: 99 };
     const cap = caps[capKey] || 99;
     const logKey = `${factionId}_${capKey}`; // 区分动作类型的独立上限
     const cur = log[logKey] || 0;
@@ -25,14 +25,23 @@ export function useTrade(
     if (applied === 0) return;
     log[logKey] = cur + applied;
     rep[factionId] = Math.max(-100, Math.min(100, (rep[factionId] || 0) + applied));
-    // 零和传导
+    // 零和传导：敌人惩罚（按动作类型区分单次值与回合上限）
+    const enemyConf: Record<string, { per: number; cap: number | null }> = {
+      buy: { per: -4, cap: -4 },
+      invest: { per: -2, cap: -20 },
+      contract: { per: -8, cap: null },
+    };
+    const conf = enemyConf[capKey] || { per: -1, cap: -5 };
     const rel = RELATION_MATRIX[factionId];
     if (rel && applied > 0) {
       for (const enemyId of rel.enemies) {
-        const enemyLogKey = `${enemyId}_penalty`;
+        const enemyLogKey = `${enemyId}_penalty_${capKey}`;
         const eCur = log[enemyLogKey] || 0;
-        const eApplied = Math.max(-5 - eCur, -1);
-        if (eApplied >= 0) continue;
+        let eApplied = conf.per;
+        if (conf.cap !== null) {
+          eApplied = Math.max(conf.cap - eCur, conf.per);
+          if (eApplied >= 0) continue;
+        }
         log[enemyLogKey] = eCur + eApplied;
         rep[enemyId] = Math.max(-100, Math.min(100, (rep[enemyId] || 0) + eApplied));
       }
@@ -49,7 +58,14 @@ export function useTrade(
 
   function checkRepBlock(prev: GameState, factionId: string, action: string): string | null {
     const rep = (prev.factionReputation || {})[factionId] || 0;
-    if (rep <= -51) return '宿敌势力拒绝与你交易';
+    // 宿敌 -100~-91：拒绝一切操作（含跃迁）
+    if (rep <= -91) return '宿敌势力拒绝与你交易';
+    // 恶意 -90~-51：可跃迁、可投资，其余拒绝
+    if (rep >= -90 && rep <= -51) {
+      if (action === 'travel' || action === 'invest') return null;
+      return '恶意势力拒绝此项操作';
+    }
+    // 敌意 -50~-21：可跃迁、可购买、可投资，其余拒绝
     if (rep >= -50 && rep <= -21) {
       if (action === 'buy' || action === 'invest' || action === 'travel') return null;
       return '敌意势力拒绝此项操作';
@@ -124,12 +140,12 @@ export function useTrade(
           if (triggered) {
             prev.buyTriggered = { ...(prev.buyTriggered || {}), [faction.id]: true };
             prev.buyBuffs = { ...(prev.buyBuffs || {}) };
-            prev.buyBuffs[faction.id] = [...(prev.buyBuffs[faction.id] || []), { multiplier: 2.5, expiresTurn: prev.turn + 10 }];
+            prev.buyBuffs[faction.id] = [...(prev.buyBuffs[faction.id] || []), { multiplier: 2.5, expiresTurn: prev.turn + 15 }];
           }
           ensureRepFields(prev);
-          applyRepChange(prev, faction.id, 3, prev.factionRepLog, 'buy');
+          applyRepChange(prev, faction.id, 2, prev.factionRepLog, 'buy');
           ships[shipIndex] = s;
-          result = { success: true, message: `购买${faction.specialtyName} x${quantity}，花费${totalCost}金币${triggered ? '。⚠ 购买量已达本回合库存60%，下回合起购买价×2.5（持续10回合）' : ''}` };
+          result = { success: true, message: `购买${faction.specialtyName} x${quantity}，花费${totalCost}金币${triggered ? '。⚠ 购买量已达本回合库存60%，下回合起购买价×2.5（持续15回合）' : ''}` };
           return { ...prev, ships };
         },
       });
@@ -177,10 +193,10 @@ export function useTrade(
           if (triggered) {
             prev.sellTriggered = { ...(prev.sellTriggered || {}), [curFid]: true };
             prev.sellBuffs = { ...(prev.sellBuffs || {}) };
-            prev.sellBuffs[curFid] = [...(prev.sellBuffs[curFid] || []), { multiplier: 0.3, expiresTurn: prev.turn + 10 }];
+            prev.sellBuffs[curFid] = [...(prev.sellBuffs[curFid] || []), { multiplier: 0.3, expiresTurn: prev.turn + 15 }];
           }
           ships[shipIndex] = s;
-          result = { success: true, message: `卖出${faction.specialtyName} x${quantity}，获得${totalRevenue}金币${triggered ? '。⚠ 卖出量已达本回合需求50%，下回合起收购价×0.3（持续10回合）' : ''}` };
+          result = { success: true, message: `卖出${faction.specialtyName} x${quantity}，获得${totalRevenue}金币${triggered ? '。⚠ 卖出量已达本回合需求50%，下回合起收购价×0.3（持续15回合）' : ''}` };
           return { ...prev, ships };
         },
       });

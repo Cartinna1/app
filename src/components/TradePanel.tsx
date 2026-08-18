@@ -88,9 +88,9 @@ export default function TradePanel({ factions, ship, factionPrices, factionSellM
   const buyStockLeft = currentFaction ? (buyStocks?.[currentFaction.id] ?? 0) : 0;
   const sellDemandLeft = sellDemands?.[curFid] ?? 0;
   const sellBuffMult = (sellBuffs?.[curFid] || []).reduce((m, b) => m * b.multiplier, 1);
-  // 选中跃迁目标是否为宿敌（声望 ≤ -51 禁止进入）
+  // 选中跃迁目标是否为宿敌（声望 ≤ -91 禁止进入；恶意 -90~-51 可跃迁）
   const selectedRep = selectedTarget ? (factionReputation || {})[selectedTarget] || 0 : 0;
-  const isHostile = selectedRep <= -51;
+  const isHostile = selectedRep <= -91;
 
   // 解析输入数量（字符串 → 数字，非法/空返回 0）
   const buyQtyNum = parseInt(buyQty, 10) || 0;
