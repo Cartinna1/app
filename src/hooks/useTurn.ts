@@ -451,8 +451,8 @@ export function useTurn(
         const sellDemands: Record<string, number> = {};
         const sellDemandMax: Record<string, number> = {};
         for (const f of FACTIONS) {
-          const bs = 800 + Math.floor(Math.random() * 401); // 800~1200
-          const sd = 900 + Math.floor(Math.random() * 601); // 900~1500
+          const bs = 500 + Math.floor(Math.random() * 301); // 500~800
+          const sd = 500 + Math.floor(Math.random() * 201); // 500~700
           buyStocks[f.id] = bs;
           buyStockMax[f.id] = bs;
           sellDemands[f.id] = sd;

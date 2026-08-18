@@ -25,7 +25,7 @@ interface TradePanelProps {
   factionReputation: Record<string, number>;
   factionContracts: FactionContract[];
   currentTurn: number;
-  onAcceptContract: (contractId: string) => boolean;
+  onAcceptContract: (contractId: string) => { success: boolean; message: string };
   onCompleteContract: (contractId: string) => { success: boolean; message: string };
   onBlackMarketBuy: (factionId: string, itemId: string, qty: number) => { success: boolean; message: string };
 }
@@ -545,7 +545,7 @@ export default function TradePanel({ factions, ship, factionPrices, factionSellM
                         <span className="text-slate-500 ml-1">| +{c.rewardGold}金 +{c.rewardRep}声望</span>
                         <span className="text-slate-600 ml-1">| 剩余 {Math.max(0, c.expiresTurn - currentTurn)} 回合可接取</span>
                       </div>
-                      <button onClick={() => onAcceptContract(c.id)} className="px-2 py-1 bg-amber-700 hover:bg-amber-600 rounded text-xs">接取</button>
+                      <button onClick={() => { const r = onAcceptContract(c.id); setMessage(r.message); setMsgType(r.success ? 'success' : 'error'); setTimeout(() => setMessage(''), 5000); }} className="px-2 py-1 bg-amber-700 hover:bg-amber-600 rounded text-xs">接取</button>
                     </div>
                   ))}
                   {activeContracts.map((c) => (

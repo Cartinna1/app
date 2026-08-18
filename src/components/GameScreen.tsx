@@ -69,7 +69,7 @@ interface GameScreenProps {
   onExploreFaction: () => { success: boolean; message: string };
   onInvestFaction: (amount: number) => { success: boolean; message: string };
   onGatherIntel: () => { success: boolean; message: string; goldChange: number };
-  onAcceptContract: (contractId: string) => boolean;
+  onAcceptContract: (contractId: string) => { success: boolean; message: string };
   onCompleteContract: (contractId: string) => { success: boolean; message: string };
   onBlackMarketBuy: (factionId: string, itemId: string, qty: number) => { success: boolean; message: string };
   onInstallModule: (moduleId: string) => { success: boolean; message: string };

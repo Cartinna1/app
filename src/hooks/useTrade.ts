@@ -95,6 +95,7 @@ export function useTrade(
           if (quantity <= 0) { result = { success: false, message: '数量必须大于0' }; return prev; }
           const faction = prev.factions.find((f) => f.id === s.tradeStatus.currentFactionId);
           if (!faction) { result = { success: false, message: '找不到势力' }; return prev; }
+          const repBlockB = checkRepBlock(prev, faction.id, 'buy'); if (repBlockB) { result = { success: false, message: repBlockB }; return prev; }
           // 库存校验
           const available = prev.buyStocks?.[faction.id] ?? 0;
           if (quantity > available) { result = { success: false, message: `库存不足，本回合仅剩${available}个` }; return prev; }
@@ -116,19 +117,19 @@ export function useTrade(
           // 扣库存
           prev.buyStocks = { ...(prev.buyStocks || {}) };
           prev.buyStocks[faction.id] = available - quantity;
-          // 触发涨价判定（本回合累计购买 ≥ 初始库存 80%）
+          // 触发涨价判定（本回合累计购买 ≥ 初始库存 60%）
           const maxStock = prev.buyStockMax?.[faction.id] || 0;
           const used = maxStock - prev.buyStocks[faction.id];
-          const triggered = maxStock > 0 && !prev.buyTriggered?.[faction.id] && used >= maxStock * 0.8;
+          const triggered = maxStock > 0 && !prev.buyTriggered?.[faction.id] && used >= maxStock * 0.6;
           if (triggered) {
             prev.buyTriggered = { ...(prev.buyTriggered || {}), [faction.id]: true };
             prev.buyBuffs = { ...(prev.buyBuffs || {}) };
-            prev.buyBuffs[faction.id] = [...(prev.buyBuffs[faction.id] || []), { multiplier: 1.6, expiresTurn: prev.turn + 3 }];
+            prev.buyBuffs[faction.id] = [...(prev.buyBuffs[faction.id] || []), { multiplier: 2.5, expiresTurn: prev.turn + 10 }];
           }
           ensureRepFields(prev);
           applyRepChange(prev, faction.id, 3, prev.factionRepLog, 'buy');
           ships[shipIndex] = s;
-          result = { success: true, message: `购买${faction.specialtyName} x${quantity}，花费${totalCost}金币${triggered ? '。⚠ 购买量已达本回合库存80%，下回合起购买价上涨60%（持续3回合）' : ''}` };
+          result = { success: true, message: `购买${faction.specialtyName} x${quantity}，花费${totalCost}金币${triggered ? '。⚠ 购买量已达本回合库存60%，下回合起购买价×2.5（持续10回合）' : ''}` };
           return { ...prev, ships };
         },
       });
@@ -169,17 +170,17 @@ export function useTrade(
           // 扣需求
           prev.sellDemands = { ...(prev.sellDemands || {}) };
           prev.sellDemands[curFid] = remaining - quantity;
-          // 触发降价判定（本回合累计卖出 ≥ 初始需求 70%）
+          // 触发降价判定（本回合累计卖出 ≥ 初始需求 50%）
           const maxDemand = prev.sellDemandMax?.[curFid] || 0;
           const sold = maxDemand - prev.sellDemands[curFid];
-          const triggered = maxDemand > 0 && !prev.sellTriggered?.[curFid] && sold >= maxDemand * 0.7;
+          const triggered = maxDemand > 0 && !prev.sellTriggered?.[curFid] && sold >= maxDemand * 0.5;
           if (triggered) {
             prev.sellTriggered = { ...(prev.sellTriggered || {}), [curFid]: true };
             prev.sellBuffs = { ...(prev.sellBuffs || {}) };
-            prev.sellBuffs[curFid] = [...(prev.sellBuffs[curFid] || []), { multiplier: 0.4, expiresTurn: prev.turn + 3 }];
+            prev.sellBuffs[curFid] = [...(prev.sellBuffs[curFid] || []), { multiplier: 0.3, expiresTurn: prev.turn + 10 }];
           }
           ships[shipIndex] = s;
-          result = { success: true, message: `卖出${faction.specialtyName} x${quantity}，获得${totalRevenue}金币${triggered ? '。⚠ 卖出量已达本回合需求70%，下回合起收购价×0.4（持续3回合）' : ''}` };
+          result = { success: true, message: `卖出${faction.specialtyName} x${quantity}，获得${totalRevenue}金币${triggered ? '。⚠ 卖出量已达本回合需求50%，下回合起收购价×0.3（持续10回合）' : ''}` };
           return { ...prev, ships };
         },
       });
@@ -227,6 +228,7 @@ export function useTrade(
           if (amount <= 0) { result = { success: false, message: '投资金额必须大于0' }; return prev; }
           if (s.gold < amount) { result = { success: false, message: '金币不足' }; return prev; }
           const factionId = s.tradeStatus.currentFactionId;
+          const repBlockInv = checkRepBlock(prev, factionId, 'invest'); if (repBlockInv) { result = { success: false, message: repBlockInv }; return prev; }
           ensureRepFields(prev);
           const maxPerTurn = 10;
           const used = (prev.factionRepLog || {})[factionId + '_invest'] || 0;
@@ -301,17 +303,17 @@ export function useTrade(
   // ==================== 合同系统 ====================
 
   /** 接取合同（接取后从当前回合重新计算完成期限） */
-  const acceptContract = useCallback((contractId: string): boolean => {
-    let success = false;
+  const acceptContract = useCallback((contractId: string): { success: boolean; message: string } => {
+    let result: { success: boolean; message: string } = { success: false, message: '' };
     dispatch({
       type: 'FUNCTIONAL_UPDATE',
       updater: (prev) => {
         const contracts = [...(prev.factionContracts || [])];
         const idx = contracts.findIndex((c) => c.id === contractId);
-        if (idx === -1) return prev;
+        if (idx === -1) { result = { success: false, message: '找不到合同' }; return prev; }
         const contract = contracts[idx];
-        if (!contract) return prev;
-        const repBlockC = checkRepBlock(prev, contract.factionId, 'contract'); if (repBlockC) return prev;
+        if (!contract) { result = { success: false, message: '找不到合同' }; return prev; }
+        const repBlockC = checkRepBlock(prev, contract.factionId, 'contract'); if (repBlockC) { result = { success: false, message: repBlockC }; return prev; }
         // 接取后独立计算完成期限
         let newExpires: number;
         if (contract.type === 'procurement') {
@@ -324,11 +326,11 @@ export function useTrade(
           newExpires = prev.turn + Math.floor(Math.random() * 4) + 7;
         }
         contracts[idx] = { ...contracts[idx], accepted: true, expiresTurn: newExpires };
-        success = true;
+        result = { success: true, message: '已接取合同，完成期限已重新计算' };
         return { ...prev, factionContracts: contracts };
       },
     });
-    return success;
+    return result;
   }, [dispatch]);
 
   /** 提交合同（交付货物） */
