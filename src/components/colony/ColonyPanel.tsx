@@ -136,6 +136,7 @@ export default function ColonyPanel(props: ColonyPanelProps) {
   const [buildCatFilter, setBuildCatFilter] = useState<string>('housing');
   const [popCatFilter, setPopCatFilter] = useState<string>('all');
   const [liveBuildFilter, setLiveBuildFilter] = useState<string>('housing');
+  const [expandedLiveGroups, setExpandedLiveGroups] = useState<Record<string, boolean>>({});
   const showMsg = (m: string, t: 'success' | 'error') => { setMessage(m); setMsgType(t); setTimeout(() => setMessage(''), 4000); };
 
   // 离开选择星球阶段时清理状态
@@ -178,6 +179,18 @@ export default function ColonyPanel(props: ColonyPanelProps) {
       nums[inst.uid] = String(counters[inst.defId]).padStart(2, '0');
     }
     return nums;
+  }, [liveBuildings]);
+
+  // 已建成建筑按类型分组（建筑Tab折叠展示用，不影响人口Tab的实例级分配）
+  const groupedLive = useMemo(() => {
+    const map = new Map<string, any[]>();
+    for (const inst of liveBuildings) {
+      const d = getBuildingDef(inst.defId);
+      const key = d?.id || inst.defId;
+      if (!map.has(key)) map.set(key, []);
+      map.get(key)!.push(inst);
+    }
+    return map;
   }, [liveBuildings]);
 
   // ===== 未解锁 =====
@@ -532,116 +545,72 @@ export default function ColonyPanel(props: ColonyPanelProps) {
           }
         }
         const rlv = colony.techState?.repeatableLevels || {};
+        // 计算单个建筑实例产出（返回 {v, un, detail}，未达标返回 null）
+        const calcLiveOut = (inst: any, def: any): { v: number; un: string; detail: string } | null => {
+          if (inst.assignedPop < def.minPop || !def.outputType) return null;
+          let efm = def.maxPop;
+          for (const l of colony.leaders || []) {
+            const ex = getLeaderDef(l.id)?.levelExtras[l.level-1];
+            if (ex?.popCapBonus?.[inst.defId]) efm = Math.max(efm, ex.popCapBonus[inst.defId]);
+          }
+          const ep = Math.min(inst.assignedPop, efm > 0 ? efm : inst.assignedPop);
+          const b = (def.baseOutput||0)+(def.popFactor||0)*ep;
+          const lb = ((mlMap[inst.defId]||0)+(def.category==='material'?mlMat:0)+mlAll)/100;
+          let rpb = 0;
+          if (def.outputType === 'food') rpb = (rlv.RP_FOOD || 0) * 0.05;
+          else if (def.outputType === 'alloy') rpb = (rlv.RP_ALLOY || 0) * 0.05;
+          else if (def.outputType === 'stardust') rpb = (rlv.RP_STARDUST || 0) * 0.05;
+          else if (def.outputType === 'gold') rpb = (rlv.RP_TRADE || 0) * 0.05;
+          else if (def.outputType === 'material') rpb = (rlv.RP_MATERIAL || 0) * 0.05;
+          else if (def.outputType === 'research') rpb = (rlv.RP_RESEARCH || 0) * 0.10;
+          let v=0, un='', detail='';
+          if (def.outputType === 'food') { const pm = planet?.buffs.foodMult ? (planet.buffs.foodMult-1) : 0; v=Math.ceil(b*(1+pm+lb+rpb)); un='食物'; detail=`${b}${pm!==0?'星球'+(pm>0?'+':'')+Math.round(pm*100)+'%':''}${lb>0?'领袖+'+Math.round(lb*100)+'%':''}${rpb>0?'循环+'+Math.round(rpb*100)+'%':''}`; }
+          else if (def.outputType === 'alloy') { const pm = planet?.buffs.alloyMult ? (planet.buffs.alloyMult-1) : 0; v=Math.ceil(b*(1+pm+lb+rpb)); un='合金'; detail=`${b}${pm!==0?'星球'+(pm>0?'+':'')+Math.round(pm*100)+'%':''}${lb>0?'领袖+'+Math.round(lb*100)+'%':''}${rpb>0?'循环+'+Math.round(rpb*100)+'%':''}`; }
+          else if (def.outputType === 'stardust') { const pm = planet?.buffs.stardustMult ? (planet.buffs.stardustMult-1) : 0; v=Math.ceil(b*(1+pm+lb+rpb)); un='星尘'; detail=`${b}${pm!==0?'星球'+(pm>0?'+':'')+Math.round(pm*100)+'%':''}${lb>0?'领袖+'+Math.round(lb*100)+'%':''}${rpb>0?'循环+'+Math.round(rpb*100)+'%':''}`; }
+          else if (def.outputType === 'gold') { v=Math.ceil(Math.floor(((def.goldOutputMin||0)+(def.goldOutputMax||0))/2)*(1+lb+rpb)); un='金币'; detail=`${lb>0?'领袖+'+Math.round(lb*100)+'%':''}${rpb>0?'循环+'+Math.round(rpb*100)+'%':''}`; }
+          else if (def.outputType === 'research') { v=Math.ceil(b*(1+lb+rpb)); un='科研'; detail=`${b}${lb>0?'领袖+'+Math.round(lb*100)+'%':''}${rpb>0?'循环+'+Math.round(rpb*100)+'%':''}`; }
+          else if (def.outputType === 'material' && def.outputMaterialId) {
+            const mc: Record<string,string> = { oil:'石油', gold_ore:'金矿', carbon:'碳块', dark_matter:'暗物质', quantum:'量子簇', silicon:'硅片' };
+            const pm = planet?.buffs.materialMults?.[def.outputMaterialId] ? (planet.buffs.materialMults[def.outputMaterialId]-1) : 0;
+            v=Math.ceil(b*(1+pm+lb)); un=mc[def.outputMaterialId]||def.outputMaterialId;
+            detail=`${b}${pm!==0?'星球'+(pm>0?'+':'')+Math.round(pm*100)+'%':''}${lb>0?'领袖+'+Math.round(lb*100)+'%':''}`;
+          }
+          if (v>0) return { v, un, detail };
+          return null;
+        };
+        // 渲染单个建筑实例卡片（折叠展开态复用）
+        const renderLiveCard = (inst: any, def: any, num?: string) => {
+          const maxLabel = def.maxPop > 0 ? `入驻 ${inst.assignedPop}/${def.maxPop}${def.minPop > 0 ? ` (最小${def.minPop}人)` : ''}` : `入驻 ${inst.assignedPop}`;
+          const catTag = <span className={`text-xs ${CAT_COLORS[def.category] || 'bg-slate-600 text-white'} px-1.5 py-0.5 rounded mr-1`}>{CAT_LABELS[def.category] || def.category}</span>;
+          const lo = calcLiveOut(inst, def);
+          const liveOut = lo ? `产出: ${lo.v} ${lo.un}/回合 (${lo.detail})` : '';
+          return (
+            <div key={inst.uid} className="bg-slate-900/60 border border-green-700/40 rounded-lg p-3 mb-2 flex justify-between items-center gap-3">
+              <img
+                src={`/buildings/${def.id}.jpg`}
+                alt={def.name}
+                onError={(e) => { (e.target as HTMLImageElement).style.display='none'; }}
+                className="w-[60px] h-[60px] md:w-[80px] md:h-[80px] rounded-lg object-cover border border-slate-700 flex-shrink-0"
+              />
+              <div className="flex-1 min-w-0">
+                {catTag}
+                <span className="text-sm text-green-300 font-bold">{def.name}{num ? <span className="text-slate-500 ml-1">{num}</span> : ''}</span>
+                <span className="text-sm text-slate-500 ml-2">{maxLabel}</span>
+                {liveOut && <span className="text-sm text-cyan-400 ml-2">{liveOut}</span>}
+                {!liveOut && def.minPop > 0 && inst.assignedPop > 0 && inst.assignedPop < def.minPop && (
+                  <span className="text-sm text-red-400 ml-2">⚠ 人口不足（需≥{def.minPop}人）</span>
+                )}
+                {!liveOut && !(def.minPop > 0 && inst.assignedPop > 0 && inst.assignedPop < def.minPop) && <span className="text-sm text-slate-600 ml-2">{getOutputDesc(def)}</span>}
+                {def.powerConsumption !== undefined && def.powerConsumption > 0 && (
+                  <span className="text-sm text-amber-500 ml-2">⚡ {def.powerConsumption}</span>
+                )}
+              </div>
+              <button onClick={() => { const r = onDemolishBuilding(inst.uid); showMsg(r.message, r.success ? 'success' : 'error'); }} className="px-2 py-1 bg-red-700 hover:bg-red-600 rounded text-xs font-bold flex-shrink-0">拆除</button>
+            </div>
+          );
+        };
         return (
         <div className="space-y-3">
-          {/* 已建成（合并同类） */}
-          <div>
-            <h4 className="text-sm font-bold text-green-400 mb-2">已建成</h4>
-            {liveBuildings.length === 0 && <p className="text-slate-500 text-sm">暂无已建成建筑</p>}
-            {/* 类型筛选标签（可点击） */}
-            {liveBuildings.length > 0 && (
-              <div className="flex flex-wrap gap-1 mb-3">
-                {['housing','food','alloy','stardust','trade','material','functional','power'].map((cat) => (
-                  <button key={cat} onClick={() => setLiveBuildFilter(cat)}
-                    className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-colors ${liveBuildFilter === cat ? 'bg-green-600 text-white' : 'bg-slate-700/80 text-slate-400 hover:bg-slate-600'}`}>
-                    {CAT_LABELS[cat] || cat}
-                    <span className="ml-1 opacity-60">({liveBuildings.filter((b:any) => { const d=getBuildingDef(b.defId); return d?.category === cat; }).length})</span>
-                  </button>
-                ))}
-              </div>
-            )}
-            {liveBuildings.filter((b:any) => { const d=getBuildingDef(b.defId); return d?.category === liveBuildFilter; }).length === 0 && liveBuildings.length > 0 && (
-              <p className="text-slate-500 text-sm mb-2">暂无「{CAT_LABELS[liveBuildFilter] || liveBuildFilter}」类型建筑</p>
-            )}
-            {liveBuildings.filter((b:any) => { const d=getBuildingDef(b.defId); return d?.category === liveBuildFilter; }).map((inst: any) => {
-              const def = getBuildingDef(inst.defId);
-              if (!def) return (
-                <div key={inst.uid} className="bg-slate-900/60 border border-purple-700/40 rounded-lg p-3 mb-2 flex justify-between items-center">
-                  <span className="text-sm text-purple-300 font-bold">{inst.defId}</span>
-                  <button onClick={() => { const r = onDemolishBuilding(inst.uid); showMsg(r.message, r.success ? 'success' : 'error'); }} className="px-2 py-1 bg-red-700 hover:bg-red-600 rounded text-xs font-bold">拆除</button>
-                </div>
-              );
-              const maxLabel = def.maxPop > 0 ? `入驻 ${inst.assignedPop}/${def.maxPop}${def.minPop > 0 ? ` (最小${def.minPop}人)` : ''}` : `入驻 ${inst.assignedPop}`;
-              const catTag = <span className={`text-xs ${CAT_COLORS[def.category] || 'bg-slate-600 text-white'} px-1.5 py-0.5 rounded mr-1`}>{CAT_LABELS[def.category] || def.category}</span>;
-              // 计算该建筑实际产出（用有效人口）
-              let liveOut = '';
-              if (inst.assignedPop >= def.minPop && def.outputType) {
-                let efm = def.maxPop;
-                for (const l of colony.leaders || []) {
-                  const ex = getLeaderDef(l.id)?.levelExtras[l.level-1];
-                  if (ex?.popCapBonus?.[inst.defId]) efm = Math.max(efm, ex.popCapBonus[inst.defId]);
-                }
-                const ep = Math.min(inst.assignedPop, efm > 0 ? efm : inst.assignedPop);
-                const b = (def.baseOutput||0)+(def.popFactor||0)*ep;
-                const lb = ((mlMap[inst.defId]||0)+(def.category==='material'?mlMat:0)+mlAll)/100;
-                let rpb = 0;
-                if (def.outputType === 'food') rpb = (rlv.RP_FOOD || 0) * 0.05;
-                else if (def.outputType === 'alloy') rpb = (rlv.RP_ALLOY || 0) * 0.05;
-                else if (def.outputType === 'stardust') rpb = (rlv.RP_STARDUST || 0) * 0.05;
-                else if (def.outputType === 'gold') rpb = (rlv.RP_TRADE || 0) * 0.05;
-                else if (def.outputType === 'material') rpb = (rlv.RP_MATERIAL || 0) * 0.05;
-                else if (def.outputType === 'research') rpb = (rlv.RP_RESEARCH || 0) * 0.10;
-                let v=0, un='', detail='';
-                if (def.outputType === 'food') { const pm = planet?.buffs.foodMult ? (planet.buffs.foodMult-1) : 0; v=Math.ceil(b*(1+pm+lb+rpb)); un='食物'; detail=`${b}${pm!==0?'星球'+(pm>0?'+':'')+Math.round(pm*100)+'%':''}${lb>0?'领袖+'+Math.round(lb*100)+'%':''}${rpb>0?'循环+'+Math.round(rpb*100)+'%':''}`; }
-                else if (def.outputType === 'alloy') { const pm = planet?.buffs.alloyMult ? (planet.buffs.alloyMult-1) : 0; v=Math.ceil(b*(1+pm+lb+rpb)); un='合金'; detail=`${b}${pm!==0?'星球'+(pm>0?'+':'')+Math.round(pm*100)+'%':''}${lb>0?'领袖+'+Math.round(lb*100)+'%':''}${rpb>0?'循环+'+Math.round(rpb*100)+'%':''}`; }
-                else if (def.outputType === 'stardust') { const pm = planet?.buffs.stardustMult ? (planet.buffs.stardustMult-1) : 0; v=Math.ceil(b*(1+pm+lb+rpb)); un='星尘'; detail=`${b}${pm!==0?'星球'+(pm>0?'+':'')+Math.round(pm*100)+'%':''}${lb>0?'领袖+'+Math.round(lb*100)+'%':''}${rpb>0?'循环+'+Math.round(rpb*100)+'%':''}`; }
-                else if (def.outputType === 'gold') { v=Math.ceil(Math.floor(((def.goldOutputMin||0)+(def.goldOutputMax||0))/2)*(1+lb+rpb)); un='金币'; detail=`${lb>0?'领袖+'+Math.round(lb*100)+'%':''}${rpb>0?'循环+'+Math.round(rpb*100)+'%':''}`; }
-                else if (def.outputType === 'research') { v=Math.ceil(b*(1+lb+rpb)); un='科研'; detail=`${b}${lb>0?'领袖+'+Math.round(lb*100)+'%':''}${rpb>0?'循环+'+Math.round(rpb*100)+'%':''}`; }
-                else if (def.outputType === 'material' && def.outputMaterialId) {
-                  const mc: Record<string,string> = { oil:'石油', gold_ore:'金矿', carbon:'碳块', dark_matter:'暗物质', quantum:'量子簇', silicon:'硅片' };
-                  const pm = planet?.buffs.materialMults?.[def.outputMaterialId] ? (planet.buffs.materialMults[def.outputMaterialId]-1) : 0;
-                  v=Math.ceil(b*(1+pm+lb)); un=mc[def.outputMaterialId]||def.outputMaterialId;
-                  detail=`${b}${pm!==0?'星球'+(pm>0?'+':'')+Math.round(pm*100)+'%':''}${lb>0?'领袖+'+Math.round(lb*100)+'%':''}`;
-                }
-                if (v>0) liveOut = `产出: ${v} ${un}/回合 (${detail})`;
-              }
-              return (
-                <div key={inst.uid} className="bg-slate-900/60 border border-green-700/40 rounded-lg p-3 mb-2 flex justify-between items-center gap-3">
-                  <img
-                    src={`/buildings/${def.id}.jpg`}
-                    alt={def.name}
-                    onError={(e) => { (e.target as HTMLImageElement).style.display='none'; }}
-                    className="w-[60px] h-[60px] md:w-[80px] md:h-[80px] rounded-lg object-cover border border-slate-700 flex-shrink-0"
-                  />
-                  <div className="flex-1 min-w-0">
-                    {catTag}
-                    <span className="text-sm text-green-300 font-bold">{def.name}</span>
-                    <span className="text-sm text-slate-500 ml-2">{maxLabel}</span>
-                    {liveOut && <span className="text-sm text-cyan-400 ml-2">{liveOut}</span>}
-                    {!liveOut && def.minPop > 0 && inst.assignedPop > 0 && inst.assignedPop < def.minPop && (
-                      <span className="text-sm text-red-400 ml-2">⚠ 人口不足（需≥{def.minPop}人）</span>
-                    )}
-                    {!liveOut && !(def.minPop > 0 && inst.assignedPop > 0 && inst.assignedPop < def.minPop) && <span className="text-sm text-slate-600 ml-2">{getOutputDesc(def)}</span>}
-                    {def.powerConsumption !== undefined && def.powerConsumption > 0 && (
-                      <span className="text-sm text-amber-500 ml-2">⚡ {def.powerConsumption}</span>
-                    )}
-                  </div>
-                  <button onClick={() => { const r = onDemolishBuilding(inst.uid); showMsg(r.message, r.success ? 'success' : 'error'); }} className="px-2 py-1 bg-red-700 hover:bg-red-600 rounded text-xs font-bold flex-shrink-0">拆除</button>
-                </div>
-              );
-            })}
-          </div>
-
-          {/* 建造中 */}
-          {pendingBuildings.length > 0 && (
-            <div>
-              <h4 className="text-sm font-bold text-yellow-400 mb-2">建造中</h4>
-              {pendingBuildings.map((inst) => {
-                const def = getBuildingDef(inst.defId);
-                if (!def) return null;
-                return (
-                  <div key={inst.uid} className="bg-slate-900/60 border border-yellow-700/40 rounded-lg p-3 mb-2 flex justify-between items-center">
-                    <div><span className="text-sm text-yellow-300 font-bold">{def.name}</span></div>
-                    <div className="flex items-center gap-2">
-                      <span className="text-sm text-yellow-400">{inst.buildProgress}/{Math.max(1, def.buildTurns + (planet?.buffs.buildTurnDelta || 0))} 回合</span>
-                      <button onClick={() => onCancelBuilding(inst.uid)} className="px-2 py-1 bg-red-700 hover:bg-red-600 rounded text-xs font-bold">取消</button>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          )}
-
           {/* 可建造列表 */}
           <div>
             <h4 className="text-sm font-bold text-cyan-400 mb-2">建造新建筑</h4>
@@ -725,6 +694,100 @@ export default function ColonyPanel(props: ColonyPanelProps) {
                 </div>
               );
             })}
+          </div>
+
+          {/* 建造中 */}
+          {pendingBuildings.length > 0 && (
+            <div>
+              <h4 className="text-sm font-bold text-yellow-400 mb-2">建造中</h4>
+              {pendingBuildings.map((inst) => {
+                const def = getBuildingDef(inst.defId);
+                if (!def) return null;
+                return (
+                  <div key={inst.uid} className="bg-slate-900/60 border border-yellow-700/40 rounded-lg p-3 mb-2 flex justify-between items-center">
+                    <div><span className="text-sm text-yellow-300 font-bold">{def.name}</span></div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm text-yellow-400">{inst.buildProgress}/{Math.max(1, def.buildTurns + (planet?.buffs.buildTurnDelta || 0))} 回合</span>
+                      <button onClick={() => onCancelBuilding(inst.uid)} className="px-2 py-1 bg-red-700 hover:bg-red-600 rounded text-xs font-bold">取消</button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+
+          {/* 已建成（按类型分组折叠） */}
+          <div>
+            <h4 className="text-sm font-bold text-green-400 mb-2">已建成</h4>
+            {liveBuildings.length === 0 && <p className="text-slate-500 text-sm">暂无已建成建筑</p>}
+            {/* 类型筛选标签（可点击，角标为类型数） */}
+            {liveBuildings.length > 0 && (
+              <div className="flex flex-wrap gap-1 mb-3">
+                {['housing','food','alloy','stardust','trade','material','functional','power'].map((cat) => (
+                  <button key={cat} onClick={() => setLiveBuildFilter(cat)}
+                    className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-colors ${liveBuildFilter === cat ? 'bg-green-600 text-white' : 'bg-slate-700/80 text-slate-400 hover:bg-slate-600'}`}>
+                    {CAT_LABELS[cat] || cat}
+                    <span className="ml-1 opacity-60">({Array.from(groupedLive.entries()).filter(([id]) => getBuildingDef(id)?.category === cat).length})</span>
+                  </button>
+                ))}
+              </div>
+            )}
+            {Array.from(groupedLive.entries()).filter(([id]) => getBuildingDef(id)?.category === liveBuildFilter).length === 0 && liveBuildings.length > 0 && (
+              <p className="text-slate-500 text-sm mb-2">暂无「{CAT_LABELS[liveBuildFilter] || liveBuildFilter}」类型建筑</p>
+            )}
+            {Array.from(groupedLive.entries())
+              .filter(([id]) => getBuildingDef(id)?.category === liveBuildFilter)
+              .map(([defId, insts]) => {
+                const def = getBuildingDef(defId);
+                if (!def) {
+                  return insts.map((inst: any) => (
+                    <div key={inst.uid} className="bg-slate-900/60 border border-purple-700/40 rounded-lg p-3 mb-2 flex justify-between items-center">
+                      <span className="text-sm text-purple-300 font-bold">{inst.defId}</span>
+                      <button onClick={() => { const r = onDemolishBuilding(inst.uid); showMsg(r.message, r.success ? 'success' : 'error'); }} className="px-2 py-1 bg-red-700 hover:bg-red-600 rounded text-xs font-bold">拆除</button>
+                    </div>
+                  ));
+                }
+                if (insts.length === 1) return renderLiveCard(insts[0], def);
+                const isExpanded = !!expandedLiveGroups[defId];
+                const totalPop = insts.reduce((s: number, i: any) => s + (i.assignedPop || 0), 0);
+                const totalMax = def.maxPop > 0 ? def.maxPop * insts.length : 0;
+                let totalOut = '';
+                if (def.outputType) {
+                  let sumV = 0, sumUn = '';
+                  for (const inst of insts) {
+                    const lo = calcLiveOut(inst, def);
+                    if (lo) { sumV += lo.v; sumUn = lo.un; }
+                  }
+                  if (sumV > 0) totalOut = `产出: ${sumV} ${sumUn}/回合`;
+                }
+                return (
+                  <div key={defId} className="mb-2">
+                    <div className="bg-slate-900/60 border border-green-700/40 rounded-lg p-3 flex justify-between items-center gap-3">
+                      <img
+                        src={`/buildings/${def.id}.jpg`}
+                        alt={def.name}
+                        onError={(e) => { (e.target as HTMLImageElement).style.display='none'; }}
+                        className="w-[60px] h-[60px] md:w-[80px] md:h-[80px] rounded-lg object-cover border border-slate-700 flex-shrink-0"
+                      />
+                      <div className="flex-1 min-w-0">
+                        <span className={`text-xs ${CAT_COLORS[def.category] || 'bg-slate-600 text-white'} px-1.5 py-0.5 rounded mr-1`}>{CAT_LABELS[def.category] || def.category}</span>
+                        <span className="text-sm text-green-300 font-bold">{def.name}</span>
+                        <span className="text-sm text-cyan-400 ml-2">×{insts.length}</span>
+                        {def.maxPop > 0 && <span className="text-sm text-slate-400 ml-2">入驻 {totalPop}/{totalMax}</span>}
+                        {totalOut && <span className="text-sm text-cyan-400 ml-2">{totalOut}</span>}
+                        {def.powerConsumption !== undefined && def.powerConsumption > 0 && (
+                          <span className="text-sm text-amber-500 ml-2">⚡ {def.powerConsumption * insts.length}</span>
+                        )}
+                      </div>
+                      <button onClick={() => setExpandedLiveGroups({ ...expandedLiveGroups, [defId]: !isExpanded })}
+                        className="px-2.5 py-1 bg-slate-700 hover:bg-slate-600 rounded text-xs font-bold text-slate-300 flex-shrink-0">
+                        {isExpanded ? '折叠 ▲' : '展开 ▼'}
+                      </button>
+                    </div>
+                    {isExpanded && insts.map((inst: any) => renderLiveCard(inst, def, buildingNumbers[inst.uid]))}
+                  </div>
+                );
+              })}
           </div>
         </div>
       );})()}
