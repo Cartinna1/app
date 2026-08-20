@@ -86,7 +86,7 @@ export default function WonderPanel({
               </div>
               <div className="flex gap-3">
                 <img
-                  src={`/wonders/${w.id}.png`}
+                  src={`/wonders/${w.id}.webp`}
                   alt={w.name}
                   onError={(e) => { (e.target as HTMLImageElement).style.display='none'; }}
                   className="w-32 h-20 rounded-lg object-cover border border-slate-700 flex-shrink-0"
@@ -232,7 +232,7 @@ export default function WonderPanel({
         </div>
         {/* 当前阶段大图 */}
         <img
-          src={`/wonders/build/${ws.selectedWonderId}_${ws.currentStage + 1}.png`}
+          src={`/wonders/build/${ws.selectedWonderId}_${ws.currentStage + 1}.webp`}
           alt={`${wonder.name} - ${stage.name}`}
           onError={(e) => { (e.target as HTMLImageElement).style.display='none'; }}
           className="w-full aspect-video object-cover rounded-lg border border-slate-700 mb-3"
