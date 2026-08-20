@@ -1,6 +1,6 @@
 import { useCallback } from 'react';
 import type { GameState, Mothership, Stock, RawMaterial, Product } from '@/types/game';
-import { RECIPES, MAT_MAX_UP, PRODUCT_PRICE_LIMITS } from '@/data/gameData';
+import { RECIPES, MAT_MAX_UP, PRODUCT_PRICE_LIMITS, INITIAL_PRODUCTS } from '@/data/gameData';
 import { FACTIONS, getInvestmentTier, getIncomeCap, rollPolicy, POLICY_EFFECTS, refreshFactionPrices, calculateSellMultipliers, RELATION_MATRIX, getReputationTier } from '@/data/factions';
 import { rollRelic } from '@/data/relics';
 import { processColonyTurn } from './useColony';
@@ -506,17 +506,13 @@ export function useTurn(
               const recipes = RECIPES.filter((r) => !r.foodYield);
               const recipe = recipes[Math.floor(Math.random() * recipes.length)];
               const qty = Math.floor(Math.random() * 4) + 2; // 2-5
+              // 金币报酬按产品价值 × 数量 × 1.1 溢价（保证不亏本 + 订单激励）
+              const basePrice = INITIAL_PRODUCTS.find((p) => p.id === recipe.id)?.baseSellPrice || 1000;
+              const rewardGold = Math.round(basePrice * qty * 1.1);
+              // 声望奖励按生产回合数分档
               const tier = Math.min(5, Math.max(0, recipe.productionTurns - 1));
-              const rewards = [
-                [5, 8, 3000, 5000],       // 1回合
-                [8, 12, 6000, 10000],     // 2回合
-                [10, 15, 12000, 20000],   // 3回合
-                [12, 18, 30000, 50000],   // 4回合
-                [14, 22, 50000, 80000],   // 5回合
-                [16, 26, 70000, 110000],  // 6回合
-              ][tier];
-              const rewardGold = Math.floor(Math.random() * (rewards[3] - rewards[2] + 1)) + rewards[2];
-              const rewardRep = Math.floor(Math.random() * (rewards[1] - rewards[0] + 1)) + rewards[0];
+              const repRanges = [[5, 8], [8, 12], [10, 15], [12, 18], [14, 22], [16, 26]];
+              const rewardRep = Math.floor(Math.random() * (repRanges[tier][1] - repRanges[tier][0] + 1)) + repRanges[tier][0];
               // 可接取窗口：生成后 5-8 回合内可接取，接取后再独立计算完成期限
               const expires = prev.turn + 5 + Math.floor(Math.random() * 4);
               kept.push({ id: `c_${prev.turn}_${f.id}_${kept.length}`, factionId: f.id, type: 'procurement', accepted: false, targetItemId: recipe.id, targetQty: qty, rewardGold, rewardRep, expiresTurn: expires, blackMarketUsed: false });

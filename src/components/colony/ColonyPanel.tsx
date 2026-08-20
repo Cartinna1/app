@@ -359,6 +359,15 @@ export default function ColonyPanel(props: ColonyPanelProps) {
             // 星球太��能修正（仅B29）
             const planetGenMult = planet?.buffs.powerGenMult || 1;
             const displayGen = Math.floor(totalGen * (planetGenMult !== 1 ? planetGenMult : 1));
+            // L22 余晖脉冲加成提示（B29 Lv1+ / B30 Lv2+）
+            const hasL22PowerBonus = (colony.leaders || []).some(l => {
+              if (l.id !== 'L22') return false;
+              return liveBuildings.some(b => {
+                const d = getBuildingDef(b.defId);
+                if (!d || b.assignedPop < d.minPop) return false;
+                return (d.id === 'B29' && l.level >= 1) || (d.id === 'B30' && l.level >= 2);
+              });
+            });
             let l21Bonus = 0;
             for (const l of colony.leaders || []) {
               const ld = getLeaderDef(l.id);
@@ -380,7 +389,7 @@ export default function ColonyPanel(props: ColonyPanelProps) {
                   <div>
                     <p className="text-sm font-bold text-slate-300">⚡ 电能</p>
                     <p className="text-xs text-slate-500">
-                      发电 {displayGen}{planetGenMult !== 1 ? (planetGenMult > 1 ? ` (星球×${planetGenMult})` : ` (星球×${planetGenMult})`) : ''}
+                      发电 {displayGen}{planetGenMult !== 1 ? (planetGenMult > 1 ? ` (星球×${planetGenMult})` : ` (星球×${planetGenMult})`) : ''}{hasL22PowerBonus ? ' (L22×1.3)' : ''}
                       {' − '}消耗 {totalUse}{l21Bonus > 0 ? ` (L21 -${Math.round(l21Bonus*100)}%)` : ''}{planetUseMult !== 1 ? ` (星球×${planetUseMult})` : ''}
                     </p>
                   </div>
