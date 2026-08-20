@@ -130,7 +130,13 @@ export default function WonderPanel({
         <div className="bg-slate-900/60 border border-amber-700/40 rounded-xl p-6 text-center">
           <h2 className="text-3xl font-bold text-amber-400 mb-4">🏆 奇观已竣工</h2>
           <p className="text-xl text-slate-200 mb-2">「{wonder.name}」已经矗立在群星之间。</p>
-          <p className="text-sm text-red-400 mb-6">⚠ 确认建成后将结束本局游戏，无法继续。</p>
+          <p className="text-sm text-red-400 mb-4">⚠ 确认建成后将结束本局游戏，无法继续。</p>
+          <img
+            src={`/wonders/${wonder.id}.webp`}
+            alt={wonder.name}
+            onError={(e) => { (e.target as HTMLImageElement).style.display='none'; }}
+            className="mx-auto w-full max-w-md h-48 rounded-lg border border-amber-700/40 object-cover mb-6 shadow-lg shadow-amber-900/20"
+          />
 
           {showConfirm ? (
             <div className="bg-red-900/20 border border-red-700/40 rounded-lg p-4 mb-4">
