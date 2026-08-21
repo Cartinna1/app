@@ -8,7 +8,7 @@ import { useLoan } from './useLoan';
 import { useTrade } from './useTrade';
 import { useSave } from './useSave';
 import { useTurn } from './useTurn';
-import { getShipTotalAssets as computeShipTotalAssets } from '@/lib/game/assets';
+import { getShipTotalAssets } from '@/lib/game/assets';
 import { MATERIAL_NAME_MAP } from '@/data/materialNames';
 import { useRedeem } from './useRedeem';
 import { useModule } from './useModule';
@@ -322,9 +322,9 @@ export function useGameState() {
 
   // 纯函数：计算总资产（不触发更新，按需计算）
   // 复用全局唯一口径（不含售价加成），与系统判定保持一致。
-  const getShipTotalAssets = useCallback(
+  const computeShipAssets = useCallback(
     (ship: Mothership): number =>
-      computeShipTotalAssets(ship, gameState.stocks, gameState.materials, gameState.products),
+      getShipTotalAssets(ship, gameState.stocks, gameState.materials, gameState.products),
     [gameState.stocks, gameState.materials, gameState.products]
   );
 
@@ -415,7 +415,7 @@ export function useGameState() {
     resetGame,
 
     // 计算
-    getShipTotalAssets,
+    getShipTotalAssets: computeShipAssets,
   });
 
   return {
