@@ -1,6 +1,7 @@
-import type { GameState, GameAction, Mothership } from '@/types/game';
+import type { GameState, GameAction } from '@/types/game';
 import { FACTIONS, POLICY_EFFECTS, refreshFactionPrices, calculateSellMultipliers } from '@/data/factions';
 import { createMotherships, createStocks, createMaterials, createProducts } from '@/data/gameData';
+import { migrateSave } from '@/lib/save';
 
 // ==================== 初始状态 ====================
 
@@ -99,54 +100,21 @@ stardustMarket: { currentRelicId: null, soldRelicIds: [] },
       return newState === state ? state : newState;
     }
 
-    case 'FLUCTUATE_PRICES':
-      return { ...state, stocks: action.stocks, materials: action.materials, products: action.products };
-
-    case 'LOAD_SAVE': {
-      const loaded = action.state as GameState;
-      if (!loaded.stardustMarket) {
-        loaded.stardustMarket = { currentRelicId: null, soldRelicIds: [] };
-      }
-      // 兼容旧存档：补充破产/饥荒/叛乱字段
-      if (loaded.ships) {
-        loaded.ships = loaded.ships.map((s: Mothership) => ({
-          ...s,
-          bankruptTimer: s.bankruptTimer || 0,
-          famineTimer: s.famineTimer || 0,
-          isRebellion: s.isRebellion || false,
-        }));
-      }
-      // 兼容旧存档：声望/合同字段
-      if (!loaded.factionReputation) {
-        loaded.factionReputation = {};
-        // 旧投资迁移：每5000金币投资→+1声望，每势力上限+15
-        if (loaded.ships?.[0]?.tradeStatus?.factionStates) {
-          for (const [fid, fs] of Object.entries(loaded.ships[0].tradeStatus.factionStates)) {
-            loaded.factionReputation[fid] = Math.min(15, Math.floor((fs.invested || 0) / 5000));
-          }
-        }
-      }
-      if (!loaded.factionRepLog) loaded.factionRepLog = {};
-      if (!loaded.factionContracts) loaded.factionContracts = [];
-      // 兼容旧存档：黑市倍率字段
-      if (!loaded.blackMarketMultiplier) loaded.blackMarketMultiplier = 3.2;
-      // 兼容旧存档：市场库存/需求/buff 字段
-      if (!loaded.buyStocks) loaded.buyStocks = {};
-      if (!loaded.buyStockMax) loaded.buyStockMax = {};
-      if (!loaded.sellDemands) loaded.sellDemands = {};
-      if (!loaded.sellDemandMax) loaded.sellDemandMax = {};
-      if (!loaded.buyTriggered) loaded.buyTriggered = {};
-      if (!loaded.sellTriggered) loaded.sellTriggered = {};
-      if (!loaded.buyBuffs) loaded.buyBuffs = {};
-      if (!loaded.sellBuffs) loaded.sellBuffs = {};
-      return loaded;
-    }
+    case 'LOAD_SAVE':
+      // 旧存档兼容补丁集中在 lib/save.ts 的 migrateSave
+      return migrateSave(action.state);
 
     case 'RESET_GAME':
       return { ...initialGameState };
 
-    case 'ADD_EVENT_LOG':
-      return { ...state, eventLog: [action.entry, ...state.eventLog].slice(0, 100) };
+    case 'ADD_EVENT_LOG': {
+      // 为每条日志注入稳定唯一 id（写入时统一生成），供列表渲染作 key，
+      // 避免 eventLog 从头部 unshift 时用 index 作 key 导致的错位复用。
+      const entry = action.entry.id
+        ? action.entry
+        : { ...action.entry, id: `${action.entry.turn}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}` };
+      return { ...state, eventLog: [entry, ...state.eventLog].slice(0, 100) };
+    }
 
     default:
       return state;

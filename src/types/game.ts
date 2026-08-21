@@ -280,6 +280,14 @@ export interface StardustMarket {
   soldRelicIds: string[];        // 已在本局购买过的遗物ID（防止重复购买同一遗物）
 }
 
+/** 事件日志条目。id 为稳定唯一标识，供列表渲染作 key；旧存档无 id 时按内容兜底。 */
+export interface EventLogEntry {
+  id?: string;
+  turn: number;
+  event: string;
+  detail: string;
+}
+
 export interface GameState {
   phase: 'select' | 'playing' | 'ended';
   turn: number;
@@ -288,7 +296,7 @@ export interface GameState {
   stocks: Stock[];
   materials: RawMaterial[];
   products: Product[];
-  eventLog: { turn: number; event: string; detail: string }[];
+  eventLog: EventLogEntry[];
   redeemedCodes: string[];
   factions: Faction[]; // 10个星际势力
   factionPrices: Record<string, number>; // 每回合各势力特产的实际价格（浮动）
@@ -317,18 +325,20 @@ export interface GameState {
 export type GameAction =
   | { type: 'SELECT_SHIP'; shipId: number }
   | { type: 'FUNCTIONAL_UPDATE'; updater: (state: GameState) => GameState }
-  | { type: 'FLUCTUATE_PRICES'; stocks: Stock[]; materials: RawMaterial[]; products: Product[] }
   | { type: 'LOAD_SAVE'; state: GameState }
   | { type: 'RESET_GAME' }
-  | { type: 'ADD_EVENT_LOG'; entry: { turn: number; event: string; detail: string } };
+  | { type: 'ADD_EVENT_LOG'; entry: EventLogEntry };
 
-export interface SaveData {
-  ships: Mothership[];
-  stocks: Stock[];
-  materials: RawMaterial[];
-  products: Product[];
-  turn: number;
-  currentShipIndex: number;
-  eventLog: { turn: number; event: string; detail: string }[];
-  redeemedCodes: string[];
-}
+/**
+ * 存档数据形状：与 GameState 持久化字段保持一致（Pick 自 GameState，字段增减自动同步类型）。
+ * 序列化/反序列化逻辑见 lib/save.ts 的 buildSaveData / stateFromSave。
+ */
+export type SaveData = Pick<
+  GameState,
+  | 'ships' | 'stocks' | 'materials' | 'products' | 'turn' | 'currentShipIndex'
+  | 'eventLog' | 'redeemedCodes' | 'factions' | 'factionPrices' | 'factionSellMultipliers'
+  | 'blackMarketMultiplier' | 'buyStocks' | 'buyStockMax' | 'sellDemands' | 'sellDemandMax'
+  | 'buyTriggered' | 'sellTriggered' | 'buyBuffs' | 'sellBuffs'
+  | 'factionPolicy' | 'policyRemainingTurns' | 'stardustMarket' | 'gameWon' | 'wonWonderName'
+  | 'factionReputation' | 'factionContracts'
+> & { saveVersion: number };

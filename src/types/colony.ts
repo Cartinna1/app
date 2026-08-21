@@ -212,17 +212,5 @@ export interface WonderState {
 }
 
 // ==================== 帮助函数 ====================
-
-export function getColonyPopCap(colony: Colony, buildingDefs: BuildingDef[]): number {
-  let cap = 5; // 基础5
-  if (colony.planetType) {
-    // 星球环境可能自带初始上限
-  }
-  for (const inst of colony.buildings) {
-    if (!inst.active) continue;
-    const def = buildingDefs.find((d) => d.id === inst.defId);
-    if (!def || def.category !== 'housing') continue;
-    if (def.id === 'B1') cap += 5;
-  }
-  return cap;
-}
+// 人口上限的唯一真值是 lib/colony/colonyTurn.ts 的 calcPopCap（每回合写回 colony.population.cap），
+// UI 只读取 population.cap，不再单独计算。原 getColonyPopCap 已废弃删除。

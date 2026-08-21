@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, memo } from 'react';
 import type { Mothership, Faction, TradePolicy, PolicyEffect, FactionContract } from '@/types/game';
 import { getDistance, getTravelTurns, getSellPrice, getReputationTier, FACTIONS as FACTIONS_DATA } from '@/data/factions';
 import { RECIPES } from '@/data/gameData';
@@ -44,7 +44,7 @@ function TravelLockOverlay({ turnsRemaining, targetName }: { turnsRemaining: num
   );
 }
 
-export default function TradePanel({ factions, ship, factionPrices, factionSellMultipliers, blackMarketMultiplier, buyStocks, sellDemands, buyBuffs, sellBuffs, factionPolicy, policyRemainingTurns, onTravel, onBuy, onSell, onExplore, onInvest, onGatherIntel, factionReputation, factionContracts, currentTurn, onAcceptContract, onCompleteContract, onBlackMarketBuy }: TradePanelProps) {
+function TradePanel({ factions, ship, factionPrices, factionSellMultipliers, blackMarketMultiplier, buyStocks, sellDemands, buyBuffs, sellBuffs, factionPolicy, policyRemainingTurns, onTravel, onBuy, onSell, onExplore, onInvest, onGatherIntel, factionReputation, factionContracts, currentTurn, onAcceptContract, onCompleteContract, onBlackMarketBuy }: TradePanelProps) {
   const [activeTab, setActiveTab] = useState<TradeTab>('overview');
   const [selectedTarget, setSelectedTarget] = useState<string>('');
   const [buyQty, setBuyQty] = useState('1');
@@ -619,3 +619,5 @@ export default function TradePanel({ factions, ship, factionPrices, factionSellM
     </div>
   );
 }
+
+export default memo(TradePanel);

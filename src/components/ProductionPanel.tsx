@@ -1,6 +1,7 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, memo } from 'react';
 import type { Mothership, RawMaterial } from '@/types/game';
 import { RECIPES } from '@/data/gameData';
+import { MATERIAL_NAME_MAP } from '@/data/materialNames';
 import { getProductionLimitBonus } from '@/data/modules';
 import { Factory, Check, AlertCircle, Clock, Wheat } from 'lucide-react';
 
@@ -21,20 +22,13 @@ interface ProductionPanelProps {
   onStartProduction: (shipIndex: number, recipeId: string) => string | null;
 }
 
-export default function ProductionPanel({ ship, shipIndex, materials: _materials, onStartProduction }: ProductionPanelProps) {
+function ProductionPanel({ ship, shipIndex, materials: _materials, onStartProduction }: ProductionPanelProps) {
   void _materials;
   const [messages, setMessages] = useState<Record<string, string>>({});
   const [filterTurn, setFilterTurn] = useState<number>(1);
   const maxProd = ship.maxProductionsPerTurn + getProductionLimitBonus(ship);
 
-  const matNames: Record<string, string> = {
-    carbon: '碳块',
-    gold_ore: '黄金',
-    oil: '石油',
-    dark_matter: '暗物质',
-    silicon: '硅片',
-    quantum: '量子簇',
-  };
+  const matNames: Record<string, string> = MATERIAL_NAME_MAP;
 
   const canProduce = (recipe: typeof RECIPES[0]) => {
     return recipe.inputs.every((input) => {
@@ -270,3 +264,6 @@ export default function ProductionPanel({ ship, shipIndex, materials: _materials
     </div>
   );
 }
+
+
+export default memo(ProductionPanel);

@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react';
+import { useRef, useState, memo } from 'react';
 import { Save, Download, Upload, AlertTriangle, FileUp } from 'lucide-react';
 
 interface SaveManagerProps {
@@ -7,7 +7,7 @@ interface SaveManagerProps {
   onReset: () => void;
 }
 
-export default function SaveManager({ onExport, onImport, onReset }: SaveManagerProps) {
+function SaveManager({ onExport, onImport, onReset }: SaveManagerProps) {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [message, setMessage] = useState('');
   const [msgType, setMsgType] = useState<'success' | 'error'>('success');
@@ -168,3 +168,6 @@ export default function SaveManager({ onExport, onImport, onReset }: SaveManager
     </div>
   );
 }
+
+
+export default memo(SaveManager);

@@ -23,13 +23,8 @@ export function useRedeem(
         updater: (prev) => {
           const ships = [...prev.ships];
           const s = { ...ships[shipIndex] };
-          if (code === 'DEBUG1126') {
-            s.stardust += 1000;
-            s.alloy += 5000;
-          } else {
-            s.gold += reward;
-            s.goldLog = [{ turn: prev.turn, amount: reward, reason: `兑换码兑换`, balanceAfter: s.gold }, ...s.goldLog].slice(0, 200);
-          }
+          s.gold += reward;
+          s.goldLog = [{ turn: prev.turn, amount: reward, reason: `兑换码兑换`, balanceAfter: s.gold }, ...s.goldLog].slice(0, 200);
           if (s.bankrupt && s.gold > 0) s.bankrupt = false;
           ships[shipIndex] = s;
           return { ...prev, ships, redeemedCodes: [...prev.redeemedCodes, code] };

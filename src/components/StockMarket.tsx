@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, useCallback, useMemo } from 'react';
+import { useState, useRef, useEffect, useCallback, useMemo, memo } from 'react';
 import type { Stock, Mothership } from '@/types/game';
 import { TrendingUp, TrendingDown, Search, Lock, Clock, ArrowLeft } from 'lucide-react';
 
@@ -24,7 +24,7 @@ const SECTOR_COLORS: Record<string, string> = {
   '娱乐服务': 'bg-pink-900/30 text-pink-400 border-pink-700/40',
 };
 
-export default function StockMarket({ stocks, ship, shipIndex, currentTurn, onBuy, onSell }: StockMarketProps) {
+function StockMarket({ stocks, ship, shipIndex, currentTurn, onBuy, onSell }: StockMarketProps) {
   const [search, setSearch] = useState('');
   const [selectedStock, setSelectedStock] = useState<Stock | null>(null);
   const [activeSector, setActiveSector] = useState<string>('全部');
@@ -615,3 +615,6 @@ function TradeDetailPanel({
     </div>
   );
 }
+
+
+export default memo(StockMarket);

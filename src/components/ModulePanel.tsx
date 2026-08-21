@@ -1,6 +1,7 @@
-import { useState } from 'react';
+import { useState, memo } from 'react';
 import type { Mothership } from '@/types/game';
 import { MODULE_DEFINITIONS, canAffordModule, isModuleInstalled } from '@/data/modules';
+import { getMaterialName } from '@/data/materialNames';
 import { Wrench, Check, X, Clock, Zap, Sparkles } from 'lucide-react';
 
 interface ModulePanelProps {
@@ -16,7 +17,7 @@ const TYPE_TABS = [
   { id: 'manual', label: '操作' },
 ];
 
-export default function ModulePanel({ ship, onInstallModule, onUseManualModule }: ModulePanelProps) {
+function ModulePanel({ ship, onInstallModule, onUseManualModule }: ModulePanelProps) {
   const [message, setMessage] = useState('');
   const [messageType, setMessageType] = useState<'success' | 'error'>('success');
   const [activeType, setActiveType] = useState<string>('all');
@@ -206,7 +207,7 @@ export default function ModulePanel({ ship, onInstallModule, onUseManualModule }
                 {def.costGold && def.costGold > 0 && <span className="text-[10px] bg-yellow-900/30 text-yellow-400 px-2 py-0.5 rounded">金币 {def.costGold}</span>}
                 {def.costMaterials && Object.entries(def.costMaterials).map(([matId, cost]) => (
                   <span key={matId} className="text-[10px] bg-blue-900/30 text-blue-400 px-2 py-0.5 rounded">
-                    {matId === 'dark_matter' ? '暗物质' : matId === 'carbon' ? '碳块' : matId === 'gold_ore' ? '黄金矿石' : matId === 'oil' ? '石油' : matId === 'silicon' ? '硅晶体' : matId === 'quantum' ? '量子晶体' : matId} {cost}
+                    {getMaterialName(matId)} {cost}
                   </span>
                 ))}
               </div>
@@ -239,3 +240,6 @@ export default function ModulePanel({ ship, onInstallModule, onUseManualModule }
     </div>
   );
 }
+
+
+export default memo(ModulePanel);

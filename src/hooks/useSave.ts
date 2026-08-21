@@ -1,18 +1,6 @@
 import { useCallback } from 'react';
 import type { GameState, Mothership } from '@/types/game';
-import { FACTIONS, POLICY_EFFECTS, refreshFactionPrices } from '@/data/factions';
-
-const SAVE_KEY = 'aviation_career_save';
-
-/** 存档结构校验（防止损坏/恶意存档导致崩溃） */
-function validateSaveData(data: unknown): data is Record<string, unknown> {
-  if (!data || typeof data !== 'object' || Array.isArray(data)) return false;
-  const d = data as Record<string, unknown>;
-  // 必需字段存在性检查
-  if (typeof d.turn !== 'number') return false;
-  if (!Array.isArray(d.ships)) return false;
-  return true;
-}
+import { SAVE_KEY, validateSaveData, buildSaveData, stateFromSave } from '@/lib/save';
 
 export function useSave(
   dispatch: React.Dispatch<
@@ -26,37 +14,11 @@ export function useSave(
       type: 'FUNCTIONAL_UPDATE',
       updater: (prev) => {
         try {
-          const saveData = {
-            ships: prev.ships,
-            stocks: prev.stocks,
-            materials: prev.materials,
-            products: prev.products,
-            turn: prev.turn,
-            currentShipIndex: prev.currentShipIndex,
-            eventLog: prev.eventLog,
-            redeemedCodes: prev.redeemedCodes,
-            factions: prev.factions,
-            factionPrices: prev.factionPrices,
-            factionSellMultipliers: prev.factionSellMultipliers,
-            blackMarketMultiplier: prev.blackMarketMultiplier,
-            buyStocks: prev.buyStocks,
-            buyStockMax: prev.buyStockMax,
-            sellDemands: prev.sellDemands,
-            sellDemandMax: prev.sellDemandMax,
-            buyTriggered: prev.buyTriggered,
-            sellTriggered: prev.sellTriggered,
-            buyBuffs: prev.buyBuffs,
-            sellBuffs: prev.sellBuffs,
-            factionPolicy: prev.factionPolicy,
-            policyRemainingTurns: prev.policyRemainingTurns,
-            stardustMarket: prev.stardustMarket,
-            gameWon: prev.gameWon,
-            wonWonderName: prev.wonWonderName,
-            factionReputation: prev.factionReputation,
-            factionContracts: prev.factionContracts,
-          };
-          localStorage.setItem(SAVE_KEY, JSON.stringify(saveData));
-        } catch { /* ignore */ }
+          localStorage.setItem(SAVE_KEY, JSON.stringify(buildSaveData(prev)));
+        } catch (e) {
+          // localStorage 超容量等场景：至少留下痕迹，避免存档静默丢失
+          console.warn('[存档] 自动存档失败：', e);
+        }
         return prev;
       },
     });
@@ -70,40 +32,7 @@ export function useSave(
     try {
       const saveData = JSON.parse(data);
       if (!validateSaveData(saveData)) return false;
-      // 校验通过后安全类型转换
-      const d = saveData as Record<string, any>;
-      const state: GameState = {
-        phase: 'playing',
-        turn: d.turn || 1,
-        currentShipIndex: d.currentShipIndex || 0,
-        ships: d.ships || [],
-        stocks: d.stocks || [],
-        materials: d.materials || [],
-        products: d.products || [],
-        eventLog: d.eventLog || [],
-        redeemedCodes: d.redeemedCodes || [],
-        factions: d.factions || FACTIONS,
-        factionPrices: d.factionPrices || refreshFactionPrices(),
-        factionSellMultipliers: d.factionSellMultipliers || {},
-        blackMarketMultiplier: d.blackMarketMultiplier || 3.2,
-        buyStocks: d.buyStocks || {},
-        buyStockMax: d.buyStockMax || {},
-        sellDemands: d.sellDemands || {},
-        sellDemandMax: d.sellDemandMax || {},
-        buyTriggered: d.buyTriggered || {},
-        sellTriggered: d.sellTriggered || {},
-        buyBuffs: d.buyBuffs || {},
-        sellBuffs: d.sellBuffs || {},
-        factionPolicy: d.factionPolicy || { type: 'normal', effect: POLICY_EFFECTS['normal'] },
-        policyRemainingTurns: d.policyRemainingTurns || 0,
-        stardustMarket: d.stardustMarket || { currentRelicId: null, soldRelicIds: [] },
-        gameWon: d.gameWon || false,
-        wonWonderName: d.wonWonderName || '',
-        factionReputation: d.factionReputation || {},
-        factionRepLog: {},
-        factionContracts: d.factionContracts || [],
-      };
-      dispatch({ type: 'LOAD_SAVE', state });
+      dispatch({ type: 'LOAD_SAVE', state: stateFromSave(saveData) });
       return true;
     } catch { return false; }
   }, [dispatch]);
@@ -148,40 +77,7 @@ export function useSave(
           const saveData = JSON.parse(text);
           if (!validateSaveData(saveData)) { resolve(false); return; }
           localStorage.setItem(SAVE_KEY, text);
-          // 校验通过后安全类型转换
-          const d = saveData as Record<string, any>;
-          const state: GameState = {
-            phase: 'playing',
-            turn: d.turn || 1,
-            currentShipIndex: d.currentShipIndex || 0,
-            ships: d.ships || [],
-            stocks: d.stocks || [],
-            materials: d.materials || [],
-            products: d.products || [],
-            eventLog: d.eventLog || [],
-            redeemedCodes: d.redeemedCodes || [],
-            factions: d.factions || FACTIONS,
-            factionPrices: d.factionPrices || refreshFactionPrices(),
-            factionSellMultipliers: d.factionSellMultipliers || {},
-            blackMarketMultiplier: d.blackMarketMultiplier || 3.2,
-            buyStocks: d.buyStocks || {},
-            buyStockMax: d.buyStockMax || {},
-            sellDemands: d.sellDemands || {},
-            sellDemandMax: d.sellDemandMax || {},
-            buyTriggered: d.buyTriggered || {},
-            sellTriggered: d.sellTriggered || {},
-            buyBuffs: d.buyBuffs || {},
-            sellBuffs: d.sellBuffs || {},
-            factionPolicy: d.factionPolicy || { type: 'normal', effect: POLICY_EFFECTS['normal'] },
-            policyRemainingTurns: d.policyRemainingTurns || 0,
-            stardustMarket: d.stardustMarket || { currentRelicId: null, soldRelicIds: [] },
-            gameWon: d.gameWon || false,
-            wonWonderName: d.wonWonderName || '',
-            factionReputation: d.factionReputation || {},
-            factionRepLog: {},
-            factionContracts: d.factionContracts || [],
-          };
-          dispatch({ type: 'LOAD_SAVE', state });
+          dispatch({ type: 'LOAD_SAVE', state: stateFromSave(saveData) });
           resolve(true);
         } catch { resolve(false); }
       };

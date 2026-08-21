@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import type { ChoiceEvent, EventOption, ResourceChange, EventSubChoice } from '@/types/game';
+import { useState, memo } from 'react';
+import type { ChoiceEvent, EventOption, ResourceChange, EventSubChoice, EventLogEntry } from '@/types/game';
 import type { ChooseResult, EventResult, DodgeReason } from '@/hooks/useEvent';
 import {
   Swords, Star, AlertTriangle, Users, HelpCircle,
@@ -15,7 +15,7 @@ interface EventPanelProps {
   eventProcessedThisTurn: boolean;
   stockTipThisTurn?: string;
   matTipThisTurn?: string;
-  eventLog: { turn: number; event: string; detail: string }[];
+  eventLog: EventLogEntry[];
   currentTurn: number;
   eventTriggeredThisTurn: boolean;
   onDrawEvent: (shipIndex: number) => ChoiceEvent | null;
@@ -34,7 +34,7 @@ const categoryConfig = {
   business: { label: '商业', color: 'text-yellow-400', border: 'border-yellow-700/40', bg: 'bg-yellow-950/30', icon: Briefcase },
 };
 
-export default function EventPanel({
+function EventPanel({
   activeEvent, eventDodged, eventProcessedThisTurn, stockTipThisTurn, matTipThisTurn, eventLog, currentTurn,
   eventTriggeredThisTurn, onDrawEvent, onChooseOption, onApplyResources, onClearActiveEvent, onClearDodged,
 }: EventPanelProps) {
@@ -357,7 +357,7 @@ export default function EventPanel({
           <h3 className="text-base md:text-lg font-bold text-slate-200 mb-2 md:mb-3">事件记录</h3>
           <div className="bg-slate-900/60 border border-slate-700 rounded-xl p-3 md:p-4 max-h-48 md:max-h-60 overflow-auto">
             {eventLog.slice(0, 30).map((log, idx) => (
-              <div key={idx} className="text-xs md:text-sm border-b border-slate-800 pb-2 mb-2 last:border-0 last:pb-0 last:mb-0">
+              <div key={log.id ?? `legacy-${log.turn}-${idx}`} className="text-xs md:text-sm border-b border-slate-800 pb-2 mb-2 last:border-0 last:pb-0 last:mb-0">
                 <span className="text-slate-500">第{log.turn}回合</span>
                 <span className="text-purple-400 mx-1 md:mx-2">{log.event}</span>
                 <span className="text-slate-400">{log.detail}</span>
@@ -369,3 +369,6 @@ export default function EventPanel({
     </div>
   );
 }
+
+
+export default memo(EventPanel);

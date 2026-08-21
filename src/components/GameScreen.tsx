@@ -42,9 +42,8 @@ import { RECIPES } from '@/data/gameData';
 import GoldLogViewer from './GoldLogViewer';
 import ModulePanel from './ModulePanel';
 import ColonyPanel from './colony/ColonyPanel';
-import { getBuildingDef } from '@/data/colony/buildings';
-import { getPlanetById } from '@/data/colony/planets';
-import { getLeaderDef } from '@/data/colony/leaders';
+import { computeColonyEconomy } from '@/lib/colony/economy';
+import { MATERIAL_NAME_MAP } from '@/data/materialNames';
 
 // 背景音乐曲目列表（放 public/ 目录下，按顺序自动循环播放）
 const BGM_LIST = ['/bgm1.mp3', '/bgm2.mp3', '/bgm3.mp3'];
@@ -111,6 +110,10 @@ interface GameScreenProps {
 }
 
 type TabId = 'overview' | 'stocks' | 'materials' | 'production' | 'products' | 'events' | 'loan' | 'trade' | 'colony' | 'module' | 'redeem' | 'goldlog' | 'save';
+
+// 空引用常量：避免每次渲染新建 {} / [] 击穿 TradePanel 的 memo
+const EMPTY_REPUTATION: Record<string, number> = {};
+const EMPTY_CONTRACTS: NonNullable<GameState['factionContracts']> = [];
 
 const tabs: { id: TabId; label: string; shortLabel: string; icon: React.ElementType }[] = [
   { id: 'overview', label: '总览', shortLabel: '总览', icon: LayoutDashboard },
@@ -512,8 +515,8 @@ export default function GameScreen({
               onExplore={onExploreFaction}
               onInvest={onInvestFaction}
               onGatherIntel={onGatherIntel}
-              factionReputation={gameState.factionReputation || {}}
-              factionContracts={gameState.factionContracts || []}
+              factionReputation={gameState.factionReputation || EMPTY_REPUTATION}
+              factionContracts={gameState.factionContracts || EMPTY_CONTRACTS}
               currentTurn={gameState.turn}
               onAcceptContract={onAcceptContract}
               onCompleteContract={onCompleteContract}
@@ -777,66 +780,11 @@ function OverviewTab({
         if (ship.installedModuleIds.includes('bio_kitchen')) modFood += 15;
         if (ship.installedModuleIds.includes('nano_farm')) modFood += 30;
         if (ship.installedModuleIds.includes('sixth_farm')) modFood += 60;
-        // 殖民地数据
-        let colFood = 0, colAlloy = 0, colStardust = 0, colGold = 0, colFoodCost = 0, colRP = 0;
-        const colMats: Record<string, number> = {};
-        if (ship.colony?.phase === 'active') {
-          const c = ship.colony;
-          const pd = c.planetType ? getPlanetById(c.planetType) : undefined;
-          // 领袖加成映射
-          const lbMap: Record<string, number> = {};
-          let lAll = 0, lMat = 0;
-          for (const l of c.leaders || []) {
-            const ld = getLeaderDef(l.id);
-            const bonuses = (ld?.levelBonuses[l.level-1] || {}) as Record<string, number>;
-            for (const [bid, b] of Object.entries(bonuses)) {
-              if (bid === 'ALL') lAll += b;
-              else if (bid === 'ALL_MATERIAL') lMat += b;
-              else lbMap[bid] = (lbMap[bid] || 0) + b;
-            }
-          }
-          for (const inst of c.buildings) {
-            if (!inst.active || inst.assignedPop <= 0) continue;
-            const d = getBuildingDef(inst.defId);
-            if (!d || !d.outputType) continue;
-            const lb = ((lbMap[inst.defId]||0)+(d.category==='material'?lMat:0)+lAll)/100;
-            const rl = c.techState?.repeatableLevels || {};
-            let rp = 0;
-            if (d.outputType === 'food') rp = (rl.RP_FOOD || 0) * 0.05;
-            else if (d.outputType === 'alloy') rp = (rl.RP_ALLOY || 0) * 0.05;
-            else if (d.outputType === 'stardust') rp = (rl.RP_STARDUST || 0) * 0.05;
-            else if (d.outputType === 'gold') rp = (rl.RP_TRADE || 0) * 0.05;
-            else if (d.outputType === 'material') rp = (rl.RP_MATERIAL || 0) * 0.05;
-            else if (d.outputType === 'research') rp = (rl.RP_RESEARCH || 0) * 0.10;
-            const base = (d.baseOutput||0)+(d.popFactor||0)*inst.assignedPop;
-            if (d.outputType === 'food') { const pm = pd?.buffs.foodMult ? (pd.buffs.foodMult-1) : 0; colFood += Math.ceil(base*(1+pm+lb+rp)); }
-            else if (d.outputType === 'alloy') { const pm = pd?.buffs.alloyMult ? (pd.buffs.alloyMult-1) : 0; colAlloy += Math.ceil(base*(1+pm+lb+rp)); }
-            else if (d.outputType === 'stardust') { const pm = pd?.buffs.stardustMult ? (pd.buffs.stardustMult-1) : 0; colStardust += Math.ceil(base*(1+pm+lb+rp)); }
-            else if (d.outputType === 'gold') { const o = Math.floor(((d.goldOutputMin||0)+(d.goldOutputMax||0))/2); colGold += Math.ceil(o*(1+lb+rp)); }
-            else if (d.outputType === 'research') { colRP += Math.ceil(base*(1+lb+rp)); }
-            else if (d.outputType === 'material' && d.outputMaterialId) {
-              const pm = pd?.buffs.materialMults?.[d.outputMaterialId] ? (pd.buffs.materialMults[d.outputMaterialId]-1) : 0;
-              colMats[d.outputMaterialId] = (colMats[d.outputMaterialId]||0) + Math.ceil(base*(1+pm+lb+rp));
-            }
-          }
-          // 领袖特殊效果
-          let lRP = 0, lDM = 0, lQ = 0, lSD = 0;
-          for (const l of c.leaders || []) {
-            const ex = getLeaderDef(l.id)?.levelExtras[l.level-1];
-            if (ex?.researchPerTurn) lRP += Math.floor((ex.researchPerTurn[0]+ex.researchPerTurn[1])/2);
-            if (ex?.darkMatterPerTurn) lDM += ex.darkMatterPerTurn;
-            if (ex?.quantumPerTurn) lQ += ex.quantumPerTurn;
-            if (ex?.stardustPerTurn) lSD += ex.stardustPerTurn;
-          }
-          colRP += lRP;
-          colStardust += lSD;
-          if (lDM>0) colMats['dark_matter'] = (colMats['dark_matter']||0) + lDM;
-          if (lQ>0) colMats['quantum'] = (colMats['quantum']||0) + lQ;
-          // 食物消耗含领袖减免
-          let fpp = 3 + (pd?.buffs.foodConsumptionDelta || 0);
-          for (const l of c.leaders || []) fpp += (getLeaderDef(l.id)?.levelExtras[l.level-1]?.foodConsumptionDelta || 0);
-          colFoodCost = c.population.total * Math.max(1, fpp);
-        }
+        // 殖民地数据（统一走 economy 模块估算，金币/领袖科研取中值）
+        const eco = ship.colony?.phase === 'active' ? computeColonyEconomy(ship.colony) : null;
+        const colFood = eco?.food ?? 0, colAlloy = eco?.alloy ?? 0, colStardust = eco?.stardust ?? 0;
+        const colGold = eco?.gold ?? 0, colRP = eco?.research ?? 0, colFoodCost = eco?.foodCost ?? 0;
+        const colMats: Record<string, number> = eco?.materials ?? {};
         return (
           <div className="mb-4 bg-slate-900/60 border border-slate-700 rounded-xl p-3 md:p-4">
             <h3 className="text-xs text-amber-400 font-bold mb-3">资源收支</h3>
@@ -849,7 +797,7 @@ function OverviewTab({
               {colStardust > 0 && <div><span className="text-slate-500">星尘产出:</span> <span className="text-purple-400 font-bold">+{colStardust}{ship.modules?.some(m => m.active && m.id === 'dyson_collector') ? ' + 3(母舰)' : ''} (殖民地)</span></div>}
               {colGold > 0 && <div><span className="text-slate-500">金币产出:</span> <span className="text-yellow-400 font-bold">+{colGold} (殖民地)</span></div>}
               {colRP > 0 && <div><span className="text-slate-500">科研产出:</span> <span className="text-cyan-400 font-bold">+{colRP} (殖民地)</span></div>}
-              {(() => { const mc: Record<string,string> = { oil:'石油', gold_ore:'金矿', carbon:'碳块', dark_matter:'暗物质', quantum:'量子簇', silicon:'硅片' }; return Object.entries(colMats).map(([k,v]) => v>0 && <div key={k}><span className="text-slate-500">{mc[k]||k}:</span> <span className="text-amber-400 font-bold">+{v} (殖民地)</span></div>); })()}
+              {(() => { const mc: Record<string,string> = MATERIAL_NAME_MAP; return Object.entries(colMats).map(([k,v]) => v>0 && <div key={k}><span className="text-slate-500">{mc[k]||k}:</span> <span className="text-amber-400 font-bold">+{v} (殖民地)</span></div>); })()}
             </div>
           </div>
         );
@@ -961,7 +909,7 @@ function OverviewTab({
           <h3 className="text-base md:text-lg font-bold text-slate-200 mb-2 md:mb-3">事件记录</h3>
           <div className="bg-slate-900/60 border border-slate-700 rounded-xl p-3 md:p-4 max-h-60 overflow-auto">
             {gameState.eventLog.slice(0, 20).map((log, idx) => (
-              <div key={idx} className="text-xs md:text-sm border-b border-slate-800 pb-2 mb-2 last:border-0 last:pb-0 last:mb-0">
+              <div key={log.id ?? `legacy-${log.turn}-${idx}`} className="text-xs md:text-sm border-b border-slate-800 pb-2 mb-2 last:border-0 last:pb-0 last:mb-0">
                 <span className="text-slate-500">第{log.turn}回合</span>
                 <span className="text-purple-400 mx-1 md:mx-2">{log.event}</span>
                 <span className="text-slate-400">{log.detail}</span>

@@ -444,66 +444,70 @@ export const PRODUCT_PRICE_LIMITS: Record<string, { maxUp: number; maxDown: numb
   p43: { maxUp: 0.35, maxDown: 0.30 }, // 暗能奇点反应堆
 };
 
-export const INITIAL_PRODUCTS: Omit<Product, 'sellPrices' | 'currentSellPrice' | 'priceMaxUp' | 'priceMaxDown'>[] = [
+// 产品基础数据。productionTurns 不在此手写——它是生产属性，唯一真值在 RECIPES，
+// 由 createProducts() 按 id 从 RECIPES 派生，避免两表重复维护导致分叉（如 p01 曾一处 1 一处 2）。
+export const INITIAL_PRODUCTS: Omit<Product, 'sellPrices' | 'currentSellPrice' | 'priceMaxUp' | 'priceMaxDown' | 'productionTurns'>[] = [
   // 1回合（12种）
-  { id: 'p07', name: '生物培养基', description: '外星生态系统维持培养液', baseSellPrice: 734, productionTurns: 1 },
-  { id: 'p22', name: '外星香料', description: '珍稀外星植物提取的调味香料', baseSellPrice: 827, productionTurns: 1 },
-  { id: 'p04', name: '纳米修复液', description: '船体与设备自动修复溶液', baseSellPrice: 891, productionTurns: 1 },
-  { id: 'p11', name: '碳晶装甲板', description: '超轻超强星际船体装甲', baseSellPrice: 892, productionTurns: 1 },
-  { id: 'p16', name: '基因改造药剂', description: '临时增强人体能力的注射药剂', baseSellPrice: 907, productionTurns: 1 },
-  { id: 'p14', name: '全息投影仪', description: '超真实全息影像生成设备', baseSellPrice: 969, productionTurns: 1 },
-  { id: 'p05', name: '星际导航芯片', description: '高精度星际航线计算芯片', baseSellPrice: 1034, productionTurns: 1 },
-  { id: 'p12', name: '星际信标', description: '深空导航与求救信号发射器', baseSellPrice: 1050, productionTurns: 1 },
-  { id: 'p17', name: '引力锚定器', description: '固定飞船位置的引力发生装置', baseSellPrice: 1145, productionTurns: 1 },
-  { id: 'p19', name: '冷冻休眠舱', description: '长途星际旅行的低温休眠设备', baseSellPrice: 1105, productionTurns: 1 },
-  { id: 'p18', name: '太阳能帆板', description: '高效星际航行用光压推进帆', baseSellPrice: 1130, productionTurns: 1 },
-  { id: 'p01', name: '量子绸缎', description: '用于高端能量护盾的纺织材料', baseSellPrice: 1759, productionTurns: 2 },
+  { id: 'p07', name: '生物培养基', description: '外星生态系统维持培养液', baseSellPrice: 734 },
+  { id: 'p22', name: '外星香料', description: '珍稀外星植物提取的调味香料', baseSellPrice: 827 },
+  { id: 'p04', name: '纳米修复液', description: '船体与设备自动修复溶液', baseSellPrice: 891 },
+  { id: 'p11', name: '碳晶装甲板', description: '超轻超强星际船体装甲', baseSellPrice: 892 },
+  { id: 'p16', name: '基因改造药剂', description: '临时增强人体能力的注射药剂', baseSellPrice: 907 },
+  { id: 'p14', name: '全息投影仪', description: '超真实全息影像生成设备', baseSellPrice: 969 },
+  { id: 'p05', name: '星际导航芯片', description: '高精度星际航线计算芯片', baseSellPrice: 1034 },
+  { id: 'p12', name: '星际信标', description: '深空导航与求救信号发射器', baseSellPrice: 1050 },
+  { id: 'p17', name: '引力锚定器', description: '固定飞船位置的引力发生装置', baseSellPrice: 1145 },
+  { id: 'p19', name: '冷冻休眠舱', description: '长途星际旅行的低温休眠设备', baseSellPrice: 1105 },
+  { id: 'p18', name: '太阳能帆板', description: '高效星际航行用光压推进帆', baseSellPrice: 1130 },
+  { id: 'p01', name: '量子绸缎', description: '用于高端能量护盾的纺织材料', baseSellPrice: 1759 },
   // 2回合（10种）
-  { id: 'p21', name: '星际合金锭', description: '超强度多用途星际建筑合金', baseSellPrice: 1597, productionTurns: 2 },
-  { id: 'p08', name: '能量转换器', description: '多形式能量高效转换装置', baseSellPrice: 1609, productionTurns: 2 },
-  { id: 'p24', name: '生态修复舱', description: '修复受损星球生态的环境装置', baseSellPrice: 1622, productionTurns: 2 },
-  { id: 'p02', name: '暗能燃料棒', description: '飞船核心动力燃料', baseSellPrice: 1823, productionTurns: 2 },
-  { id: 'p03', name: '量子处理器', description: '超光速计算机核心组件', baseSellPrice: 1919, productionTurns: 2 },
-  { id: 'p10', name: '量子通讯器', description: '无视距离即时通讯终端', baseSellPrice: 2269, productionTurns: 2 },
-  { id: 'p09', name: '重力稳定器', description: '人工重力场生成与稳定设备', baseSellPrice: 2323, productionTurns: 2 },
-  { id: 'p23', name: '灵能增幅器', description: '增强灵能者精神力量的装置', baseSellPrice: 2318, productionTurns: 2 },
-  { id: 'p15', name: '反物质容器', description: '安全储存反物质的磁约束罐', baseSellPrice: 3272, productionTurns: 3 },
-  { id: 'p20', name: '相位护盾发生器', description: '可穿透实体物质的相位偏移护盾', baseSellPrice: 3479, productionTurns: 3 },
+  { id: 'p21', name: '星际合金锭', description: '超强度多用途星际建筑合金', baseSellPrice: 1597 },
+  { id: 'p08', name: '能量转换器', description: '多形式能量高效转换装置', baseSellPrice: 1609 },
+  { id: 'p24', name: '生态修复舱', description: '修复受损星球生态的环境装置', baseSellPrice: 1622 },
+  { id: 'p02', name: '暗能燃料棒', description: '飞船核心动力燃料', baseSellPrice: 1823 },
+  { id: 'p03', name: '量子处理器', description: '超光速计算机核心组件', baseSellPrice: 1919 },
+  { id: 'p10', name: '量子通讯器', description: '无视距离即时通讯终端', baseSellPrice: 2269 },
+  { id: 'p09', name: '重力稳定器', description: '人工重力场生成与稳定设备', baseSellPrice: 2323 },
+  { id: 'p23', name: '灵能增幅器', description: '增强灵能者精神力量的装置', baseSellPrice: 2318 },
+  { id: 'p15', name: '反物质容器', description: '安全储存反物质的磁约束罐', baseSellPrice: 3272 },
+  { id: 'p20', name: '相位护盾发生器', description: '可穿透实体物质的相位偏移护盾', baseSellPrice: 3479 },
   // 3回合（3种）
-  { id: 'p06', name: '暗物质炸弹', description: '军事级大规模杀伤武器', baseSellPrice: 3249, productionTurns: 3 },
-  { id: 'p25', name: '跃迁燃料添加剂', description: '提升跃迁引擎效率的催化添加剂', baseSellPrice: 3160, productionTurns: 3 },
-  { id: 'p13', name: '时间减缓场', description: '局部时间流速控制装置', baseSellPrice: 3723, productionTurns: 3 },
+  { id: 'p06', name: '暗物质炸弹', description: '军事级大规模杀伤武器', baseSellPrice: 3249 },
+  { id: 'p25', name: '跃迁燃料添加剂', description: '提升跃迁引擎效率的催化添加剂', baseSellPrice: 3160 },
+  { id: 'p13', name: '时间减缓场', description: '局部时间流速控制装置', baseSellPrice: 3723 },
   // 重型（4-6回合，18种：每档各6种对应6种原料）
-  { id: 'p26', name: '碳晶复合装甲', description: '以巨量碳块熔铸的船体装甲，坚不可摧', baseSellPrice: 19500, productionTurns: 4 },
-  { id: 'p27', name: '光子计算核心', description: '集成海量硅片的光子运算核心', baseSellPrice: 19500, productionTurns: 4 },
-  { id: 'p28', name: '高能燃料精炼体', description: '原油深度精炼的高能聚合物燃料', baseSellPrice: 19500, productionTurns: 4 },
-  { id: 'p29', name: '银河铸币母模', description: '用黄金铸造的银河硬通货压铸母版', baseSellPrice: 19600, productionTurns: 4 },
-  { id: 'p30', name: '量子纠缠通信器', description: '量子簇编织的跨空间通信终端', baseSellPrice: 19700, productionTurns: 4 },
-  { id: 'p31', name: '暗能引擎核心', description: '暗物质驱动的曲速引擎核心', baseSellPrice: 19500, productionTurns: 4 },
-  { id: 'p32', name: '碳晶巨构模块', description: '由海量碳块压铸而成的超大型结构模块', baseSellPrice: 26000, productionTurns: 5 },
-  { id: 'p33', name: '全息投影矩阵', description: '硅片阵列驱动的全息成像设备', baseSellPrice: 26000, productionTurns: 5 },
-  { id: 'p34', name: '曲速引擎燃料', description: '为曲速引擎量身打造的高能燃料', baseSellPrice: 26000, productionTurns: 5 },
-  { id: 'p35', name: '星际纪念金币', description: '黄金铸造的限量星际纪念钱币', baseSellPrice: 26100, productionTurns: 5 },
-  { id: 'p36', name: '量子计算阵列', description: '量子簇级联的超算阵列', baseSellPrice: 25900, productionTurns: 5 },
-  { id: 'p37', name: '暗物质聚变炉', description: '暗物质湮灭驱动的聚变反应炉', baseSellPrice: 26100, productionTurns: 5 },
-  { id: 'p38', name: '碳基生态培育舱', description: '碳基生态的独立生命培育舱体', baseSellPrice: 32500, productionTurns: 6 },
-  { id: 'p39', name: '硅基智慧核心', description: '硅基生命的自主智慧运算核心', baseSellPrice: 32500, productionTurns: 6 },
-  { id: 'p40', name: '泰坦级能量核心', description: '泰坦级能量汇聚与存储核心', baseSellPrice: 32500, productionTurns: 6 },
-  { id: 'p41', name: '黄金行星仪', description: '黄金精工打造的行星模型仪器', baseSellPrice: 32600, productionTurns: 6 },
-  { id: 'p42', name: '量子奇点引擎', description: '逼近奇点的量子计算引擎', baseSellPrice: 32600, productionTurns: 6 },
-  { id: 'p43', name: '暗能奇点反应堆', description: '暗物质驱动的奇点级能源核心', baseSellPrice: 32600, productionTurns: 6 },
+  { id: 'p26', name: '碳晶复合装甲', description: '以巨量碳块熔铸的船体装甲，坚不可摧', baseSellPrice: 19500 },
+  { id: 'p27', name: '光子计算核心', description: '集成海量硅片的光子运算核心', baseSellPrice: 19500 },
+  { id: 'p28', name: '高能燃料精炼体', description: '原油深度精炼的高能聚合物燃料', baseSellPrice: 19500 },
+  { id: 'p29', name: '银河铸币母模', description: '用黄金铸造的银河硬通货压铸母版', baseSellPrice: 19600 },
+  { id: 'p30', name: '量子纠缠通信器', description: '量子簇编织的跨空间通信终端', baseSellPrice: 19700 },
+  { id: 'p31', name: '暗能引擎核心', description: '暗物质驱动的曲速引擎核心', baseSellPrice: 19500 },
+  { id: 'p32', name: '碳晶巨构模块', description: '由海量碳块压铸而成的超大型结构模块', baseSellPrice: 26000 },
+  { id: 'p33', name: '全息投影矩阵', description: '硅片阵列驱动的全息成像设备', baseSellPrice: 26000 },
+  { id: 'p34', name: '曲速引擎燃料', description: '为曲速引擎量身打造的高能燃料', baseSellPrice: 26000 },
+  { id: 'p35', name: '星际纪念金币', description: '黄金铸造的限量星际纪念钱币', baseSellPrice: 26100 },
+  { id: 'p36', name: '量子计算阵列', description: '量子簇级联的超算阵列', baseSellPrice: 25900 },
+  { id: 'p37', name: '暗物质聚变炉', description: '暗物质湮灭驱动的聚变反应炉', baseSellPrice: 26100 },
+  { id: 'p38', name: '碳基生态培育舱', description: '碳基生态的独立生命培育舱体', baseSellPrice: 32500 },
+  { id: 'p39', name: '硅基智慧核心', description: '硅基生命的自主智慧运算核心', baseSellPrice: 32500 },
+  { id: 'p40', name: '泰坦级能量核心', description: '泰坦级能量汇聚与存储核心', baseSellPrice: 32500 },
+  { id: 'p41', name: '黄金行星仪', description: '黄金精工打造的行星模型仪器', baseSellPrice: 32600 },
+  { id: 'p42', name: '量子奇点引擎', description: '逼近奇点的量子计算引擎', baseSellPrice: 32600 },
+  { id: 'p43', name: '暗能奇点反应堆', description: '暗物质驱动的奇点级能源核心', baseSellPrice: 32600 },
 ];
 
 export function createProducts(): Product[] {
   return INITIAL_PRODUCTS.map((p) => {
     const limits = PRODUCT_PRICE_LIMITS[p.id] || { maxUp: 0.20, maxDown: 0.15 };
+    // productionTurns 由 RECIPES 派生（单一真值），无对应配方时回退 1
+    const productionTurns = RECIPES.find((r) => r.id === p.id)?.productionTurns ?? 1;
     // 初始价格在基准价 ±10% 范围内随机
     const lower = Math.round(p.baseSellPrice * 0.9);
     const upper = Math.round(p.baseSellPrice * 1.1);
     const initial = lower + Math.floor(Math.random() * (upper - lower + 1));
     const prices: number[] = [];
     for (let i = 0; i < 10; i++) prices.push(initial);
-    return { ...p, sellPrices: prices, currentSellPrice: initial, priceMaxUp: limits.maxUp, priceMaxDown: limits.maxDown };
+    return { ...p, productionTurns, sellPrices: prices, currentSellPrice: initial, priceMaxUp: limits.maxUp, priceMaxDown: limits.maxDown };
   });
 }
 
@@ -527,10 +531,6 @@ export const REDEEM_CODES: Record<string, number> = {
   '168203': 5000, '553879': 5000, '986448': 5000,
   // 10000金币 x2
   '377425': 10000, '624987': 10000,
-  // DEBUG测试码
-  'DEBUG1125': 50000000,
-  // 特殊资源码
-  'DEBUG1126': -1, // 特殊处理：1000星尘+5000合金
 };
 
 export function getRedeemCodeList(): string[] {

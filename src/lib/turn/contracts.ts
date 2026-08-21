@@ -1,0 +1,54 @@
+// ==================== 势力合同生成（纯逻辑，从 useTurn 抽离） ====================
+
+import type { GameState, FactionContract } from '@/types/game';
+import { RECIPES } from '@/data/gameData';
+import { RELATION_MATRIX } from '@/data/factions';
+
+/** 合同生成：清理过期合同并按势力补充新合同，返回新列表 */
+export function generateContracts(prev: GameState): FactionContract[] {
+  const factionContracts = [...(prev.factionContracts || [])];
+  // 过期清理
+  const alive = factionContracts.filter((c) => c.accepted ? c.expiresTurn >= prev.turn : true);
+  // 清理未接取的过期合同
+  const kept = alive.filter((c) => c.accepted || c.expiresTurn >= prev.turn);
+  // 每势力生成新合同
+  const contractFactions = new Set(kept.map((c) => c.factionId));
+  for (const f of prev.factions) {
+    const count = kept.filter((c) => c.factionId === f.id && !c.accepted).length;
+    if (count >= 3) continue;
+    if (Math.random() < 0.35 && !contractFactions.has(f.id)) {
+      const types: Array<'procurement' | 'smuggling'> = ['procurement', 'procurement', 'smuggling'];
+      const type = types[Math.floor(Math.random() * types.length)];
+      if (type === 'procurement') {
+        const recipes = RECIPES.filter((r) => !r.foodYield);
+        const recipe = recipes[Math.floor(Math.random() * recipes.length)];
+        const qty = Math.floor(Math.random() * 4) + 2; // 2-5
+        const tier = Math.min(5, Math.max(0, recipe.productionTurns - 1));
+        const rewards = [
+          [5, 8, 3000, 5000],       // 1回合
+          [8, 12, 6000, 10000],     // 2回合
+          [10, 15, 12000, 20000],   // 3回合
+          [12, 18, 30000, 50000],   // 4回合
+          [14, 22, 50000, 80000],   // 5回合
+          [16, 26, 70000, 110000],  // 6回合
+        ][tier];
+        const rewardGold = Math.floor(Math.random() * (rewards[3] - rewards[2] + 1)) + rewards[2];
+        const rewardRep = Math.floor(Math.random() * (rewards[1] - rewards[0] + 1)) + rewards[0];
+        // 可接取窗口：生成后 5-8 回合内可接取，接取后再独立计算完成期限
+        const expires = prev.turn + 5 + Math.floor(Math.random() * 4);
+        kept.push({ id: `c_${prev.turn}_${f.id}_${kept.length}`, factionId: f.id, type: 'procurement', accepted: false, targetItemId: recipe.id, targetQty: qty, rewardGold, rewardRep, expiresTurn: expires, blackMarketUsed: false });
+      } else {
+        const rel = RELATION_MATRIX[f.id];
+        if (!rel || !rel.enemies.length) continue;
+        const enemyId = rel.enemies[Math.floor(Math.random() * rel.enemies.length)];
+        if (enemyId === 'f07') continue;
+        const qty = Math.floor(Math.random() * 6) + 5; // 5-10
+        const rewardRep = Math.floor(Math.random() * 6) + 20; // 20-25
+        // 可接取窗口：生成后 5-8 回合内可接取，接取后再独立计算完成期限
+        const expires = prev.turn + 5 + Math.floor(Math.random() * 4);
+        kept.push({ id: `c_${prev.turn}_${f.id}_${kept.length}`, factionId: f.id, type: 'smuggling', accepted: false, targetItemId: enemyId, targetQty: qty, rewardGold: 0, rewardRep, expiresTurn: expires, blackMarketUsed: false });
+      }
+    }
+  }
+  return kept;
+}

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, memo } from 'react';
 import type { Mothership, Loan, GameState } from '@/types/game';
 import { getLoanLimit, getLoanTierInfo } from '@/hooks/useLoan';
 import { Banknote, AlertTriangle, Clock, Coins, Check, ShieldAlert } from 'lucide-react';
@@ -17,7 +17,7 @@ const LOAN_PLANS = [
   { turns: 15, rate: 0.9, label: '15回合', rateLabel: '到期总利率90%' },
 ];
 
-export default function LoanPanel({ ship, gameState, onTakeLoan, onRepayLoan }: LoanPanelProps) {
+function LoanPanel({ ship, gameState, onTakeLoan, onRepayLoan }: LoanPanelProps) {
   const [amount, setAmount] = useState('');
   const [selectedPlan, setSelectedPlan] = useState(0);
   const [message, setMessage] = useState('');
@@ -255,3 +255,6 @@ function LoanCard({ loan, onRepay, shipGold }: { loan: Loan; onRepay: (id: strin
     </div>
   );
 }
+
+
+export default memo(LoanPanel);

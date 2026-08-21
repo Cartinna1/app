@@ -1,19 +1,19 @@
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo, useEffect, useCallback, memo } from 'react';
 import type { Mothership } from '@/types/game';
 import type { PlanetTypeId, PlanetDef } from '@/types/colony';
 import { getBuildableBuildings, getBuildingDef, getBuildingEffect } from '@/data/colony/buildings';
 import { getPlanetById } from '@/data/colony/planets';
 import { getTechById, getAvailableTechs, REPEATABLE_TECHS, getRepeatableCost } from '@/data/colony/techs';
 import { getLeaderDef } from '@/data/colony/leaders';
+import { computeColonyEconomy, computeColonyPower } from '@/lib/colony/economy';
+import { MATERIAL_NAME_MAP } from '@/data/materialNames';
 import { Home, Users, Wrench, Play, UserPlus, FlaskConical, Crown, Trophy } from 'lucide-react';
 import WonderPanel from './WonderPanel';
 
 // ==================== 辅助函数 ====================
 
-const MAT_NAMES: Record<string, string> = {
-  carbon: '碳块', gold_ore: '黄金', oil: '石油',
-  dark_matter: '暗物质', silicon: '硅片', quantum: '量子簇',
-};
+// 原料中文名统一走全局唯一真值 MATERIAL_NAME_MAP（见 data/materialNames.ts）
+const MAT_NAMES: Record<string, string> = MATERIAL_NAME_MAP;
 
 function matLabel(id: string): string { return MAT_NAMES[id] || id; }
 
@@ -125,7 +125,7 @@ interface ColonyPanelProps {
 
 type ColonyTab = 'overview' | 'buildings' | 'population' | 'research' | 'leaders' | 'wonders';
 
-export default function ColonyPanel(props: ColonyPanelProps) {
+function ColonyPanel(props: ColonyPanelProps) {
   const { ship, onUnlockColony, onSelectPlanet, onRescrollPlanets, generateScoutingPool, onBuild, onRecruitPop, onAssignPop, onStartResearch, onRecruitLeader, onUpgradeLeader, onRollAndRecruit, onCancelBuilding, onDemolishBuilding, onSelectWonder, onSubmitWonderResources, onCompleteWonder, canStartWonder } = props;
   const colony = ship.colony;
   const [tab, setTab] = useState<ColonyTab>('overview');
@@ -137,7 +137,7 @@ export default function ColonyPanel(props: ColonyPanelProps) {
   const [popCatFilter, setPopCatFilter] = useState<string>('all');
   const [liveBuildFilter, setLiveBuildFilter] = useState<string>('housing');
   const [expandedLiveGroups, setExpandedLiveGroups] = useState<Record<string, boolean>>({});
-  const showMsg = (m: string, t: 'success' | 'error') => { setMessage(m); setMsgType(t); setTimeout(() => setMessage(''), 4000); };
+  const showMsg = useCallback((m: string, t: 'success' | 'error') => { setMessage(m); setMsgType(t); setTimeout(() => setMessage(''), 4000); }, []);
 
   // 离开选择星球阶段时清理状态
   useEffect(() => {
@@ -145,6 +145,14 @@ export default function ColonyPanel(props: ColonyPanelProps) {
       setPlanetName('');
     }
   }, [colony?.phase]);
+
+  // 进入选择星球阶段但星球池为空时，通过 dispatch 正规生成（不可变更新），
+  // 替代原先在渲染期直接 colony.scoutingPool = p 的副作用写法。
+  useEffect(() => {
+    if (colony?.phase === 'selecting' && (!colony.scoutingPool || colony.scoutingPool.length === 0)) {
+      generateScoutingPool();
+    }
+  }, [colony?.phase, colony?.scoutingPool, generateScoutingPool]);
 
   // 科研：稳定随机选项
   const researchOptions = useMemo(() => {
@@ -230,7 +238,9 @@ export default function ColonyPanel(props: ColonyPanelProps) {
   // ===== 选择星球 =====
   if (colony.phase === 'selecting') {
     const pool = colony.scoutingPool;
-    if (!pool || pool.length === 0) { const p = generateScoutingPool(); colony.scoutingPool = p; return null; }
+    // 池为空时不在这里生成——由下方 useEffect 通过 dispatch 正规写入，渲染体保持纯净。
+    // 此分支仅在 effect 触发 dispatch、state 更新前短暂出现，返回 null 避免闪烁。
+    if (!pool || pool.length === 0) return null;
     return (
       <div className="space-y-4">
         <h2 className="text-xl font-bold text-white">选择殖民星球</h2>
@@ -344,43 +354,7 @@ export default function ColonyPanel(props: ColonyPanelProps) {
           </div>
           {/* 电能状态 */}
           {(() => {
-            const totalGen = liveBuildings.reduce((sum, b) => {
-              const d = getBuildingDef(b.defId);
-              if (d?.outputType === 'power' && b.assignedPop >= d.minPop) {
-                let gen = (d.baseOutput || 0) + (d.popFactor || 0) * b.assignedPop;
-                for (const l of colony.leaders || []) {
-                  const ld = getLeaderDef(l.id);
-                  if (ld?.id === 'L22' && ((d.id === 'B29' && l.level >= 1) || (d.id === 'B30' && l.level >= 2))) gen = Math.floor(gen * 1.30);
-                }
-                return sum + Math.floor(gen);
-              }
-              return sum;
-            }, 0);
-            // 星球太��能修正（仅B29）
-            const planetGenMult = planet?.buffs.powerGenMult || 1;
-            const displayGen = Math.floor(totalGen * (planetGenMult !== 1 ? planetGenMult : 1));
-            // L22 余晖脉冲加成提示（B29 Lv1+ / B30 Lv2+）
-            const hasL22PowerBonus = (colony.leaders || []).some(l => {
-              if (l.id !== 'L22') return false;
-              return liveBuildings.some(b => {
-                const d = getBuildingDef(b.defId);
-                if (!d || b.assignedPop < d.minPop) return false;
-                return (d.id === 'B29' && l.level >= 1) || (d.id === 'B30' && l.level >= 2);
-              });
-            });
-            let l21Bonus = 0;
-            for (const l of colony.leaders || []) {
-              const ld = getLeaderDef(l.id);
-              if (ld?.id === 'L21') l21Bonus = [0.10, 0.15, 0.25][l.level - 1] || 0;
-            }
-            const rawUse = liveBuildings.reduce((sum, b) => {
-              const d = getBuildingDef(b.defId);
-              if (!d || d.outputType === 'power') return sum;
-              return sum + (d.powerConsumption || 0);
-            }, 0);
-            const planetUseMult = planet?.buffs.powerUseMult || 1;
-            const useAfterL21 = l21Bonus > 0 ? Math.ceil(rawUse * (1 - l21Bonus)) : rawUse;
-            const totalUse = Math.ceil(useAfterL21 * planetUseMult);
+            const power = computeColonyPower(colony);
             const netPwr = (colony.energy ?? 0);
             const hasL22Lv3 = colony.leaders?.some(l => l.id === 'L22' && l.level >= 3);
             return (
@@ -389,8 +363,8 @@ export default function ColonyPanel(props: ColonyPanelProps) {
                   <div>
                     <p className="text-sm font-bold text-slate-300">⚡ 电能</p>
                     <p className="text-xs text-slate-500">
-                      发电 {displayGen}{planetGenMult !== 1 ? (planetGenMult > 1 ? ` (星球×${planetGenMult})` : ` (星球×${planetGenMult})`) : ''}{hasL22PowerBonus ? ' (L22×1.3)' : ''}
-                      {' − '}消耗 {totalUse}{l21Bonus > 0 ? ` (L21 -${Math.round(l21Bonus*100)}%)` : ''}{planetUseMult !== 1 ? ` (星球×${planetUseMult})` : ''}
+                      发电 {power.gen}{power.planetGenMult !== 1 ? ` (星球×${power.planetGenMult})` : ''}
+                      {' − '}消耗 {power.use}{power.l21Pct > 0 ? ` (L21 -${Math.round(power.l21Pct*100)}%)` : ''}{power.planetUseMult !== 1 ? ` (星球×${power.planetUseMult})` : ''}
                     </p>
                   </div>
                   <div className="text-right">
@@ -401,88 +375,25 @@ export default function ColonyPanel(props: ColonyPanelProps) {
               </div>
             );
           })()}
-          {/* 产出汇总 */}
+          {/* 产出汇总（统一走 economy 模块估算） */}
           {liveBuildings.length > 0 && (() => {
-            const pod = planet?.buffs;
-            const omMap: Record<string, number> = {};
-            let omAll = 0, omMat = 0;
-            for (const l of colony.leaders || []) {
-              const ld = getLeaderDef(l.id);
-              const bonuses = ld?.levelBonuses[l.level-1] || {};
-              for (const [bid, b] of Object.entries(bonuses)) {
-                if (bid === 'ALL') omAll += b;
-                else if (bid === 'ALL_MATERIAL') omMat += b;
-                else omMap[bid] = (omMap[bid] || 0) + b;
-              }
-            }
-            // 循环科技加成
-            const rl = colony.techState?.repeatableLevels || {};
+            const eco = computeColonyEconomy(colony);
+            const MAT_CN: Record<string, string> = MATERIAL_NAME_MAP;
+            const OUT_LABEL: Record<string, string> = { food:'食物', alloy:'合金', stardust:'星尘', gold:'金币', research:'科研' };
             const bonusLines: { label: string; value: number; detail: string }[] = [];
             const matLines: { k: string; v: number; detail: string }[] = [];
-            const MAT_CN: Record<string, string> = { oil:'石油', gold_ore:'金矿', carbon:'碳块', dark_matter:'暗物质', quantum:'量子簇', silicon:'硅片' };
-            for (const inst of liveBuildings) {
-              const d = getBuildingDef(inst.defId);
+            for (const e of eco.buildings) {
+              const d = getBuildingDef(e.defId);
               if (!d) continue;
-              if (inst.assignedPop < d.minPop) continue;
-              // 有效人口（含领袖槽位扩展）
-              let efm = d.maxPop;
-              for (const l of colony.leaders || []) {
-                const ex = getLeaderDef(l.id)?.levelExtras[l.level-1];
-                if (ex?.popCapBonus?.[inst.defId]) efm = Math.max(efm, ex.popCapBonus[inst.defId]);
-              }
-              const ep = Math.min(inst.assignedPop, efm > 0 ? efm : inst.assignedPop);
-              const base = (d.baseOutput||0)+(d.popFactor||0)*ep;
-              const lb = ((omMap[inst.defId]||0)+(d.category==='material'?omMat:0)+omAll)/100;
-              let rpb = 0;
-              if (d.outputType === 'food') rpb = (rl.RP_FOOD || 0) * 0.05;
-              else if (d.outputType === 'alloy') rpb = (rl.RP_ALLOY || 0) * 0.05;
-              else if (d.outputType === 'stardust') rpb = (rl.RP_STARDUST || 0) * 0.05;
-              else if (d.outputType === 'gold') rpb = (rl.RP_TRADE || 0) * 0.05;
-              else if (d.outputType === 'material') rpb = (rl.RP_MATERIAL || 0) * 0.05;
-              else if (d.outputType === 'research') rpb = (rl.RP_RESEARCH || 0) * 0.10;
-              if (d.outputType === 'food') {
-                const pm = pod?.foodMult ? (pod.foodMult-1) : 0;
-                const v = Math.ceil(base*(1+pm+lb+rpb));
-                const parts: string[] = [`${d.name}:${base}`];
-                if (pod?.foodMult) parts.push(`星球${pod.foodMult>1?'+':''}${Math.round(pm*100)}%`);
-                if (lb>0) parts.push(`领袖+${Math.round(lb*100)}%`);
-                if (rpb>0) parts.push(`循环+${Math.round(rpb*100)}%`);
-                bonusLines.push({ label: '食物', value: v, detail: parts.join(' ') });
-              } else if (d.outputType === 'alloy') {
-                const pm = pod?.alloyMult ? (pod.alloyMult-1) : 0;
-                const v = Math.ceil(base*(1+pm+lb+rpb));
-                const parts: string[] = [`${d.name}:${base}`];
-                if (pod?.alloyMult) parts.push(`星球${pod.alloyMult>1?'+':''}${Math.round(pm*100)}%`);
-                if (lb>0) parts.push(`领袖+${Math.round(lb*100)}%`);
-                if (rpb>0) parts.push(`循环+${Math.round(rpb*100)}%`);
-                bonusLines.push({ label: '合金', value: v, detail: parts.join(' ') });
-              } else if (d.outputType === 'stardust') {
-                const pm = pod?.stardustMult ? (pod.stardustMult-1) : 0;
-                const v = Math.ceil(base*(1+pm+lb+rpb));
-                const parts: string[] = [`${d.name}:${base}`];
-                if (pod?.stardustMult) parts.push(`星球${pod.stardustMult>1?'+':''}${Math.round(pm*100)}%`);
-                if (lb>0) parts.push(`领袖+${Math.round(lb*100)}%`);
-                if (rpb>0) parts.push(`循环+${Math.round(rpb*100)}%`);
-                bonusLines.push({ label: '星尘', value: v, detail: parts.join(' ') });
-              } else if (d.outputType === 'gold') {
-                const v = Math.ceil(Math.floor(((d.goldOutputMin||0)+(d.goldOutputMax||0))/2)*(1+lb+rpb));
-                const parts: string[] = [`${d.name}`];
-                if (lb>0) parts.push(`领袖+${Math.round(lb*100)}%`);
-                if (rpb>0) parts.push(`循环+${Math.round(rpb*100)}%`);
-                bonusLines.push({ label: '金币', value: v, detail: parts.join(' ') });
-              } else if (d.outputType === 'research') {
-                const v = Math.ceil(base*(1+lb+rpb));
-                const parts: string[] = [`${d.name}:${base}`];
-                if (lb>0) parts.push(`领袖+${Math.round(lb*100)}%`);
-                if (rpb>0) parts.push(`循环+${Math.round(rpb*100)}%`);
-                bonusLines.push({ label: '科研', value: v, detail: parts.join(' ') });
-              } else if (d.outputType === 'material' && d.outputMaterialId) {
-                const pm = pod?.materialMults?.[d.outputMaterialId] ? (pod.materialMults[d.outputMaterialId]-1) : 0;
-                const v = Math.ceil(base*(1+pm+lb));
-                const parts: string[] = [`${d.name}:${base}`];
-                if (pm!==0) parts.push(`星球${pm>0?'+':''}${Math.round(pm*100)}%`);
-                if (lb>0) parts.push(`领袖+${Math.round(lb*100)}%`);
-                matLines.push({ k: d.outputMaterialId, v, detail: parts.join(' ') });
+              const parts: string[] = [e.outputType === 'gold' ? `${d.name}` : `${d.name}:${e.base}`];
+              if (e.planetPct !== 0) parts.push(`星球${e.planetPct>0?'+':''}${Math.round(e.planetPct*100)}%`);
+              if (e.leaderPct > 0) parts.push(`领袖+${Math.round(e.leaderPct*100)}%`);
+              if (e.repeatPct > 0) parts.push(`循环+${Math.round(e.repeatPct*100)}%`);
+              if (e.b26Pct > 0) parts.push(`量子实验室+${Math.round(e.b26Pct*100)}%`);
+              if (e.outputType === 'material' && e.materialId) {
+                matLines.push({ k: e.materialId, v: e.value, detail: parts.join(' ') });
+              } else {
+                bonusLines.push({ label: OUT_LABEL[e.outputType] || e.outputType, value: e.value, detail: parts.join(' ') });
               }
             }
             // 聚合同类
@@ -520,7 +431,7 @@ export default function ColonyPanel(props: ColonyPanelProps) {
                 {Object.keys(agg).length===0 && Object.keys(aggMat).length===0 && <span className="text-slate-500">暂无产出（建筑无人入驻）</span>}
               </div>
               <div className="text-sm text-red-400 mt-2">
-                {(() => { let fp=3+(pod?.foodConsumptionDelta||0); for(const l of colony.leaders||[]){fp+=(getLeaderDef(l.id)?.levelExtras[l.level-1]?.foodConsumptionDelta||0);} return `食物消耗: -${colony.population.total * Math.max(1, fp)} (每人${Math.max(1,fp)})`; })()}
+                {`食物消耗: -${eco.foodCost} (每人${eco.foodPerPop})`}
               </div>
             </div>
             );
@@ -541,51 +452,24 @@ export default function ColonyPanel(props: ColonyPanelProps) {
 
       {/* ===== 建筑 ===== */}
       {tab === 'buildings' && (() => {
-        // 领袖加成映射（加算用）
-        const mlMap: Record<string, number> = {};
-        let mlAll = 0, mlMat = 0;
-        for (const l of colony.leaders || []) {
-          const ld = getLeaderDef(l.id);
-          const bonuses = ld?.levelBonuses[l.level-1] || {};
-          for (const [bid, b] of Object.entries(bonuses)) {
-            if (bid === 'ALL') mlAll += b;
-            else if (bid === 'ALL_MATERIAL') mlMat += b;
-            else mlMap[bid] = (mlMap[bid] || 0) + b;
-          }
-        }
-        const rlv = colony.techState?.repeatableLevels || {};
+        // 每回合产出（统一走 economy 模块估算，金币取区间中值）
+        const liveEco = computeColonyEconomy(colony);
+        const ecoByUid = new Map(liveEco.buildings.map((e) => [e.uid, e]));
+        const OUT_UN: Record<string, string> = { food: '食物', alloy: '合金', stardust: '星尘', gold: '金币', research: '科研' };
+        const MAT_UN: Record<string, string> = MATERIAL_NAME_MAP;
         // 计算单个建筑实例产出（返回 {v, un, detail}，未达标返回 null）
         const calcLiveOut = (inst: any, def: any): { v: number; un: string; detail: string } | null => {
           if (inst.assignedPop < def.minPop || !def.outputType) return null;
-          let efm = def.maxPop;
-          for (const l of colony.leaders || []) {
-            const ex = getLeaderDef(l.id)?.levelExtras[l.level-1];
-            if (ex?.popCapBonus?.[inst.defId]) efm = Math.max(efm, ex.popCapBonus[inst.defId]);
-          }
-          const ep = Math.min(inst.assignedPop, efm > 0 ? efm : inst.assignedPop);
-          const b = (def.baseOutput||0)+(def.popFactor||0)*ep;
-          const lb = ((mlMap[inst.defId]||0)+(def.category==='material'?mlMat:0)+mlAll)/100;
-          let rpb = 0;
-          if (def.outputType === 'food') rpb = (rlv.RP_FOOD || 0) * 0.05;
-          else if (def.outputType === 'alloy') rpb = (rlv.RP_ALLOY || 0) * 0.05;
-          else if (def.outputType === 'stardust') rpb = (rlv.RP_STARDUST || 0) * 0.05;
-          else if (def.outputType === 'gold') rpb = (rlv.RP_TRADE || 0) * 0.05;
-          else if (def.outputType === 'material') rpb = (rlv.RP_MATERIAL || 0) * 0.05;
-          else if (def.outputType === 'research') rpb = (rlv.RP_RESEARCH || 0) * 0.10;
-          let v=0, un='', detail='';
-          if (def.outputType === 'food') { const pm = planet?.buffs.foodMult ? (planet.buffs.foodMult-1) : 0; v=Math.ceil(b*(1+pm+lb+rpb)); un='食物'; detail=`${b}${pm!==0?'星球'+(pm>0?'+':'')+Math.round(pm*100)+'%':''}${lb>0?'领袖+'+Math.round(lb*100)+'%':''}${rpb>0?'循环+'+Math.round(rpb*100)+'%':''}`; }
-          else if (def.outputType === 'alloy') { const pm = planet?.buffs.alloyMult ? (planet.buffs.alloyMult-1) : 0; v=Math.ceil(b*(1+pm+lb+rpb)); un='合金'; detail=`${b}${pm!==0?'星球'+(pm>0?'+':'')+Math.round(pm*100)+'%':''}${lb>0?'领袖+'+Math.round(lb*100)+'%':''}${rpb>0?'循环+'+Math.round(rpb*100)+'%':''}`; }
-          else if (def.outputType === 'stardust') { const pm = planet?.buffs.stardustMult ? (planet.buffs.stardustMult-1) : 0; v=Math.ceil(b*(1+pm+lb+rpb)); un='星尘'; detail=`${b}${pm!==0?'星球'+(pm>0?'+':'')+Math.round(pm*100)+'%':''}${lb>0?'领袖+'+Math.round(lb*100)+'%':''}${rpb>0?'循环+'+Math.round(rpb*100)+'%':''}`; }
-          else if (def.outputType === 'gold') { v=Math.ceil(Math.floor(((def.goldOutputMin||0)+(def.goldOutputMax||0))/2)*(1+lb+rpb)); un='金币'; detail=`${lb>0?'领袖+'+Math.round(lb*100)+'%':''}${rpb>0?'循环+'+Math.round(rpb*100)+'%':''}`; }
-          else if (def.outputType === 'research') { v=Math.ceil(b*(1+lb+rpb)); un='科研'; detail=`${b}${lb>0?'领袖+'+Math.round(lb*100)+'%':''}${rpb>0?'循环+'+Math.round(rpb*100)+'%':''}`; }
-          else if (def.outputType === 'material' && def.outputMaterialId) {
-            const mc: Record<string,string> = { oil:'石油', gold_ore:'金矿', carbon:'碳块', dark_matter:'暗物质', quantum:'量子簇', silicon:'硅片' };
-            const pm = planet?.buffs.materialMults?.[def.outputMaterialId] ? (planet.buffs.materialMults[def.outputMaterialId]-1) : 0;
-            v=Math.ceil(b*(1+pm+lb)); un=mc[def.outputMaterialId]||def.outputMaterialId;
-            detail=`${b}${pm!==0?'星球'+(pm>0?'+':'')+Math.round(pm*100)+'%':''}${lb>0?'领袖+'+Math.round(lb*100)+'%':''}`;
-          }
-          if (v>0) return { v, un, detail };
-          return null;
+          const e = ecoByUid.get(inst.uid);
+          if (!e || e.value <= 0) return null;
+          const un = e.outputType === 'material' ? (MAT_UN[e.materialId || ''] || e.materialId || '') : (OUT_UN[e.outputType] || e.outputType);
+          let detail = '';
+          if (e.outputType !== 'gold') detail += `${e.base}`;
+          if (e.planetPct !== 0) detail += `星球${e.planetPct > 0 ? '+' : ''}${Math.round(e.planetPct * 100)}%`;
+          if (e.leaderPct > 0) detail += `领袖+${Math.round(e.leaderPct * 100)}%`;
+          if (e.repeatPct > 0) detail += `循环+${Math.round(e.repeatPct * 100)}%`;
+          if (e.b26Pct > 0) detail += `量子实验室+${Math.round(e.b26Pct * 100)}%`;
+          return { v: e.value, un, detail };
         };
         // 渲染单个建筑实例卡片（折叠展开态复用）
         const renderLiveCard = (inst: any, def: any, num?: string) => {
@@ -1140,12 +1024,15 @@ export default function ColonyPanel(props: ColonyPanelProps) {
           shipStardust={ship.stardust}
           shipFood={ship.food}
           shipMaterials={ship.materials}
-          onSelectWonder={(id) => onSelectWonder(id)}
-          onSubmitResources={() => onSubmitWonderResources()}
-          onCompleteWonder={() => onCompleteWonder()}
+          onSelectWonder={onSelectWonder}
+          onSubmitResources={onSubmitWonderResources}
+          onCompleteWonder={onCompleteWonder}
           onShowMsg={showMsg}
         />
       )}
     </div>
   );
 }
+
+
+export default memo(ColonyPanel);

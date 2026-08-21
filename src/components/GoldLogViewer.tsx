@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, memo } from 'react';
 import type { GoldLogEntry } from '@/types/game';
 import { Coins, TrendingUp, TrendingDown, Filter, ChevronDown, ChevronUp } from 'lucide-react';
 
@@ -7,7 +7,7 @@ interface GoldLogViewerProps {
   currentGold: number;
 }
 
-export default function GoldLogViewer({ goldLog, currentGold }: GoldLogViewerProps) {
+function GoldLogViewer({ goldLog, currentGold }: GoldLogViewerProps) {
   const [filter, setFilter] = useState<'all' | 'income' | 'expense'>('all');
   const [expanded, setExpanded] = useState(false);
 
@@ -93,3 +93,6 @@ export default function GoldLogViewer({ goldLog, currentGold }: GoldLogViewerPro
     </div>
   );
 }
+
+
+export default memo(GoldLogViewer);

@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, memo } from 'react';
 import type { Mothership, Product, StardustMarket } from '@/types/game';
 import { INITIAL_PRODUCTS, RECIPES } from '@/data/gameData';
 import { getRelicById } from '@/data/relics';
@@ -43,7 +43,7 @@ interface ProductGroup {
   productionTurns: number;
 }
 
-export default function ProductMarket({ ship, shipIndex, products, materials, stardustMarket, currentTurn, onSellQty, onBuyRelic, onBuyRandomMats, onBuySellBonus, onBuyGoldWithStardust, onRerollPolicy, onBuyFoodWithStardust, onBuyAlloy, onBuyFood }: ProductMarketProps) {
+function ProductMarket({ ship, shipIndex, products, materials, stardustMarket, currentTurn, onSellQty, onBuyRelic, onBuyRandomMats, onBuySellBonus, onBuyGoldWithStardust, onRerollPolicy, onBuyFoodWithStardust, onBuyAlloy, onBuyFood }: ProductMarketProps) {
   const [quantities, setQuantities] = useState<Record<string, number>>({});
   const [messages, setMessages] = useState<Record<string, string>>({});
   const [msgTypes, setMsgTypes] = useState<Record<string, 'success' | 'error'>>({});
@@ -85,6 +85,8 @@ export default function ProductMarket({ ship, shipIndex, products, materials, st
     const map = new Map<string, ProductGroup>();
     ship.products.forEach((item) => {
       const info = INITIAL_PRODUCTS.find((p) => p.id === item.productId);
+      // productionTurns 唯一真值在 RECIPES（INITIAL_PRODUCTS 不再重复维护）
+      const recipe = RECIPES.find((r) => r.id === item.productId);
       const existing = map.get(item.productId);
       if (existing) {
         existing.count += 1;
@@ -99,7 +101,7 @@ export default function ProductMarket({ ship, shipIndex, products, materials, st
           avgMatCost: item.materialCost || 0,
           totalMatCost: item.materialCost || 0,
           earliestExpire: item.expiresAt,
-          productionTurns: info?.productionTurns || 1,
+          productionTurns: recipe?.productionTurns || 1,
         });
       }
     });
@@ -847,3 +849,6 @@ export default function ProductMarket({ ship, shipIndex, products, materials, st
     </div>
   );
 }
+
+
+export default memo(ProductMarket);

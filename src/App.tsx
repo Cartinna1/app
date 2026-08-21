@@ -71,8 +71,8 @@ function App() {
   if (gameState.phase === 'select') {
     return (
       <ShipSelection
-        onSelect={(shipId) => selectShips(shipId)}
-        onLoad={() => loadSave()}
+        onSelect={selectShips}
+        onLoad={loadSave}
         hasSave={hasSave()}
       />
     );
@@ -116,19 +116,19 @@ function App() {
       onApplyEventResources={applyEventResources}
       onClearActiveEvent={clearActiveEvent}
       onClearEventDodged={clearEventDodged}
-      onTakeLoan={(principal, plan) => takeLoan(0, principal, plan)}
-      onRepayLoan={(loanId) => repayLoan(0, loanId)}
-      onTravelToFaction={(targetId) => travelToFaction(0, targetId)}
-      onBuySpecialty={(qty) => buySpecialty(0, qty)}
-      onSellSpecialty={(fid, qty) => sellSpecialty(0, fid, qty)}
-      onExploreFaction={() => exploreFaction(0)}
-      onInvestFaction={(amt) => investFaction(0, amt)}
-      onGatherIntel={() => gatherIntel(0)}
-      onAcceptContract={(contractId) => acceptContract(contractId)}
-      onCompleteContract={(contractId) => completeContract(0, contractId)}
-      onBlackMarketBuy={(fid, itemId, qty) => blackMarketBuy(0, fid, itemId, qty)}
-      onInstallModule={(moduleId) => installModule(0, moduleId)}
-      onUseManualModule={(moduleId) => useManualModule(0, moduleId)}
+      onTakeLoan={takeLoan}
+      onRepayLoan={repayLoan}
+      onTravelToFaction={travelToFaction}
+      onBuySpecialty={buySpecialty}
+      onSellSpecialty={sellSpecialty}
+      onExploreFaction={exploreFaction}
+      onInvestFaction={investFaction}
+      onGatherIntel={gatherIntel}
+      onAcceptContract={acceptContract}
+      onCompleteContract={completeContract}
+      onBlackMarketBuy={blackMarketBuy}
+      onInstallModule={installModule}
+      onUseManualModule={useManualModule}
       onUnlockColony={unlockColony}
       onSelectPlanet={selectPlanet}
       onRescrollPlanets={rescrollPlanets}
@@ -155,7 +155,7 @@ function App() {
       onRerollPolicy={rerollPolicy}
       onBuyFoodWithStardust={buyFoodWithStardust}
       onRedeemCode={redeemCode}
-      onExportSave={() => exportSave(gameState.ships, gameState.turn)}
+      onExportSave={exportSave}
       onImportSave={importSave}
       onResetGame={resetGame}
       getShipTotalAssets={getShipTotalAssets}

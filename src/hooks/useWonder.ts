@@ -83,7 +83,7 @@ export function useWonder(
         if (stage.food > 0 && s.food < stage.food) checks.push(`食物不足`);
         if (stage.carbon > 0 && (s.materials.carbon || 0) < stage.carbon) checks.push(`碳块不足`);
         if (stage.oil > 0 && (s.materials.oil || 0) < stage.oil) checks.push(`石油不足`);
-        if (stage.gold_ore > 0 && (s.materials.gold_ore || 0) < stage.gold_ore) checks.push(`金矿不足`);
+        if (stage.gold_ore > 0 && (s.materials.gold_ore || 0) < stage.gold_ore) checks.push(`黄金不足`);
         if (stage.research > 0 && (s.colony.techState?.researchPoints || 0) < stage.research) checks.push(`科研点不足`);
 
         if (checks.length > 0) { result = { success: false, message: checks.join('；') }; return prev; }

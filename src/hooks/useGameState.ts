@@ -1,4 +1,4 @@
-import { useReducer, useCallback } from 'react';
+import { useReducer, useCallback, useRef } from 'react';
 import type { Mothership, GameState } from '@/types/game';
 import { gameReducer, initialGameState } from './gameReducer';
 import { useStock } from './useStock';
@@ -8,6 +8,8 @@ import { useLoan } from './useLoan';
 import { useTrade } from './useTrade';
 import { useSave } from './useSave';
 import { useTurn } from './useTurn';
+import { getShipTotalAssets as computeShipTotalAssets } from '@/lib/game/assets';
+import { MATERIAL_NAME_MAP } from '@/data/materialNames';
 import { useRedeem } from './useRedeem';
 import { useModule } from './useModule';
 import { useColony } from './useColony';
@@ -23,6 +25,29 @@ import { rollPolicy, POLICY_EFFECTS } from '@/data/factions';
  *   接收 dispatch，通过 FUNCTIONAL_UPDATE action 更新状态
  * - getShipTotalAssets 是纯函数，不触发任何更新
  */
+
+/** 去掉元组第一个元素（用于收敛 shipIndex 恒为 0 的单舰队接口） */
+type Tail<T extends unknown[]> = T extends [unknown, ...infer R] ? R : never;
+
+/**
+ * 把一组 action 函数包装成引用稳定的版本：
+ * 每次渲染更新内部 ref，调用时始终执行最新闭包。
+ * 这样子 hook 里依赖 gameState 的 useCallback 即使每次渲染都重建，
+ * 透传到组件层的函数引用也保持不变，不会击穿面板组件的 React.memo。
+ */
+function useStableActions<T extends Record<string, (...args: never[]) => unknown>>(actions: T): T {
+  const ref = useRef(actions);
+  ref.current = actions;
+  const stableRef = useRef<T | null>(null);
+  if (stableRef.current === null) {
+    const wrapped: Record<string, unknown> = {};
+    for (const key of Object.keys(actions)) {
+      wrapped[key] = (...args: unknown[]) => (ref.current[key] as (...a: unknown[]) => unknown)(...args);
+    }
+    stableRef.current = wrapped as unknown as T;
+  }
+  return stableRef.current;
+}
 
 export function useGameState() {
   const [gameState, dispatch] = useReducer(gameReducer, initialGameState);
@@ -164,7 +189,7 @@ export function useGameState() {
       if (!ship) return { success: false, message: '舰队不存在' };
       if (ship.stardust < 4) return { success: false, message: '星尘不足（需要4星尘）' };
       const matIds = ['carbon', 'gold_ore', 'oil', 'dark_matter', 'silicon', 'quantum'];
-      const matNames: Record<string, string> = { carbon: '碳块', gold_ore: '黄金', oil: '石油', dark_matter: '暗物质', silicon: '硅片', quantum: '量子簇' };
+      const matNames: Record<string, string> = MATERIAL_NAME_MAP;
       let result = { success: false, message: '' };
       dispatch({
         type: 'FUNCTIONAL_UPDATE',
@@ -296,37 +321,16 @@ export function useGameState() {
   );
 
   // 纯函数：计算总资产（不触发更新，按需计算）
+  // 复用全局唯一口径（不含售价加成），与系统判定保持一致。
   const getShipTotalAssets = useCallback(
-    (ship: Mothership): number => {
-      let total = ship.gold;
-      const loanDebt = ship.loans.reduce((sum, l) => sum + (l.totalRepay - l.repaid), 0);
-      total -= loanDebt;
-      gameState.stocks.forEach((stock) => {
-        const count = ship.stockHoldings[stock.id] || 0;
-        if (count > 0) total += stock.currentPrice * count;
-      });
-      gameState.materials.forEach((mat) => {
-        const count = ship.materials[mat.id] || 0;
-        if (count > 0) total += mat.currentPrice * count;
-      });
-      gameState.products.forEach((product) => {
-        const hasProduct = ship.products.some((p) => p.productId === product.id);
-        if (hasProduct) {
-          const qty = ship.products.filter((p) => p.productId === product.id).length;
-          const totalBonus = (ship.sellBonuses || []).reduce((sum, b) => sum + b.bonus, 0);
-          total += product.currentSellPrice * qty * (1 + totalBonus / 100);
-        }
-      });
-      return Math.round(total);
-    },
+    (ship: Mothership): number =>
+      computeShipTotalAssets(ship, gameState.stocks, gameState.materials, gameState.products),
     [gameState.stocks, gameState.materials, gameState.products]
   );
 
-  return {
-    // 状态
-    gameState,
-    activeEvent,
-
+  // 所有对外 action 包成引用稳定的函数（见 useStableActions）。
+  // shipIndex 恒为 0 的单舰队接口在此收敛，组件层不再感知 shipIndex 参数。
+  const actions = useStableActions({
     // 初始化
     selectShips,
 
@@ -345,7 +349,6 @@ export function useGameState() {
     fluctuatePrices,
 
     // 事件
-    eventDodged,
     drawEvent,
     chooseEventOption,
     applyEventResources,
@@ -353,24 +356,22 @@ export function useGameState() {
     clearEventDodged,
 
     // 贷款
-    takeLoan,
-    repayLoan,
+    takeLoan: (...args: Tail<Parameters<typeof takeLoan>>) => takeLoan(0, ...args),
+    repayLoan: (...args: Tail<Parameters<typeof repayLoan>>) => repayLoan(0, ...args),
 
     // 贸易
-    travelToFaction,
-    buySpecialty,
-    sellSpecialty,
-    exploreFaction,
-    investFaction,
-    gatherIntel,
+    travelToFaction: (...args: Tail<Parameters<typeof travelToFaction>>) => travelToFaction(0, ...args),
+    buySpecialty: (...args: Tail<Parameters<typeof buySpecialty>>) => buySpecialty(0, ...args),
+    sellSpecialty: (...args: Tail<Parameters<typeof sellSpecialty>>) => sellSpecialty(0, ...args),
+    exploreFaction: () => exploreFaction(0),
+    investFaction: (...args: Tail<Parameters<typeof investFaction>>) => investFaction(0, ...args),
+    gatherIntel: () => gatherIntel(0),
     acceptContract,
-    completeContract,
-    blackMarketBuy,
+    completeContract: (...args: Tail<Parameters<typeof completeContract>>) => completeContract(0, ...args),
+    blackMarketBuy: (...args: Tail<Parameters<typeof blackMarketBuy>>) => blackMarketBuy(0, ...args),
 
-    // 合金购买
+    // 合金/食物购买
     buyAlloy,
-
-    // 食物购买
     buyFood,
 
     // 星尘集市
@@ -385,8 +386,8 @@ export function useGameState() {
     redeemCode,
 
     // 母舰改造
-    installModule,
-    useManualModule,
+    installModule: (...args: Tail<Parameters<typeof installModule>>) => installModule(0, ...args),
+    useManualModule: (...args: Tail<Parameters<typeof useManualModule>>) => useManualModule(0, ...args),
 
     // 星际殖民
     unlockColony,
@@ -409,14 +410,22 @@ export function useGameState() {
     autoSave,
     hasSave,
     loadSave,
-    exportSave,
+    exportSave: () => exportSave(gameState.ships, gameState.turn),
     importSave,
     resetGame,
 
     // 计算
     getShipTotalAssets,
+  });
+
+  return {
+    // 状态
+    gameState,
+    activeEvent,
+    eventDodged,
+    ...actions,
   };
 }
 
 // 重新导出 getShipTotalAssets 纯函数（供组件外部使用）
-export { getShipTotalAssets } from './useTurn';
+export { getShipTotalAssets } from '@/lib/game/assets';

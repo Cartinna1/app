@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, memo } from 'react';
 import { getWonderDef, ALL_WONDERS } from '@/data/colony/wonders';
 import type { Colony } from '@/types/colony';
 
@@ -18,7 +18,7 @@ interface Props {
   onShowMsg: (msg: string, type: 'success' | 'error') => void;
 }
 
-export default function WonderPanel({
+function WonderPanel({
   colony, researchedCount, hasT25, conditionsMet,
   shipGold, shipAlloy, shipStardust, shipFood, shipMaterials,
   onSelectWonder, onSubmitResources, onCompleteWonder, onShowMsg,
@@ -86,7 +86,7 @@ export default function WonderPanel({
               </div>
               <div className="flex gap-3">
                 <img
-                  src={`/wonders/${w.id}.webp`}
+                  src={`/wonders/${w.id}.png`}
                   alt={w.name}
                   onError={(e) => { (e.target as HTMLImageElement).style.display='none'; }}
                   className="w-32 h-20 rounded-lg object-cover border border-slate-700 flex-shrink-0"
@@ -130,13 +130,7 @@ export default function WonderPanel({
         <div className="bg-slate-900/60 border border-amber-700/40 rounded-xl p-6 text-center">
           <h2 className="text-3xl font-bold text-amber-400 mb-4">🏆 奇观已竣工</h2>
           <p className="text-xl text-slate-200 mb-2">「{wonder.name}」已经矗立在群星之间。</p>
-          <p className="text-sm text-red-400 mb-4">⚠ 确认建成后将结束本局游戏，无法继续。</p>
-          <img
-            src={`/wonders/${wonder.id}.webp`}
-            alt={wonder.name}
-            onError={(e) => { (e.target as HTMLImageElement).style.display='none'; }}
-            className="mx-auto w-full max-w-md h-48 rounded-lg border border-amber-700/40 object-cover mb-6 shadow-lg shadow-amber-900/20"
-          />
+          <p className="text-sm text-red-400 mb-6">⚠ 确认建成后将结束本局游戏，无法继续。</p>
 
           {showConfirm ? (
             <div className="bg-red-900/20 border border-red-700/40 rounded-lg p-4 mb-4">
@@ -211,13 +205,13 @@ export default function WonderPanel({
     checkRes(stage.gold, shipGold, '金币'),
     checkRes(stage.alloy, shipAlloy, '合金'),
     checkRes(stage.silicon, shipMaterials.silicon || 0, '硅片'),
-    checkRes(stage.quantum, shipMaterials.quantum || 0, '量子'),
+    checkRes(stage.quantum, shipMaterials.quantum || 0, '量子簇'),
     checkRes(stage.dark_matter, shipMaterials.dark_matter || 0, '暗物质'),
     checkRes(stage.stardust, shipStardust, '星尘'),
     checkRes(stage.food, shipFood, '食物'),
     checkRes(stage.carbon, shipMaterials.carbon || 0, '碳块'),
     checkRes(stage.oil, shipMaterials.oil || 0, '石油'),
-    checkRes(stage.gold_ore, shipMaterials.gold_ore || 0, '金矿'),
+    checkRes(stage.gold_ore, shipMaterials.gold_ore || 0, '黄金'),
     checkRes(stage.research, colony.techState?.researchPoints || 0, '科研点'),
   ].filter(Boolean);
 
@@ -238,7 +232,7 @@ export default function WonderPanel({
         </div>
         {/* 当前阶段大图 */}
         <img
-          src={`/wonders/build/${ws.selectedWonderId}_${ws.currentStage + 1}.webp`}
+          src={`/wonders/build/${ws.selectedWonderId}_${ws.currentStage + 1}.png`}
           alt={`${wonder.name} - ${stage.name}`}
           onError={(e) => { (e.target as HTMLImageElement).style.display='none'; }}
           className="w-full aspect-video object-cover rounded-lg border border-slate-700 mb-3"
@@ -303,3 +297,6 @@ export default function WonderPanel({
     </div>
   );
 }
+
+
+export default memo(WonderPanel);

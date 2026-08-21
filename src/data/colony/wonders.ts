@@ -41,7 +41,7 @@ export const ALL_WONDERS: WonderDef[] = [
     id: 'engine', name: '创世引擎', subtitle: '生命播种者',
     description: '你建造的不是机器，是一颗可以编程的行星心脏。它吸入灰烬、岩屑和死寂的大气，呼出雨林、洋流和漫天飞鸟。三十个回合前这里还是一片沉默的岩石，现在风里有了泥土的气味。',
     preferredPlanets: '海洋/热带',
-    totalLines: ['554万金币', '食物 73,000', '碳块 37,300', '石油 1,965', '暗物质 2,900', '金矿 5,600'],
+    totalLines: ['554万金币', '食物 73,000', '碳块 37,300', '石油 1,965', '暗物质 2,900', '黄金 5,600'],
     stages: [
       { name:'生态测绘', turns:4, gold:60000, alloy:0, silicon:0, quantum:0, dark_matter:0, stardust:0, food:1000, carbon:800, oil:0, gold_ore:0, research:0 },
       { name:'地壳预热', turns:3, gold:100000, alloy:0, silicon:0, quantum:0, dark_matter:0, stardust:0, food:1000, carbon:1100, oil:30, gold_ore:0, research:0 },
@@ -75,7 +75,7 @@ export const ALL_WONDERS: WonderDef[] = [
     id: 'beacon', name: '统一信标', subtitle: '万邦来朝',
     description: '黄金铸成的信标核心悬浮在十道势力舰队的交汇点上，每秒向全银河播送一段翻译成所有语言的信息。你不需要征服银河，你只需要让银河听见自己。',
     preferredPlanets: '草原/陆地',
-    totalLines: ['280万金币', '合金 3,200', '碳块 8,160', '金矿 28,000', '星尘 1,470', '暗物质 3,900'],
+    totalLines: ['280万金币', '合金 3,200', '碳块 8,160', '黄金 28,000', '星尘 1,470', '暗物质 3,900'],
     stages: [
       { name:'外交筹备', turns:5, gold:50000, alloy:0, silicon:0, quantum:0, dark_matter:0, stardust:0, food:0, carbon:600, oil:0, gold_ore:400, research:0 },
       { name:'信标地基', turns:4, gold:50000, alloy:800, silicon:0, quantum:0, dark_matter:0, stardust:0, food:0, carbon:900, oil:0, gold_ore:600, research:0 },

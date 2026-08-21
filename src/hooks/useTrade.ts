@@ -2,28 +2,29 @@ import { useCallback } from 'react';
 import type { GameState } from '@/types/game';
 import { FACTIONS, getTravelTurns, getSellPrice, RELATION_MATRIX, getReputationTier } from '@/data/factions';
 import { RECIPES } from '@/data/gameData';
+import { MATERIAL_NAME_MAP } from '@/data/materialNames';
 
 
 export function useTrade(
   gameState: GameState,
   dispatch: React.Dispatch<{ type: 'FUNCTIONAL_UPDATE'; updater: (state: GameState) => GameState }>
 ) {
-  /** 应用声望变化（带回合上限管控和零和传导） */
+  /** 应用声望变化（带回合上限管控和零和传导）。纯函数：返回更新后的字段，无变化返回 null */
   function applyRepChange(
-    prev: GameState,
+    factionReputation: Record<string, number> | undefined,
+    factionRepLog: Record<string, number> | undefined,
     factionId: string,
     delta: number,
-    repLog: Record<string, number>,
     capKey: 'buy' | 'invest' | 'contract' = 'buy'
-  ) {
-    const rep = { ...prev.factionReputation };
-    const log = { ...repLog };
+  ): { factionReputation: Record<string, number>; factionRepLog: Record<string, number> } | null {
+    const rep = { ...(factionReputation || {}) };
+    const log = { ...(factionRepLog || {}) };
     const caps: Record<string, number> = { buy: 2, invest: 10, contract: 99 };
     const cap = caps[capKey] || 99;
     const logKey = `${factionId}_${capKey}`; // 区分动作类型的独立上限
     const cur = log[logKey] || 0;
     const applied = delta > 0 ? Math.min(delta, cap - cur) : delta;
-    if (applied === 0) return;
+    if (applied === 0) return null;
     log[logKey] = cur + applied;
     rep[factionId] = Math.max(-100, Math.min(100, (rep[factionId] || 0) + applied));
     // 零和传导：敌人惩罚（按动作类型区分单次值与回合上限）
@@ -47,14 +48,7 @@ export function useTrade(
         rep[enemyId] = Math.max(-100, Math.min(100, (rep[enemyId] || 0) + eApplied));
       }
     }
-    prev.factionReputation = rep;
-    prev.factionRepLog = log;
-  }
-
-  function ensureRepFields(prev: GameState) {
-    if (!prev.factionReputation) prev.factionReputation = {};
-    if (!prev.factionRepLog) prev.factionRepLog = {};
-    if (!prev.factionContracts) prev.factionContracts = [];
+    return { factionReputation: rep, factionRepLog: log };
   }
 
   function checkRepBlock(prev: GameState, factionId: string, action: string): string | null {
@@ -139,23 +133,20 @@ export function useTrade(
           s.tradeStatus = { ...s.tradeStatus };
           s.tradeStatus.inventory = { ...s.tradeStatus.inventory };
           s.tradeStatus.inventory[faction.id] = (s.tradeStatus.inventory[faction.id] || 0) + quantity;
-          // 扣库存
-          prev.buyStocks = { ...(prev.buyStocks || {}) };
-          prev.buyStocks[faction.id] = available - quantity;
+          // 扣库存（不可变更新）
+          const buyStocks = { ...(prev.buyStocks || {}), [faction.id]: available - quantity };
           // 触发涨价判定（本回合累计购买 ≥ 初始库存 60%）
           const maxStock = prev.buyStockMax?.[faction.id] || 0;
-          const used = maxStock - prev.buyStocks[faction.id];
+          const used = maxStock - buyStocks[faction.id];
           const triggered = maxStock > 0 && !prev.buyTriggered?.[faction.id] && used >= maxStock * 0.6;
-          if (triggered) {
-            prev.buyTriggered = { ...(prev.buyTriggered || {}), [faction.id]: true };
-            prev.buyBuffs = { ...(prev.buyBuffs || {}) };
-            prev.buyBuffs[faction.id] = [...(prev.buyBuffs[faction.id] || []), { multiplier: 2.5, expiresTurn: prev.turn + 15 }];
-          }
-          ensureRepFields(prev);
-          applyRepChange(prev, faction.id, 2, prev.factionRepLog, 'buy');
+          const buyTriggered = triggered ? { ...(prev.buyTriggered || {}), [faction.id]: true } : prev.buyTriggered;
+          const buyBuffs = triggered
+            ? { ...(prev.buyBuffs || {}), [faction.id]: [...(prev.buyBuffs?.[faction.id] || []), { multiplier: 2.5, expiresTurn: prev.turn + 15 }] }
+            : prev.buyBuffs;
+          const repResult = applyRepChange(prev.factionReputation, prev.factionRepLog, faction.id, 2, 'buy');
           ships[shipIndex] = s;
           result = { success: true, message: `购买${faction.specialtyName} x${quantity}，花费${totalCost}金币${triggered ? '。⚠ 购买量已达本回合库存60%，下回合起购买价×2.5（持续15回合）' : ''}` };
-          return { ...prev, ships };
+          return { ...prev, ships, buyStocks, buyTriggered, buyBuffs, ...(repResult || {}) };
         },
       });
       return result;
@@ -198,21 +189,19 @@ export function useTrade(
           s.tradeStatus.inventory = { ...s.tradeStatus.inventory };
           s.tradeStatus.inventory[factionId] = invCount - quantity;
           if (s.tradeStatus.inventory[factionId] === 0) delete s.tradeStatus.inventory[factionId];
-          // 扣需求
-          prev.sellDemands = { ...(prev.sellDemands || {}) };
-          prev.sellDemands[curFid] = remaining - quantity;
+          // 扣需求（不可变更新）
+          const sellDemands = { ...(prev.sellDemands || {}), [curFid]: remaining - quantity };
           // 触发降价判定（本回合累计卖出 ≥ 初始需求 50%）
           const maxDemand = prev.sellDemandMax?.[curFid] || 0;
-          const sold = maxDemand - prev.sellDemands[curFid];
+          const sold = maxDemand - sellDemands[curFid];
           const triggered = maxDemand > 0 && !prev.sellTriggered?.[curFid] && sold >= maxDemand * 0.5;
-          if (triggered) {
-            prev.sellTriggered = { ...(prev.sellTriggered || {}), [curFid]: true };
-            prev.sellBuffs = { ...(prev.sellBuffs || {}) };
-            prev.sellBuffs[curFid] = [...(prev.sellBuffs[curFid] || []), { multiplier: 0.3, expiresTurn: prev.turn + 15 }];
-          }
+          const sellTriggered = triggered ? { ...(prev.sellTriggered || {}), [curFid]: true } : prev.sellTriggered;
+          const sellBuffs = triggered
+            ? { ...(prev.sellBuffs || {}), [curFid]: [...(prev.sellBuffs?.[curFid] || []), { multiplier: 0.3, expiresTurn: prev.turn + 15 }] }
+            : prev.sellBuffs;
           ships[shipIndex] = s;
           result = { success: true, message: `卖出${faction.specialtyName} x${quantity}，获得${totalRevenue}金币${triggered ? '。⚠ 卖出量已达本回合需求50%，下回合起收购价×0.3（持续15回合）' : ''}` };
-          return { ...prev, ships };
+          return { ...prev, ships, sellDemands, sellTriggered, sellBuffs };
         },
       });
       return result;
@@ -235,7 +224,7 @@ export function useTrade(
           const repBlockEx = checkRepBlock(prev, s.tradeStatus.currentFactionId, 'explore'); if (repBlockEx) { result = { success: false, message: repBlockEx }; return prev; }
           if (s.tradeStatus.exploredThisTurn) { result = { success: false, message: '本回合已探索过' }; return prev; }
           const matIds = ['carbon', 'gold_ore', 'oil', 'dark_matter', 'silicon', 'quantum'];
-          const matNames: Record<string, string> = { carbon: '碳块', gold_ore: '黄金矿石', oil: '石油', dark_matter: '暗物质', silicon: '硅片', quantum: '量子簇' };
+          const matNames: Record<string, string> = MATERIAL_NAME_MAP;
           const dropCount = Math.floor(Math.random() * 3) + 1;
           s.materials = { ...s.materials };
           const drops: string[] = [];
@@ -272,7 +261,6 @@ export function useTrade(
           if (s.gold < amount) { result = { success: false, message: '金币不足' }; return prev; }
           const factionId = s.tradeStatus.currentFactionId;
           const repBlockInv = checkRepBlock(prev, factionId, 'invest'); if (repBlockInv) { result = { success: false, message: repBlockInv }; return prev; }
-          ensureRepFields(prev);
           const maxPerTurn = 10;
           const used = (prev.factionRepLog || {})[factionId + '_invest'] || 0;
           if (used >= maxPerTurn) { result = { success: false, message: `本回合已投资${maxPerTurn}次，下次回合再来` }; return prev; }
@@ -282,11 +270,11 @@ export function useTrade(
           s.gold -= actualAmount;
           const factionName = FACTIONS.find((f) => f.id === factionId)?.name || factionId;
           s.goldLog = [{ turn: prev.turn, amount: -actualAmount, reason: `投资「${factionName}」`, balanceAfter: s.gold }, ...s.goldLog].slice(0, 200);
-          applyRepChange(prev, factionId, repGain, prev.factionRepLog, 'invest');
+          const repResult = applyRepChange(prev.factionReputation, prev.factionRepLog, factionId, repGain, 'invest');
           ships[shipIndex] = s;
-          const repNow = prev.factionReputation[factionId] || 0;
+          const repNow = (repResult?.factionReputation ?? prev.factionReputation ?? {})[factionId] || 0;
           result = { success: true, message: `投资${actualAmount}金币，声望+${repGain}（当前${repNow}）` };
-          return { ...prev, ships };
+          return { ...prev, ships, ...(repResult || {}) };
         },
       });
       return result;
@@ -406,12 +394,10 @@ export function useTrade(
           const roll = Math.random();
           if (roll > 0.65) {
             contracts.splice(idx, 1);
-            ensureRepFields(prev);
-            const rep = (prev.factionReputation[contract.factionId] || 0) - 5;
-            prev.factionReputation = { ...prev.factionReputation };
-            prev.factionReputation[contract.factionId] = Math.max(-100, rep);
+            const rep = ((prev.factionReputation || {})[contract.factionId] || 0) - 5;
+            const factionReputation = { ...(prev.factionReputation || {}), [contract.factionId]: Math.max(-100, rep) };
             result = { success: false, message: `走私失败！声望-5（当前${rep}）` };
-            return { ...prev, factionContracts: contracts, ships };
+            return { ...prev, factionContracts: contracts, ships, factionReputation };
           }
         }
 
@@ -437,12 +423,11 @@ export function useTrade(
         // 发放奖励
         s.gold += contract.rewardGold;
         s.goldLog = [{ turn: prev.turn, amount: contract.rewardGold, reason: '合同奖励', balanceAfter: s.gold }, ...s.goldLog].slice(0, 200);
-        ensureRepFields(prev);
-        applyRepChange(prev, contract.factionId, contract.rewardRep, prev.factionRepLog, 'contract');
+        const repResult = applyRepChange(prev.factionReputation, prev.factionRepLog, contract.factionId, contract.rewardRep, 'contract');
         contracts.splice(idx, 1);
         ships[shipIndex] = s;
         result = { success: true, message: `合同完成！+${contract.rewardGold}金币，+${contract.rewardRep}声望` };
-        return { ...prev, factionContracts: contracts, ships };
+        return { ...prev, factionContracts: contracts, ships, ...(repResult || {}) };
       },
     });
     return result;

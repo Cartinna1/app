@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, memo } from 'react';
 import type { RawMaterial, Mothership } from '@/types/game';
 import { TrendingUp, TrendingDown, Warehouse } from 'lucide-react';
 
@@ -9,7 +9,7 @@ interface MaterialMarketProps {
   onBuy: (shipIndex: number, matId: string, qty: number) => string | null;
 }
 
-export default function MaterialMarket({ materials, ship, shipIndex, onBuy }: MaterialMarketProps) {
+function MaterialMarket({ materials, ship, shipIndex, onBuy }: MaterialMarketProps) {
   const [quantities, setQuantities] = useState<Record<string, number>>({});
   const [messages, setMessages] = useState<Record<string, string>>({});
 
@@ -160,3 +160,6 @@ export default function MaterialMarket({ materials, ship, shipIndex, onBuy }: Ma
     </div>
   );
 }
+
+
+export default memo(MaterialMarket);

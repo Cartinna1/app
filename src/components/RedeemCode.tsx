@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, memo } from 'react';
 import { Gift, Check, AlertCircle } from 'lucide-react';
 
 interface RedeemCodeProps {
@@ -7,7 +7,7 @@ interface RedeemCodeProps {
   onRedeem: (shipIndex: number, code: string) => { success: boolean; message: string };
 }
 
-export default function RedeemCode({ shipIndex, redeemedCodes, onRedeem }: RedeemCodeProps) {
+function RedeemCode({ shipIndex, redeemedCodes, onRedeem }: RedeemCodeProps) {
   const [code, setCode] = useState('');
   const [result, setResult] = useState<{ success: boolean; message: string } | null>(null);
 
@@ -106,3 +106,6 @@ export default function RedeemCode({ shipIndex, redeemedCodes, onRedeem }: Redee
     </div>
   );
 }
+
+
+export default memo(RedeemCode);

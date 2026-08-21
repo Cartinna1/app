@@ -1,4 +1,5 @@
 import type { BuildingDef } from '@/types/colony';
+import { MATERIAL_NAME_MAP } from '@/data/materialNames';
 
 /** 全部建筑定义（含科技要求） */
 export const FULL_BUILDINGS: BuildingDef[] = [
@@ -92,7 +93,7 @@ export function getBuildingEffect(bd: BuildingDef): string {
     case 'gold':
       return `每回合产出${bd.goldOutputMin}~${bd.goldOutputMax}金币`;
     case 'material': {
-      const mat = { carbon: '碳块', gold_ore: '金矿', oil: '石油', silicon: '硅片', dark_matter: '暗物质', quantum: '量子簇' }[bd.outputMaterialId || ''] || '原料';
+      const mat = MATERIAL_NAME_MAP[bd.outputMaterialId || ''] || '原料';
       const lo = base + pf * min, hi = base + pf * max;
       return min === max ? `每回合产出${lo}${mat}` : `${min}人产出${lo}${mat}，满人${max}人产出${hi}${mat}`;
     }
