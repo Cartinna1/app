@@ -24,15 +24,17 @@ export function generateContracts(prev: GameState): FactionContract[] {
         const recipe = recipes[Math.floor(Math.random() * recipes.length)];
         const qty = Math.floor(Math.random() * 4) + 2; // 2-5
         const tier = Math.min(5, Math.max(0, recipe.productionTurns - 1));
+        // 金币为每件报酬，rewardGold = 每件 × qty，约 1.2-1.3 倍单件材料成本，与直接售价相当
         const rewards = [
-          [5, 8, 3000, 5000],       // 1回合
-          [8, 12, 6000, 10000],     // 2回合
-          [10, 15, 12000, 20000],   // 3回合
-          [12, 18, 30000, 50000],   // 4回合
-          [14, 22, 50000, 80000],   // 5回合
-          [16, 26, 70000, 110000],  // 6回合
+          [5, 8, 900, 1400],        // 1回合（单件成本约400-1100）
+          [8, 12, 1300, 2000],      // 2回合（单件成本约800-2000）
+          [10, 15, 2200, 3200],     // 3回合（单件成本约1600-2350）
+          [12, 18, 18000, 24000],   // 4回合（单件成本约15000）
+          [14, 22, 24000, 32000],   // 5回合（单件成本约20000）
+          [16, 26, 30000, 40000],   // 6回合（单件成本约25000）
         ][tier];
-        const rewardGold = Math.floor(Math.random() * (rewards[3] - rewards[2] + 1)) + rewards[2];
+        const perUnitGold = Math.floor(Math.random() * (rewards[3] - rewards[2] + 1)) + rewards[2];
+        const rewardGold = perUnitGold * qty;
         const rewardRep = Math.floor(Math.random() * (rewards[1] - rewards[0] + 1)) + rewards[0];
         // 可接取窗口：生成后 5-8 回合内可接取，接取后再独立计算完成期限
         const expires = prev.turn + 5 + Math.floor(Math.random() * 4);

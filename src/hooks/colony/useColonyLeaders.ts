@@ -1,6 +1,6 @@
 import { useCallback } from 'react';
 import type { GameState } from '@/types/game';
-import { getLeaderDef, rollLeaders } from '@/data/colony/leaders';
+import { getLeaderDef, rollLeaders, getLeaderUpgradeCost } from '@/data/colony/leaders';
 
 /** 殖民地领袖招募 / 升级 / 招募池（从 useColony 拆出） */
 export function useColonyLeaders(
@@ -35,7 +35,8 @@ export function useColonyLeaders(
     const li = col.leaders[leaderIndex];
     if (!li) return { success: false, message: '领袖不存在' };
     if (li.level >= 3) return { success: false, message: '已达最高等级' };
-    const cost = li.level === 1 ? 20 : 45;
+    // 升级费用唯一真值在 data/colony/leaders.ts（Lv1→2=50，Lv2→3=100）
+    const cost = getLeaderUpgradeCost(li.level) ?? 0;
     if (gameState.ships[0].stardust < cost) return { success: false, message: `星尘不足(需要${cost})` };
     dispatch({
       type: 'FUNCTIONAL_UPDATE',

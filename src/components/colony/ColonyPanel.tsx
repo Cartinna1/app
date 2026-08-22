@@ -4,7 +4,7 @@ import type { PlanetTypeId, PlanetDef } from '@/types/colony';
 import { getBuildableBuildings, getBuildingDef, getBuildingEffect } from '@/data/colony/buildings';
 import { getPlanetById } from '@/data/colony/planets';
 import { getTechById, getAvailableTechs, REPEATABLE_TECHS, getRepeatableCost } from '@/data/colony/techs';
-import { getLeaderDef } from '@/data/colony/leaders';
+import { getLeaderDef, getLeaderUpgradeCost } from '@/data/colony/leaders';
 import { computeColonyEconomy, computeColonyPower } from '@/lib/colony/economy';
 import { MATERIAL_NAME_MAP } from '@/data/materialNames';
 import { Home, Users, Wrench, Play, UserPlus, FlaskConical, Crown, Trophy } from 'lucide-react';
@@ -991,12 +991,12 @@ function ColonyPanel(props: ColonyPanelProps) {
                         </div>
                         {l.level < 3 && (
                           <button onClick={() => {
-                            const cost = l.level===1?50:100;
+                            const cost = getLeaderUpgradeCost(l.level) ?? 0;
                             if (ship.stardust<cost) { showMsg('星尘不足', 'error'); return; }
                             const r=onUpgradeLeader(i); showMsg(r.message,r.success?'success':'error');
-                          }} disabled={ship.stardust<(l.level===1?50:100)}
+                          }} disabled={ship.stardust<(getLeaderUpgradeCost(l.level) ?? 0)}
                             className="px-3 py-1.5 bg-yellow-700 hover:bg-yellow-600 disabled:bg-slate-700 rounded text-sm font-bold ml-2 flex-shrink-0">
-                            升级({l.level===1?50:100}星尘)
+                            升级({getLeaderUpgradeCost(l.level) ?? 0}星尘)
                           </button>
                         )}
                       </div>

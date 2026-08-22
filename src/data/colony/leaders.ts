@@ -126,6 +126,17 @@ export const ALL_LEADERS: LeaderDef[] = [
     levelExtras: [{}, {}, {}] },
 ];
 
+// ==================== 领袖升级星尘费用（唯一真值） ====================
+// Lv1→Lv2 = 50，Lv2→Lv3 = 100。UI 显示与 useColonyLeaders 扣费统一从这里取，
+// 历史上 UI(50/100) 与 hook(20/45) 分叉已收敛至此，勿再就地硬编码。
+export const LEADER_UPGRADE_COST = { 1: 50, 2: 100 } as const;
+
+/** 取某级升到下一级所需星尘；level 已达 3（满级）时返回 null。 */
+export function getLeaderUpgradeCost(level: number): number | null {
+  if (level >= 3) return null;
+  return LEADER_UPGRADE_COST[level as 1 | 2] ?? null;
+}
+
 export function getLeaderDef(id: string): LeaderDef | undefined {
   return ALL_LEADERS.find((l) => l.id === id);
 }
