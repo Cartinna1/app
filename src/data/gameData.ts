@@ -342,7 +342,7 @@ export function createMaterials(): RawMaterial[] {
 // ==================== 产品配方（25种） ====================
 
 export const RECIPES: Recipe[] = [
-  // 1回合（简单配方，10种）
+  // 1回合（简单配方，12种）
   { id: 'p01', productName: '量子绸缎', description: '用于高端能量护盾的纺织材料', inputs: [{ materialId: 'gold_ore', amount: 2 }, { materialId: 'quantum', amount: 1 }], productionTurns: 1 },
   { id: 'p04', productName: '纳米修复液', description: '船体与设备自动修复溶液', inputs: [{ materialId: 'carbon', amount: 3 }, { materialId: 'oil', amount: 2 }], productionTurns: 1 },
   { id: 'p07', productName: '生物培养基', description: '外星生态系统维持培养液', inputs: [{ materialId: 'carbon', amount: 4 }, { materialId: 'oil', amount: 1 }], productionTurns: 1 },
@@ -353,10 +353,10 @@ export const RECIPES: Recipe[] = [
   { id: 'p18', productName: '太阳能帆板', description: '高效星际航行用光压推进帆', inputs: [{ materialId: 'silicon', amount: 5 }, { materialId: 'gold_ore', amount: 1 }], productionTurns: 1 },
   { id: 'p05', productName: '星际导航芯片', description: '高精度星际航线计算芯片', inputs: [{ materialId: 'silicon', amount: 4 }, { materialId: 'gold_ore', amount: 1 }], productionTurns: 1 },
   { id: 'p14', productName: '全息投影仪', description: '超真实全息影像生成设备', inputs: [{ materialId: 'silicon', amount: 3 }, { materialId: 'gold_ore', amount: 1 }, { materialId: 'carbon', amount: 1 }], productionTurns: 1 },
-  // 2回合（中等配方，10种）
-  { id: 'p08', productName: '能量转换器', description: '多形式能量高效转换装置', inputs: [{ materialId: 'gold_ore', amount: 1 }, { materialId: 'silicon', amount: 2 }, { materialId: 'oil', amount: 2 }], productionTurns: 2 },
   { id: 'p11', productName: '碳晶装甲板', description: '超轻超强星际船体装甲', inputs: [{ materialId: 'carbon', amount: 5 }, { materialId: 'gold_ore', amount: 1 }], productionTurns: 1 },
   { id: 'p17', productName: '引力锚定器', description: '固定飞船位置的引力发生装置', inputs: [{ materialId: 'dark_matter', amount: 1 }, { materialId: 'silicon', amount: 3 }], productionTurns: 1 },
+  // 2回合（中等配方，9种）
+  { id: 'p08', productName: '能量转换器', description: '多形式能量高效转换装置', inputs: [{ materialId: 'gold_ore', amount: 1 }, { materialId: 'silicon', amount: 2 }, { materialId: 'oil', amount: 2 }], productionTurns: 2 },
   { id: 'p19', productName: '冷冻休眠舱', description: '长途星际旅行的低温休眠设备', inputs: [{ materialId: 'carbon', amount: 3 }, { materialId: 'quantum', amount: 1 }, { materialId: 'oil', amount: 1 }], productionTurns: 2 },
   { id: 'p21', productName: '星际合金锭', description: '超强度多用途星际建筑合金', inputs: [{ materialId: 'carbon', amount: 3 }, { materialId: 'gold_ore', amount: 2 }, { materialId: 'silicon', amount: 1 }], productionTurns: 2 },
   { id: 'p24', productName: '生态修复舱', description: '修复受损星球生态的环境装置', inputs: [{ materialId: 'carbon', amount: 4 }, { materialId: 'oil', amount: 2 }, { materialId: 'gold_ore', amount: 1 }], productionTurns: 2 },
@@ -364,12 +364,12 @@ export const RECIPES: Recipe[] = [
   { id: 'p10', productName: '量子通讯器', description: '无视距离即时通讯终端', inputs: [{ materialId: 'quantum', amount: 3 }, { materialId: 'silicon', amount: 2 }], productionTurns: 2 },
   { id: 'p25', productName: '跃迁燃料添加剂', description: '提升跃迁引擎效率的催化添加剂', inputs: [{ materialId: 'quantum', amount: 1 }, { materialId: 'oil', amount: 3 }, { materialId: 'dark_matter', amount: 1 }], productionTurns: 2 },
   { id: 'p15', productName: '反物质容器', description: '安全储存反物质的磁约束罐', inputs: [{ materialId: 'dark_matter', amount: 1 }, { materialId: 'gold_ore', amount: 2 }, { materialId: 'quantum', amount: 2 }], productionTurns: 2 },
-  // 3回合（复杂配方，5种）
+  { id: 'p23', productName: '灵能增幅器', description: '增强灵能者精神力量的装置', inputs: [{ materialId: 'quantum', amount: 2 }, { materialId: 'dark_matter', amount: 1 }, { materialId: 'silicon', amount: 2 }], productionTurns: 2 },
+  // 3回合（复杂配方，4种）
   { id: 'p06', productName: '暗物质炸弹', description: '军事级大规模杀伤武器', inputs: [{ materialId: 'dark_matter', amount: 3 }, { materialId: 'quantum', amount: 1 }], productionTurns: 3 },
   { id: 'p09', productName: '重力稳定器', description: '人工重力场生成与稳定设备', inputs: [{ materialId: 'dark_matter', amount: 2 }, { materialId: 'gold_ore', amount: 2 }], productionTurns: 3 },
   { id: 'p13', productName: '时间减缓场', description: '局部时间流速控制装置', inputs: [{ materialId: 'dark_matter', amount: 2 }, { materialId: 'quantum', amount: 3 }], productionTurns: 3 },
   { id: 'p20', productName: '相位护盾发生器', description: '可穿透实体物质的相位偏移护盾', inputs: [{ materialId: 'dark_matter', amount: 2 }, { materialId: 'quantum', amount: 2 }, { materialId: 'gold_ore', amount: 1 }], productionTurns: 3 },
-  { id: 'p23', productName: '灵能增幅器', description: '增强灵能者精神力量的装置', inputs: [{ materialId: 'quantum', amount: 2 }, { materialId: 'dark_matter', amount: 1 }, { materialId: 'silicon', amount: 2 }], productionTurns: 2 },
   // ===== 食物配方 =====
   { id: 'f01', productName: '合成营养块', description: '用基础原料合成的船员口粮，维持舰船日常消耗', inputs: [{ materialId: 'carbon', amount: 3 }, { materialId: 'oil', amount: 2 }], productionTurns: 2, foodYield: 20 },
   { id: 'f02', productName: '高级营养液', description: '富含量子微粒的高效营养液，一滴抵三餐', inputs: [{ materialId: 'carbon', amount: 5 }, { materialId: 'oil', amount: 3 }, { materialId: 'quantum', amount: 1 }], productionTurns: 3, foodYield: 40 },
@@ -457,24 +457,24 @@ export const INITIAL_PRODUCTS: Omit<Product, 'sellPrices' | 'currentSellPrice' |
   { id: 'p05', name: '星际导航芯片', description: '高精度星际航线计算芯片', baseSellPrice: 1034 },
   { id: 'p12', name: '星际信标', description: '深空导航与求救信号发射器', baseSellPrice: 1050 },
   { id: 'p17', name: '引力锚定器', description: '固定飞船位置的引力发生装置', baseSellPrice: 1145 },
-  { id: 'p19', name: '冷冻休眠舱', description: '长途星际旅行的低温休眠设备', baseSellPrice: 1105 },
   { id: 'p18', name: '太阳能帆板', description: '高效星际航行用光压推进帆', baseSellPrice: 1130 },
   { id: 'p01', name: '量子绸缎', description: '用于高端能量护盾的纺织材料', baseSellPrice: 1759 },
-  // 2回合（10种）
+  { id: 'p02', name: '暗能燃料棒', description: '飞船核心动力燃料', baseSellPrice: 1823 },
+  // 2回合（9种）
   { id: 'p21', name: '星际合金锭', description: '超强度多用途星际建筑合金', baseSellPrice: 1597 },
   { id: 'p08', name: '能量转换器', description: '多形式能量高效转换装置', baseSellPrice: 1609 },
   { id: 'p24', name: '生态修复舱', description: '修复受损星球生态的环境装置', baseSellPrice: 1622 },
-  { id: 'p02', name: '暗能燃料棒', description: '飞船核心动力燃料', baseSellPrice: 1823 },
   { id: 'p03', name: '量子处理器', description: '超光速计算机核心组件', baseSellPrice: 1919 },
   { id: 'p10', name: '量子通讯器', description: '无视距离即时通讯终端', baseSellPrice: 2269 },
-  { id: 'p09', name: '重力稳定器', description: '人工重力场生成与稳定设备', baseSellPrice: 2323 },
   { id: 'p23', name: '灵能增幅器', description: '增强灵能者精神力量的装置', baseSellPrice: 2318 },
-  { id: 'p15', name: '反物质容器', description: '安全储存反物质的磁约束罐', baseSellPrice: 3272 },
-  { id: 'p20', name: '相位护盾发生器', description: '可穿透实体物质的相位偏移护盾', baseSellPrice: 3479 },
-  // 3回合（3种）
-  { id: 'p06', name: '暗物质炸弹', description: '军事级大规模杀伤武器', baseSellPrice: 3249 },
+  { id: 'p19', name: '冷冻休眠舱', description: '长途星际旅行的低温休眠设备', baseSellPrice: 1105 },
   { id: 'p25', name: '跃迁燃料添加剂', description: '提升跃迁引擎效率的催化添加剂', baseSellPrice: 3160 },
+  { id: 'p15', name: '反物质容器', description: '安全储存反物质的磁约束罐', baseSellPrice: 3272 },
+  // 3回合（4种）
+  { id: 'p06', name: '暗物质炸弹', description: '军事级大规模杀伤武器', baseSellPrice: 3249 },
   { id: 'p13', name: '时间减缓场', description: '局部时间流速控制装置', baseSellPrice: 3723 },
+  { id: 'p09', name: '重力稳定器', description: '人工重力场生成与稳定设备', baseSellPrice: 2323 },
+  { id: 'p20', name: '相位护盾发生器', description: '可穿透实体物质的相位偏移护盾', baseSellPrice: 3479 },
   // 重型（4-6回合，18种：每档各6种对应6种原料）
   { id: 'p26', name: '碳晶复合装甲', description: '以巨量碳块熔铸的船体装甲，坚不可摧', baseSellPrice: 19500 },
   { id: 'p27', name: '光子计算核心', description: '集成海量硅片的光子运算核心', baseSellPrice: 19500 },
