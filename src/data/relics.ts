@@ -5,7 +5,7 @@ import type { Relic } from '@/types/game';
  * 效果必须可在代码中实现（通过relicId判断）
  */
 export const ALL_RELICS: Relic[] = [
-  // ===== 原始5个（保留以兼容旧存档，但不再通过兑换码获取）=====
+  // ===== 原始5个 =====
   {
     id: 'r_001',
     name: '奥得律斯基亚水晶',

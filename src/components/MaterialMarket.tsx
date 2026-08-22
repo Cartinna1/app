@@ -42,7 +42,7 @@ function MaterialMarket({ materials, ship, shipIndex, onBuy }: MaterialMarketPro
           <div className="mb-4 bg-cyan-900/20 border border-cyan-700/50 rounded-lg px-4 py-2 text-sm text-cyan-400">
             原料购买折扣: {Math.round(totalDiscount * 100)}%
             {ship.materialPriceDiscount > 0 && ' (技能)'}
-            {ship.relics.some((r) => r.id === '100004' || r.id === 'r_004') && ' + 星际罗盘10%'}
+            {ship.relics.some((r) => r.id === 'r_004') && ' + 星际罗盘10%'}
             {ship.installedModuleIds.includes('trade_hub') && ' + 贸易枢纽8%'}
           </div>
         ) : null;
@@ -89,7 +89,8 @@ function MaterialMarket({ materials, ship, shipIndex, onBuy }: MaterialMarketPro
           // 涨跌百分比对比基准价（每回合价格独立，上一回合无参考意义）
           const change = ((mat.currentPrice - mat.basePrice) / mat.basePrice) * 100;
           const inventory = ship.materials[mat.id] || 0;
-          const unitCost = Math.round(mat.currentPrice * (1 - getMaterialDiscountRate(ship)));
+          const discount = getMaterialDiscountRate(ship);
+          const unitCost = Math.round(mat.currentPrice * (1 - discount));
           const totalCost = unitCost * getQty(mat.id);
           const msg = messages[mat.id] || '';
 

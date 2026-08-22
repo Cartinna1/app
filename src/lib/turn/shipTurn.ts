@@ -110,8 +110,8 @@ export function processShipTurn(
     s.materials[pickedMat] = (s.materials[pickedMat] || 0) + amount;
   }
 
-  // 遗物 r_001/100001：奥得律斯基亚水晶——每回合3个随机原料
-  if (s.relics.some((r) => r.id === '100001' || r.id === 'r_001')) {
+  // 遗物 r_001：奥得律斯基亚水晶——每回合3个随机原料
+  if (s.relics.some((r) => r.id === 'r_001')) {
     const matIds = ['carbon', 'gold_ore', 'oil', 'dark_matter', 'silicon', 'quantum'];
     s.materials = { ...s.materials };
     for (let i = 0; i < 3; i++) {
@@ -120,8 +120,8 @@ export function processShipTurn(
     }
   }
 
-  // 遗物 r_002/100002：誊录仪——每回合+1%总资产金币
-  if (s.relics.some((r) => r.id === '100002' || r.id === 'r_002')) {
+  // 遗物 r_002：誊录仪——每回合+1%总资产金币
+  if (s.relics.some((r) => r.id === 'r_002')) {
     const assets = getShipTotalAssets(s, stocks, mats, prods);
     const bonus = famineHalve(Math.max(0, Math.floor(assets * 0.01)));
     if (bonus > 0) {

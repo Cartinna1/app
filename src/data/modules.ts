@@ -187,7 +187,7 @@ export function getModuleDef(id: string): ModuleDefinition | undefined {
 // 计算生产上限总加成（遗物时空稳定锚 +2、三个量产装置 +1/+2/+3，可叠加）
 export function getProductionLimitBonus(ship: { installedModuleIds: string[]; relics: { id: string }[] }): number {
   let bonus = 0;
-  if (ship.relics.some((r) => r.id === '100003' || r.id === 'r_003')) bonus += 2;
+  if (ship.relics.some((r) => r.id === 'r_003')) bonus += 2;
   if (ship.installedModuleIds.includes('prod_scheduler')) bonus += 1;
   if (ship.installedModuleIds.includes('parallel_matrix')) bonus += 2;
   if (ship.installedModuleIds.includes('automation_hub')) bonus += 3;
@@ -198,7 +198,7 @@ export function getProductionLimitBonus(ship: { installedModuleIds: string[]; re
 // 单一真值：逻辑层（useProduction.buyMaterial）与显示层（MaterialMarket）都从这里取，避免分叉。
 export function getMaterialDiscountRate(ship: { materialPriceDiscount: number; relics: { id: string }[]; installedModuleIds: string[] }): number {
   let discount = ship.materialPriceDiscount || 0;
-  if (ship.relics.some((r) => r.id === '100004' || r.id === 'r_004')) discount += 0.1;
+  if (ship.relics.some((r) => r.id === 'r_004')) discount += 0.1;
   if (ship.installedModuleIds.includes('trade_hub')) discount += 0.08;
   return discount;
 }

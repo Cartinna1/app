@@ -98,35 +98,6 @@ export function getStockFeeMult(ship: { id: number }): number {
   return ship.id === 2 ? 1.0 : ship.id === 0 ? 1.0 - 0.5 * 0.03 : 1.03;
 }
 
-// 遗物兑换码：6位数字，100001-100005
-export const RELICS: Record<string, { name: string; description: string; effect: string }> = {
-  '100001': {
-    name: '奥得律斯基亚水晶',
-    description: '散发着柔和蓝光的远古水晶，蕴含着生命创造之力',
-    effect: '每回合随机获得3个原料',
-  },
-  '100002': {
-    name: '誊录仪',
-    description: '自动记录所有交易并从中提炼财富的智慧装置',
-    effect: '每回合增加你所有财富值1%的金币',
-  },
-  '100003': {
-    name: '时空稳定锚',
-    description: '锚定局部时空流速，让生产线的效率翻倍',
-    effect: '每回合生产次数上限+2',
-  },
-  '100004': {
-    name: '星际罗盘',
-    description: '指向最有价值的星际航线，让你总能找到最好的交易',
-    effect: '原料购买价格额外打9折',
-  },
-  '100005': {
-    name: '命运之骰',
-    description: '一颗永远停在六面的骰子，为持有者带来好运',
-    effect: '所有事件金币收益+20%，损失-20%',
-  },
-};
-
 export function createMotherships(): Mothership[] {
   return MOTHERSHIP_TEMPLATES.map((tpl) => ({
     ...tpl,

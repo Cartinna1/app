@@ -150,7 +150,7 @@ export function useEvent(
       if (isHolyGlory && isReward) gloryMul = 1.25;
 
       // 命运之骰
-      const hasDice = ship?.relics.some((r) => r.id === '100005' || r.id === 'r_005') || false;
+      const hasDice = ship?.relics.some((r) => r.id === 'r_005') || false;
       let diceMul = 1;
       if (hasDice && (outcome.resources.goldChange || 0) !== 0) {
         diceMul = (outcome.resources.goldChange || 0) > 0 ? 1.2 : 0.8;
