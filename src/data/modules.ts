@@ -203,6 +203,22 @@ export function getMaterialDiscountRate(ship: { materialPriceDiscount: number; r
   return discount;
 }
 
+// 原料折扣来源明细（用于 UI 明示玩家折扣构成，括号内列出各分项）
+// 单一真值：分项百分比从此处取，与 getMaterialDiscountRate 同源；UI 只渲染不再硬编码。
+export function getMaterialDiscountBreakdown(ship: { materialPriceDiscount: number; relics: { id: string }[]; installedModuleIds: string[] }): Array<{ label: string; rate: number }> {
+  const breakdown: Array<{ label: string; rate: number }> = [];
+  if ((ship.materialPriceDiscount || 0) > 0) {
+    breakdown.push({ label: '母舰技能', rate: ship.materialPriceDiscount });
+  }
+  if (ship.relics.some((r) => r.id === 'r_004')) {
+    breakdown.push({ label: '星际罗盘', rate: 0.1 });
+  }
+  if (ship.installedModuleIds.includes('trade_hub')) {
+    breakdown.push({ label: '贸易枢纽', rate: 0.08 });
+  }
+  return breakdown;
+}
+
 // 生产实际回合数（基础回合 − 母舰生产加速 − 工程师AI，下限 0）
 // 单一真值：逻辑层（useProduction.startProduction）与显示层（ProductionPanel）都从这里取，避免分叉。
 export function getProductionTurns(recipe: { productionTurns: number }, ship: { productionSpeedBonus: number; installedModuleIds: string[] }): number {

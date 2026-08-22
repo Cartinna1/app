@@ -1,6 +1,6 @@
 import { useState, memo } from 'react';
 import type { RawMaterial, Mothership } from '@/types/game';
-import { getMaterialDiscountRate } from '@/data/modules';
+import { getMaterialDiscountRate, getMaterialDiscountBreakdown } from '@/data/modules';
 import { TrendingUp, TrendingDown, Warehouse } from 'lucide-react';
 
 interface MaterialMarketProps {
@@ -38,12 +38,16 @@ function MaterialMarket({ materials, ship, shipIndex, onBuy }: MaterialMarketPro
       <p className="text-sm text-slate-400 mb-2">购买原料用于生产高价值产品。每回合价格波动，注意时机。</p>
       {(() => {
         const totalDiscount = getMaterialDiscountRate(ship);
+        const breakdown = getMaterialDiscountBreakdown(ship);
         return totalDiscount > 0 ? (
           <div className="mb-4 bg-cyan-900/20 border border-cyan-700/50 rounded-lg px-4 py-2 text-sm text-cyan-400">
             原料购买折扣: {Math.round(totalDiscount * 100)}%
-            {ship.materialPriceDiscount > 0 && ' (技能)'}
-            {ship.relics.some((r) => r.id === 'r_004') && ' + 星际罗盘10%'}
-            {ship.installedModuleIds.includes('trade_hub') && ' + 贸易枢纽8%'}
+            {breakdown.length > 0 && <span className="text-slate-500">（{breakdown.map((b, i) => (
+              <span key={i}>
+                {i > 0 && <span className="mx-1">·</span>}
+                {b.label} {Math.round(b.rate * 100)}%
+              </span>
+            ))}）</span>}
           </div>
         ) : null;
       })()}
