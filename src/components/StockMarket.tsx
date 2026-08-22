@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect, useCallback, useMemo, memo } from 'react';
 import type { Stock, Mothership } from '@/types/game';
+import { getStockFeeMult } from '@/data/gameData';
 import { TrendingUp, TrendingDown, Search, Lock, Clock, ArrowLeft } from 'lucide-react';
 
 interface StockMarketProps {
@@ -40,6 +41,7 @@ function StockMarket({ stocks, ship, shipIndex, currentTurn, onBuy, onSell }: St
   }, [stocks]);
 
   const holdings = ship?.stockHoldings || {};
+  const feeMult = getStockFeeMult(ship);
 
   const filteredStocks = useMemo(() => {
     let result = stocks;
@@ -119,7 +121,6 @@ function StockMarket({ stocks, ship, shipIndex, currentTurn, onBuy, onSell }: St
     if (!selectedStock || tradeQty <= 0) return;
     setMessage('');
     if (tradeMode === 'buy') {
-      const feeMult = ship.id === 2 ? 1.0 : ship.id === 0 ? 1.0 - 0.5 * 0.03 : 1.03;
       const totalCost = Math.round(selectedStock.currentPrice * tradeQty * feeMult);
       if (ship.gold < totalCost) {
         setMessage(`金币不足，需${totalCost.toLocaleString()}金币`);
@@ -141,7 +142,7 @@ function StockMarket({ stocks, ship, shipIndex, currentTurn, onBuy, onSell }: St
         setMessage(result.error);
         setMessageType('error');
       } else {
-        const revenue = Math.round(selectedStock.currentPrice * tradeQty * 0.97);
+        const revenue = Math.round(selectedStock.currentPrice * tradeQty * (2 - feeMult));
         setMessage(`成功卖出 ${tradeQty} 股 ${selectedStock.name}，收入 ${revenue.toLocaleString()} 金币`);
         setMessageType('success');
       }
@@ -357,6 +358,7 @@ function StockMarket({ stocks, ship, shipIndex, currentTurn, onBuy, onSell }: St
               setTradeMode={setTradeMode}
               setTradeQty={setTradeQty}
               handleTrade={handleTrade}
+              feeMult={feeMult}
             />
           ) : (
             <div className="bg-slate-900/60 border border-slate-700 rounded-xl p-8 text-center text-slate-500">
@@ -394,12 +396,12 @@ function MobileTradePanel({
   const costs = ship?.stockCosts || {};
   const buyTurns = ship?.stockBuyTurn || {};
   const cd = buyTurns[stock.id] !== undefined && currentTurn <= buyTurns[stock.id];
+  const feeMult = getStockFeeMult(ship);
 
   const handleTrade = () => {
     if (tradeQty <= 0) return;
     setMessage('');
     if (tradeMode === 'buy') {
-      const feeMult = ship.id === 2 ? 1.0 : ship.id === 0 ? 1.0 - 0.5 * 0.03 : 1.03;
       const totalCost = Math.round(stock.currentPrice * tradeQty * feeMult);
       if (ship.gold < totalCost) {
         setMessage(`金币不足，需${totalCost.toLocaleString()}金币`);
@@ -417,7 +419,7 @@ function MobileTradePanel({
       const result = onSell(shipIndex, stock.id, tradeQty);
       if (result.error) { setMessage(result.error); setMessageType('error'); }
       else {
-        const revenue = Math.round(stock.currentPrice * tradeQty * 0.97);
+        const revenue = Math.round(stock.currentPrice * tradeQty * (2 - feeMult));
         setMessage(`卖出收入 ${revenue.toLocaleString()} 金币`);
         setMessageType('success');
       }
@@ -480,8 +482,8 @@ function MobileTradePanel({
         />
         <div className="text-xs text-slate-500 mt-1">
           {tradeMode === 'buy'
-            ? `需要: ${Math.round(stock.currentPrice * tradeQty * 1.03).toLocaleString()} 金币（含3%手续费）`
-            : `收入: ${Math.round(stock.currentPrice * tradeQty * 0.97).toLocaleString()} 金币（含3%手续费）`
+            ? `需要: ${Math.round(stock.currentPrice * tradeQty * feeMult).toLocaleString()} 金币${feeMult === 1 ? '（无手续费）' : feeMult > 1 ? '（含手续费）' : '（手续费减免）'}`
+            : `收入: ${Math.round(stock.currentPrice * tradeQty * (2 - feeMult)).toLocaleString()} 金币${feeMult === 1 ? '（无手续费）' : feeMult > 1 ? '（含手续费）' : '（手续费减免）'}`
           }
         </div>
       </div>
@@ -519,6 +521,7 @@ function TradeDetailPanel({
   setTradeMode,
   setTradeQty,
   handleTrade,
+  feeMult,
 }: {
   stock: Stock;
   tradeQty: number;
@@ -533,6 +536,7 @@ function TradeDetailPanel({
   setTradeMode: (mode: 'buy' | 'sell') => void;
   setTradeQty: (qty: number) => void;
   handleTrade: () => void;
+  feeMult: number;
 }) {
   const sectorColor = SECTOR_COLORS[stock.sector] || 'bg-slate-800 text-slate-400 border-slate-700';
   const cd = getCooldownStatus(stock.id);
@@ -553,7 +557,13 @@ function TradeDetailPanel({
       </div>
       <div className="flex justify-between text-sm mb-3">
         <span className="text-slate-400">手续费</span>
-        <span className="text-slate-300">固定3%（买入x1.03 / 卖出x0.97）</span>
+        <span className="text-slate-300">
+          {feeMult === 1
+            ? '0%（无手续费）'
+            : feeMult > 1
+              ? `${Math.round((feeMult - 1) * 100)}%（买入×${feeMult.toFixed(2)} / 卖出×${(2 - feeMult).toFixed(2)}）`
+              : `减免${Math.round((1 - feeMult) * 100)}%（买入×${feeMult.toFixed(3)}）`}
+        </span>
       </div>
 
       <div className="text-sm mb-3 space-y-1">
@@ -594,8 +604,8 @@ function TradeDetailPanel({
         />
         <div className="text-xs text-slate-500 mt-1">
           {tradeMode === 'buy'
-            ? `需要: ${Math.round(stock.currentPrice * tradeQty * 1.03).toLocaleString()} 金币（含3%手续费）`
-            : `收入: ${Math.round(stock.currentPrice * tradeQty * 0.97).toLocaleString()} 金币（含3%手续费）`
+            ? `需要: ${Math.round(stock.currentPrice * tradeQty * feeMult).toLocaleString()} 金币${feeMult === 1 ? '（无手续费）' : feeMult > 1 ? '（含手续费）' : '（手续费减免）'}`
+            : `收入: ${Math.round(stock.currentPrice * tradeQty * (2 - feeMult)).toLocaleString()} 金币${feeMult === 1 ? '（无手续费）' : feeMult > 1 ? '（含手续费）' : '（手续费减免）'}`
           }
         </div>
       </div>

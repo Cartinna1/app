@@ -2,7 +2,7 @@ import { useState, useMemo, memo } from 'react';
 import type { Mothership, RawMaterial } from '@/types/game';
 import { RECIPES, INITIAL_PRODUCTS } from '@/data/gameData';
 import { MATERIAL_NAME_MAP } from '@/data/materialNames';
-import { getProductionLimitBonus } from '@/data/modules';
+import { getProductionLimitBonus, getProductionTurns } from '@/data/modules';
 import { Factory, Check, AlertCircle, Clock, Wheat } from 'lucide-react';
 
 // 产品分类标签颜色（按生产回合数，与集会一致）
@@ -80,7 +80,7 @@ function ProductionPanel({ ship, shipIndex, materials: _materials, onStartProduc
   };
 
   const turns = (recipe: typeof RECIPES[0]) => {
-    return Math.max(0, recipe.productionTurns - ship.productionSpeedBonus);
+    return getProductionTurns(recipe, ship);
   };
 
   return (
@@ -112,6 +112,9 @@ function ProductionPanel({ ship, shipIndex, materials: _materials, onStartProduc
         )}
         {ship.productionSpeedBonus > 0 && (
           <span className="text-sm text-purple-400">跃迁者: 生产回合-{ship.productionSpeedBonus}</span>
+        )}
+        {ship.installedModuleIds.includes('engineer_ai') && (
+          <span className="text-sm text-purple-400">工程师AI: 生产回合-1</span>
         )}
       </div>
       {ship.productionsThisTurn >= maxProd && (
@@ -205,7 +208,7 @@ function ProductionPanel({ ship, shipIndex, materials: _materials, onStartProduc
                 <div className="flex items-center gap-1 text-sm text-slate-400">
                   <Clock size={14} />
                   <span>{t <= 0 ? '立即' : `${t}回合`}</span>
-                  {ship.productionSpeedBonus > 0 && recipe.productionTurns > 1 && (
+                  {(ship.productionSpeedBonus > 0 || ship.installedModuleIds.includes('engineer_ai')) && recipe.productionTurns > 1 && (
                     <span className="text-[10px] text-purple-400">(原{recipe.productionTurns})</span>
                   )}
                 </div>

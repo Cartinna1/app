@@ -1,7 +1,7 @@
 import { useCallback } from 'react';
 import type { GameState } from '@/types/game';
 import { RECIPES } from '@/data/gameData';
-import { getProductionLimitBonus } from '@/data/modules';
+import { getProductionLimitBonus, getMaterialDiscountRate, getProductionTurns } from '@/data/modules';
 
 export function useProduction(
   dispatch: React.Dispatch<{ type: 'FUNCTIONAL_UPDATE'; updater: (state: GameState) => GameState }>
@@ -21,9 +21,7 @@ export function useProduction(
           const mat = prev.materials.find((m) => m.id === materialId);
           if (!mat) return prev;
 
-          const relicDiscount = ship.relics.some((r) => r.id === '100004' || r.id === 'r_004') ? 0.1 : 0;
-          const tradeHubDiscount = ship.installedModuleIds.includes('trade_hub') ? 0.08 : 0;
-          const cost = Math.round(mat.currentPrice * quantity * (1 - ship.materialPriceDiscount - relicDiscount - tradeHubDiscount));
+          const cost = Math.round(mat.currentPrice * quantity * (1 - getMaterialDiscountRate(ship)));
           if (ship.gold < cost) return prev;
 
           ship.gold -= cost;
@@ -61,8 +59,7 @@ export function useProduction(
             const m = prev.materials.find((mm) => mm.id === inp.materialId);
             return sum + (m ? m.currentPrice * inp.amount : 0);
           }, 0);
-          const engineerAiBonus = ship.installedModuleIds.includes('engineer_ai') ? 1 : 0;
-          const turns = Math.max(0, recipe.productionTurns - ship.productionSpeedBonus - engineerAiBonus);
+          const turns = getProductionTurns(recipe, ship);
           if (turns <= 0) {
             // 食物配方：立即完成时直接加食物
             if (recipe.foodYield) {

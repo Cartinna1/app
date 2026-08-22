@@ -5,7 +5,7 @@ export const RESOURCE_EVENTS: ChoiceEvent[] = [
   {
     id: 'r_f01',
     name: '太空温室奇迹',
-    description: '你的探测 drone 在一颗无人卫星上发现了一个仍在自动运行的古代太空温室——数千年的运行让里面的植物发生了奇妙的变异。',
+    description: '你的探测 无人机 在一颗无人卫星上发现了一个仍在自动运行的古代太空温室——数千年的运行让里面的植物发生了奇妙的变异。',
     category: 'opportunity',
     options: [
       {
@@ -125,7 +125,7 @@ export const RESOURCE_EVENTS: ChoiceEvent[] = [
           {
             probability: 80,
             description: '外星果农看到星尘的瞬间，它的"脸"上开出了花——字面意义上的。它激动得把整船的食物都堆到了交易平台上。',
-            message: '外星果农对星尘 ecstatic！把整船食物都给你了！',
+            message: '外星果农对星尘 狂喜！把整船食物都给你了！',
             resources: { stardustChange: -1, foodChange: 25 },
           },
           {
@@ -152,7 +152,7 @@ export const RESOURCE_EVENTS: ChoiceEvent[] = [
   {
     id: 'r_f04',
     name: '漂浮的生态舱',
-    description: '你发现了一座 abandoned 的农业轨道站——里面的植物在无人照料的情况下运行了不知多少年，长满了茂盛的植物。',
+    description: '你发现了一座 废弃的农业轨道站——里面的植物在无人照料的情况下运行了不知多少年，长满了茂盛的植物。',
     category: 'opportunity',
     options: [
       {
@@ -238,13 +238,13 @@ export const RESOURCE_EVENTS: ChoiceEvent[] = [
         outcomes: [
           {
             probability: 70,
-            description: '你派出了采集 drone，安全地收集了大量发光藻类。营养价值是普通合成食物的五倍。',
+            description: '你派出了采集 无人机，安全地收集了大量发光藻类。营养价值是普通合成食物的五倍。',
             message: '采集了大量高营养发光藻类！',
             resources: { foodChange: 18 },
           },
           {
             probability: 30,
-            description: '采集过程中，冰层发出了一声低沉的"咕哝"——巨兽翻了个身！采集 drone 紧急撤回，但还是带回来了一些藻类。',
+            description: '采集过程中，冰层发出了一声低沉的"咕哝"——巨兽翻了个身！采集 无人机 紧急撤回，但还是带回来了一些藻类。',
             message: '巨兽翻身了！吓得赶紧跑，但带回了藻类！',
             resources: { foodChange: 8 },
           },
@@ -261,13 +261,13 @@ export const RESOURCE_EVENTS: ChoiceEvent[] = [
           },
           {
             probability: 40,
-            description: '采集很成功。回程时巨兽的一只眼睛睁开了——它看了你的 drone 一眼，又闭上了。像是在说"拿走就好，别吵醒我。"',
+            description: '采集很成功。回程时巨兽的一只眼睛睁开了——它看了你的 无人机 一眼，又闭上了。像是在说"拿走就好，别吵醒我。"',
             message: '巨兽睁眼看了你一眼！但允许你带走样本！',
             resources: { foodChange: 15 },
           },
           {
             probability: 20,
-            description: '巨兽突然打了个喷嚏。冰层崩裂。你的 drone 差点被埋在冰下。',
+            description: '巨兽突然打了个喷嚏。冰层崩裂。你的 无人机 差点被埋在冰下。',
             message: '巨兽打喷嚏了！冰层崩裂！惊险采集完成！',
             resources: { foodChange: 10, goldChange: -500 },
           },
@@ -278,7 +278,7 @@ export const RESOURCE_EVENTS: ChoiceEvent[] = [
   {
     id: 'r_f07',
     name: '废弃的农业站',
-    description: '你发现了一座 abandoned 的农业轨道站——station 的自动系统似乎还在运行，培养舱里长满了各种作物。',
+    description: '你发现了一座 废弃的农业轨道站——空间站的自动系统似乎还在运行，培养舱里长满了各种作物。',
     category: 'opportunity',
     options: [
       {
@@ -417,7 +417,7 @@ export const RESOURCE_EVENTS: ChoiceEvent[] = [
         outcomes: [
           {
             probability: 100,
-            description: '你把基因数据卖给了一家生物技术公司。他们对这些古代基因样本 ecstatic。',
+            description: '你把基因数据卖给了一家生物技术公司。他们对这些古代基因样本 狂喜。',
             message: '出售古代基因数据获得了巨额回报！',
             resources: { goldChange: 2000, foodChange: 5 },
           },
@@ -428,7 +428,7 @@ export const RESOURCE_EVENTS: ChoiceEvent[] = [
   {
     id: 'r_f11',
     name: '星际快递',
-    description: '一艘自动快递 drone 误把你当成了收件人，在你船旁边徘徊不去。扫描显示它携带的是一批高端合成食物。',
+    description: '一艘自动快递 无人机 误把你当成了收件人，在你船旁边徘徊不去。扫描显示它携带的是一批高端合成食物。',
     category: 'opportunity',
     options: [
       {
@@ -473,7 +473,7 @@ export const RESOURCE_EVENTS: ChoiceEvent[] = [
           {
             probability: 100,
             description: '蛋糕大师在你的厨房里施展了他的魔法。做出来的蛋糕不仅好吃到让船员们流泪，而且营养价值极高。',
-            message: '蛋糕大师的蛋糕让全船 ecstatic！获得大量食物！',
+            message: '蛋糕大师的蛋糕让全船 狂喜！获得大量食物！',
             resources: { foodChange: 18, alloyChange: -2, goldChange: -500 },
           },
         ],
@@ -519,7 +519,7 @@ export const RESOURCE_EVENTS: ChoiceEvent[] = [
         outcomes: [
           {
             probability: 100,
-            description: '你把冰样本卖给了一家科研机构。他们对这种古代有机物质 ecstatic。',
+            description: '你把冰样本卖给了一家科研机构。他们对这种古代有机物质 狂喜。',
             message: '出售了冰彗星样本！获得了丰厚报酬！',
             resources: { goldChange: 1200 },
           },
@@ -530,7 +530,7 @@ export const RESOURCE_EVENTS: ChoiceEvent[] = [
   {
     id: 'r_f14',
     name: '自动售卖机',
-    description: '你在一座废弃的空间站上发现了一台仍在运行的自动售卖机——里面装满了各种食物。但问题是：它只接受一种已经 discontinued 的联邦硬币。',
+    description: '你在一座废弃的空间站上发现了一台仍在运行的自动售卖机——里面装满了各种食物。但问题是：它只接受一种已经 停售的联邦硬币。',
     category: 'opportunity',
     options: [
       {
@@ -551,11 +551,11 @@ export const RESOURCE_EVENTS: ChoiceEvent[] = [
         ],
       },
       {
-        label: '找收藏家', description: ' discontinued 硬币很值钱',
+        label: '找收藏家', description: ' 停售硬币很值钱',
         outcomes: [
           {
             probability: 100,
-            description: '你拆下了售卖机的硬币识别模块，卖给了一个收藏家。他用稀有的 discontinued 硬币跟你换了一堆金币。',
+            description: '你拆下了售卖机的硬币识别模块，卖给了一个收藏家。他用稀有的 停售硬币跟你换了一堆金币。',
             message: '卖了硬币识别模块！收藏家给了高价！',
             resources: { goldChange: 800, foodChange: 3 },
           },
@@ -627,7 +627,7 @@ export const RESOURCE_EVENTS: ChoiceEvent[] = [
         outcomes: [
           {
             probability: 40,
-            description: '你在担任裁判的同时，偷偷派 drone 开采了一处未被发现的矿脉。',
+            description: '你在担任裁判的同时，偷偷派 无人机 开采了一处未被发现的矿脉。',
             message: '偷偷开采了隐藏矿脉！',
             resources: { alloyChange: 15, goldChange: 500 },
           },
@@ -742,8 +742,8 @@ export const RESOURCE_EVENTS: ChoiceEvent[] = [
           },
           {
             probability: 20,
-            description: '一块巨大的陨石碎片击中了你的 drone。紧急回收程序启动，但至少已经采集到了一部分。',
-            message: ' drone 被击中！但抢救回了一部分合金！',
+            description: '一块巨大的陨石碎片击中了你的 无人机。紧急回收程序启动，但至少已经采集到了一部分。',
+            message: ' 无人机 被击中！但抢救回了一部分合金！',
             resources: { alloyChange: 5, goldChange: -800 },
           },
         ],
@@ -842,22 +842,22 @@ export const RESOURCE_EVENTS: ChoiceEvent[] = [
   {
     id: 'r_a07',
     name: '外星冶炼技术',
-    description: '你在一个 alien 遗迹中发现了一套完整的合金冶炼设备——设计风格完全不像是人类制造的。效率之高让你目瞪口呆：产出是现代设备的三倍，但能耗只有五分之一。',
+    description: '你在一个 外星 遗迹中发现了一套完整的合金冶炼设备——设计风格完全不像是人类制造的。效率之高让你目瞪口呆：产出是现代设备的三倍，但能耗只有五分之一。',
     category: 'opportunity',
     options: [
       {
-        label: '拆解带回', description: '研究 alien 技术',
+        label: '拆解带回', description: '研究 外星 技术',
         outcomes: [
           {
             probability: 50,
             description: '你成功拆解了设备并带回了母舰。技术团队 reverse-engineer 了它的核心原理——一种全新的冶炼方法。',
-            message: '成功逆向工程了 alien 冶炼技术！',
+            message: '成功逆向工程了 外星 冶炼技术！',
             resources: { alloyChange: 15, goldChange: 1200 },
           },
           {
             probability: 50,
             description: '设备的核心部件已经被岁月侵蚀了，但你还是回收了大量可用的组件。',
-            message: '回收了 alien 合金组件！',
+            message: '回收了 外星 合金组件！',
             resources: { alloyChange: 12, stardustChange: 1 },
           },
         ],
@@ -867,8 +867,8 @@ export const RESOURCE_EVENTS: ChoiceEvent[] = [
         outcomes: [
           {
             probability: 100,
-            description: '你在遗迹中待了整整一周，仔细研究了 alien 的冶炼工艺。虽然没有搬走设备，但你学到了足以改良自己设备的知识。',
-            message: '学会了 alien 冶炼工艺！大幅提升了合金产量！',
+            description: '你在遗迹中待了整整一周，仔细研究了 外星 的冶炼工艺。虽然没有搬走设备，但你学到了足以改良自己设备的知识。',
+            message: '学会了 外星 冶炼工艺！大幅提升了合金产量！',
             resources: { alloyChange: 8, goldChange: 800 },
           },
         ],
@@ -918,11 +918,11 @@ export const RESOURCE_EVENTS: ChoiceEvent[] = [
     category: 'opportunity',
     options: [
       {
-        label: '全面采集', description: '用所有 drone 收集金属颗粒',
+        label: '全面采集', description: '用所有 无人机 收集金属颗粒',
         outcomes: [
           {
             probability: 50,
-            description: '你的 drone 在星云中工作了整整一天，收集了大量的金属颗粒。经过冶炼处理后，它们变成了一批纯度不错的合金。',
+            description: '你的 无人机 在星云中工作了整整一天，收集了大量的金属颗粒。经过冶炼处理后，它们变成了一批纯度不错的合金。',
             message: '在金属星云中大量采集！获得了可观的合金！',
             resources: { alloyChange: 12 },
           },
@@ -1006,20 +1006,20 @@ export const RESOURCE_EVENTS: ChoiceEvent[] = [
         outcomes: [
           {
             probability: 40,
-            description: '你的 drone 在遗迹核心区域发现了一片星尘结晶——它们在超新星的光芒中闪闪发光，美得令人窒息。',
+            description: '你的 无人机 在遗迹核心区域发现了一片星尘结晶——它们在超新星的光芒中闪闪发光，美得令人窒息。',
             message: '在超新星遗迹核心发现了大量星尘结晶！',
             resources: { stardustChange: 6, goldChange: -500 },
           },
           {
             probability: 35,
-            description: '采集过程中，遗迹发生了一次小型能量爆发。你的 drone 紧急撤退，但还是带回了可观的收获。',
+            description: '采集过程中，遗迹发生了一次小型能量爆发。你的 无人机 紧急撤退，但还是带回了可观的收获。',
             message: '遭遇能量爆发！紧急撤退但收获不菲！',
             resources: { stardustChange: 4, goldChange: -1200 },
           },
           {
             probability: 25,
-            description: '遗迹的辐射强度远超预期。你的 drone 大部分都损坏了，但还是有一架带回了珍贵的星尘样本。',
-            message: ' drone 损失惨重！但带回了珍贵的星尘！',
+            description: '遗迹的辐射强度远超预期。你的 无人机 大部分都损坏了，但还是有一架带回了珍贵的星尘样本。',
+            message: ' 无人机 损失惨重！但带回了珍贵的星尘！',
             resources: { stardustChange: 3, goldChange: -2000 },
           },
         ],
@@ -1071,7 +1071,7 @@ export const RESOURCE_EVENTS: ChoiceEvent[] = [
         outcomes: [
           {
             probability: 100,
-            description: '你把日记卖给了一位星尘收藏家。他对猎人的生平 ecstatic ，愿意支付高价。',
+            description: '你把日记卖给了一位星尘收藏家。他对猎人的生平 狂喜 ，愿意支付高价。',
             message: '出售了星尘猎人的日记！获得了高额报酬！',
             resources: { goldChange: 2000, stardustChange: 2 },
           },

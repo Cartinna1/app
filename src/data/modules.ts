@@ -194,6 +194,22 @@ export function getProductionLimitBonus(ship: { installedModuleIds: string[]; re
   return bonus;
 }
 
+// 原料购买总折扣（母舰技能 + 星际罗盘遗物 + 贸易枢纽协议，可叠加）
+// 单一真值：逻辑层（useProduction.buyMaterial）与显示层（MaterialMarket）都从这里取，避免分叉。
+export function getMaterialDiscountRate(ship: { materialPriceDiscount: number; relics: { id: string }[]; installedModuleIds: string[] }): number {
+  let discount = ship.materialPriceDiscount || 0;
+  if (ship.relics.some((r) => r.id === '100004' || r.id === 'r_004')) discount += 0.1;
+  if (ship.installedModuleIds.includes('trade_hub')) discount += 0.08;
+  return discount;
+}
+
+// 生产实际回合数（基础回合 − 母舰生产加速 − 工程师AI，下限 0）
+// 单一真值：逻辑层（useProduction.startProduction）与显示层（ProductionPanel）都从这里取，避免分叉。
+export function getProductionTurns(recipe: { productionTurns: number }, ship: { productionSpeedBonus: number; installedModuleIds: string[] }): number {
+  const engineerAiBonus = ship.installedModuleIds.includes('engineer_ai') ? 1 : 0;
+  return Math.max(0, recipe.productionTurns - (ship.productionSpeedBonus || 0) - engineerAiBonus);
+}
+
 // 检查是否已安装
 export function isModuleInstalled(ship: { installedModuleIds: string[] }, id: string): boolean {
   return ship.installedModuleIds.includes(id);

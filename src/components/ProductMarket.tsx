@@ -389,7 +389,7 @@ function ProductMarket({ ship, shipIndex, products, materials, stardustMarket, c
                     <div className="bg-slate-800/50 rounded-lg p-1.5 md:p-2">
                       <div className="text-[10px] md:text-xs text-slate-500 mb-0.5 md:mb-1">单价/总价</div>
                       <div className="text-cyan-400 font-bold text-xs md:text-sm">{unitSellPrice.toLocaleString()}</div>
-                      <div className="text-[10px] text-slate-400">\u00d7{getQty(group.productId)} = {(unitSellPrice * getQty(group.productId)).toLocaleString()}</div>
+                      <div className="text-[10px] text-slate-400">{getQty(group.productId) > 1 && (<>×{getQty(group.productId)} = {(unitSellPrice * getQty(group.productId)).toLocaleString()}</>)}</div>
                     </div>
                     <div className="bg-slate-800/50 rounded-lg p-1.5 md:p-2">
                       <div className="text-[10px] md:text-xs text-slate-500 mb-0.5 md:mb-1">生产成本/个</div>

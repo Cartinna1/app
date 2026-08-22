@@ -552,7 +552,7 @@ export const ALL_EVENTS: ChoiceEvent[] = [
     ],
   },
   {
-    id: 'b03', name: '走私 opportunity', category: 'business',
+    id: 'b03', name: '走私良机', category: 'business',
     description: '一个自称"深空影子"的神秘中间人联系了你。他有一批"特殊货物"需要运送到禁运星域。报酬极其丰厚——五倍于正常运输费用。但你也知道，被星际海关抓到走私的后果很严重：巨额罚款、货物没收，甚至可能被吊销航行许可。',
     options: [
       {

@@ -92,6 +92,12 @@ export const MOTHERSHIP_TEMPLATES: Omit<Mothership, 'gold' | 'food' | 'alloy' | 
 
 export const INITIAL_GOLD = 10000;
 
+// 股票交易买入手续费倍率（单一真值：扣款与 UI 显示都从这里取）
+// 黄金集团(id2) 0 手续费 → 1.0；万众一心(id0) 手续费减半 → 0.985；其余 → 1.03
+export function getStockFeeMult(ship: { id: number }): number {
+  return ship.id === 2 ? 1.0 : ship.id === 0 ? 1.0 - 0.5 * 0.03 : 1.03;
+}
+
 // 遗物兑换码：6位数字，100001-100005
 export const RELICS: Record<string, { name: string; description: string; effect: string }> = {
   '100001': {

@@ -1,5 +1,6 @@
 import { useState, memo } from 'react';
 import type { RawMaterial, Mothership } from '@/types/game';
+import { getMaterialDiscountRate } from '@/data/modules';
 import { TrendingUp, TrendingDown, Warehouse } from 'lucide-react';
 
 interface MaterialMarketProps {
@@ -21,8 +22,7 @@ function MaterialMarket({ materials, ship, shipIndex, onBuy }: MaterialMarketPro
     if (result) {
       setMessages({ ...messages, [mat.id]: result });
     } else {
-      const discount = ship.materialPriceDiscount + (ship.relics.some((r) => r.id === '100004' || r.id === 'r_004') ? 0.1 : 0);
-      const cost = Math.round(mat.currentPrice * qty * (1 - discount));
+      const cost = Math.round(mat.currentPrice * qty * (1 - getMaterialDiscountRate(ship)));
       setMessages({ ...messages, [mat.id]: `成功购买 ${qty} 单位${mat.name}，花费 ${cost} 金币` });
     }
     setTimeout(() => {
@@ -37,12 +37,13 @@ function MaterialMarket({ materials, ship, shipIndex, onBuy }: MaterialMarketPro
       <h2 className="text-2xl font-bold text-white mb-4">星际原料市场</h2>
       <p className="text-sm text-slate-400 mb-2">购买原料用于生产高价值产品。每回合价格波动，注意时机。</p>
       {(() => {
-        const totalDiscount = ship.materialPriceDiscount + (ship.relics.some((r) => r.id === '100004' || r.id === 'r_004') ? 0.1 : 0);
+        const totalDiscount = getMaterialDiscountRate(ship);
         return totalDiscount > 0 ? (
           <div className="mb-4 bg-cyan-900/20 border border-cyan-700/50 rounded-lg px-4 py-2 text-sm text-cyan-400">
             原料购买折扣: {Math.round(totalDiscount * 100)}%
             {ship.materialPriceDiscount > 0 && ' (技能)'}
             {ship.relics.some((r) => r.id === '100004' || r.id === 'r_004') && ' + 星际罗盘10%'}
+            {ship.installedModuleIds.includes('trade_hub') && ' + 贸易枢纽8%'}
           </div>
         ) : null;
       })()}
@@ -88,8 +89,7 @@ function MaterialMarket({ materials, ship, shipIndex, onBuy }: MaterialMarketPro
           // 涨跌百分比对比基准价（每回合价格独立，上一回合无参考意义）
           const change = ((mat.currentPrice - mat.basePrice) / mat.basePrice) * 100;
           const inventory = ship.materials[mat.id] || 0;
-          const discount = ship.materialPriceDiscount + (ship.relics.some((r) => r.id === '100004' || r.id === 'r_004') ? 0.1 : 0);
-          const unitCost = Math.round(mat.currentPrice * (1 - discount));
+          const unitCost = Math.round(mat.currentPrice * (1 - getMaterialDiscountRate(ship)));
           const totalCost = unitCost * getQty(mat.id);
           const msg = messages[mat.id] || '';
 
