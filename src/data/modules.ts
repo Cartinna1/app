@@ -158,7 +158,7 @@ export const MODULE_DEFINITIONS: ModuleDefinition[] = [
   {
     id: 'parallel_matrix',
     name: '并行生产矩阵',
-    description: '多轴并行加工矩阵，同时运行多条产线，进一步提升母舰产能。',
+    description: '多轴并行加工矩阵，同时运行多条产线，生产上限 +2，进一步提升母舰产能。',
     costFood: 0,
     costAlloy: 300,
     costStardust: 0,
@@ -169,7 +169,7 @@ export const MODULE_DEFINITIONS: ModuleDefinition[] = [
   {
     id: 'automation_hub',
     name: '全自动量产中枢',
-    description: '由中央AI统筹的无人化量产中枢，将母舰产能推向极限。',
+    description: '由中央AI统筹的无人化量产中枢，生产上限 +3，将母舰产能推向极限。',
     costFood: 0,
     costAlloy: 500,
     costStardust: 0,

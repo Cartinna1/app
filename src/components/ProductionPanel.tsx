@@ -1,6 +1,6 @@
 import { useState, useMemo, memo } from 'react';
 import type { Mothership, RawMaterial } from '@/types/game';
-import { RECIPES } from '@/data/gameData';
+import { RECIPES, INITIAL_PRODUCTS } from '@/data/gameData';
 import { MATERIAL_NAME_MAP } from '@/data/materialNames';
 import { getProductionLimitBonus } from '@/data/modules';
 import { Factory, Check, AlertCircle, Clock, Wheat } from 'lucide-react';
@@ -29,6 +29,13 @@ function ProductionPanel({ ship, shipIndex, materials: _materials, onStartProduc
   const maxProd = ship.maxProductionsPerTurn + getProductionLimitBonus(ship);
 
   const matNames: Record<string, string> = MATERIAL_NAME_MAP;
+
+  // 产品基准价 lookup（baseSellPrice 唯一真值在 INITIAL_PRODUCTS，此处只读、不复制数值）
+  const basePriceMap = useMemo(() => {
+    const m = new Map<string, number>();
+    for (const p of INITIAL_PRODUCTS) m.set(p.id, p.baseSellPrice);
+    return m;
+  }, []);
 
   const canProduce = (recipe: typeof RECIPES[0]) => {
     return recipe.inputs.every((input) => {
@@ -169,6 +176,7 @@ function ProductionPanel({ ship, shipIndex, materials: _materials, onStartProduc
           const msg = messages[recipe.id] || '';
           const t = turns(recipe);
           const isFood = !!recipe.foodYield;
+          const basePrice = basePriceMap.get(recipe.id);
 
           return (
             <div
@@ -203,6 +211,12 @@ function ProductionPanel({ ship, shipIndex, materials: _materials, onStartProduc
                 </div>
               </div>
               <p className="text-xs text-slate-500 mb-3">{recipe.description}</p>
+
+              {!isFood && basePrice != null && (
+                <p className="text-xs text-yellow-400 font-medium mb-2">
+                  基准价：{basePrice.toLocaleString()} 金币
+                </p>
+              )}
 
               {isFood && (
                 <div className="mb-3">
