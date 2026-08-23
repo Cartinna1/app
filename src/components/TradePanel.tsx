@@ -309,19 +309,13 @@ function TradePanel({ factions, ship, factionPrices, factionSellMultipliers, bla
                           {isCurrent && <span className="text-[10px] bg-cyan-600 text-white px-1.5 py-0.5 rounded">当前</span>}
                           <span className={`text-xs px-1.5 py-0.5 rounded font-bold ${fRep < -20 ? 'bg-red-900/60 text-red-300' : fRep < 30 ? 'bg-slate-700 text-slate-300' : fRep < 70 ? 'bg-cyan-700 text-cyan-100' : 'bg-amber-600 text-white'}`}>{fRepTier.label} <span className={fRep < 0 ? 'text-red-400' : fRep > 0 ? 'text-green-300' : ''}>{fRep}</span></span>
                           {fRel.allies.length > 0 && (
-                            <span
-                              className="text-[10px] md:text-xs px-1.5 py-0.5 rounded bg-emerald-900/40 text-emerald-300 border border-emerald-700/50 font-bold"
-                              title={`盟友: ${fRel.allies.map(id => FACTIONS_DATA.find(x => x.id === id)?.name).filter(Boolean).join('、')}`}
-                            >
-                              友 {fRel.allies.length}
+                            <span className="text-[10px] md:text-xs px-1.5 py-0.5 rounded bg-emerald-900/40 text-emerald-300 border border-emerald-700/50">
+                              友：{fRel.allies.map(id => FACTIONS_DATA.find(x => x.id === id)?.name).filter(Boolean).join('、')}
                             </span>
                           )}
                           {fRel.enemies.length > 0 && (
-                            <span
-                              className="text-[10px] md:text-xs px-1.5 py-0.5 rounded bg-red-900/40 text-red-300 border border-red-700/50 font-bold"
-                              title={`敌对: ${fRel.enemies.map(id => FACTIONS_DATA.find(x => x.id === id)?.name).filter(Boolean).join('、')}`}
-                            >
-                              敌 {fRel.enemies.length}
+                            <span className="text-[10px] md:text-xs px-1.5 py-0.5 rounded bg-red-900/40 text-red-300 border border-red-700/50">
+                              敌：{fRel.enemies.map(id => FACTIONS_DATA.find(x => x.id === id)?.name).filter(Boolean).join('、')}
                             </span>
                           )}
                         </div>
