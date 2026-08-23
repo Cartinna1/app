@@ -6,6 +6,7 @@ import { getPlanetById } from '@/data/colony/planets';
 import { getTechById, getAvailableTechs, REPEATABLE_TECHS, getRepeatableCost } from '@/data/colony/techs';
 import { getLeaderDef, getLeaderUpgradeCost } from '@/data/colony/leaders';
 import { computeColonyEconomy, computeColonyPower } from '@/lib/colony/economy';
+import { getRecruitCapPerTurn } from '@/lib/colony/colonyTurn';
 import { MATERIAL_NAME_MAP } from '@/data/materialNames';
 import { Home, Users, Wrench, Play, UserPlus, FlaskConical, Crown, Trophy } from 'lucide-react';
 import WonderPanel from './WonderPanel';
@@ -132,6 +133,8 @@ function ColonyPanel(props: ColonyPanelProps) {
   const [message, setMessage] = useState('');
   const [msgType, setMsgType] = useState<'success' | 'error'>('success');
   const [recruitQty, setRecruitQty] = useState(1);
+  const recruitCap = useMemo(() => (colony ? getRecruitCapPerTurn(colony) : 5), [colony]);
+  const remainingRecruit = Math.max(0, recruitCap - (colony?.recruitedThisTurn || 0));
   const [planetName, setPlanetName] = useState('');
   const [buildCatFilter, setBuildCatFilter] = useState<string>('housing');
   const [popCatFilter, setPopCatFilter] = useState<string>('all');
@@ -690,13 +693,13 @@ function ColonyPanel(props: ColonyPanelProps) {
         <div className="space-y-4">
           <div className="bg-slate-900/60 border border-slate-700 rounded-xl p-4">
             <h4 className="font-bold text-slate-200 mb-3 flex items-center gap-2"><UserPlus size={16} className="text-green-400" />招募人口</h4>
-            <p className="text-sm text-slate-400 mb-2">每人口花费 {(planet?.buffs.recruitCostDelta ? 2000 + planet.buffs.recruitCostDelta : 2000).toLocaleString()} 金币，每回合最多 {(()=>{let rm=5;for(const l of colony.leaders||[]){const ld=getLeaderDef(l.id);rm+=ld?.levelExtras[l.level-1]?.recruitCapPerTurn||0;}return rm;})()} 人，当前上限 {colony.population.cap}</p>
+            <p className="text-sm text-slate-400 mb-2">每人口花费 {(planet?.buffs.recruitCostDelta ? 2000 + planet.buffs.recruitCostDelta : 2000).toLocaleString()} 金币，每回合最多 {recruitCap} 人（本回合还可招募 <span className="text-green-400 font-bold">{remainingRecruit}</span> 人），当前上限 {colony.population.cap}</p>
             <div className="flex gap-2">
-              <input type="number" min={1} max={(()=>{let rm=5;for(const l of colony.leaders||[]){const ld=getLeaderDef(l.id);rm+=ld?.levelExtras[l.level-1]?.recruitCapPerTurn||0;}return rm;})()} value={recruitQty}
-                onChange={(e) => setRecruitQty(Math.min((()=>{let rm=5;for(const l of colony.leaders||[]){const ld=getLeaderDef(l.id);rm+=ld?.levelExtras[l.level-1]?.recruitCapPerTurn||0;}return rm;})(), Math.max(1, parseInt(e.target.value) || 1)))}
+              <input type="number" min={1} max={recruitCap} value={recruitQty}
+                onChange={(e) => setRecruitQty(Math.min(recruitCap, Math.max(1, parseInt(e.target.value) || 1)))}
                 className="w-16 bg-slate-800 border border-slate-600 rounded px-2 py-1.5 text-sm text-slate-200 text-center" />
               <button onClick={() => { const r = onRecruitPop(recruitQty); showMsg(r.message, r.success ? 'success' : 'error'); }}
-                disabled={ship.gold < 2000 * recruitQty || colony.population.total >= colony.population.cap}
+                disabled={ship.gold < 2000 * recruitQty || colony.population.total >= colony.population.cap || remainingRecruit <= 0}
                 className="px-4 py-1.5 bg-green-700 hover:bg-green-600 disabled:bg-slate-700 disabled:text-slate-500 rounded text-sm font-bold text-white">
                 招募 ({(2000 * recruitQty).toLocaleString()}G)
               </button>

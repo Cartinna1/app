@@ -153,6 +153,8 @@ export interface Colony {
   planetName: string;           // 玩家命名的星球名
   buildings: BuildingInstance[];
   population: Population;
+  /** 本回合已招募人口数（用于「每回合最多招募 N 人」累计校验，回合推进时清零） */
+  recruitedThisTurn: number;
   techState?: TechState;           // 科技状态（Phase 2）
   leaders: ColonyLeader[];           // 已招募的领袖
   leaderCap: number;                 // 领袖上限（基础3）

@@ -112,6 +112,7 @@ export function migrateSave(loaded: GameState): GameState {
       bankruptTimer: s.bankruptTimer || 0,
       famineTimer: s.famineTimer || 0,
       isRebellion: s.isRebellion || false,
+      colony: s.colony ? { ...s.colony, recruitedThisTurn: s.colony.recruitedThisTurn || 0 } : s.colony,
     }));
   }
   // 兼容旧存档：声望/合同字段

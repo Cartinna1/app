@@ -24,7 +24,7 @@ export function useColonyBase(
         const s = { ...ships[0] };
         s.gold -= UNLOCK_COST;
         s.goldLog = [{ turn: prev.turn, amount: -UNLOCK_COST, reason: '组建远征军探索殖民', balanceAfter: s.gold }, ...s.goldLog].slice(0, 200);
-        s.colony = { phase: 'scouting', scoutTurnsRemaining: 2, planetType: null, planetName: '', buildings: [], population: { total: 0, available: 0, cap: 5 }, leaders: [], leaderCap: 3, energy: 0 };
+        s.colony = { phase: 'scouting', scoutTurnsRemaining: 2, planetType: null, planetName: '', buildings: [], population: { total: 0, available: 0, cap: 5 }, recruitedThisTurn: 0, leaders: [], leaderCap: 3, energy: 0 };
         ships[0] = s;
         return { ...prev, ships };
       },

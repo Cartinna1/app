@@ -52,7 +52,7 @@ src/
 |---|---|
 | 舰队总资产（口径：不含售价加成） | `lib/game/assets.ts` → `getShipTotalAssets` |
 | 殖民地经济/电力/食物/产出 | `lib/colony/economy.ts` → `computeColonyEconomy` / `computeColonyPower` / `computeColonyFoodCost` |
-| 殖民地回合推进、人口上限 | `lib/colony/colonyTurn.ts` → `processColonyTurn` / `calcPopCap` |
+| 殖民地回合推进、人口上限、招募上限 | `lib/colony/colonyTurn.ts` → `processColonyTurn` / `calcPopCap` / `getRecruitCapPerTurn` |
 | 单舰船回合结算、游戏结束判定 | `lib/turn/shipTurn.ts` |
 | 价格波动、市场/政策刷新、合同、被动收入 | `lib/turn/priceFluctuation.ts` / `factionTurn.ts` / `contracts.ts` |
 | **回合结算的调用顺序** | `hooks/useTurn.ts`（编排器，唯一权威） |
@@ -113,6 +113,7 @@ src/
 | 奇观总消耗漏乘回合 | 简单相加而非 Σ(资源×回合) | 以 `stages` 为准 |
 | updater 里 mutate prev | 违反 reducer 纯函数约定 | 返回值纯函数化（参照 useTrade 的 applyRepChange） |
 | 领袖升级费用 UI/hook 分叉 | UI 写 50/100、hook 写 20/45，玩家被误挡且账实不符 | 已收敛到 `data/colony/leaders.ts` 的 `getLeaderUpgradeCost`（50/100） |
+| 招募上限形同虚设 | 每回合最多招N人只校验单次 amount、无累计字段，反复点可无限招 | Colony 加 `recruitedThisTurn`，`getRecruitCapPerTurn` 共享；「字段+动作检查+回合重置」三段式 |
 
 ---
 

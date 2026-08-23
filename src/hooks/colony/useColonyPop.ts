@@ -3,6 +3,7 @@ import type { GameState } from '@/types/game';
 import { ALL_PLANETS } from '@/data/colony/planets';
 import { getBuildingDef } from '@/data/colony/buildings';
 import { getLeaderDef } from '@/data/colony/leaders';
+import { getRecruitCapPerTurn } from '@/lib/colony/colonyTurn';
 
 /** 殖民地人口招募 / 分配（从 useColony 拆出） */
 export function useColonyPop(
@@ -28,15 +29,16 @@ export function useColonyPop(
           return pd?.buffs.recruitCostDelta || 0;
         })();
         // 领袖招募费用减免
-        let recruitCostBonus = 0; let recruitCapBonus = 0;
+        let recruitCostBonus = 0;
         for (const l of s.colony!.leaders || []) {
           const ld = getLeaderDef(l.id);
           recruitCostBonus += (ld?.levelExtras[l.level-1]?.recruitCostBonus || 0);
-          recruitCapBonus += (ld?.levelExtras[l.level-1]?.recruitCapPerTurn || 0);
         }
-        const maxRecruit = 5 + recruitCapBonus;
-        if (amount > maxRecruit) {
-          result = { success: false, message: `每回合最多招募${maxRecruit}人口` };
+        const maxRecruit = getRecruitCapPerTurn(s.colony!);
+        const recruitedThisTurn = s.colony!.recruitedThisTurn || 0;
+        const remaining = maxRecruit - recruitedThisTurn;
+        if (amount > remaining) {
+          result = { success: false, message: `本回合剩余可招募${remaining}人（每回合最多${maxRecruit}人）` };
           return prev;
         }
         const cost = Math.max(0, (baseCost + planetDelta + recruitCostBonus) * amount);
@@ -57,6 +59,7 @@ export function useColonyPop(
             total: s.colony.population.total + amount,
             available: s.colony.population.available + amount,
           },
+          recruitedThisTurn: recruitedThisTurn + amount,
         };
         result = { success: true, message: `招募了${amount}人口` };
         ships[0] = s;

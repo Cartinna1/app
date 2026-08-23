@@ -35,6 +35,9 @@ export function processColonyTurn(ship: Mothership, _turn: number): void {
 
   if (colony.phase !== 'active') return;
 
+  // 重置本回合招募累计（每回合招募上限）
+  colony.recruitedThisTurn = 0;
+
   // 建筑建造进度推进
   const planetDef = colony.planetType ? ALL_PLANETS.find((p) => p.id === colony.planetType) : null;
   const turnDelta = planetDef?.buffs.buildTurnDelta || 0;
@@ -140,6 +143,16 @@ export function processColonyTurn(ship: Mothership, _turn: number): void {
 
   // 奇观回合结算
   processWonderTurn(ship, _turn);
+}
+
+/** 每回合招募人口上限（基础5 + 领袖 recruitCapPerTurn）——单一真值，UI 与逻辑共用 */
+export function getRecruitCapPerTurn(colony: Colony): number {
+  let cap = 5;
+  for (const l of colony.leaders || []) {
+    const ld = getLeaderDef(l.id);
+    cap += (ld?.levelExtras[l.level - 1]?.recruitCapPerTurn || 0);
+  }
+  return cap;
 }
 
 /** 人口上限计算（含星球初始上限、居住建筑、领袖加成） */
