@@ -523,14 +523,14 @@ export const ALL_EVENTS: ChoiceEvent[] = [
   },
   {
     id: 'b02', name: '股市内幕交易', category: 'business',
-    description: '一个匿名消息源联系了你，声称掌握着关于"银河能源集团"的内幕消息。他们声称这家公司即将宣布一项革命性的能源技术，股价将在48小时内暴涨300%。消息源开价5000金币出售这个情报，并警告你"这是一次性的机会，错过就没有了"。',
+    description: '一个匿名消息源联系了你，声称掌握着关于"银河能源集团"的内幕消息。他们声称这家公司即将宣布一项革命性的能源技术，股价将在48小时内暴涨300%。消息源开价不菲出售这个情报，并警告你"这是一次性的机会，错过就没有了"。',
     options: [
       {
-        label: '购买情报', description: '花5000金币购买内幕消息。',
+        label: '购买情报', description: '花重金购买内幕消息。',
         outcomes: [
           { probability: 35, description: '情报是真的！你提前大量买入银河能源集团的股票，两天后技术宣布，股价果然暴涨。你赚了个盆满钵满！', message: '内幕是真的！大赚一笔！', resources: { goldChange: 3000, grantTip: 'stock' } },
           { probability: 30, description: '情报部分属实——确实有新技术宣布，但市场反应不如预期。股价只涨了80%。你还是赚了，但不多。', message: '情报部分属实。小赚一笔。', resources: { goldChange: 2000 } },
-          { probability: 35, description: '情报是假的！这是一场精心策划的骗局。你不仅损失了5000金币的购买费，还因为大量买入导致被套牢。', message: '被骗了！情报是假的！', resources: { goldChange: -3000 } },
+          { probability: 35, description: '情报是假的！这是一场精心策划的骗局。你不仅损失了一笔购买费，还因为大量买入导致被套牢。', message: '被骗了！情报是假的！', resources: { goldChange: -3000 } },
         ],
       },
       {
@@ -563,7 +563,7 @@ export const ALL_EVENTS: ChoiceEvent[] = [
               title: '后续合作',
               description: '买方对你的表现很满意，提出了一个长期合作的机会。',
               options: [
-                { label: '成为固定走私商', description: '长期合作，但风险更高。', outcomes: [{ probability: 50, description: '你成为了他们的固定走私商，收入源源不断。', message: '走私事业蒸蒸日上！', resources: { goldChange: 3000 } }, { probability: 50, description: '长期走私终于被抓了！你被重罚。', message: '被抓了！巨额罚款！', resources: { goldChange: -3000, stockFreeze: true } }] },
+                { label: '成为固定走私商', description: '长期合作，但风险更高。', outcomes: [{ probability: 50, description: '你接下了这单走私，这一票赚得盆满钵满。', message: '这一票赚得盆满钵满！', resources: { goldChange: 3000 } }, { probability: 50, description: '长期走私终于被抓了！你被重罚。', message: '被抓了！巨额罚款！', resources: { goldChange: -3000, stockFreeze: true } }] },
                 { label: '只做这一单', description: '见好就收，不再合作。', outcomes: [{ probability: 100, description: '你带着钱离开了，没有继续冒险。', message: '安全收手。', resources: { goldChange: 800 } }] },
               ],
             },

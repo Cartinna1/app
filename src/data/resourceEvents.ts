@@ -18,7 +18,7 @@ export const RESOURCE_EVENTS: ChoiceEvent[] = [
             resources: { foodChange: 25 },
             subOutcomes: [
               { probability: 50, description: '清理温室时发现了一间隐藏的种子库。', message: '发现了古代种子库！额外获得了珍稀种子！', resources: { foodChange: 10 } },
-              { probability: 50, description: '温室AI感谢你结束了它的孤独，给了你一个种植优化程序。', message: '获得了种植优化程序！食物产量提升！', resources: { foodChange: 5, goldChange: 500 } },
+              { probability: 50, description: '温室AI感谢你结束了它的孤独，给了你一个种植优化程序。', message: '获得了种植优化程序！额外获得了食物！', resources: { foodChange: 5, goldChange: 500 } },
             ],
           },
           {
@@ -40,8 +40,8 @@ export const RESOURCE_EVENTS: ChoiceEvent[] = [
         outcomes: [
           {
             probability: 100,
-            description: '你小心翼翼地收集了温室中的各种种子。这是一笔长期投资。',
-            message: '获得了太空植物种子！未来食物来源有保障了！',
+            description: '你小心翼翼地收集了温室中的各种种子，还顺带收获了一批可食用的作物。',
+            message: '获得了太空植物种子！收获了一批食物！',
             resources: { foodChange: 8, goldChange: 500 },
           },
         ],
@@ -177,8 +177,8 @@ export const RESOURCE_EVENTS: ChoiceEvent[] = [
         outcomes: [
           {
             probability: 100,
-            description: '你花了一整天研究这个生态舱。它的循环原理堪称完美。你把这套系统设计图记录下来。',
-            message: '学会了完美的生态循环系统！未来食物产量提升！',
+            description: '你花了一整天研究这个生态舱。它的循环原理堪称完美。你把它彻底研究透了。',
+            message: '学会了生态循环原理！收获了一批食物！',
             resources: { foodChange: 10, goldChange: 800 },
           },
         ],
@@ -208,8 +208,8 @@ export const RESOURCE_EVENTS: ChoiceEvent[] = [
           },
           {
             probability: 30,
-            description: '比赛现场一位食材供应商看中了你们的创意，当场签了一份供应合同。',
-            message: '认识了食材供应商！未来食物价格大幅降低！',
+            description: '比赛现场一位食材供应商看中了你们的创意，当场送了你一批高级食材。',
+            message: '认识了食材供应商！获赠了一批高级食材！',
             resources: { foodChange: 10, goldChange: 800 },
           },
         ],
@@ -219,8 +219,8 @@ export const RESOURCE_EVENTS: ChoiceEvent[] = [
         outcomes: [
           {
             probability: 100,
-            description: '你以"星际贸易商"的身份被邀请担任评委。你发现了几个极具潜力的参赛者——他们后来成了明星厨师，而你获得了他们的"终生免费晚餐"承诺。',
-            message: '当评委结识了未来的明星厨师！获得了终生免费晚餐权！',
+            description: '你以"星际贸易商"的身份被邀请担任评委。你发现了几个极具潜力的参赛者，他们盛情款待了你。',
+            message: '当评委结识了未来的明星厨师！享用到了一顿丰盛的美食！',
             resources: { foodChange: 15, goldChange: 500 },
           },
         ],
@@ -303,8 +303,8 @@ export const RESOURCE_EVENTS: ChoiceEvent[] = [
         outcomes: [
           {
             probability: 100,
-            description: '你投入了一些合金修复了农业站的核心系统。AI 同意定期向你供应食物——这是一个长期的食物来源！',
-            message: '修复了农业站！获得了长期食物供应！',
+            description: '你投入了一些合金修复了农业站的核心系统。AI 慷慨地赠送了你一批食物作为答谢！',
+            message: '修复了农业站！获得了一批食物！',
             resources: { alloyChange: -5, foodChange: 20 },
           },
         ],
@@ -339,8 +339,8 @@ export const RESOURCE_EVENTS: ChoiceEvent[] = [
         outcomes: [
           {
             probability: 100,
-            description: '你把孢子样本放进了培养舱。几天后，它们长成了一片微型真菌森林——持续不断地产出食物。',
-            message: '孢子在培养舱里长成了真菌森林！持续产出食物！',
+            description: '你把孢子样本放进了培养舱。几天后，它们长成了一片微型真菌森林，产出了一批食物。',
+            message: '孢子在培养舱里长成了真菌森林！收获了一批食物！',
             resources: { foodChange: 12 },
           },
         ],
@@ -483,8 +483,8 @@ export const RESOURCE_EVENTS: ChoiceEvent[] = [
         outcomes: [
           {
             probability: 100,
-            description: '蛋糕大师教了你几个独家配方。你的合成厨房现在能产出既好吃又营养的食物了。',
-            message: '学会了蛋糕大师的独家配方！食物质量大幅提升！',
+            description: '蛋糕大师教了你几个独家食谱，并当场为你做了一批既好吃又营养的食物。',
+            message: '学会了独家食谱！获得了一批美食！',
             resources: { foodChange: 10 },
           },
         ],
@@ -652,14 +652,14 @@ export const RESOURCE_EVENTS: ChoiceEvent[] = [
         outcomes: [
           {
             probability: 50,
-            description: '配方下载完成！这是一种早已失传的合金冶炼技术——生产的合金强度是现代合金的三倍。',
-            message: '获得了传说中的永恒合金配方！',
+            description: '配方下载完成！你获得了一批早已失传的永恒合金成品，纯度惊人。',
+            message: '获得了传说中的永恒合金！',
             resources: { alloyChange: 10, goldChange: 2000 },
           },
           {
             probability: 30,
-            description: '配方的一部分数据已经损坏了，但核心工艺还完整。你根据残缺的配方改良出了自己的版本。',
-            message: '获得了残缺的配方！改良出了自己的版本！',
+            description: '配方的一部分数据已经损坏了，但你还是从中提取出了一批可用的合金。',
+            message: '提取出了一批可用的合金！',
             resources: { alloyChange: 8, goldChange: 1200 },
           },
           {
@@ -675,8 +675,8 @@ export const RESOURCE_EVENTS: ChoiceEvent[] = [
         outcomes: [
           {
             probability: 100,
-            description: '你把整个终端机搬回了母舰。技术人员恢复了部分数据——除了合金配方，还有一份古代星图。',
-            message: '恢复了终端数据！获得了合金配方和古代星图！',
+            description: '你把整个终端机搬回了母舰。技术人员恢复了部分数据，还回收了一批合金和一份古代星图资料。',
+            message: '恢复了终端数据！获得了合金和星图资料！',
             resources: { alloyChange: 8, goldChange: 800, stardustChange: 1 },
           },
         ],
@@ -701,7 +701,7 @@ export const RESOURCE_EVENTS: ChoiceEvent[] = [
           {
             probability: 30,
             description: '打造过程中，老铁匠发现了一种新的合金配比——强度提高了20%。他兴奋地把这批实验品都送给了你。',
-            message: '老铁匠发明了新合金配方！全部送给你了！',
+            message: '老铁匠把新合金的实验品都送给了你！',
             resources: { alloyChange: 15 },
           },
         ],
@@ -711,8 +711,8 @@ export const RESOURCE_EVENTS: ChoiceEvent[] = [
         outcomes: [
           {
             probability: 100,
-            description: '老铁匠看你诚心求学，教了你几手"星际锻造术"。这些技术可以大幅提升你的合金生产效率。',
-            message: '学会了星际锻造术！合金产量提升！',
+            description: '老铁匠看你诚心求学，教了你几手"星际锻造术"，还顺手送你一批他练手打造的合金。',
+            message: '学会了星际锻造术！获赠了一批合金！',
             resources: { alloyChange: 8, goldChange: -500 },
           },
         ],
@@ -789,8 +789,8 @@ export const RESOURCE_EVENTS: ChoiceEvent[] = [
         outcomes: [
           {
             probability: 100,
-            description: '你投入了燃料重启了古代冶炼炉。虽然效率不高，但它还是产出了一批合金。更重要的是，你获得了它的设计图。',
-            message: '重启了古代冶炼炉！获得了合金和设计图！',
+            description: '你投入了燃料重启了古代冶炼炉。虽然效率不高，但它还是产出了一批合金。',
+            message: '重启了古代冶炼炉！获得了一批合金！',
             resources: { alloyChange: 12, goldChange: -500 },
           },
         ],
@@ -804,7 +804,7 @@ export const RESOURCE_EVENTS: ChoiceEvent[] = [
     category: 'business',
     options: [
       {
-        label: '买下所有', description: '500金币买大量合金',
+        label: '买下所有', description: '低价买下这批合金',
         outcomes: [
           {
             probability: 60,
@@ -850,8 +850,8 @@ export const RESOURCE_EVENTS: ChoiceEvent[] = [
         outcomes: [
           {
             probability: 50,
-            description: '你成功拆解了设备并带回了母舰。技术团队 reverse-engineer 了它的核心原理——一种全新的冶炼方法。',
-            message: '成功逆向工程了 外星 冶炼技术！',
+            description: '你成功拆解了设备并带回了母舰，回收了大量高纯度合金组件。',
+            message: '成功回收了外星冶炼设备！',
             resources: { alloyChange: 15, goldChange: 1200 },
           },
           {
@@ -867,8 +867,8 @@ export const RESOURCE_EVENTS: ChoiceEvent[] = [
         outcomes: [
           {
             probability: 100,
-            description: '你在遗迹中待了整整一周，仔细研究了 外星 的冶炼工艺。虽然没有搬走设备，但你学到了足以改良自己设备的知识。',
-            message: '学会了 外星 冶炼工艺！大幅提升了合金产量！',
+            description: '你在遗迹中待了整整一周，仔细研究了外星的冶炼工艺，并回收了一批外星合金样品。',
+            message: '研究了外星冶炼工艺！收获了一批合金！',
             resources: { alloyChange: 8, goldChange: 800 },
           },
         ],
@@ -1170,7 +1170,7 @@ export const RESOURCE_EVENTS: ChoiceEvent[] = [
     category: 'business',
     options: [
       {
-        label: '用金币购买', description: '1000金币',
+        label: '用金币购买', description: '付一笔金币购买',
         outcomes: [
           {
             probability: 60,
