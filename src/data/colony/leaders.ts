@@ -137,6 +137,15 @@ export function getLeaderUpgradeCost(level: number): number | null {
   return LEADER_UPGRADE_COST[level as 1 | 2] ?? null;
 }
 
+/** 招募领袖所需星尘（基础10，减去已招募领袖的 leaderCostReduction，下限1）——单一真值，UI 与 useColonyLeaders 共用 */
+export function getRecruitRollCost(leaders: Array<{ id: string; level: number }>): number {
+  let reduction = 0;
+  for (const l of leaders) {
+    reduction += (getLeaderDef(l.id)?.levelExtras[l.level - 1]?.leaderCostReduction || 0);
+  }
+  return Math.max(1, 10 - reduction);
+}
+
 export function getLeaderDef(id: string): LeaderDef | undefined {
   return ALL_LEADERS.find((l) => l.id === id);
 }

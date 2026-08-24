@@ -4,7 +4,7 @@ import type { PlanetTypeId, PlanetDef } from '@/types/colony';
 import { getBuildableBuildings, getBuildingDef, getBuildingEffect } from '@/data/colony/buildings';
 import { getPlanetById } from '@/data/colony/planets';
 import { getTechById, getAvailableTechs, REPEATABLE_TECHS, getRepeatableCost } from '@/data/colony/techs';
-import { getLeaderDef, getLeaderUpgradeCost } from '@/data/colony/leaders';
+import { getLeaderDef, getLeaderUpgradeCost, getRecruitRollCost } from '@/data/colony/leaders';
 import { computeColonyEconomy, computeColonyPower } from '@/lib/colony/economy';
 import { getRecruitCapPerTurn } from '@/lib/colony/colonyTurn';
 import { MATERIAL_NAME_MAP } from '@/data/materialNames';
@@ -135,6 +135,7 @@ function ColonyPanel(props: ColonyPanelProps) {
   const [recruitQty, setRecruitQty] = useState(1);
   const recruitCap = useMemo(() => (colony ? getRecruitCapPerTurn(colony) : 5), [colony]);
   const remainingRecruit = Math.max(0, recruitCap - (colony?.recruitedThisTurn || 0));
+  const recruitRollCost = useMemo(() => (colony ? getRecruitRollCost(colony.leaders) : 10), [colony]);
   const [planetName, setPlanetName] = useState('');
   const [buildCatFilter, setBuildCatFilter] = useState<string>('housing');
   const [popCatFilter, setPopCatFilter] = useState<string>('all');
@@ -862,11 +863,11 @@ function ColonyPanel(props: ColonyPanelProps) {
             <>
               {/* 招募 */}
               <div className="bg-slate-900/60 border border-slate-700 rounded-xl p-4">
-                <h4 className="font-bold text-slate-200 mb-2">招募领袖 (10星尘/次)</h4>
+                <h4 className="font-bold text-slate-200 mb-2">招募领袖 ({recruitRollCost}星尘/次)</h4>
                 <p className="text-sm text-slate-400 mb-3">当前: {colony.leaders.length}/{colony.leaderCap}</p>
                 {!colony.recruitPool ? (
                   <button onClick={() => { console.log('开始招募 clicked'); onRollAndRecruit(); }}
-                    disabled={ship.stardust < 10 || colony.leaders.length >= colony.leaderCap}
+                    disabled={ship.stardust < recruitRollCost || colony.leaders.length >= colony.leaderCap}
                     className="px-4 py-2 bg-purple-700 hover:bg-purple-600 disabled:bg-slate-700 rounded-lg text-sm font-bold text-white">
                     {colony.leaders.length >= colony.leaderCap ? '已满' : '开始招募'}
                   </button>
@@ -925,8 +926,8 @@ function ColonyPanel(props: ColonyPanelProps) {
                       );
                     })}
                     <button onClick={() => { onRollAndRecruit(); }}
-                      disabled={ship.stardust < 10 || colony.leaders.length >= colony.leaderCap}
-                      className="text-sm text-purple-400 hover:text-purple-300 disabled:text-slate-600">换一批 (10星尘)</button>
+                      disabled={ship.stardust < recruitRollCost || colony.leaders.length >= colony.leaderCap}
+                      className="text-sm text-purple-400 hover:text-purple-300 disabled:text-slate-600">换一批 ({recruitRollCost}星尘)</button>
                   </div>
                 )}
               </div>

@@ -1,6 +1,6 @@
 import { useCallback } from 'react';
 import type { GameState } from '@/types/game';
-import { getLeaderDef, rollLeaders, getLeaderUpgradeCost } from '@/data/colony/leaders';
+import { getLeaderDef, rollLeaders, getLeaderUpgradeCost, getRecruitRollCost } from '@/data/colony/leaders';
 
 /** 殖民地领袖招募 / 升级 / 招募池（从 useColony 拆出） */
 export function useColonyLeaders(
@@ -58,11 +58,7 @@ export function useColonyLeaders(
         const ships = [...prev.ships]; const s = { ...ships[0] };
         if (!s.colony) return prev;
         if (s.colony.leaders.length >= s.colony.leaderCap) return prev;
-        let lCostReduction = 0;
-        for (const l of s.colony.leaders) {
-          lCostReduction += (getLeaderDef(l.id)?.levelExtras[l.level-1]?.leaderCostReduction || 0);
-        }
-        const rollCost = Math.max(1, 10 - lCostReduction);
+        const rollCost = getRecruitRollCost(s.colony.leaders);
         if (s.stardust < rollCost) return prev;
         s.stardust -= rollCost;
         s.colony = { ...s.colony, recruitPool: rollLeaders(3, s.colony.leaders.map((l) => l.id)) };
