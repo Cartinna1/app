@@ -2,7 +2,7 @@ import { useState, useMemo, memo } from 'react';
 import type { Mothership, RawMaterial } from '@/types/game';
 import { RECIPES, INITIAL_PRODUCTS } from '@/data/gameData';
 import { MATERIAL_NAME_MAP } from '@/data/materialNames';
-import { getProductionLimitBonus, getProductionTurns } from '@/data/modules';
+import { getProductionLimitBonus, getProductionTurns, getSellPriceBreakdown } from '@/data/modules';
 import { Factory, Check, AlertCircle, Clock, Wheat } from 'lucide-react';
 
 // 产品分类标签颜色（按生产回合数，与集会一致）
@@ -27,6 +27,8 @@ function ProductionPanel({ ship, shipIndex, materials: _materials, onStartProduc
   const [messages, setMessages] = useState<Record<string, string>>({});
   const [filterTurn, setFilterTurn] = useState<number>(1);
   const maxProd = ship.maxProductionsPerTurn + getProductionLimitBonus(ship);
+  // 售价加成明细（单一真值：data/modules.ts → getSellPriceBreakdown）
+  const sellBd = getSellPriceBreakdown(ship);
 
   const matNames: Record<string, string> = MATERIAL_NAME_MAP;
 
@@ -95,12 +97,12 @@ function ProductionPanel({ ship, shipIndex, materials: _materials, onStartProduc
           </span>
           <span className="text-slate-500 ml-1">次</span>
         </div>
-        {((ship.sellBonuses || []).length > 0 || (ship.sellPriceBonus || 0) > 0) && (
+        {sellBd.multiplier > 1 && (
           <div className="text-sm flex flex-wrap gap-2">
             <span className="text-slate-400">产品售价加成:</span>
-            {(ship.sellPriceBonus || 0) > 0 && (
+            {sellBd.skillPercent > 0 && (
               <span className="font-bold text-cyan-400">
-                +{Math.round(ship.sellPriceBonus * 100)}%<span className="text-slate-500 font-normal">(技能)</span>
+                +{sellBd.skillPercent}%<span className="text-slate-500 font-normal">(技能)</span>
               </span>
             )}
             {(ship.sellBonuses || []).map((b, i) => (
@@ -108,6 +110,11 @@ function ProductionPanel({ ship, shipIndex, materials: _materials, onStartProduc
                 {b.bonus > 0 ? '+' : ''}{b.bonus}%<span className="text-slate-500 font-normal">({b.remainingTurns}回)</span>
               </span>
             ))}
+            {sellBd.alliancePercent > 0 && (
+              <span className="font-bold text-purple-400">
+                +{sellBd.alliancePercent}%<span className="text-slate-500 font-normal">(联盟)</span>
+              </span>
+            )}
           </div>
         )}
         {ship.productionSpeedBonus > 0 && (

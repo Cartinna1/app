@@ -39,6 +39,7 @@ import LoanPanel from './LoanPanel';
 import TradePanel from './TradePanel';
 import { getInvestmentTier, getBuffDescription } from '@/data/factions';
 import { RECIPES } from '@/data/gameData';
+import { getSellPriceBreakdown } from '@/data/modules';
 import GoldLogViewer from './GoldLogViewer';
 import ModulePanel from './ModulePanel';
 import ColonyPanel from './colony/ColonyPanel';
@@ -687,6 +688,8 @@ function OverviewTab({
   const allianceActive = ship.allianceRounds && ship.allianceRounds > 0;
   const stockCount = Object.values(ship.stockHoldings).reduce((a, b) => a + b, 0);
   const matCount = Object.values(ship.materials).reduce((a, b) => a + b, 0);
+  // 售价加成明细（单一真值：data/modules.ts → getSellPriceBreakdown）
+  const sellBd = getSellPriceBreakdown(ship);
 
   return (
     <div>
@@ -710,12 +713,12 @@ function OverviewTab({
           <p className="text-[10px] md:text-xs text-slate-500 mb-1">产品库存</p>
           <p className="text-lg md:text-xl font-bold text-slate-200">{ship.products.length} 个</p>
         </div>
-        {((ship.sellBonuses || []).length > 0 || (ship.sellPriceBonus || 0) > 0) && (
+        {sellBd.multiplier > 1 && (
           <div className="bg-slate-900/60 border border-green-700/40 rounded-xl p-3 md:p-4">
             <p className="text-[10px] md:text-xs text-slate-500 mb-1">产品售价加成</p>
-            {(ship.sellPriceBonus || 0) > 0 && (
+            {sellBd.skillPercent > 0 && (
               <p className="text-sm font-bold text-cyan-400">
-                +{Math.round(ship.sellPriceBonus * 100)}% <span className="text-slate-500 font-normal">(银河之心技能·永久)</span>
+                +{sellBd.skillPercent}% <span className="text-slate-500 font-normal">(银河之心技能·永久)</span>
               </p>
             )}
             {(ship.sellBonuses || []).map((b, i) => (
@@ -723,6 +726,11 @@ function OverviewTab({
                 {b.bonus > 0 ? '+' : ''}{b.bonus}% <span className="text-slate-500 font-normal">({b.source}·{b.remainingTurns}回合)</span>
               </p>
             ))}
+            {sellBd.alliancePercent > 0 && (
+              <p className="text-sm font-bold text-purple-400">
+                +{sellBd.alliancePercent}% <span className="text-slate-500 font-normal">(联盟·{ship.allianceRounds}回合)</span>
+              </p>
+            )}
           </div>
         )}
       </div>

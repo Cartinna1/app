@@ -1,7 +1,7 @@
 import { useCallback } from 'react';
 import type { GameState } from '@/types/game';
 import { RECIPES } from '@/data/gameData';
-import { getProductionLimitBonus, getMaterialDiscountRate, getProductionTurns } from '@/data/modules';
+import { getProductionLimitBonus, getMaterialDiscountRate, getProductionTurns, getSellPriceBreakdown } from '@/data/modules';
 
 export function useProduction(
   dispatch: React.Dispatch<{ type: 'FUNCTIONAL_UPDATE'; updater: (state: GameState) => GameState }>
@@ -96,11 +96,7 @@ export function useProduction(
           const product = prev.products.find((p) => p.id === item.productId);
           if (!product) return prev;
 
-          const eventBonus = (ship.sellBonuses || []).reduce((sum, b) => sum + b.bonus, 0) / 100;
-          const skillBonus = ship.sellPriceBonus || 0;
-          const bonus = eventBonus + skillBonus;
-          const allianceBonus = ship.allianceRounds && ship.allianceRounds > 0 ? 0.15 : 0;
-          const price = Math.round(product.currentSellPrice * (1 + bonus + allianceBonus));
+          const price = Math.round(product.currentSellPrice * getSellPriceBreakdown(ship).multiplier);
           ship.gold += price;
           if (ship.bankrupt && ship.gold > 0) ship.bankrupt = false;
           ship.goldLog = [{ turn: prev.turn, amount: price, reason: `出售产品「${product.name}」`, balanceAfter: ship.gold }, ...ship.goldLog].slice(0, 200);
@@ -127,11 +123,7 @@ export function useProduction(
           const product = prev.products.find((p) => p.id === productId);
           if (!product) return prev;
 
-          const eventBonus = (ship.sellBonuses || []).reduce((sum, b) => sum + b.bonus, 0) / 100;
-          const skillBonus = ship.sellPriceBonus || 0;
-          const bonus = eventBonus + skillBonus;
-          const allianceBonus = ship.allianceRounds && ship.allianceRounds > 0 ? 0.15 : 0;
-          const unitPrice = Math.round(product.currentSellPrice * (1 + bonus + allianceBonus));
+          const unitPrice = Math.round(product.currentSellPrice * getSellPriceBreakdown(ship).multiplier);
           const matching: { idx: number; item: typeof ship.products[0] }[] = [];
           ship.products.forEach((p, idx) => { if (p.productId === productId) matching.push({ idx, item: p }); });
           matching.sort((a, b) => a.item.expiresAt - b.item.expiresAt);

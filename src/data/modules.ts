@@ -226,6 +226,26 @@ export function getProductionTurns(recipe: { productionTurns: number }, ship: { 
   return Math.max(0, recipe.productionTurns - (ship.productionSpeedBonus || 0) - engineerAiBonus);
 }
 
+// 产品卖出价加成明细（母舰技能 + 事件套装 + 联盟）
+// 单一真值：逻辑层（useProduction 出售）与显示层（ProductMarket 单价/出售消息）都从这里取，
+// 避免三处拷贝分叉、漏联盟加成、eventBonus 单位不一致（历史坑）。
+export interface SellPriceBreakdown {
+  multiplier: number;      // 总乘数 = 1 + event/100 + skill + alliance/100
+  eventPercent: number;    // 事件套装加成（百分比整数，如 50）
+  skillPercent: number;    // 母舰技能加成（百分比整数，如 20）
+  alliancePercent: number; // 联盟加成（15 或 0）
+}
+
+export function getSellPriceBreakdown(ship: { sellPriceBonus: number; sellBonuses?: { bonus: number }[]; allianceRounds?: number }): SellPriceBreakdown {
+  const eventPercent = (ship.sellBonuses || []).reduce((sum, b) => sum + b.bonus, 0);
+  const skillBonus = ship.sellPriceBonus || 0;
+  const skillPercent = Math.round(skillBonus * 100);
+  const alliancePercent = (ship.allianceRounds && ship.allianceRounds > 0) ? 15 : 0;
+  // multiplier 内部用 sellPriceBonus 原始小数参与运算，勿用 skillPercent/100 重建（避免二次取整偏差）
+  const multiplier = 1 + eventPercent / 100 + skillBonus + alliancePercent / 100;
+  return { multiplier, eventPercent, skillPercent, alliancePercent };
+}
+
 // 检查是否已安装
 export function isModuleInstalled(ship: { installedModuleIds: string[] }, id: string): boolean {
   return ship.installedModuleIds.includes(id);
