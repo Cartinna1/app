@@ -101,6 +101,7 @@ src/
 - 走私合同成功率 65%（`roll > 0.65` 失败；持有遗物 `RELIC_DECIPHERER` 情报破译器时 100% 成功；判定在 `useTrade.ts completeContract`）
 - 遗物 ID 一律走 `data/relics.ts` 常量（`RELIC_*`），逻辑层勿硬编码 `'r_xxx'` 字符串
 - 兑换码表 `REDEEM_CODES`（`data/gameData.ts`，30 组正常码，无调试码——不要加回 DEBUG 码）
+- 远征录入规则（`data/colony/expeditions.ts`）：A 节点全免费（忽略文档 A 的条件）；文档「人口×N」统一改为合金×50；D 结局统一金币×20000；文本一律用模板字符串（反引号）防 ASCII 引号截断；树结构 A×3→B×2→C×2→D×1，可跑 `validateExpeditionTree()` 自检；图片 `/expeditions/<leaderId>/{planet,D1..D12}.webp`（统一 WebP）；终极技能= Lv3 产出加成基础上叠加 `ultimateSkill.bonus`（数据驱动，勿新机制）
 
 ## 八、命名与文案
 

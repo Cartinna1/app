@@ -11,6 +11,7 @@ import { MATERIAL_NAME_MAP } from '@/data/materialNames';
 import { Home, Users, Wrench, Play, UserPlus, FlaskConical, Crown, Trophy, Rocket } from 'lucide-react';
 import WonderPanel from './WonderPanel';
 import ExpeditionPanel from './ExpeditionPanel';
+import FeedbackMessage from '../FeedbackMessage';
 
 // ==================== 辅助函数 ====================
 
@@ -225,7 +226,7 @@ function ColonyPanel(props: ColonyPanelProps) {
             className={`px-6 py-2.5 rounded-lg font-bold text-sm transition-colors ${ship.gold >= 30000 ? 'bg-cyan-600 hover:bg-cyan-500 text-white' : 'bg-slate-700 text-slate-500 cursor-not-allowed'}`}
           >{ship.gold >= 30000 ? '组建远征军 (30,000金币)' : '金币不足 (30,000)'}</button>
         </div>
-        {message && <div className={`p-3 rounded-lg text-sm text-center ${msgType === 'success' ? 'bg-green-900/20 border border-green-700/50 text-green-400' : 'bg-red-900/20 border border-red-700/50 text-red-400'}`}>{message}</div>}
+        <FeedbackMessage message={message} type={msgType} />
       </div>
     );
   }
@@ -291,7 +292,7 @@ function ColonyPanel(props: ColonyPanelProps) {
             disabled={ship.gold < 30000}
             className="px-4 py-2 bg-slate-700 hover:bg-slate-600 disabled:opacity-50 rounded-lg text-sm text-slate-200">重新探索 (30,000G)</button>
         </div>
-        {message && <div className={`p-3 rounded-lg text-sm text-center ${msgType === 'success' ? 'bg-green-900/20 border border-green-700/50 text-green-400' : 'bg-red-900/20 border border-red-700/50 text-red-400'}`}>{message}</div>}
+        <FeedbackMessage message={message} type={msgType} />
       </div>
     );
   }
@@ -329,7 +330,7 @@ function ColonyPanel(props: ColonyPanelProps) {
         })}
       </div>
 
-      {message && <div className={`p-3 rounded-lg text-sm text-center ${msgType === 'success' ? 'bg-green-900/20 border border-green-700/50 text-green-400' : 'bg-red-900/20 border border-red-700/50 text-red-400'}`}>{message}</div>}
+      <FeedbackMessage message={message} type={msgType} />
 
       {/* ===== 总览 ===== */}
       {tab === 'overview' && (

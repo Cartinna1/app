@@ -7,6 +7,7 @@ import type { Colony } from '@/types/colony';
 import { EXPEDITION_COST, RESOURCE_LABELS, getLeaderExpedition } from '@/data/colony/expeditions';
 import { getLeaderDef } from '@/data/colony/leaders';
 import { Rocket, Sparkles, Crown, Lock } from 'lucide-react';
+import FeedbackMessage from '../FeedbackMessage';
 
 interface ExpeditionPanelProps {
   colony: Colony;
@@ -58,11 +59,7 @@ function ExpeditionPanel({ colony, onStartExpedition, onPayExpeditionNode, onUnl
       </p>
 
       {/* 操作反馈 */}
-      {msg && (
-        <div className={`mb-3 p-3 rounded-lg text-sm text-center ${msgType === 'success' ? 'bg-green-900/20 border border-green-700/50 text-green-400' : 'bg-red-900/20 border border-red-700/50 text-red-400'}`}>
-          {msg}
-        </div>
-      )}
+      <FeedbackMessage message={msg} type={msgType} />
 
       {/* ===== 远征进行中 ===== */}
       {ex && route && (
@@ -83,7 +80,7 @@ function ExpeditionPanel({ colony, onStartExpedition, onPayExpeditionNode, onUnl
           {ex.stage === 1 && (
             <div>
               <img
-                src={imgPath(ex.leaderId, 'planet.png')}
+                src={imgPath(ex.leaderId, 'planet.webp')}
                 alt={route.planetName}
                 onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
                 className="w-full h-40 md:h-52 object-cover rounded-lg border border-slate-700 mb-3"
@@ -124,7 +121,7 @@ function ExpeditionPanel({ colony, onStartExpedition, onPayExpeditionNode, onUnl
           {ex.stage === 6 && node && node.isEnding && (
             <div className="text-center">
               <img
-                src={imgPath(ex.leaderId, `${node.id}.png`)}
+                src={imgPath(ex.leaderId, `${node.id}.webp`)}
                 alt={node.title}
                 onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
                 className="w-full max-w-sm mx-auto rounded-lg border border-purple-700/40 mb-3"
