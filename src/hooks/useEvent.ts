@@ -2,7 +2,7 @@ import { useState, useCallback, useRef, useLayoutEffect } from 'react';
 import type { GameState, GameAction, ChoiceEvent, EventOption, EventOutcome, ResourceChange, EventSubChoice } from '@/types/game';
 import { ALL_EVENTS } from '@/data/choiceEvents';
 import { RESOURCE_EVENTS } from '@/data/resourceEvents';
-import { RELIC_DICE, RELIC_JUMP_ACCELERATOR, RELIC_VOID_SAFE } from '@/data/relics';
+import { RELIC_DICE, RELIC_VOID_SAFE } from '@/data/relics';
 
 export interface EventResult {
   description: string;
@@ -18,7 +18,7 @@ export type ChooseResult =
   | { type: 'subChoice'; subChoice: EventSubChoice; accumulator: ResourceChange }
   | { type: 'final'; result: EventResult; accumulator: ResourceChange };
 
-export type DodgeReason = false | 'jumper' | 'crisis';
+export type DodgeReason = false | 'jumper';
 
 interface UseEventReturn {
   activeEvent: ChoiceEvent | null;
@@ -62,8 +62,7 @@ export function useEvent(
       const ships = [...prev.ships];
       const s = { ...ships[shipIndex] };
 
-      const hasVoidSafe = s.relics.some((r) => r.id === RELIC_VOID_SAFE);
-      const actualGoldChange = (hasVoidSafe && (res.goldChange || 0) < 0) ? 0 : res.goldChange;
+      const actualGoldChange = res.goldChange || 0;
       const famineHalve = (amt: number): number => {
         if (amt <= 0) return amt;
         if (s.food < 0) return Math.floor(amt * 0.5);
@@ -196,6 +195,12 @@ export function useEvent(
         }
       }
 
+      // 虚空保险箱：免疫惩罚事件的金币损失（结算与显示同步归零，并给出提示）
+      if (res.goldChange < 0 && ship?.relics.some((r) => r.id === RELIC_VOID_SAFE)) {
+        res.goldChange = 0;
+        subMessage = subMessage ? `${subMessage}（虚空保险箱免疫金币损失）` : '虚空保险箱免疫了金币损失！';
+      }
+
       return { res, description: outcome.description, message: outcome.message, subMessage };
     },
     [gameState]
@@ -245,15 +250,6 @@ export function useEvent(
         if ((ship.eventDodgeChance || 0) > 0 && Math.random() < ship.eventDodgeChance) {
           dispatch({ type: 'FUNCTIONAL_UPDATE', updater: (prev) => { const ships = [...prev.ships]; ships[0] = { ...ships[0], eventTriggeredThisTurn: true }; return { ...prev, ships }; } });
           setEventDodged('jumper');
-          drawingRef.current = false;
-          return null;
-        }
-
-        // 危机预知：50%概率闪避惩罚事件
-        const hasCrisis = ship.relics.some((r) => r.id === RELIC_JUMP_ACCELERATOR);
-        if (hasCrisis && Math.random() < 0.5) {
-          dispatch({ type: 'FUNCTIONAL_UPDATE', updater: (prev) => { const ships = [...prev.ships]; ships[0] = { ...ships[0], eventTriggeredThisTurn: true }; return { ...prev, ships }; } });
-          setEventDodged('crisis');
           drawingRef.current = false;
           return null;
         }

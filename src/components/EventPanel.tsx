@@ -311,33 +311,17 @@ function EventPanel({
 
       {/* 事件躲避提示 */}
       {eventDodged && !activeEvent && !result && !currentChoice && (
-        <div className={`rounded-xl p-4 md:p-5 text-center border ${
-          eventDodged === 'jumper'
-            ? 'bg-blue-900/30 border-blue-700/40'
-            : 'bg-emerald-900/30 border-emerald-700/40'
-        }`}>
-          <Shield size={24} className={`mx-auto mb-2 ${
-            eventDodged === 'jumper' ? 'text-blue-400' : 'text-emerald-400'
-          }`} />
-          <p className={`font-bold text-sm md:text-base mb-1 ${
-            eventDodged === 'jumper' ? 'text-blue-300' : 'text-emerald-300'
-          }`}>
-            {eventDodged === 'jumper' ? '跃迁者直觉生效！' : '危机预知生效！'}
+        <div className="rounded-xl p-4 md:p-5 text-center border bg-blue-900/30 border-blue-700/40">
+          <Shield size={24} className="mx-auto mb-2 text-blue-400" />
+          <p className="font-bold text-sm md:text-base mb-1 text-blue-300">
+            跃迁者直觉生效！
           </p>
-          <p className={`text-xs md:text-sm mb-3 ${
-            eventDodged === 'jumper' ? 'text-blue-400/70' : 'text-emerald-400/70'
-          }`}>
-            {eventDodged === 'jumper'
-              ? '跃迁者号的预知能力帮你规避了一个危险事件。'
-              : '你的直觉/技能帮你提前规避了一个危险事件。'}
+          <p className="text-xs md:text-sm mb-3 text-blue-400/70">
+            跃迁者号的预知能力帮你规避了一个危险事件。
           </p>
           <button
             onClick={onClearDodged}
-            className={`px-4 py-1.5 rounded-lg text-xs transition-colors ${
-              eventDodged === 'jumper'
-                ? 'bg-blue-800/60 hover:bg-blue-700/60 text-blue-200'
-                : 'bg-emerald-800/60 hover:bg-emerald-700/60 text-emerald-200'
-            }`}
+            className="px-4 py-1.5 rounded-lg text-xs transition-colors bg-blue-800/60 hover:bg-blue-700/60 text-blue-200"
           >
             继续
           </button>

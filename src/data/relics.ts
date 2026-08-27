@@ -7,7 +7,7 @@ export const RELIC_STABILITY_ANCHOR = 'r_003';   // 时空稳定锚：生产上�
 export const RELIC_STAR_COMPASS = 'r_004';       // 星际罗盘：原料购买9折
 export const RELIC_DICE = 'r_005';               // 命运之骰：事件金币收益+20%、损失-20%
 export const RELIC_RESONANCE_STONE = 'r_006';    // 星灵共鸣石：每回合+2星尘
-export const RELIC_FOOD_PRESERVER = 'r_007';     // 食物保鲜舱：食物消耗减半
+export const RELIC_FOOD_PRESERVER = 'r_007';     // 食物保鲜舱：船员食物消耗减半
 export const RELIC_ALLOY_MANUAL = 'r_008';       // 合金精炼手册：所有合金建筑产出+1合金
 export const RELIC_DECIPHERER = 'r_009';         // 情报破译器：走私订单成功率100%
 export const RELIC_JUMP_ACCELERATOR = 'r_010';   // 跃迁加速器：跃迁回合额外-1
@@ -71,7 +71,7 @@ export const ALL_RELICS: Relic[] = [
     id: RELIC_FOOD_PRESERVER,
     name: '食物保鲜舱',
     description: '利用量子冻结技术保存食物，几乎零损耗',
-    effect: '每回合食物消耗减少50%',
+    effect: '船员食物消耗减少50%',
     stardustCost: 18,
   },
   {
