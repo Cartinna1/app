@@ -516,6 +516,11 @@ export const REDEEM_CODES: Record<string, number> = {
   '377425': 10000, '624987': 10000,
 };
 
+// ⚠️ 临时测试码（仅开发测试用，发布前删除）：
+export const REDEEM_STARDUST_CODES: Record<string, number> = {
+  'TEST5000': 5000, // 临时：兑换 5000 星尘
+};
+
 export function getRedeemCodeList(): string[] {
   return Object.keys(REDEEM_CODES);
 }
