@@ -96,6 +96,9 @@ interface GameScreenProps {
   onSubmitWonderResources: () => { success: boolean; message: string };
   onCompleteWonder: () => { success: boolean; message: string };
   canStartWonder: () => { success: boolean; reasons: string[] };
+  onStartExpedition: (leaderId: string) => { success: boolean; message: string };
+  onPayExpeditionNode: () => { success: boolean; message: string };
+  onUnlockUltimate: (leaderId: string) => { success: boolean; message: string };
   onBuyAlloy: (type: 'gold' | 'stardust', qty: number) => boolean;
   onBuyFood: (type: 'gold' | 'alloy', qty: number) => boolean;
   onBuyRelic: (relicId: string) => { success: boolean; message: string };
@@ -178,6 +181,9 @@ export default function GameScreen({
             onSubmitWonderResources,
             onCompleteWonder,
             canStartWonder,
+  onStartExpedition,
+  onPayExpeditionNode,
+  onUnlockUltimate,
   onBuyAlloy,
   onBuyFood,
   onBuyRelic,
@@ -547,6 +553,9 @@ export default function GameScreen({
               onSubmitWonderResources={onSubmitWonderResources}
               onCompleteWonder={onCompleteWonder}
               canStartWonder={canStartWonder}
+              onStartExpedition={onStartExpedition}
+              onPayExpeditionNode={onPayExpeditionNode}
+              onUnlockUltimate={onUnlockUltimate}
             />
           </div>
           )}

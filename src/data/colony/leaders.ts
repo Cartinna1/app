@@ -15,6 +15,8 @@ export interface LeaderDef {
   levelBonuses: BonusMap[];
   /** 每级的额外效果（可选） */
   levelExtras: Partial<LeaderExtraEffects>[];
+  /** 终极技能（远征 12/12 结局解锁）：在 Lv3 产出加成基础上再叠加 bonus（百分比点），无新机制 */
+  ultimateSkill?: { name: string; description: string; bonus: number };
 }
 
 export interface LeaderExtraEffects {
@@ -44,7 +46,8 @@ export const ALL_LEADERS: LeaderDef[] = [
   { id: 'L2', rarity: 'R', name: '莉娜·绿手指', abilityName: '绿手指',
     description: '她曾让一颗死寂卫星绽放花海。手中的基因剪裁器不是工具，而是写满生命诗篇的羽毛笔。',
     levelBonuses: [{ B3:20,B4:20,B5:20 }, { B3:30,B4:30,B5:30 }, { B3:40,B4:40,B5:40 }],
-    levelExtras: [{}, {}, { popCapBonus: { B4:10 } }] },
+    levelExtras: [{}, {}, { popCapBonus: { B4:10 } }],
+    ultimateSkill: { name: '绿意绽放', description: '食物建筑产出额外+20%（与Lv3叠加，合计+60%）', bonus: 20 } },
   { id: 'L3', rarity: 'R', name: '虚空财阀·诺姆', abilityName: '虚空套利',
     description: '据说他卖掉过同一个星系三次，买家至今仍在互相诉讼。财富于他并非目的，而是丈量宇宙荒谬的标尺。',
     levelBonuses: [{ B11:20 }, { B11:30,B12:30 }, { B11:40,B12:40 }],

@@ -23,7 +23,7 @@ src/
 ├── data/           # 静态数据：gameData / factions / modules / relics / materialNames
 │                   #   / choiceEvents / resourceEvents / colony/
 ├── hooks/          # 业务 hook：gameReducer / useGameState / useTurn / useTrade / useSave 等
-│   └── colony/     # useColony 的 5 个子 hook
+│   └── colony/     # useColony 的 6 个子 hook（Base/Buildings/Pop/Research/Leaders/Expedition）
 ├── lib/            # 纯函数（无副作用、可独立测试）
 │   ├── colony/     # economy.ts（产出结算）、colonyTurn.ts（回合推进）、wonderTurn.ts（奇观推进）
 │   ├── game/       # assets.ts（总资产）
@@ -53,6 +53,7 @@ src/
 | 舰队总资产（口径：不含售价加成） | `lib/game/assets.ts` → `getShipTotalAssets` |
 | 殖民地经济/电力/食物/产出 | `lib/colony/economy.ts` → `computeColonyEconomy` / `computeColonyPower` / `computeColonyFoodCost` |
 | 殖民地回合推进、人口上限、招募上限 | `lib/colony/colonyTurn.ts` → `processColonyTurn` / `calcPopCap` / `getRecruitCapPerTurn` |
+| 远征回合推进（领袖剧情树） | `lib/colony/expeditionTurn.ts` → `processExpeditionTurn`（数据在 `data/colony/expeditions.ts`，节点消耗走 cost 勿硬编码） |
 | 奇观回合推进 | `lib/colony/wonderTurn.ts` → `processWonderTurn`（lib 层，勿放回 hooks/useWonder） |
 | 游戏初始状态（新开局/重置/选船共用） | `hooks/gameReducer.ts` → `createInitialGameState`（勿在 SELECT_SHIP 另抄字段，嵌套对象由工厂新建防引用共享） |
 | 单舰船回合结算、游戏结束判定 | `lib/turn/shipTurn.ts` → `processShipTurn` / `getGameOverReason` / `computeCrewFoodCost` |

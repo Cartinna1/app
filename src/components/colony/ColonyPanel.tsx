@@ -8,8 +8,9 @@ import { getLeaderDef, getLeaderUpgradeCost, getRecruitRollCost, LEADER_LOAD_BAL
 import { computeColonyEconomy, computeColonyPower } from '@/lib/colony/economy';
 import { getRecruitCapPerTurn } from '@/lib/colony/colonyTurn';
 import { MATERIAL_NAME_MAP } from '@/data/materialNames';
-import { Home, Users, Wrench, Play, UserPlus, FlaskConical, Crown, Trophy } from 'lucide-react';
+import { Home, Users, Wrench, Play, UserPlus, FlaskConical, Crown, Trophy, Rocket } from 'lucide-react';
 import WonderPanel from './WonderPanel';
+import ExpeditionPanel from './ExpeditionPanel';
 
 // ==================== 辅助函数 ====================
 
@@ -122,12 +123,16 @@ interface ColonyPanelProps {
   onSubmitWonderResources: () => { success: boolean; message: string };
   onCompleteWonder: () => { success: boolean; message: string };
   canStartWonder: () => { success: boolean; reasons: string[] };
+  // 远征
+  onStartExpedition: (leaderId: string) => { success: boolean; message: string };
+  onPayExpeditionNode: () => { success: boolean; message: string };
+  onUnlockUltimate: (leaderId: string) => { success: boolean; message: string };
 }
 
-type ColonyTab = 'overview' | 'buildings' | 'population' | 'research' | 'leaders' | 'wonders';
+type ColonyTab = 'overview' | 'buildings' | 'population' | 'research' | 'leaders' | 'wonders' | 'expedition';
 
 function ColonyPanel(props: ColonyPanelProps) {
-  const { ship, onUnlockColony, onSelectPlanet, onRescrollPlanets, generateScoutingPool, onBuild, onRecruitPop, onAssignPop, onStartResearch, onRecruitLeader, onUpgradeLeader, onRollAndRecruit, onCancelBuilding, onDemolishBuilding, onSelectWonder, onSubmitWonderResources, onCompleteWonder, canStartWonder } = props;
+  const { ship, onUnlockColony, onSelectPlanet, onRescrollPlanets, generateScoutingPool, onBuild, onRecruitPop, onAssignPop, onStartResearch, onRecruitLeader, onUpgradeLeader, onRollAndRecruit, onCancelBuilding, onDemolishBuilding, onSelectWonder, onSubmitWonderResources, onCompleteWonder, canStartWonder, onStartExpedition, onPayExpeditionNode, onUnlockUltimate } = props;
   const colony = ship.colony;
   const [tab, setTab] = useState<ColonyTab>('overview');
   const [message, setMessage] = useState('');
@@ -302,6 +307,7 @@ function ColonyPanel(props: ColonyPanelProps) {
     { id: 'research', label: '科研', icon: FlaskConical },
     { id: 'leaders', label: '领袖', icon: Crown },
     { id: 'wonders', label: '奇观', icon: Trophy },
+    { id: 'expedition', label: '远征', icon: Rocket },
   ];
 
   return (
@@ -1032,6 +1038,16 @@ function ColonyPanel(props: ColonyPanelProps) {
           onSubmitResources={onSubmitWonderResources}
           onCompleteWonder={onCompleteWonder}
           onShowMsg={showMsg}
+        />
+      )}
+
+      {/* ===== 远征（领袖剧情树） ===== */}
+      {tab === 'expedition' && (
+        <ExpeditionPanel
+          colony={colony}
+          onStartExpedition={onStartExpedition}
+          onPayExpeditionNode={onPayExpeditionNode}
+          onUnlockUltimate={onUnlockUltimate}
         />
       )}
     </div>

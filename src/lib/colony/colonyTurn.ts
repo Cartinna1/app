@@ -9,6 +9,7 @@ import { getTechById, REPEATABLE_TECHS } from '@/data/colony/techs';
 import { getLeaderDef, LEADER_AFTERGLOW_PULSE } from '@/data/colony/leaders';
 import { computeColonyEconomy, computeColonyPower } from './economy';
 import { processWonderTurn } from './wonderTurn';
+import { processExpeditionTurn } from './expeditionTurn';
 
 /** 处理殖民地每个回合的推进（在 useTurn 中调用） */
 export function processColonyTurn(ship: Mothership, _turn: number): void {
@@ -143,6 +144,9 @@ export function processColonyTurn(ship: Mothership, _turn: number): void {
 
   // 奇观回合结算
   processWonderTurn(ship, _turn);
+
+  // 远征回合推进（领袖剧情树）
+  processExpeditionTurn(colony);
 }
 
 /** 每回合招募人口上限（基础5 + 领袖 recruitCapPerTurn）——单一真值，UI 与逻辑共用 */

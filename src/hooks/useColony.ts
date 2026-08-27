@@ -4,6 +4,7 @@ import { useColonyBuildings } from './colony/useColonyBuildings';
 import { useColonyPop } from './colony/useColonyPop';
 import { useColonyResearch } from './colony/useColonyResearch';
 import { useColonyLeaders } from './colony/useColonyLeaders';
+import { useColonyExpedition } from './colony/useColonyExpedition';
 import { useWonder } from './useWonder';
 
 /**
@@ -21,6 +22,8 @@ export function useColony(
   const { recruitLeader, upgradeLeader, rollAndRecruit, clearRecruitPool } = useColonyLeaders(gameState, dispatch);
   // 奇观系统
   const { selectWonder, submitWonderResources, canStartWonder, completeWonder } = useWonder(gameState, dispatch);
+  // 远征系统（领袖剧情树）
+  const { startExpedition, payExpeditionNode, unlockUltimate } = useColonyExpedition(gameState, dispatch);
 
   return {
     unlockColony, selectPlanet, rescrollPlanets, generateScoutingPool,
@@ -28,5 +31,6 @@ export function useColony(
     recruitLeader, upgradeLeader, rollAndRecruit, clearRecruitPool,
     cancelBuilding, demolishBuilding,
     selectWonder, submitWonderResources, canStartWonder, completeWonder,
+    startExpedition, payExpeditionNode, unlockUltimate,
   };
 }

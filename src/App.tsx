@@ -51,6 +51,9 @@ function App() {
     submitWonderResources,
     canStartWonder,
     completeWonder,
+    startExpedition,
+    payExpeditionNode,
+    unlockUltimate,
     buyAlloy,
     buyFood,
     buyRelic,
@@ -146,6 +149,9 @@ function App() {
       onSubmitWonderResources={submitWonderResources}
       onCompleteWonder={completeWonder}
       canStartWonder={canStartWonder}
+      onStartExpedition={startExpedition}
+      onPayExpeditionNode={payExpeditionNode}
+      onUnlockUltimate={unlockUltimate}
       onBuyAlloy={buyAlloy}
       onBuyFood={buyFood}
       onBuyRelic={buyRelic}

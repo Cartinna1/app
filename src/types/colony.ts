@@ -162,6 +162,9 @@ export interface Colony {
   recruitPool?: any[];               // 招募池（领袖选项，暂存）
   wonder?: WonderState;              // 奇观建设状态
   energy: number;                    // 当前净电能（-1以下=停电）
+  expedition?: ExpeditionState;                 // 远征状态（领袖剧情树）
+  expeditionEndings?: Record<string, string[]>; // 领袖 → 已触发结局 id（去重，12/12 解锁终极技能）
+  expeditionUnlocks?: string[];                 // 已解锁终极技能的领袖 id
 }
 
 // ==================== 奇观 ====================
@@ -211,6 +214,45 @@ export interface WonderState {
   totalTurnsSpent: number;      // 已花费的回合总数
   eventHistory: string[];       // 事件历史文本
   submittedThisTurn: boolean;   // 本回合是否已提交资源
+}
+
+// ==================== 远征（领袖剧情树） ====================
+
+/** 远征节点：A（免费）→ B/C（消耗）→ D（结局，消耗+箴言） */
+export interface ExpeditionNodeDef {
+  id: string;                    // A1 / B4 / C7 / D7
+  title: string;                 // 节点标题（不含层级前缀）
+  text: string;                  // 正文
+  /** 资源消耗（缺省=免费）。key：gold/food/alloy/stardust/原料id(silicon等)/researchPoints */
+  cost?: Record<string, number>;
+  /** 随机后继节点 id（A→2个B，B→2个C，C→1个D） */
+  children?: string[];
+  /** 结局节点（D） */
+  isEnding?: boolean;
+  /** 结局箴言（箴言回合显示） */
+  motto?: string;
+}
+
+/** 单个领袖的远征路线（22 领袖同构，内容独立） */
+export interface LeaderExpedition {
+  leaderId: string;
+  planetName: string;            // 第2回合 星球名
+  planetIntro: string;           // 星球介绍
+  landing: string;               // 降落正文
+  nodes: Record<string, ExpeditionNodeDef>;
+}
+
+/** 远征运行状态（挂在 colony.expedition） */
+export interface ExpeditionState {
+  leaderId: string;
+  /** 0准备 1降落 2A 3B 4C 5D 6箴言/记录 */
+  stage: number;
+  currentNodeId: string | null;  // 当前节点（B/C/D 需支付）
+  /** 本回合是否已支付当前节点（回合结算重置） */
+  paidThisTurn: boolean;
+  startedTurn: number;
+  /** 已抵达的结局节点 id（stage 6 时写入 expeditionEndings） */
+  endingId: string | null;
 }
 
 // ==================== 帮助函数 ====================
