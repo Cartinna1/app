@@ -24,6 +24,7 @@ function renderCost(cost?: Record<string, number>): string {
 function ExpeditionPanel({ colony, onStartExpedition, onPayExpeditionNode, onUnlockUltimate }: ExpeditionPanelProps) {
   const [msg, setMsg] = useState('');
   const [msgType, setMsgType] = useState<'success' | 'error'>('success');
+  const [showHistory, setShowHistory] = useState(false);
   const showMsg = (m: string, type: 'success' | 'error') => {
     setMsg(m);
     setMsgType(type);
@@ -106,21 +107,15 @@ function ExpeditionPanel({ colony, onStartExpedition, onPayExpeditionNode, onUnl
               <p className="text-[10px] text-slate-500 mb-1">节点 {node.id}</p>
               <h4 className="font-bold text-slate-100 mb-2">{node.title}</h4>
               {ex.paidThisTurn ? (
-                <>
-                  <p className="text-sm text-slate-300 leading-relaxed whitespace-pre-line mb-2">{node.text}</p>
-                  <p className="text-xs text-cyan-500/80">已支付，结束回合后进入下一节点。</p>
-                </>
+                <p className="text-sm text-slate-300 leading-relaxed whitespace-pre-line">{node.text}</p>
               ) : (
                 <div>
-                  <p className="text-xs text-slate-500 mb-3">支付资源后显示正文（每回合一次，支付后结束回合进入下一节点）</p>
-                  <div className="flex items-center gap-3">
-                    <button
-                      onClick={handlePay}
-                      className="px-4 py-2 bg-cyan-600 hover:bg-cyan-500 rounded-lg font-bold text-white text-sm transition-colors"
-                    >
-                      支付 {renderCost(node.cost)}
-                    </button>
-                  </div>
+                  <button
+                    onClick={handlePay}
+                    className="px-4 py-2 bg-cyan-600 hover:bg-cyan-500 rounded-lg font-bold text-white text-sm transition-colors"
+                  >
+                    支付 {renderCost(node.cost)}
+                  </button>
                 </div>
               )}
             </div>
@@ -134,13 +129,36 @@ function ExpeditionPanel({ colony, onStartExpedition, onPayExpeditionNode, onUnl
                 onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
                 className="w-full max-w-sm mx-auto rounded-lg border border-purple-700/40 mb-3"
               />
-              <p className="text-[10px] text-slate-500 mb-1">结局 {node.id} · 已记录</p>
+              <p className="text-[10px] text-slate-500 mb-1">结局 {node.id} · 已记录（{endingsCount(ex.leaderId)}/12）</p>
               <h4 className="font-bold text-purple-300 mb-2">{node.title}</h4>
-              <p className="text-sm italic text-purple-200/90 leading-relaxed mb-2 whitespace-pre-line">{node.motto}</p>
-              <p className="text-xs text-slate-400">
-                {node.text.length > 200 ? `${node.text.slice(0, 200)}…` : node.text}
-              </p>
-              <p className="text-xs text-slate-400 mt-2">该结局已记入图鉴（{endingsCount(ex.leaderId)}/12），可再次发起远征收集其他结局</p>
+              <p className="text-sm italic text-purple-200/90 leading-relaxed whitespace-pre-line">{node.motto}</p>
+              <p className="text-xs text-slate-500 mt-3">远征结束，结束回合后返回选领袖界面。</p>
+            </div>
+          )}
+
+          {/* 回顾剧情 */}
+          {ex.history && ex.history.length > 0 && (
+            <div className="mt-4 border-t border-slate-700/50 pt-3">
+              <button
+                onClick={() => setShowHistory(!showHistory)}
+                className="text-xs text-cyan-400 hover:text-cyan-300 font-bold"
+              >
+                {showHistory ? '收起剧情回顾' : `回顾剧情（${ex.history.length}）`}
+              </button>
+              {showHistory && (
+                <div className="mt-2 space-y-2">
+                  {ex.history.map((nid) => {
+                    const n = route.nodes[nid];
+                    if (!n) return null;
+                    return (
+                      <div key={nid} className="bg-slate-800/50 rounded-lg p-2">
+                        <p className="text-xs font-bold text-slate-300">{n.id} · {n.title}</p>
+                        <p className="text-[11px] text-slate-400 mt-1 leading-relaxed whitespace-pre-line">{n.text}</p>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
             </div>
           )}
         </div>
@@ -154,34 +172,40 @@ function ExpeditionPanel({ colony, onStartExpedition, onPayExpeditionNode, onUnl
           const unlocked = colony.expeditionUnlocks?.includes(l.id) || false;
           const hasRoute = !!getLeaderExpedition(l.id);
           return (
-            <div key={l.id} className="bg-slate-800/60 border border-slate-700 rounded-lg p-3 flex items-center justify-between gap-3">
-              <div className="min-w-0">
-                <p className="text-sm font-bold text-slate-200 flex items-center gap-1.5">
+            <div key={l.id} className="bg-slate-800/60 border border-slate-700 rounded-lg p-3 flex gap-3 items-start">
+              <img
+                src={`/leaders/${l.id}.jpg`}
+                alt={l.name}
+                onError={(e) => { (e.target as HTMLImageElement).style.display='none'; }}
+                className={`w-[80px] h-[80px] md:w-[250px] md:h-[250px] rounded-lg object-cover flex-shrink-0 border-2 ${l.rarity==='SSR'?'border-amber-400 shadow-[0_0_10px_rgba(251,191,36,0.6)]':l.rarity==='SR'?'border-purple-400':'border-blue-400'}`}
+              />
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-bold text-slate-200 flex items-center gap-1.5 flex-wrap">
                   <Crown size={14} className="text-amber-400" />
                   {l.name}
-                  <span className="text-[10px] text-slate-500 font-normal">Lv{l.level}</span>
+                  <span className="text-[10px] text-slate-500 font-normal">{l.rarity} Lv{l.level}</span>
                 </p>
-                <p className="text-[10px] text-slate-500 mt-0.5">
+                <p className="text-[10px] text-slate-500 mt-1">
                   已触发结局 {count}/12
                   {unlocked && ld?.ultimateSkill ? ` · 终极技能已解锁「${ld.ultimateSkill.name}」` : ''}
                 </p>
-              </div>
-              <div className="flex-shrink-0 flex gap-2">
-                {!unlocked && count >= 12 && ld?.ultimateSkill && (
+                <div className="mt-2 flex flex-wrap gap-2">
+                  {!unlocked && count >= 12 && ld?.ultimateSkill && (
+                    <button
+                      onClick={() => handleUnlock(l.id)}
+                      className="px-3 py-1.5 bg-purple-600 hover:bg-purple-500 rounded-lg text-xs font-bold text-white transition-colors flex items-center gap-1"
+                    >
+                      <Lock size={12} /> 解锁终极技能
+                    </button>
+                  )}
                   <button
-                    onClick={() => handleUnlock(l.id)}
-                    className="px-3 py-1.5 bg-purple-600 hover:bg-purple-500 rounded-lg text-xs font-bold text-white transition-colors flex items-center gap-1"
+                    onClick={() => handleStart(l.id)}
+                    disabled={!!ex}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-colors ${hasRoute ? 'bg-cyan-600 hover:bg-cyan-500 text-white' : 'bg-slate-700 text-slate-400'} ${ex ? 'opacity-50 cursor-not-allowed' : ''}`}
                   >
-                    <Lock size={12} /> 解锁终极技能
+                    远征（{EXPEDITION_COST}星尘）
                   </button>
-                )}
-                <button
-                  onClick={() => handleStart(l.id)}
-                  disabled={!!ex}
-                  className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-colors ${hasRoute ? 'bg-cyan-600 hover:bg-cyan-500 text-white' : 'bg-slate-700 text-slate-400'} ${ex ? 'opacity-50 cursor-not-allowed' : ''}`}
-                >
-                  远征（{EXPEDITION_COST}星尘）
-                </button>
+                </div>
               </div>
             </div>
           );

@@ -65,7 +65,7 @@ export function useColonyExpedition(
         s.stardust -= EXPEDITION_COST;
         s.colony = {
           ...s.colony,
-          expedition: { leaderId, stage: 0, currentNodeId: null, paidThisTurn: false, startedTurn: prev.turn, endingId: null },
+          expedition: { leaderId, stage: 0, currentNodeId: null, paidThisTurn: false, startedTurn: prev.turn, endingId: null, history: [] },
         };
         ships[0] = s;
         result = { success: true, message: '远征准备就绪，下回合登陆！' };
@@ -104,6 +104,10 @@ export function useColonyExpedition(
         const c = { ...s.colony, expedition: { ...s.colony.expedition! } };
         for (const [key, amount] of Object.entries(cost)) {
           deductResource(s, c, key, amount);
+        }
+        // 金币支付记入金币日志（与其他扣款口径一致）
+        if (cost.gold) {
+          s.goldLog = [{ turn: prev.turn, amount: -cost.gold, reason: `远征「${node.title}」支付`, balanceAfter: s.gold }, ...s.goldLog].slice(0, 200);
         }
         c.expedition = { ...c.expedition, paidThisTurn: true };
         s.colony = c;

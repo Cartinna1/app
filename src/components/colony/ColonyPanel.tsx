@@ -997,6 +997,7 @@ function ColonyPanel(props: ColonyPanelProps) {
                           <span className={`text-sm font-bold ${l.rarity==='SSR'?'text-amber-400':l.rarity==='SR'?'text-purple-400':'text-blue-400'}`}>{l.rarity} Lv{l.level}</span>
                           <span className="text-sm text-slate-200 font-bold ml-2">{l.name}</span>
                           <span className="text-sm text-amber-400 ml-2">· {l.abilityName}</span>
+                          <span className="text-xs text-cyan-400 ml-2">结局 {(colony.expeditionEndings?.[l.id] || []).length}/12</span>
                           <span className="text-sm text-slate-600 ml-2">- {skillText}{parts.length>0?' | '+parts.join(' | '):''}</span>
                         </div>
                         {l.level < 3 && (

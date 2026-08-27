@@ -36,8 +36,9 @@ export function useTurn(
         // 每艘母舰的回合推进（装置/食物/破产饥荒/生产/跃迁/投资/贷款）
         const ships = prev.ships.map((ship) => processShipTurn(ship, prev.turn, stocks, mats, prods));
 
-        // 殖民地回合处理
+        // 殖民地回合处理（先克隆 colony，避免共享引用原地 mutate 击穿 memo 面板的重渲染）
         ships.forEach((s) => {
+          if (s.colony) s.colony = { ...s.colony };
           processColonyTurn(s, prev.turn + 1);
           if (s.food >= 0 && s.famineTimer > 0 && !s.isRebellion) s.famineTimer = 0;
         });

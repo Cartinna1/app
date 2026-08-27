@@ -16,6 +16,12 @@ export function processExpeditionTurn(colony: Colony): void {
   // 上回合是否已支付当前节点（决定本回合能否推进），随后重置本回合支付标记
   const paid = ex.paidThisTurn;
   ex.paidThisTurn = false;
+  if (!ex.history) ex.history = [];
+
+  // 进入新节点时记入剧情历史（供「回顾剧情」）
+  const enterNode = (nodeId: string | null): void => {
+    if (nodeId && !ex.history!.includes(nodeId)) ex.history!.push(nodeId);
+  };
 
   // 从节点的 children 中随机选一个后继（数据驱动，未配置返回 null）
   const rollChild = (parentId: string | null): string | null => {
@@ -34,18 +40,21 @@ export function processExpeditionTurn(colony: Colony): void {
       ex.stage = 2;
       const aIds = Object.keys(route.nodes).filter((id) => /^A\d+$/.test(id));
       ex.currentNodeId = aIds.length > 0 ? aIds[Math.floor(Math.random() * aIds.length)] : null;
+      enterNode(ex.currentNodeId);
       break;
     }
     case 2:
       // A 已展示（免费），下一回合自动进 B
       ex.stage = 3;
       ex.currentNodeId = rollChild(ex.currentNodeId);
+      enterNode(ex.currentNodeId);
       break;
     case 3:
       // B：上回合支付才进 C
       if (paid) {
         ex.stage = 4;
         ex.currentNodeId = rollChild(ex.currentNodeId);
+        enterNode(ex.currentNodeId);
       }
       break;
     case 4:
@@ -54,6 +63,7 @@ export function processExpeditionTurn(colony: Colony): void {
         ex.stage = 5;
         ex.currentNodeId = rollChild(ex.currentNodeId);
         ex.endingId = ex.currentNodeId;
+        enterNode(ex.currentNodeId);
       }
       break;
     case 5:
@@ -68,6 +78,9 @@ export function processExpeditionTurn(colony: Colony): void {
         ex.stage = 6;
       }
       break;
-    // case 6: 箴言终局，保持展示；玩家可再次发起新远征覆盖
+    case 6:
+      // 箴言回合已展示完毕，结束远征（回到选领袖界面；结局已记录在 expeditionEndings）
+      colony.expedition = undefined;
+      break;
   }
 }

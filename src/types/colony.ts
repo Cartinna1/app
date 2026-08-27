@@ -253,6 +253,8 @@ export interface ExpeditionState {
   startedTurn: number;
   /** 已抵达的结局节点 id（stage 6 时写入 expeditionEndings） */
   endingId: string | null;
+  /** 已展示过的节点 id（按顺序，供「回顾剧情」） */
+  history: string[];
 }
 
 // ==================== 帮助函数 ====================
