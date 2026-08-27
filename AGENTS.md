@@ -122,6 +122,7 @@ src/
 | updater 里 mutate prev | 违反 reducer 纯函数约定 | 返回值纯函数化（参照 useTrade 的 applyRepChange） |
 | 领袖升级费用 UI/hook 分叉 | UI 写 50/100、hook 写 20/45，玩家被误挡且账实不符 | 已收敛到 `data/colony/leaders.ts` 的 `getLeaderUpgradeCost`（50/100） |
 | 招募上限形同虚设 | 每回合最多招N人只校验单次 amount、无累计字段，反复点可无限招 | Colony 加 `recruitedThisTurn`，`getRecruitCapPerTurn` 共享；「字段+动作检查+回合重置」三段式 |
+| 远征文本 ASCII 引号致语法错误 | 故事文档里 `'xxx'`（如「叫'回头青'」）是 ASCII 单引号，逐字搬进单引号字符串会截断（TS1005） | 远征数据文本一律用模板字符串（反引号）或转义 `\'`；录入新路线后 grep `[\u4e00-\u9fff]'[\u4e00-\u9fff]` 自检（该模式只在文本内部引号时命中） |
 
 ---
 
