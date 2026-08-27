@@ -83,7 +83,7 @@ function ExpeditionPanel({ colony, onStartExpedition, onPayExpeditionNode, onUnl
                 src={imgPath(ex.leaderId, 'planet.webp')}
                 alt={route.planetName}
                 onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
-                className="w-full h-40 md:h-52 object-cover rounded-lg border border-slate-700 mb-3"
+                className="w-full aspect-video object-cover rounded-lg border border-slate-700 mb-3"
               />
               <h4 className="font-bold text-slate-100 mb-2">{route.planetName}</h4>
               <p className="text-xs text-slate-400 whitespace-pre-line mb-3 leading-relaxed">{route.planetIntro}</p>
@@ -124,7 +124,7 @@ function ExpeditionPanel({ colony, onStartExpedition, onPayExpeditionNode, onUnl
                 src={imgPath(ex.leaderId, `${node.id}.webp`)}
                 alt={node.title}
                 onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
-                className="w-full max-w-sm mx-auto rounded-lg border border-purple-700/40 mb-3"
+                className="w-full max-w-2xl aspect-video object-cover mx-auto rounded-lg border border-purple-700/40 mb-3"
               />
               <p className="text-[10px] text-slate-500 mb-1">结局 {node.id} · 已记录（{endingsCount(ex.leaderId)}/12）</p>
               <h4 className="font-bold text-purple-300 mb-2">{node.title}</h4>
@@ -177,12 +177,12 @@ function ExpeditionPanel({ colony, onStartExpedition, onPayExpeditionNode, onUnl
                 className={`w-[80px] h-[80px] md:w-[250px] md:h-[250px] rounded-lg object-cover flex-shrink-0 border-2 ${l.rarity==='SSR'?'border-amber-400 shadow-[0_0_10px_rgba(251,191,36,0.6)]':l.rarity==='SR'?'border-purple-400':'border-blue-400'}`}
               />
               <div className="flex-1 min-w-0">
-                <p className="text-sm font-bold text-slate-200 flex items-center gap-1.5 flex-wrap">
-                  <Crown size={14} className="text-amber-400" />
+                <p className="text-base md:text-lg font-bold text-slate-200 flex items-center gap-1.5 flex-wrap">
+                  <Crown size={16} className="text-amber-400" />
                   {l.name}
-                  <span className="text-[10px] text-slate-500 font-normal">{l.rarity} Lv{l.level}</span>
+                  <span className="text-xs text-slate-500 font-normal">{l.rarity} Lv{l.level}</span>
                 </p>
-                <p className="text-[10px] text-slate-500 mt-1">
+                <p className="text-sm text-slate-500 mt-1">
                   已触发结局 {count}/12
                   {unlocked && ld?.ultimateSkill ? ` · 终极技能已解锁「${ld.ultimateSkill.name}」` : ''}
                 </p>
@@ -190,15 +190,15 @@ function ExpeditionPanel({ colony, onStartExpedition, onPayExpeditionNode, onUnl
                   {!unlocked && count >= 12 && ld?.ultimateSkill && (
                     <button
                       onClick={() => handleUnlock(l.id)}
-                      className="px-3 py-1.5 bg-purple-600 hover:bg-purple-500 rounded-lg text-xs font-bold text-white transition-colors flex items-center gap-1"
+                      className="px-3 py-1.5 bg-purple-600 hover:bg-purple-500 rounded-lg text-sm font-bold text-white transition-colors flex items-center gap-1"
                     >
-                      <Lock size={12} /> 解锁终极技能
+                      <Lock size={14} /> 解锁终极技能
                     </button>
                   )}
                   <button
                     onClick={() => handleStart(l.id)}
                     disabled={!!ex}
-                    className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-colors ${hasRoute ? 'bg-cyan-600 hover:bg-cyan-500 text-white' : 'bg-slate-700 text-slate-400'} ${ex ? 'opacity-50 cursor-not-allowed' : ''}`}
+                    className={`px-3 py-1.5 rounded-lg text-sm font-bold transition-colors ${hasRoute ? 'bg-cyan-600 hover:bg-cyan-500 text-white' : 'bg-slate-700 text-slate-400'} ${ex ? 'opacity-50 cursor-not-allowed' : ''}`}
                   >
                     远征（{EXPEDITION_COST}星尘）
                   </button>

@@ -8,9 +8,10 @@ import { getLeaderDef, getLeaderUpgradeCost, getRecruitRollCost, LEADER_LOAD_BAL
 import { computeColonyEconomy, computeColonyPower } from '@/lib/colony/economy';
 import { getRecruitCapPerTurn } from '@/lib/colony/colonyTurn';
 import { MATERIAL_NAME_MAP } from '@/data/materialNames';
-import { Home, Users, Wrench, Play, UserPlus, FlaskConical, Crown, Trophy, Rocket } from 'lucide-react';
+import { Home, Users, Wrench, Play, UserPlus, FlaskConical, Crown, Trophy, Rocket, Images } from 'lucide-react';
 import WonderPanel from './WonderPanel';
 import ExpeditionPanel from './ExpeditionPanel';
+import GalleryPanel from './GalleryPanel';
 import FeedbackMessage from '../FeedbackMessage';
 
 // ==================== 辅助函数 ====================
@@ -130,7 +131,7 @@ interface ColonyPanelProps {
   onUnlockUltimate: (leaderId: string) => { success: boolean; message: string };
 }
 
-type ColonyTab = 'overview' | 'buildings' | 'population' | 'research' | 'leaders' | 'wonders' | 'expedition';
+type ColonyTab = 'overview' | 'buildings' | 'population' | 'research' | 'leaders' | 'wonders' | 'expedition' | 'gallery';
 
 function ColonyPanel(props: ColonyPanelProps) {
   const { ship, onUnlockColony, onSelectPlanet, onRescrollPlanets, generateScoutingPool, onBuild, onRecruitPop, onAssignPop, onStartResearch, onRecruitLeader, onUpgradeLeader, onRollAndRecruit, onCancelBuilding, onDemolishBuilding, onSelectWonder, onSubmitWonderResources, onCompleteWonder, canStartWonder, onStartExpedition, onPayExpeditionNode, onUnlockUltimate } = props;
@@ -309,6 +310,7 @@ function ColonyPanel(props: ColonyPanelProps) {
     { id: 'leaders', label: '领袖', icon: Crown },
     { id: 'wonders', label: '奇观', icon: Trophy },
     { id: 'expedition', label: '远征', icon: Rocket },
+    { id: 'gallery', label: '图鉴', icon: Images },
   ];
 
   return (
@@ -1052,6 +1054,9 @@ function ColonyPanel(props: ColonyPanelProps) {
           onUnlockUltimate={onUnlockUltimate}
         />
       )}
+
+      {/* ===== 图鉴（远征收集物回顾） ===== */}
+      {tab === 'gallery' && <GalleryPanel colony={colony} />}
     </div>
   );
 }

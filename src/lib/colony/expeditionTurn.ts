@@ -31,15 +31,47 @@ export function processExpeditionTurn(colony: Colony): void {
     return parent.children[Math.floor(Math.random() * parent.children.length)];
   };
 
+  // ===== 收集导向（方案 B）：随机时优先"未收集结局"的分支，集齐 12 后回退纯随机 =====
+  const collectedSet = new Set(colony.expeditionEndings?.[ex.leaderId] || []);
+  // C 节点 → 其唯一 D 结局 id
+  const dOfC = (cId: string): string | null => {
+    const c = route.nodes[cId];
+    return c?.children && c.children.length === 1 ? c.children[0] : null;
+  };
+  // C 分支是否通向未收集结局
+  const cFresh = (cId: string): boolean => {
+    const d = dOfC(cId);
+    return d ? !collectedSet.has(d) : true;
+  };
+  // A 分支是否还有未收集结局可达（A→B→C→D 全展开）
+  const aFresh = (aId: string): boolean =>
+    (route.nodes[aId]?.children || []).some((bId) =>
+      (route.nodes[bId]?.children || []).some(cFresh)
+    );
+  const pickFrom = (ids: string[]): string | null => ids.length > 0 ? ids[Math.floor(Math.random() * ids.length)] : null;
+  // 随机选 A：优先还有新结局的 A
+  const rollA = (): string | null => {
+    const aIds = Object.keys(route.nodes).filter((id) => /^A\d+$/.test(id));
+    const fresh = aIds.filter(aFresh);
+    return pickFrom(fresh.length > 0 ? fresh : aIds);
+  };
+  // B → C：优先 C 的 D 未收集
+  const rollFreshC = (parentId: string | null): string | null => {
+    if (!parentId) return null;
+    const parent = route.nodes[parentId];
+    if (!parent?.children || parent.children.length === 0) return null;
+    const fresh = parent.children.filter(cFresh);
+    return pickFrom(fresh.length > 0 ? fresh : parent.children);
+  };
+
   switch (ex.stage) {
     case 0: // 准备 → 降落
       ex.stage = 1;
       break;
     case 1: {
-      // 降落 → 随机 A 节点
+      // 降落 → 随机 A 节点（收集导向：优先未收集结局的 A）
       ex.stage = 2;
-      const aIds = Object.keys(route.nodes).filter((id) => /^A\d+$/.test(id));
-      ex.currentNodeId = aIds.length > 0 ? aIds[Math.floor(Math.random() * aIds.length)] : null;
+      ex.currentNodeId = rollA();
       enterNode(ex.currentNodeId);
       break;
     }
@@ -50,10 +82,10 @@ export function processExpeditionTurn(colony: Colony): void {
       enterNode(ex.currentNodeId);
       break;
     case 3:
-      // B：上回合支付才进 C
+      // B：上回合支付才进 C（收集导向：优先 C 的 D 未收集）
       if (paid) {
         ex.stage = 4;
-        ex.currentNodeId = rollChild(ex.currentNodeId);
+        ex.currentNodeId = rollFreshC(ex.currentNodeId);
         enterNode(ex.currentNodeId);
       }
       break;
