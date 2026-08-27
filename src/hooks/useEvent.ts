@@ -196,7 +196,7 @@ export function useEvent(
       }
 
       // 虚空保险箱：免疫惩罚事件的金币损失（结算与显示同步归零，并给出提示）
-      if (res.goldChange < 0 && ship?.relics.some((r) => r.id === RELIC_VOID_SAFE)) {
+      if ((res.goldChange || 0) < 0 && ship?.relics.some((r) => r.id === RELIC_VOID_SAFE)) {
         res.goldChange = 0;
         subMessage = subMessage ? `${subMessage}（虚空保险箱免疫金币损失）` : '虚空保险箱免疫了金币损失！';
       }
