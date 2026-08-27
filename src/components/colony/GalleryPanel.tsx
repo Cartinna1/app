@@ -6,7 +6,7 @@ import { useState, memo } from 'react';
 import type { Colony } from '@/types/colony';
 import { getLeaderExpedition } from '@/data/colony/expeditions';
 import { getLeaderDef } from '@/data/colony/leaders';
-import { Crown, Lock } from 'lucide-react';
+import { Crown, Lock, ChevronDown, ChevronRight } from 'lucide-react';
 
 interface GalleryPanelProps {
   colony: Colony;
@@ -14,6 +14,8 @@ interface GalleryPanelProps {
 
 function GalleryPanel({ colony }: GalleryPanelProps) {
   const [selected, setSelected] = useState<{ leaderId: string; nodeId: string } | null>(null);
+  // 每个领袖卡片默认收起，点击标题栏展开格子网格
+  const [expanded, setExpanded] = useState<Record<string, boolean>>({});
   const imgPath = (leaderId: string, name: string) => `/expeditions/${leaderId}/${name}`;
   const leadersWithRoute = colony.leaders.filter((l) => getLeaderExpedition(l.id));
 
@@ -76,11 +78,18 @@ function GalleryPanel({ colony }: GalleryPanelProps) {
         ];
         return (
           <div key={l.id} className="bg-slate-800/60 border border-slate-700 rounded-xl p-4 mb-4">
-            <p className="text-sm font-bold text-slate-200 flex items-center gap-1.5 mb-3">
+            <button
+              onClick={() => setExpanded((prev) => ({ ...prev, [l.id]: !prev[l.id] }))}
+              className="w-full flex items-center gap-1.5 mb-3 text-left group"
+            >
               <Crown size={14} className="text-amber-400" />
-              {l.name}
+              <span className="text-sm font-bold text-slate-200 group-hover:text-white">{l.name}</span>
               <span className="text-xs text-slate-500 font-normal">· {ld?.abilityName || ''} · 已收集 {list.length}/12</span>
-            </p>
+              <span className="ml-auto text-slate-500 group-hover:text-slate-300">
+                {expanded[l.id] ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
+              </span>
+            </button>
+            {expanded[l.id] && (
             <div className="grid grid-cols-3 md:grid-cols-4 gap-2">
               {cells.map((c) => (
                 <button
@@ -109,6 +118,7 @@ function GalleryPanel({ colony }: GalleryPanelProps) {
                 </button>
               ))}
             </div>
+            )}
           </div>
         );
       })}
