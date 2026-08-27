@@ -3,6 +3,8 @@ import type { GameState } from '@/types/game';
 import { FACTIONS, getTravelTurns, getSellPrice, RELATION_MATRIX, getReputationTier } from '@/data/factions';
 import { RECIPES } from '@/data/gameData';
 import { MATERIAL_NAME_MAP } from '@/data/materialNames';
+import { MODULE_TRADE_HUB } from '@/data/modules';
+import { RELIC_JUMP_ACCELERATOR, RELIC_ANTI_MONOPOLY, RELIC_DECIPHERER, RELIC_BARGAIN_AI } from '@/data/relics';
 
 
 export function useTrade(
@@ -85,7 +87,7 @@ export function useTrade(
           if (s.tradeStatus.currentFactionId === targetFactionId) { result = { success: false, message: '已在此势力' }; return prev; }
           let turns = getTravelTurns(s.tradeStatus.currentFactionId, targetFactionId);
           if (s.installedModuleIds.includes('gravity_anchor')) turns = Math.max(1, turns - 1);
-          if (s.relics.some((r) => r.id === 'r_010')) turns = Math.max(1, turns - 1);
+          if (s.relics.some((r) => r.id === RELIC_JUMP_ACCELERATOR)) turns = Math.max(1, turns - 1);
           s.tradeStatus.targetFactionId = targetFactionId;
           s.tradeStatus.travelTurnsRemaining = turns;
           ships[shipIndex] = s;
@@ -126,6 +128,8 @@ export function useTrade(
           else if (tier.discount > 0) price = Math.ceil(price * (1 - tier.discount)); // 正声望打折
           const buyBuffMult = (prev.buyBuffs?.[faction.id] || []).reduce((m, b) => m * b.multiplier, 1);
           price = Math.ceil(price * buyBuffMult);
+          // 讨价还价AI机器人 r_015：买特产价格打9折
+          if (s.relics.some((r) => r.id === RELIC_BARGAIN_AI)) price = Math.ceil(price * 0.9);
           const totalCost = price * quantity;
           if (s.gold < totalCost) { result = { success: false, message: `金币不足，需${totalCost}` }; return prev; }
           s.gold -= totalCost;
@@ -179,8 +183,8 @@ export function useTrade(
           if (!faction) { result = { success: false, message: '找不到势力' }; return prev; }
           const sellPrice = getSellPrice(factionId, prev.factionPrices, prev.factionSellMultipliers);
           const sellBuffMult = (prev.sellBuffs?.[curFid] || []).reduce((m, b) => m * b.multiplier, 1);
-          const relicBonus = s.relics.some((r) => r.id === 'r_014') ? 1.1 : 1;
-          const tradeHubBonus = s.installedModuleIds.includes('trade_hub') ? 1.15 : 1;
+          const relicBonus = s.relics.some((r) => r.id === RELIC_ANTI_MONOPOLY) ? 1.1 : 1;
+          const tradeHubBonus = s.installedModuleIds.includes(MODULE_TRADE_HUB) ? 1.15 : 1;
           const totalRevenue = Math.round(sellPrice * quantity * relicBonus * tradeHubBonus * sellBuffMult);
           s.gold += totalRevenue;
           if (s.bankrupt && s.gold > 0) s.bankrupt = false;
@@ -389,10 +393,11 @@ export function useTrade(
         if (!contract.accepted) { result = { success: false, message: '请先接取合同' }; return prev; }
         if (prev.turn > contract.expiresTurn) { result = { success: false, message: '合同已过期' }; return prev; }
 
-        // 走私合同成功率判定
+        // 走私合同成功率判定（情报破译器 r_009 使走私必定成功）
         if (contract.type === 'smuggling') {
+          const hasDecipherer = s.relics.some((r) => r.id === RELIC_DECIPHERER);
           const roll = Math.random();
-          if (roll > 0.65) {
+          if (!hasDecipherer && roll > 0.65) {
             contracts.splice(idx, 1);
             const rep = ((prev.factionReputation || {})[contract.factionId] || 0) - 5;
             const factionReputation = { ...(prev.factionReputation || {}), [contract.factionId]: Math.max(-100, rep) };

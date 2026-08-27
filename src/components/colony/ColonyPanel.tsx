@@ -1,10 +1,10 @@
 import { useState, useMemo, useEffect, useCallback, memo } from 'react';
 import type { Mothership } from '@/types/game';
 import type { PlanetTypeId, PlanetDef } from '@/types/colony';
-import { getBuildableBuildings, getBuildingDef, getBuildingEffect } from '@/data/colony/buildings';
+import { getBuildableBuildings, getBuildingDef, getBuildingEffect, BUILDING_QUANTUM_LAB } from '@/data/colony/buildings';
 import { getPlanetById } from '@/data/colony/planets';
 import { getTechById, getAvailableTechs, REPEATABLE_TECHS, getRepeatableCost } from '@/data/colony/techs';
-import { getLeaderDef, getLeaderUpgradeCost, getRecruitRollCost } from '@/data/colony/leaders';
+import { getLeaderDef, getLeaderUpgradeCost, getRecruitRollCost, LEADER_LOAD_BALANCE, LEADER_AFTERGLOW_PULSE } from '@/data/colony/leaders';
 import { computeColonyEconomy, computeColonyPower } from '@/lib/colony/economy';
 import { getRecruitCapPerTurn } from '@/lib/colony/colonyTurn';
 import { MATERIAL_NAME_MAP } from '@/data/materialNames';
@@ -85,7 +85,7 @@ function getOutputDesc(def: ReturnType<typeof getBuildingDef>): string {
   if (def.outputType === 'research') return `产科研点: ${def.popFactor}×入驻/回合`;
   if (def.category === 'housing') return `人口上限+${def.id === 'B2' ? '20' : '5'}`;
   if (def.id === 'B27') return '解锁招募领袖';
-  if (def.id === 'B26') return '研究实验室产出×1.5';
+  if (def.id === BUILDING_QUANTUM_LAB) return '研究实验室产出×1.5';
   if (def.id === 'B28') return '每2回合+1人口';
   return '';
 }
@@ -360,7 +360,7 @@ function ColonyPanel(props: ColonyPanelProps) {
           {(() => {
             const power = computeColonyPower(colony);
             const netPwr = (colony.energy ?? 0);
-            const hasL22Lv3 = colony.leaders?.some(l => l.id === 'L22' && l.level >= 3);
+            const hasL22Lv3 = colony.leaders?.some(l => l.id === LEADER_AFTERGLOW_PULSE && l.level >= 3);
             return (
               <div className={`rounded-xl p-4 border ${netPwr < 0 ? 'bg-red-900/30 border-red-700/50' : 'bg-slate-900/60 border-slate-700'}`}>
                 <div className="flex justify-between items-center">
@@ -381,7 +381,7 @@ function ColonyPanel(props: ColonyPanelProps) {
           })()}
           {/* 产出汇总（统一走 economy 模块估算） */}
           {liveBuildings.length > 0 && (() => {
-            const eco = computeColonyEconomy(colony);
+            const eco = computeColonyEconomy(colony, { relics: ship.relics });
             const MAT_CN: Record<string, string> = MATERIAL_NAME_MAP;
             const OUT_LABEL: Record<string, string> = { food:'食物', alloy:'合金', stardust:'星尘', gold:'金币', research:'科研' };
             const bonusLines: { label: string; value: number; detail: string }[] = [];
@@ -457,7 +457,7 @@ function ColonyPanel(props: ColonyPanelProps) {
       {/* ===== 建筑 ===== */}
       {tab === 'buildings' && (() => {
         // 每回合产出（统一走 economy 模块估算，金币取区间中值）
-        const liveEco = computeColonyEconomy(colony);
+        const liveEco = computeColonyEconomy(colony, { relics: ship.relics });
         const ecoByUid = new Map(liveEco.buildings.map((e) => [e.uid, e]));
         const OUT_UN: Record<string, string> = { food: '食物', alloy: '合金', stardust: '星尘', gold: '金币', research: '科研' };
         const MAT_UN: Record<string, string> = MATERIAL_NAME_MAP;
@@ -901,10 +901,10 @@ function ColonyPanel(props: ColonyPanelProps) {
                       if (ex1.quantumPerTurn) skillDesc += ` | 量子簇+${ex1.quantumPerTurn}/回合`;
                       {/* L16 穹顶之父（硬编码追加） */}
                       {ld.id === 'L16' && (skillDesc += ' | 穹顶都市/居住舱人口效果+50%')}
-                      {/* L21 索林·瓦特 */}
-                      {ld.id === 'L21' && (skillDesc += ' | Lv1所有建筑电能消耗-10% | Lv2 -15% | Lv3 -25%')}
-                      {/* L22 诺娃·永昼 */}
-                      {ld.id === 'L22' && (skillDesc += ' | Lv1太阳能阵列+30% | Lv2聚变电站+30% | Lv3停电保护5回合')}
+                      {/* LEADER_LOAD_BALANCE 索林·瓦特 */}
+                      {ld.id === LEADER_LOAD_BALANCE && (skillDesc += ' | Lv1所有建筑电能消耗-10% | Lv2 -15% | Lv3 -25%')}
+                      {/* LEADER_AFTERGLOW_PULSE 诺娃·永昼 */}
+                      {ld.id === LEADER_AFTERGLOW_PULSE && (skillDesc += ' | Lv1太阳能阵列+30% | Lv2聚变电站+30% | Lv3停电保护5回合')}
                       return (
                         <div key={i} className="bg-slate-800/60 border border-slate-700 rounded-lg p-3 flex justify-between items-center gap-3">
                           <img
@@ -969,10 +969,10 @@ function ColonyPanel(props: ColonyPanelProps) {
                       parts.push(`穹顶都市/居住舱人口效果+${popPct}%`);
                       if (l.level >= 2) parts.push(`B2造价-${l.level===2?30:50}%`);
                     })()}
-                    {/* L21 索林·瓦特 */}
-                    {ld.id === 'L21' && parts.push(`所有建筑电能消耗 -${[10,15,25][l.level-1]}%`)}
-                    {/* L22 诺娃·永昼 */}
-                    {ld.id === 'L22' && (() => {
+                    {/* LEADER_LOAD_BALANCE 索林·瓦特 */}
+                    {ld.id === LEADER_LOAD_BALANCE && parts.push(`所有建筑电能消耗 -${[10,15,25][l.level-1]}%`)}
+                    {/* LEADER_AFTERGLOW_PULSE 诺娃·永昼 */}
+                    {ld.id === LEADER_AFTERGLOW_PULSE && (() => {
                       if (l.level >= 1) parts.push('太阳能阵列产出+30%');
                       if (l.level >= 2) parts.push('聚变电站产出+30%');
                       if (l.level >= 3) parts.push('停电后保持5回合正常产出');

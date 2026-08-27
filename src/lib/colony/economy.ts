@@ -5,19 +5,20 @@
 // 修改产出规则时只需改这里，UI 与结算不会再分叉。
 
 import type { BuildingDef, Colony } from '@/types/colony';
-import { getBuildingDef } from '@/data/colony/buildings';
-import { getLeaderDef } from '@/data/colony/leaders';
+import { getBuildingDef, BUILDING_QUANTUM_LAB, BUILDING_SOLAR_ARRAY, BUILDING_FUSION_PLANT } from '@/data/colony/buildings';
+import { getLeaderDef, LEADER_LOAD_BALANCE, LEADER_AFTERGLOW_PULSE } from '@/data/colony/leaders';
 import { getPlanetById } from '@/data/colony/planets';
+import { RELIC_ALLOY_MANUAL } from '@/data/relics';
 
 /** 电能结算结果 */
 export interface ColonyPowerInfo {
-  /** 总发电（逐建筑 floor，含 L22/星球/领袖全员加成） */
+  /** 总发电（逐建筑 floor，含 余晖脉冲/星球/领袖全员加成） */
   gen: number;
-  /** 总耗电（含 L21 折扣与星球倍率，ceil） */
+  /** 总耗电（含 负载平衡折扣与星球倍率，ceil） */
   use: number;
   /** 净电能 gen - use */
   net: number;
-  /** L21 负载平衡折扣率（0 / 0.10 / 0.15 / 0.25） */
+  /** 负载平衡折扣率（0 / 0.10 / 0.15 / 0.25） */
   l21Pct: number;
   planetGenMult: number;
   planetUseMult: number;
@@ -38,7 +39,7 @@ export interface BuildingEconomyEntry {
   leaderPct: number;
   /** 循环科技加成（小数） */
   repeatPct: number;
-  /** B26 量子实验室加成（小数，仅科研） */
+  /** 量子实验室加成（小数，仅科研） */
   b26Pct: number;
   /** 最终产出（gold 在估算模式下取区间中值） */
   value: number;
@@ -67,6 +68,9 @@ export interface ColonyEconomyOptions {
   blackout?: boolean;
   /** true = 实际结算（金币区间、领袖科研区间、随机原料均掷骰）；false/缺省 = 确定性估算（取中值） */
   random?: boolean;
+  /** 母舰遗物（结算与显示共用的遗物加成，如 r_008 合金精炼手册）。
+   *  必填：漏传会让遗物加成静默失效（显示与结算分叉），故由 TS 强制所有调用点传值。 */
+  relics: { id: string }[];
 }
 
 /** 领袖全员加成（levelBonuses 中 'ALL' 键的合计，% 值） */
@@ -97,15 +101,15 @@ export function computeColonyPower(colony: Colony): ColonyPowerInfo {
     if (!def || def.outputType !== 'power') continue;
     if (inst.assignedPop < def.minPop) continue;
     let base = (def.baseOutput || 0) + (def.popFactor || 0) * inst.assignedPop;
-    // L22 余晖脉冲加成
+    // 余晖脉冲加成
     for (const l of colony.leaders) {
       const ld = getLeaderDef(l.id);
-      if (ld?.id === 'L22') {
-        if ((def.id === 'B29' && l.level >= 1) || (def.id === 'B30' && l.level >= 2)) base *= 1.30;
+      if (ld?.id === LEADER_AFTERGLOW_PULSE) {
+        if ((def.id === BUILDING_SOLAR_ARRAY && l.level >= 1) || (def.id === BUILDING_FUSION_PLANT && l.level >= 2)) base *= 1.30;
       }
     }
-    // 星球修正（仅太阳能阵列 B29）
-    if (def.id === 'B29' && powerGenPlanetMult !== 1) base *= powerGenPlanetMult;
+    // 星球修正（仅太阳能阵列）
+    if (def.id === BUILDING_SOLAR_ARRAY && powerGenPlanetMult !== 1) base *= powerGenPlanetMult;
     // 领袖全员加成
     if (lAllBonus > 0) base *= (1 + lAllBonus / 100);
     gen += Math.floor(base);
@@ -119,11 +123,11 @@ export function computeColonyPower(colony: Colony): ColonyPowerInfo {
     if (!def || def.outputType === 'power') continue; // 电力建筑自身不耗电
     totalUse += def.powerConsumption || 0;
   }
-  // L21 负载平衡（总消耗 × 折扣，ceil 取整）
+  // 负载平衡（总消耗 × 折扣，ceil 取整）
   let l21Pct = 0;
   for (const l of colony.leaders) {
     const ld = getLeaderDef(l.id);
-    if (ld?.id === 'L21') { l21Pct = [0.10, 0.15, 0.25][l.level - 1] || 0; }
+    if (ld?.id === LEADER_LOAD_BALANCE) { l21Pct = [0.10, 0.15, 0.25][l.level - 1] || 0; }
   }
   const effectiveUse = l21Pct > 0 ? Math.ceil(totalUse * (1 - l21Pct)) : totalUse;
   // 星球电能消耗修正
@@ -148,9 +152,10 @@ export function computeColonyFoodCost(colony: Colony): { foodPerPop: number; foo
 const RANDOM_MAT_IDS = ['oil', 'gold_ore', 'carbon', 'dark_matter', 'quantum', 'silicon'];
 
 /** 殖民地每回合经济结算（产出 + 食物消耗 + 电能） */
-export function computeColonyEconomy(colony: Colony, opts?: ColonyEconomyOptions): ColonyEconomy {
-  const random = opts?.random === true;
-  const blackout = opts?.blackout === true;
+export function computeColonyEconomy(colony: Colony, opts: ColonyEconomyOptions): ColonyEconomy {
+  const random = opts.random === true;
+  const blackout = opts.blackout === true;
+  const hasAlloyManual = opts.relics.some((r) => r.id === RELIC_ALLOY_MANUAL);
   const planet = colony.planetType ? getPlanetById(colony.planetType) : undefined;
   const buffs = planet?.buffs;
 
@@ -171,9 +176,9 @@ export function computeColonyEconomy(colony: Colony, opts?: ColonyEconomyOptions
   // ===== 循环科技加成 =====
   const rl = colony.techState?.repeatableLevels || {};
 
-  // ===== B26 量子实验室：科研产出加成 =====
+  // ===== 量子实验室：科研产出加成 =====
   let b26Bonus = 0;
-  if (colony.buildings.some((b) => b.active && b.defId === 'B26')) {
+  if (colony.buildings.some((b) => b.active && b.defId === BUILDING_QUANTUM_LAB)) {
     b26Bonus = 0.5;
     for (const l of colony.leaders) {
       const bm = getLeaderDef(l.id)?.levelExtras[l.level - 1]?.b26Mult;
@@ -250,6 +255,8 @@ export function computeColonyEconomy(colony: Colony, opts?: ColonyEconomyOptions
       const pm = mult ? (mult - 1) : 0;
       entry.base = base; entry.planetPct = pm;
       entry.value = Math.ceil(base * (1 + pm + leaderPct + repeatPct));
+      // 合金精炼手册 r_008：每座在产合金建筑 +1 合金（结算与显示共用）
+      if (def.outputType === 'alloy' && hasAlloyManual) entry.value += 1;
       if (def.outputType === 'food') result.food += entry.value;
       else if (def.outputType === 'alloy') result.alloy += entry.value;
       else result.stardust += entry.value;

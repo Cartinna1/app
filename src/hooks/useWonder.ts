@@ -136,34 +136,3 @@ export function useWonder(
 
   return { selectWonder, submitWonderResources, canStartWonder, completeWonder };
 }
-
-/** 由 processColonyTurn 调用：结算奇观推进 */
-export function processWonderTurn(ship: any, _turn: number): void {
-  const ws = ship.colony?.wonder;
-  if (!ws || ws.phase !== 'building' || !ws.selectedWonderId) return;
-  if (!ws.submittedThisTurn) { return; }
-
-  const wonder = getWonderDef(ws.selectedWonderId);
-  if (!wonder) return;
-
-  let newStage = ws.currentStage;
-  let newProgress = ws.stageProgress + 1;
-  let newTotal = ws.totalTurnsSpent + 1;
-
-  // 阶段切换
-  if (newStage < wonder.stages.length && newProgress >= wonder.stages[newStage].turns) {
-    newProgress = 0;
-    newStage++;
-  }
-
-  const newWS: WonderState = {
-    ...ws,
-    currentStage: newStage,
-    stageProgress: newProgress,
-    totalTurnsSpent: newTotal,
-    submittedThisTurn: false,
-    eventHistory: [...ws.eventHistory, `第${newTotal}回合：${wonder.stages[ws.currentStage]?.name || ''}进度 +1`],
-  };
-
-  ship.colony.wonder = newWS;
-}

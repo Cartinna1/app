@@ -3,9 +3,21 @@
 // 跃迁、投资收益、贷款还款等所有"每艘母舰"级别的回合结算。
 
 import type { Mothership, Stock, RawMaterial, Product } from '@/types/game';
-import { RECIPES } from '@/data/gameData';
+import { RECIPES, MOTHERSHIP_ID_UNITY, MOTHERSHIP_ID_SINGULARITY_SEEKER } from '@/data/gameData';
 import { FACTIONS, getInvestmentTier, getIncomeCap } from '@/data/factions';
 import { getShipTotalAssets } from '@/lib/game/assets';
+import {
+  RELIC_CRYSTAL, RELIC_TRANSCRIBER, RELIC_RESONANCE_STONE, RELIC_FOOD_PRESERVER,
+  RELIC_CLONE_DISH, RELIC_LUCKY_CAT,
+} from '@/data/relics';
+import {
+  MODULE_BIO_KITCHEN, MODULE_NANO_FARM, MODULE_SIXTH_FARM, MODULE_MINING_ARRAY,
+  MODULE_DYSON_COLLECTOR, MODULE_RESERVE_BAY,
+} from '@/data/modules';
+
+// 原料 ID 清单（随机原料效果用，勿就地重复声明）
+const BASIC_MATERIAL_IDS = ['carbon', 'gold_ore', 'oil', 'silicon'];
+const ALL_MATERIAL_IDS = ['carbon', 'gold_ore', 'oil', 'dark_matter', 'silicon', 'quantum'];
 
 /** 处理单艘母舰的回合推进；内部先浅拷贝再改写，返回新 ship 对象。 */
 export function processShipTurn(
@@ -32,23 +44,23 @@ export function processShipTurn(
   const hasModule = (id: string) => s.installedModuleIds.includes(id);
 
   // 1. 生物合成厨房：每回合 +15 食物
-  if (hasModule('bio_kitchen')) s.food += 15;
+  if (hasModule(MODULE_BIO_KITCHEN)) s.food += 15;
 
   // 1b. 纳米机器人农场：每回合 +30 食物
-  if (hasModule('nano_farm')) s.food += 30;
+  if (hasModule(MODULE_NANO_FARM)) s.food += 30;
 
   // 1c. 六维奇点农场：每回合 +60 食物
-  if (hasModule('sixth_farm')) s.food += 60;
+  if (hasModule(MODULE_SIXTH_FARM)) s.food += 60;
 
   // 2. 深空采矿阵列：每回合 +10 随机基础原料
-  if (hasModule('mining_array')) {
-    const basicMats = ['carbon', 'gold_ore', 'oil', 'silicon'];
+  if (hasModule(MODULE_MINING_ARRAY)) {
+    const basicMats = BASIC_MATERIAL_IDS;
     const picked = basicMats[Math.floor(Math.random() * basicMats.length)];
     s.materials = { ...s.materials, [picked]: (s.materials[picked] || 0) + 10 };
   }
 
   // 4. 戴森粒子收集器：每回合 +3 星尘
-  if (hasModule('dyson_collector')) s.stardust += 3;
+  if (hasModule(MODULE_DYSON_COLLECTOR)) s.stardust += 3;
 
   // 6. 手动装置冷却倒计时
   s.modules = s.modules.map((m) => m.cooldown > 0 ? { ...m, cooldown: m.cooldown - 1 } : m);
@@ -74,25 +86,14 @@ export function processShipTurn(
   };
 
   // ==================== 食物消耗（船员维持）- 允许变负数 ====================
-  const foodPreserve = s.relics.some((r) => r.id === 'r_007') ? 0.5 : 0;
-  const t = turn;
-  let foodCost: number;
-  if (t <= 5) foodCost = 1;
-  else if (t <= 10) foodCost = 3;
-  else if (t <= 15) foodCost = 7;
-  else if (t <= 20) foodCost = 15;
-  else if (t <= 25) foodCost = 23;
-  else if (t <= 30) foodCost = 26;
-  else foodCost = t;
-  const finalFoodCost = Math.floor(foodCost * (1 - foodPreserve));
-  s.food -= finalFoodCost;
+  s.food -= computeCrewFoodCost(turn, s);
   // 食物刚变负数 → 触发饥荒
   if (s.food < 0 && s.famineTimer === 0 && !s.isRebellion) {
     s.famineTimer = 10;
   }
 
-  // 万众一心股息（ship.id === 0）- 饥荒减半
-  if (s.id === 0) {
+  // 万众一心股息（MOTHERSHIP_ID_UNITY）- 饥荒减半
+  if (s.id === MOTHERSHIP_ID_UNITY) {
     const div = famineHalve(Math.floor(getShipTotalAssets(s, stocks, mats, prods) * 0.01));
     if (div > 0) {
       s.gold += div;
@@ -101,18 +102,18 @@ export function processShipTurn(
     }
   }
 
-  // 奇点探求者原料（ship.id === 4）
-  if (s.id === 4) {
-    const matIds = ['carbon', 'gold_ore', 'oil', 'dark_matter', 'silicon', 'quantum'];
+  // 奇点探求者原料（MOTHERSHIP_ID_SINGULARITY_SEEKER）
+  if (s.id === MOTHERSHIP_ID_SINGULARITY_SEEKER) {
+    const matIds = ALL_MATERIAL_IDS;
     const pickedMat = matIds[Math.floor(Math.random() * matIds.length)];
     const amount = Math.floor(Math.random() * 3) + 2;
     s.materials = { ...s.materials };
     s.materials[pickedMat] = (s.materials[pickedMat] || 0) + amount;
   }
 
-  // 遗物 r_001：奥得律斯基亚水晶——每回合3个随机原料
-  if (s.relics.some((r) => r.id === 'r_001')) {
-    const matIds = ['carbon', 'gold_ore', 'oil', 'dark_matter', 'silicon', 'quantum'];
+  // 遗物「奥得律斯基亚水晶」——每回合3个随机原料
+  if (s.relics.some((r) => r.id === RELIC_CRYSTAL)) {
+    const matIds = ALL_MATERIAL_IDS;
     s.materials = { ...s.materials };
     for (let i = 0; i < 3; i++) {
       const picked = matIds[Math.floor(Math.random() * matIds.length)];
@@ -120,8 +121,8 @@ export function processShipTurn(
     }
   }
 
-  // 遗物 r_002：誊录仪——每回合+1%总资产金币
-  if (s.relics.some((r) => r.id === 'r_002')) {
+  // 遗物「誊录仪」——每回合+1%总资产金币
+  if (s.relics.some((r) => r.id === RELIC_TRANSCRIBER)) {
     const assets = getShipTotalAssets(s, stocks, mats, prods);
     const bonus = famineHalve(Math.max(0, Math.floor(assets * 0.01)));
     if (bonus > 0) {
@@ -132,10 +133,10 @@ export function processShipTurn(
   }
 
   // 新遗物：星灵共鸣石——每回合+2星尘
-  if (s.relics.some((r) => r.id === 'r_006')) s.stardust += 2;
+  if (s.relics.some((r) => r.id === RELIC_RESONANCE_STONE)) s.stardust += 2;
 
   // 新遗物：克隆培养皿——每回合+5食物
-  if (s.relics.some((r) => r.id === 'r_012')) {
+  if (s.relics.some((r) => r.id === RELIC_CLONE_DISH)) {
     s.food += 5;
     if (s.food >= 0 && s.famineTimer > 0 && !s.isRebellion) {
       s.famineTimer = 0; // 食物回正解除饥荒
@@ -143,7 +144,7 @@ export function processShipTurn(
   }
 
   // 新遗物：招财猫摆件——每回合+200金币
-  if (s.relics.some((r) => r.id === 'r_013')) {
+  if (s.relics.some((r) => r.id === RELIC_LUCKY_CAT)) {
     const catBonus = famineHalve(200);
     s.gold += catBonus;
     checkBankrupt();
@@ -188,7 +189,7 @@ export function processShipTurn(
       }
     } else {
       const mCost = recipe ? recipe.inputs.reduce((sum, inp) => { const m = mats.find((mm) => mm.id === inp.materialId); return sum + (m ? m.currentPrice * inp.amount : 0); }, 0) : 0;
-      const expiryBonus = s.installedModuleIds.includes('reserve_bay') ? 3 : 0;
+      const expiryBonus = s.installedModuleIds.includes(MODULE_RESERVE_BAY) ? 3 : 0;
       s.products.push({ productId: task.productId, expiresAt: turn + 3 + expiryBonus, materialCost: mCost });
     }
   });
@@ -249,6 +250,20 @@ export function processShipTurn(
   }
 
   return s;
+}
+
+/** 船员食物消耗（阶梯 + 遗物保鲜减半）——单一真值：回合结算与总览显示共用 */
+export function computeCrewFoodCost(turn: number, ship: { relics: { id: string }[] }): number {
+  let base: number;
+  if (turn <= 5) base = 1;
+  else if (turn <= 10) base = 3;
+  else if (turn <= 15) base = 7;
+  else if (turn <= 20) base = 15;
+  else if (turn <= 25) base = 23;
+  else if (turn <= 30) base = 26;
+  else base = turn;
+  const preserve = ship.relics.some((r) => r.id === RELIC_FOOD_PRESERVER) ? 0.5 : 0;
+  return Math.floor(base * (1 - preserve));
 }
 
 /** 游戏结束判定：返回结束原因文案，未结束返回 null */

@@ -33,7 +33,7 @@ export interface PlanetBuff {
   recruitCostDelta?: number;
   /** 领袖招募费用变动（正数=增加） */
   leaderCostDelta?: number;
-  /** 电力建筑产量倍率（B29/B30/B31） */
+  /** 电力建筑产量倍率（太阳能阵列/聚变电站/反物质反应堆） */
   powerGenMult?: number;
   /** 建筑电能消耗倍率 */
   powerUseMult?: number;

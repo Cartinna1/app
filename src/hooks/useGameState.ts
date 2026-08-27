@@ -1,6 +1,6 @@
 import { useReducer, useCallback, useRef } from 'react';
 import type { Mothership, GameState } from '@/types/game';
-import { gameReducer, initialGameState } from './gameReducer';
+import { gameReducer, createInitialGameState } from './gameReducer';
 import { useStock } from './useStock';
 import { useProduction } from './useProduction';
 import { useEvent } from './useEvent';
@@ -50,7 +50,7 @@ function useStableActions<T extends Record<string, (...args: never[]) => unknown
 }
 
 export function useGameState() {
-  const [gameState, dispatch] = useReducer(gameReducer, initialGameState);
+  const [gameState, dispatch] = useReducer(gameReducer, undefined, createInitialGameState);
 
   // 子 Hook（dispatch 引用稳定，不会导致函数重建）
   const { buyStock, sellStock } = useStock(dispatch);

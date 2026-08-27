@@ -25,7 +25,7 @@ src/
 ├── hooks/          # 业务 hook：gameReducer / useGameState / useTurn / useTrade / useSave 等
 │   └── colony/     # useColony 的 5 个子 hook
 ├── lib/            # 纯函数（无副作用、可独立测试）
-│   ├── colony/     # economy.ts（产出结算）、colonyTurn.ts（回合推进）
+│   ├── colony/     # economy.ts（产出结算）、colonyTurn.ts（回合推进）、wonderTurn.ts（奇观推进）
 │   ├── game/       # assets.ts（总资产）
 │   ├── turn/       # priceFluctuation / shipTurn / factionTurn / contracts
 │   └── save.ts     # 存档序列化 / 反序列化 / 迁移
@@ -53,7 +53,10 @@ src/
 | 舰队总资产（口径：不含售价加成） | `lib/game/assets.ts` → `getShipTotalAssets` |
 | 殖民地经济/电力/食物/产出 | `lib/colony/economy.ts` → `computeColonyEconomy` / `computeColonyPower` / `computeColonyFoodCost` |
 | 殖民地回合推进、人口上限、招募上限 | `lib/colony/colonyTurn.ts` → `processColonyTurn` / `calcPopCap` / `getRecruitCapPerTurn` |
-| 单舰船回合结算、游戏结束判定 | `lib/turn/shipTurn.ts` |
+| 奇观回合推进 | `lib/colony/wonderTurn.ts` → `processWonderTurn`（lib 层，勿放回 hooks/useWonder） |
+| 游戏初始状态（新开局/重置/选船共用） | `hooks/gameReducer.ts` → `createInitialGameState`（勿在 SELECT_SHIP 另抄字段，嵌套对象由工厂新建防引用共享） |
+| 单舰船回合结算、游戏结束判定 | `lib/turn/shipTurn.ts` → `processShipTurn` / `getGameOverReason` / `computeCrewFoodCost` |
+| 船员食物消耗（阶梯+遗物保鲜减半） | `lib/turn/shipTurn.ts` → `computeCrewFoodCost`（结算与总览显示共用，勿就地重写阶梯） |
 | 价格波动、市场/政策刷新、合同、被动收入 | `lib/turn/priceFluctuation.ts` / `factionTurn.ts` / `contracts.ts` |
 | **回合结算的调用顺序** | `hooks/useTurn.ts`（编排器，唯一权威） |
 | 存档字段清单与迁移 | `lib/save.ts` |
@@ -94,6 +97,8 @@ src/
 - `0.4` / `0.7` 建筑取消/拆除返还（`hooks/colony/useColonyBuildings.ts`）
 - `50` / `100` 领袖升级星尘费（唯一真值：`data/colony/leaders.ts` 的 `LEADER_UPGRADE_COST` / `getLeaderUpgradeCost`；UI 与 hook 均从该处取，勿就地硬编码）
 - 招募领袖星尘费（基础 10，减领袖 `leaderCostReduction`，下限 1；唯一真值：`data/colony/leaders.ts` 的 `getRecruitRollCost`；UI 与 `useColonyLeaders` 均从该处取，勿就地硬编码）
+- 走私合同成功率 65%（`roll > 0.65` 失败；持有遗物 `RELIC_DECIPHERER` 情报破译器时 100% 成功；判定在 `useTrade.ts completeContract`）
+- 遗物 ID 一律走 `data/relics.ts` 常量（`RELIC_*`），逻辑层勿硬编码 `'r_xxx'` 字符串
 - 兑换码表 `REDEEM_CODES`（`data/gameData.ts`，30 组正常码，无调试码——不要加回 DEBUG 码）
 
 ## 八、命名与文案

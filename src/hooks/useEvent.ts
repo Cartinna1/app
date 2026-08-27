@@ -2,6 +2,7 @@ import { useState, useCallback, useRef, useLayoutEffect } from 'react';
 import type { GameState, GameAction, ChoiceEvent, EventOption, EventOutcome, ResourceChange, EventSubChoice } from '@/types/game';
 import { ALL_EVENTS } from '@/data/choiceEvents';
 import { RESOURCE_EVENTS } from '@/data/resourceEvents';
+import { RELIC_DICE, RELIC_JUMP_ACCELERATOR, RELIC_VOID_SAFE } from '@/data/relics';
 
 export interface EventResult {
   description: string;
@@ -61,7 +62,7 @@ export function useEvent(
       const ships = [...prev.ships];
       const s = { ...ships[shipIndex] };
 
-      const hasVoidSafe = s.relics.some((r) => r.id === 'r_011');
+      const hasVoidSafe = s.relics.some((r) => r.id === RELIC_VOID_SAFE);
       const actualGoldChange = (hasVoidSafe && (res.goldChange || 0) < 0) ? 0 : res.goldChange;
       const famineHalve = (amt: number): number => {
         if (amt <= 0) return amt;
@@ -150,7 +151,7 @@ export function useEvent(
       if (isHolyGlory && isReward) gloryMul = 1.25;
 
       // 命运之骰
-      const hasDice = ship?.relics.some((r) => r.id === 'r_005') || false;
+      const hasDice = ship?.relics.some((r) => r.id === RELIC_DICE) || false;
       let diceMul = 1;
       if (hasDice && (outcome.resources.goldChange || 0) !== 0) {
         diceMul = (outcome.resources.goldChange || 0) > 0 ? 1.2 : 0.8;
@@ -249,7 +250,7 @@ export function useEvent(
         }
 
         // 危机预知：50%概率闪避惩罚事件
-        const hasCrisis = ship.relics.some((r) => r.id === 'r_010');
+        const hasCrisis = ship.relics.some((r) => r.id === RELIC_JUMP_ACCELERATOR);
         if (hasCrisis && Math.random() < 0.5) {
           dispatch({ type: 'FUNCTIONAL_UPDATE', updater: (prev) => { const ships = [...prev.ships]; ships[0] = { ...ships[0], eventTriggeredThisTurn: true }; return { ...prev, ships }; } });
           setEventDodged('crisis');

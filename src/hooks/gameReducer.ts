@@ -3,39 +3,41 @@ import { FACTIONS, POLICY_EFFECTS, refreshFactionPrices, calculateSellMultiplier
 import { createMotherships, createStocks, createMaterials, createProducts } from '@/data/gameData';
 import { migrateSave } from '@/lib/save';
 
-// ==================== 初始状态 ====================
+// ==================== 初始状态（单一真值：新开局/重置/选船共用，勿另抄一份） ====================
 
-export const initialGameState: GameState = {
-  phase: 'select',
-  turn: 1,
-  currentShipIndex: 0,
+export function createInitialGameState(): GameState {
+  return {
+    phase: 'select',
+    turn: 1,
+    currentShipIndex: 0,
     ships: [],
-  stocks: [],
-  materials: [],
-  products: [],
-  eventLog: [],
-  redeemedCodes: [],
-  factions: FACTIONS,
-  factionPrices: {},
-  factionSellMultipliers: {},
-  blackMarketMultiplier: 3.2,
-  buyStocks: {},
-  buyStockMax: {},
-  sellDemands: {},
-  sellDemandMax: {},
-  buyTriggered: {},
-  sellTriggered: {},
-  buyBuffs: {},
-  sellBuffs: {},
-  factionPolicy: { type: 'normal', effect: POLICY_EFFECTS['normal'] },
-  policyRemainingTurns: 0,
-  stardustMarket: { currentRelicId: null, soldRelicIds: [] },
-  gameWon: false,
-  wonWonderName: '',
-  factionReputation: {},
-  factionRepLog: {},
-  factionContracts: [],
-};
+    stocks: [],
+    materials: [],
+    products: [],
+    eventLog: [],
+    redeemedCodes: [],
+    factions: FACTIONS,
+    factionPrices: {},
+    factionSellMultipliers: {},
+    blackMarketMultiplier: 3.2,
+    buyStocks: {},
+    buyStockMax: {},
+    sellDemands: {},
+    sellDemandMax: {},
+    buyTriggered: {},
+    sellTriggered: {},
+    buyBuffs: {},
+    sellBuffs: {},
+    factionPolicy: { type: 'normal', effect: POLICY_EFFECTS['normal'] },
+    policyRemainingTurns: 0,
+    stardustMarket: { currentRelicId: null, soldRelicIds: [] },
+    gameWon: false,
+    wonWonderName: '',
+    factionReputation: {},
+    factionRepLog: {},
+    factionContracts: [],
+  };
+}
 
 // ==================== Reducer ====================
 
@@ -62,37 +64,22 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
         sellDemandMax[f.id] = sd;
       }
       return {
-        ...state,
+        ...createInitialGameState(),
         phase: 'playing',
-        turn: 1,
-                ships: [myShip],
+        ships: [myShip],
         stocks,
         materials,
         products,
-        eventLog: [],
-        redeemedCodes: [],
-        factions: FACTIONS,
         factionPrices: refreshFactionPrices(),
         factionSellMultipliers: calculateSellMultipliers(
           myShip.tradeStatus.currentFactionId,
           { type: 'normal', effect: POLICY_EFFECTS['normal'] },
-                  ),
-        blackMarketMultiplier: 3.2,
+        ),
         buyStocks,
         buyStockMax,
         sellDemands,
         sellDemandMax,
-        buyTriggered: {},
-        sellTriggered: {},
-        buyBuffs: {},
-        sellBuffs: {},
-        factionPolicy: { type: 'normal', effect: POLICY_EFFECTS['normal'] },
-        policyRemainingTurns: 0,
-stardustMarket: { currentRelicId: null, soldRelicIds: [] },
-  factionReputation: {},
-  factionRepLog: {},
-  factionContracts: [],
-};
+      };
     }
 
     case 'FUNCTIONAL_UPDATE': {
@@ -105,7 +92,7 @@ stardustMarket: { currentRelicId: null, soldRelicIds: [] },
       return migrateSave(action.state);
 
     case 'RESET_GAME':
-      return { ...initialGameState };
+      return createInitialGameState();
 
     case 'ADD_EVENT_LOG': {
       // 为每条日志注入稳定唯一 id（写入时统一生成），供列表渲染作 key，

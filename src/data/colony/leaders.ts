@@ -1,3 +1,7 @@
+// 领袖 ID 常量（单一真值：逻辑层按领袖效果判断一律引用）
+export const LEADER_LOAD_BALANCE = 'L21';    // 索林·瓦特（电能消耗减免）
+export const LEADER_AFTERGLOW_PULSE = 'L22'; // 诺娃·永昼（电能产出加成/停电保护）
+
 /** 领袖效果：产出加成 (buildingId → bonus%) */
 type BonusMap = Record<string, number>;
 
@@ -27,7 +31,7 @@ export interface LeaderExtraEffects {
   randomMatsPerTurn: number;               // 随机原料/回合
   darkMatterPerTurn: number;               // 暗物质/回合
   quantumPerTurn: number;                  // 量子簇/回合
-  b26Mult?: number;                        // B26量子实验室倍率替代
+  b26Mult?: number;                        // 量子实验室倍率替代
   stardustPerTurn: number;                 // 星尘/回合
 }
 
@@ -116,11 +120,11 @@ export const ALL_LEADERS: LeaderDef[] = [
     levelBonuses: [{}, {}, {}],
     levelExtras: [{ leaderCapBonus: 1 }, { leaderCapBonus: 2, leaderCostReduction: 2 }, { leaderCapBonus: 3, leaderCostReduction: 3, researchPerTurn: [50,100] }] },
   // ===== 电能领袖 =====
-  { id: 'L21', rarity: 'SR', name: '索林·瓦特', abilityName: '负载平衡',
+  { id: LEADER_LOAD_BALANCE, rarity: 'SR', name: '索林·瓦特', abilityName: '负载平衡',
     description: '永远叼着一根绝缘电缆代替香烟的前电网工程师。他说电缆的焦味比烟草好闻，因为那意味着有人在用电。',
     levelBonuses: [{}, {}, {}],
     levelExtras: [{}, {}, {}] },
-  { id: 'L22', rarity: 'SSR', name: '诺娃·永昼', abilityName: '余晖脉冲',
+  { id: LEADER_AFTERGLOW_PULSE, rarity: 'SSR', name: '诺娃·永昼', abilityName: '余晖脉冲',
     description: '一位来自能量生命体的意识——在聚变事故中与反应堆核心融合，从此以纯能形态存在。殖民地停电的瞬间她总能醒来。',
     levelBonuses: [{}, {}, {}],
     levelExtras: [{}, {}, {}] },

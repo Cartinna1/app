@@ -1,7 +1,7 @@
 import { useCallback } from 'react';
 import type { GameState } from '@/types/game';
 import { RECIPES } from '@/data/gameData';
-import { getProductionLimitBonus, getMaterialDiscountRate, getProductionTurns, getSellPriceBreakdown } from '@/data/modules';
+import { getProductionLimitBonus, getMaterialDiscountRate, getProductionTurns, getSellPriceBreakdown, MODULE_RESERVE_BAY } from '@/data/modules';
 
 export function useProduction(
   dispatch: React.Dispatch<{ type: 'FUNCTIONAL_UPDATE'; updater: (state: GameState) => GameState }>
@@ -68,7 +68,7 @@ export function useProduction(
                 ship.famineTimer = 0;
               }
             } else {
-              const expiryBonus = ship.installedModuleIds.includes('reserve_bay') ? 3 : 0;
+              const expiryBonus = ship.installedModuleIds.includes(MODULE_RESERVE_BAY) ? 3 : 0;
               ship.products = [...ship.products, { productId: recipeId, expiresAt: prev.turn + 3 + expiryBonus, materialCost: matCost }];
             }
           } else {

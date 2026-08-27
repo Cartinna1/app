@@ -3,9 +3,15 @@ import { FACTIONS } from './factions';
 
 // ==================== 母舰数据 ====================
 
+// 母舰 ID 常量（单一真值：按 id 特判的逻辑一律引用，勿硬编码数字）
+export const MOTHERSHIP_ID_UNITY = 0;               // 万众一心
+export const MOTHERSHIP_ID_GOLD_GROUP = 2;          // 黄金集团
+export const MOTHERSHIP_ID_GALAXY_HEART = 3;        // 银河之心
+export const MOTHERSHIP_ID_SINGULARITY_SEEKER = 4;  // 奇点探求者
+
 export const MOTHERSHIP_TEMPLATES: Omit<Mothership, 'gold' | 'food' | 'alloy' | 'stardust' | 'modules' | 'installedModuleIds' | 'stockHoldings' | 'stockCosts' | 'stockBuyTurn' | 'sellPriceBonus' | 'productionsThisTurn' | 'maxProductionsPerTurn' | 'materials' | 'products' | 'productionQueue' | 'usedCodes' | 'loans' | 'bankrupt' | 'bankruptTimer' | 'famineTimer' | 'isRebellion' | 'relics' | 'tradeStatus' | 'goldLog'>[] = [
   {
-    id: 0,
+    id: MOTHERSHIP_ID_UNITY,
     name: '万众一心',
     description: '团结协作的舰队，善于全面优化资源运转',
     skill: {
@@ -33,7 +39,7 @@ export const MOTHERSHIP_TEMPLATES: Omit<Mothership, 'gold' | 'food' | 'alloy' | 
     initialCapitalMultiplier: 1,
   },
   {
-    id: 2,
+    id: MOTHERSHIP_ID_GOLD_GROUP,
     name: '黄金集团',
     description: '星际最大的金融财团，资本的力量无处不在',
     skill: {
@@ -47,7 +53,7 @@ export const MOTHERSHIP_TEMPLATES: Omit<Mothership, 'gold' | 'food' | 'alloy' | 
     initialCapitalMultiplier: 1.2,
   },
   {
-    id: 3,
+    id: MOTHERSHIP_ID_GALAXY_HEART,
     name: '银河之心',
     description: '掌控星际贸易航线的物流巨头，买卖皆有优势',
     skill: {
@@ -61,7 +67,7 @@ export const MOTHERSHIP_TEMPLATES: Omit<Mothership, 'gold' | 'food' | 'alloy' | 
     initialCapitalMultiplier: 1,
   },
   {
-    id: 4,
+    id: MOTHERSHIP_ID_SINGULARITY_SEEKER,
     name: '奇点探求者',
     description: '探索宇宙奥秘的科学舰队，稳定获取研究资源',
     skill: {
@@ -93,15 +99,15 @@ export const MOTHERSHIP_TEMPLATES: Omit<Mothership, 'gold' | 'food' | 'alloy' | 
 export const INITIAL_GOLD = 10000;
 
 // 股票交易买入手续费倍率（单一真值：扣款与 UI 显示都从这里取）
-// 黄金集团(id2) 0 手续费 → 1.0；万众一心(id0) 手续费减半 → 0.985；其余 → 1.03
+// 黄金集团（MOTHERSHIP_ID_GOLD_GROUP）0 手续费 → 1.0；万众一心（MOTHERSHIP_ID_UNITY）手续费减半 → 0.985；其余 → 1.03
 export function getStockFeeMult(ship: { id: number }): number {
-  return ship.id === 2 ? 1.0 : ship.id === 0 ? 1.0 - 0.5 * 0.03 : 1.03;
+  return ship.id === MOTHERSHIP_ID_GOLD_GROUP ? 1.0 : ship.id === MOTHERSHIP_ID_UNITY ? 1.0 - 0.5 * 0.03 : 1.03;
 }
 
 export function createMotherships(): Mothership[] {
   return MOTHERSHIP_TEMPLATES.map((tpl) => ({
     ...tpl,
-    sellPriceBonus: tpl.id === 3 ? 0.2 : 0,
+    sellPriceBonus: tpl.id === MOTHERSHIP_ID_GALAXY_HEART ? 0.2 : 0,
     gold: Math.round(INITIAL_GOLD * tpl.initialCapitalMultiplier),
     // 新资源系统（初始：食物20，合金5，星尘5）
     food: 20,

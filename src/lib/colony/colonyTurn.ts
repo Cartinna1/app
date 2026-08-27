@@ -6,9 +6,9 @@ import type { Colony, PlanetTypeId } from '@/types/colony';
 import { ALL_PLANETS } from '@/data/colony/planets';
 import { getBuildingDef } from '@/data/colony/buildings';
 import { getTechById, REPEATABLE_TECHS } from '@/data/colony/techs';
-import { getLeaderDef } from '@/data/colony/leaders';
+import { getLeaderDef, LEADER_AFTERGLOW_PULSE } from '@/data/colony/leaders';
 import { computeColonyEconomy, computeColonyPower } from './economy';
-import { processWonderTurn } from '@/hooks/useWonder';
+import { processWonderTurn } from './wonderTurn';
 
 /** 处理殖民地每个回合的推进（在 useTurn 中调用） */
 export function processColonyTurn(ship: Mothership, _turn: number): void {
@@ -60,8 +60,8 @@ export function processColonyTurn(ship: Mothership, _turn: number): void {
   // ===== 电能计算（在产出计算之前） =====
   if (colony.energy === undefined) colony.energy = 0;
   const power = computeColonyPower(colony);
-  // L22 Lv3 余晖脉冲——停电保护
-  const hasL22Lv3 = colony.leaders.some(l => l.id === 'L22' && l.level >= 3);
+  // 余晖脉冲 Lv3——停电保护
+  const hasL22Lv3 = colony.leaders.some(l => l.id === LEADER_AFTERGLOW_PULSE && l.level >= 3);
   // 电能累积（容量上限 50，防止无限堆）
   const prevEnergy = typeof colony.energy === 'number' ? colony.energy : 0;
   const newEnergy = Math.max(-1, Math.min(50, prevEnergy + power.net));
@@ -69,7 +69,7 @@ export function processColonyTurn(ship: Mothership, _turn: number): void {
   const blackout = newEnergy < 0 && !hasL22Lv3;
 
   // ===== 建筑产出 + 领袖每回合特效（统一走 economy 模块） =====
-  const eco = computeColonyEconomy(colony, { blackout, random: true });
+  const eco = computeColonyEconomy(colony, { blackout, random: true, relics: ship.relics });
   const totalRP = eco.research;
 
   for (const [mid, n] of Object.entries(eco.materials)) {

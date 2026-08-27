@@ -1,4 +1,18 @@
 import type { ModuleDefinition } from '@/types/game';
+import { RELIC_STABILITY_ANCHOR, RELIC_STAR_COMPASS } from './relics';
+
+// 母舰装置 ID 常量（单一真值：逻辑层按装置效果判断一律引用，勿硬编码字符串）
+export const MODULE_BIO_KITCHEN = 'bio_kitchen';
+export const MODULE_NANO_FARM = 'nano_farm';
+export const MODULE_SIXTH_FARM = 'sixth_farm';
+export const MODULE_RESERVE_BAY = 'reserve_bay';
+export const MODULE_MINING_ARRAY = 'mining_array';
+export const MODULE_TRADE_HUB = 'trade_hub';
+export const MODULE_ENGINEER_AI = 'engineer_ai';
+export const MODULE_DYSON_COLLECTOR = 'dyson_collector';
+export const MODULE_PROD_SCHEDULER = 'prod_scheduler';
+export const MODULE_PARALLEL_MATRIX = 'parallel_matrix';
+export const MODULE_AUTOMATION_HUB = 'automation_hub';
 
 /**
  * 母舰装置定义 — 共15种
@@ -7,7 +21,7 @@ import type { ModuleDefinition } from '@/types/game';
 export const MODULE_DEFINITIONS: ModuleDefinition[] = [
   // ===== 基础装置 =====
   {
-    id: 'bio_kitchen',
+    id: MODULE_BIO_KITCHEN,
     name: '生物合成厨房',
     description: '每回合自动产出 15 食物，维持船员生存的基础设施',
     costFood: 0,
@@ -18,7 +32,7 @@ export const MODULE_DEFINITIONS: ModuleDefinition[] = [
     effectDescription: '每回合 +15 食物',
   },
   {
-    id: 'nano_farm',
+    id: MODULE_NANO_FARM,
     name: '纳米机器人农场',
     description: '部署纳米机器人群体自动化种植，每回合产出30食物',
     costFood: 0,
@@ -30,7 +44,7 @@ export const MODULE_DEFINITIONS: ModuleDefinition[] = [
     effectDescription: '每回合 +30 食物',
   },
   {
-    id: 'sixth_farm',
+    id: MODULE_SIXTH_FARM,
     name: '六维奇点农场',
     description: '利用六维空间特性进行超高效农业，每回合产出60食物（生物合成厨房的终极升级版）',
     costFood: 0,
@@ -43,7 +57,7 @@ export const MODULE_DEFINITIONS: ModuleDefinition[] = [
     effectDescription: '每回合 +60 食物',
   },
   {
-    id: 'reserve_bay',
+    id: MODULE_RESERVE_BAY,
     name: '应急储备舱',
     description: '产品过期时间延长3回合，保护你的生产成果',
     costFood: 0,
@@ -78,7 +92,7 @@ export const MODULE_DEFINITIONS: ModuleDefinition[] = [
     effectDescription: '消耗 50 食物 → +30000 金币（无冷却，食物不足时无法使用）',
   },
   {
-    id: 'mining_array',
+    id: MODULE_MINING_ARRAY,
     name: '深空采矿阵列',
     description: '每回合自动产出10单位随机基础原料',
     costFood: 0,
@@ -89,7 +103,7 @@ export const MODULE_DEFINITIONS: ModuleDefinition[] = [
     effectDescription: '每回合 +10 随机基础原料（碳/黄金/石油/硅）',
   },
   {
-    id: 'trade_hub',
+    id: MODULE_TRADE_HUB,
     name: '贸易枢纽协议',
     description: '所有特产卖出价格+15%，原料购买价格-8%',
     costFood: 0,
@@ -100,7 +114,7 @@ export const MODULE_DEFINITIONS: ModuleDefinition[] = [
     effectDescription: '特产卖出 +15%，原料购买 -8%',
   },
   {
-    id: 'engineer_ai',
+    id: MODULE_ENGINEER_AI,
     name: '工程师AI助手',
     description: '所有生产所需回合数 -1（最少1回合）',
     costFood: 0,
@@ -123,7 +137,7 @@ export const MODULE_DEFINITIONS: ModuleDefinition[] = [
     effectDescription: '消耗500合金 → +10 星尘（冷却2回合）',
   },
   {
-    id: 'dyson_collector',
+    id: MODULE_DYSON_COLLECTOR,
     name: '戴森粒子收集器',
     description: '每回合直接产出3星尘',
     costFood: 0,
@@ -145,7 +159,7 @@ export const MODULE_DEFINITIONS: ModuleDefinition[] = [
     effectDescription: '消耗30星尘 → 所有产品和原料数量翻倍（冷却5回合）',
   },
   {
-    id: 'prod_scheduler',
+    id: MODULE_PROD_SCHEDULER,
     name: '量产调度终端',
     description: '加装自动化调度系统，优化产线排程，让母舰每回合能多进行一次产品生产。',
     costFood: 0,
@@ -156,7 +170,7 @@ export const MODULE_DEFINITIONS: ModuleDefinition[] = [
     effectDescription: '每回合生产产品上限 +1',
   },
   {
-    id: 'parallel_matrix',
+    id: MODULE_PARALLEL_MATRIX,
     name: '并行生产矩阵',
     description: '多轴并行加工矩阵，同时运行多条产线，生产上限 +2，进一步提升母舰产能。',
     costFood: 0,
@@ -167,7 +181,7 @@ export const MODULE_DEFINITIONS: ModuleDefinition[] = [
     effectDescription: '每回合生产产品上限 +2',
   },
   {
-    id: 'automation_hub',
+    id: MODULE_AUTOMATION_HUB,
     name: '全自动量产中枢',
     description: '由中央AI统筹的无人化量产中枢，生产上限 +3，将母舰产能推向极限。',
     costFood: 0,
@@ -187,10 +201,10 @@ export function getModuleDef(id: string): ModuleDefinition | undefined {
 // 计算生产上限总加成（遗物时空稳定锚 +2、三个量产装置 +1/+2/+3，可叠加）
 export function getProductionLimitBonus(ship: { installedModuleIds: string[]; relics: { id: string }[] }): number {
   let bonus = 0;
-  if (ship.relics.some((r) => r.id === 'r_003')) bonus += 2;
-  if (ship.installedModuleIds.includes('prod_scheduler')) bonus += 1;
-  if (ship.installedModuleIds.includes('parallel_matrix')) bonus += 2;
-  if (ship.installedModuleIds.includes('automation_hub')) bonus += 3;
+  if (ship.relics.some((r) => r.id === RELIC_STABILITY_ANCHOR)) bonus += 2;
+  if (ship.installedModuleIds.includes(MODULE_PROD_SCHEDULER)) bonus += 1;
+  if (ship.installedModuleIds.includes(MODULE_PARALLEL_MATRIX)) bonus += 2;
+  if (ship.installedModuleIds.includes(MODULE_AUTOMATION_HUB)) bonus += 3;
   return bonus;
 }
 
@@ -198,8 +212,8 @@ export function getProductionLimitBonus(ship: { installedModuleIds: string[]; re
 // 单一真值：逻辑层（useProduction.buyMaterial）与显示层（MaterialMarket）都从这里取，避免分叉。
 export function getMaterialDiscountRate(ship: { materialPriceDiscount: number; relics: { id: string }[]; installedModuleIds: string[] }): number {
   let discount = ship.materialPriceDiscount || 0;
-  if (ship.relics.some((r) => r.id === 'r_004')) discount += 0.1;
-  if (ship.installedModuleIds.includes('trade_hub')) discount += 0.08;
+  if (ship.relics.some((r) => r.id === RELIC_STAR_COMPASS)) discount += 0.1;
+  if (ship.installedModuleIds.includes(MODULE_TRADE_HUB)) discount += 0.08;
   return discount;
 }
 
@@ -210,10 +224,10 @@ export function getMaterialDiscountBreakdown(ship: { materialPriceDiscount: numb
   if ((ship.materialPriceDiscount || 0) > 0) {
     breakdown.push({ label: '母舰技能', rate: ship.materialPriceDiscount });
   }
-  if (ship.relics.some((r) => r.id === 'r_004')) {
+  if (ship.relics.some((r) => r.id === RELIC_STAR_COMPASS)) {
     breakdown.push({ label: '星际罗盘', rate: 0.1 });
   }
-  if (ship.installedModuleIds.includes('trade_hub')) {
+  if (ship.installedModuleIds.includes(MODULE_TRADE_HUB)) {
     breakdown.push({ label: '贸易枢纽', rate: 0.08 });
   }
   return breakdown;
@@ -222,7 +236,7 @@ export function getMaterialDiscountBreakdown(ship: { materialPriceDiscount: numb
 // 生产实际回合数（基础回合 − 母舰生产加速 − 工程师AI，下限 0）
 // 单一真值：逻辑层（useProduction.startProduction）与显示层（ProductionPanel）都从这里取，避免分叉。
 export function getProductionTurns(recipe: { productionTurns: number }, ship: { productionSpeedBonus: number; installedModuleIds: string[] }): number {
-  const engineerAiBonus = ship.installedModuleIds.includes('engineer_ai') ? 1 : 0;
+  const engineerAiBonus = ship.installedModuleIds.includes(MODULE_ENGINEER_AI) ? 1 : 0;
   return Math.max(0, recipe.productionTurns - (ship.productionSpeedBonus || 0) - engineerAiBonus);
 }
 

@@ -1,4 +1,5 @@
 import type { ResearchTech } from '@/types/colony';
+import { BUILDING_QUANTUM_LAB, BUILDING_FUSION_PLANT } from './buildings';
 
 export const ALL_TECHS: ResearchTech[] = [
   // ===== T1 都市级穹顶理论 =====
@@ -82,7 +83,7 @@ export const ALL_TECHS: ResearchTech[] = [
     description: '"完美的世界，从一个完美的原子开始。"在原子级层面进行硅晶圆制造的自动化协议。激光以单原子精度熔融硅晶，制造出平整度无可挑剔的晶圆。这是任何高算力芯片的母体，也是AI觉醒的温床。',
     costRP: 1250, researchTurns: 3, prerequisites: ['T14'] },
   // ===== T21 实用量子力学体系 =====
-  { id: 'T21', name: '实用量子力学体系', unlocksBuilding: 'B26',
+  { id: 'T21', name: '实用量子力学体系', unlocksBuilding: BUILDING_QUANTUM_LAB,
     description: '"在这里，现实只是一条可以被重写的代码。"将量子谐振器的零散发现系统化为一门完整的学科。量子实验室配备了超低温量子比特阵列、因果律隔离场与亚稳态粒子囚禁环，科学家们得以在受控环境中反复验证量子现象——从量子纠缠的宏观化，到虚粒子对的定向提取。它不仅是研究设施，更是通往量子编织、量子计算与量子现实等终极技术的大门。',
     costRP: 2700, researchTurns: 3, prerequisites: ['T12'] },
   // ===== T22 加速表型复制协议 =====
@@ -104,7 +105,7 @@ export const ALL_TECHS: ResearchTech[] = [
   // ===== T26 聚变能源原理 =====
   { id: 'T26', name: '聚变能源原理',
     description: '"当温度和压力达到临界点，恒星的核心反应可以被囚禁在一枚磁场之茧中。"解锁聚变电站，大幅提升殖民地电能产出。',
-    costRP: 6000, researchTurns: 4, prerequisites: [], minResearchedCount: 15, unlocksBuilding: 'B30' },
+    costRP: 6000, researchTurns: 4, prerequisites: [], minResearchedCount: 15, unlocksBuilding: BUILDING_FUSION_PLANT },
   // ===== T27 反物质约束理论 =====
   { id: 'T27', name: '反物质约束理论',
     description: '"反物质不是燃料……它是纯能量凝固成的晶体。困难不在于制造它，而在于说服它安静地待在容器里。"解锁反物质反应堆，彻底解决殖民地电能问题。',

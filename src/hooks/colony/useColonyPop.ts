@@ -107,7 +107,7 @@ export function useColonyPop(
           result = { success: false, message: `入驻人口需在0-${effMax}之间` };
           return prev;
         }
-        // 最小入驻人口约束：B9/B10/B11/B12/B26 等建筑必须满足 minPop
+        // 最小入驻人口约束：B9/B10/B11/B12/量子实验室 等建筑必须满足 minPop
         if (count > 0 && count < def.minPop) {
           result = { success: false, message: `「${def.name}」最少需要${def.minPop}人才能运作（当前分配${count}人不足）` };
           return prev;

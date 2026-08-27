@@ -1,6 +1,11 @@
 import type { BuildingDef } from '@/types/colony';
 import { MATERIAL_NAME_MAP } from '@/data/materialNames';
 
+// 建筑 ID 常量（单一真值：逻辑层按建筑效果判断一律引用）
+export const BUILDING_QUANTUM_LAB = 'B26';  // 量子实验室（研究产出翻倍）
+export const BUILDING_SOLAR_ARRAY = 'B29';  // 太阳能阵列
+export const BUILDING_FUSION_PLANT = 'B30'; // 聚变电站
+
 /** 全部建筑定义（含科技要求） */
 export const FULL_BUILDINGS: BuildingDef[] = [
   // ===== 居住类 =====
@@ -41,13 +46,13 @@ export const FULL_BUILDINGS: BuildingDef[] = [
 
   // ===== 功能类 =====
   { id: 'B25', name: '研究实验室', description: '装备了最先进分析仪器的研究中心，每一位科学家都在推进文明的知识边界。', category: 'functional', costGold: 8000, buildTurns: 1, minPop: 1, maxPop: 5, outputType: 'research', baseOutput: 0, popFactor: 20, powerConsumption: 6 },
-  { id: 'B26', name: '量子实验室', description: '接近绝对零度的量子计算与实验设施，将研究实验室的产出效率倍增。', category: 'functional', costGold: 15000, buildTurns: 3, maxCount: 1, minPop: 5, maxPop: 5, requiresTech: 'T21', powerConsumption: 8 },
+  { id: BUILDING_QUANTUM_LAB, name: '量子实验室', description: '接近绝对零度的量子计算与实验设施，将研究实验室的产出效率倍增。', category: 'functional', costGold: 15000, buildTurns: 3, maxCount: 1, minPop: 5, maxPop: 5, requiresTech: 'T21', powerConsumption: 8 },
   { id: 'B27', name: '星河议政厅', description: '殖民地行政中枢，解锁招募领袖的功能。', category: 'functional', costGold: 10000, buildTurns: 1, maxCount: 1, minPop: 0, maxPop: 0, powerConsumption: 2 },
   { id: 'B28', name: '克隆中心', description: '生物克隆设施，加速人口增长。存在伦理争议——但在殖民前线，实用主义压倒一切。', category: 'functional', costGold: 30000, buildTurns: 3, maxCount: 1, minPop: 1, maxPop: 1, requiresTech: 'T22', powerConsumption: 8 },
 
   // ===== 电能生产 =====
-  { id: 'B29', name: '太阳能阵列', description: '铺设在殖民地外围的巨型光伏矩阵，利用恒星辐射为基地提供基础电力。转化效率不高，但建造简单、无需原料。电能产出 = 5 + 3×人口。', category: 'power', costGold: 10000, costMaterials: { silicon: 300 }, buildTurns: 2, minPop: 1, maxPop: 3, outputType: 'power', baseOutput: 5, popFactor: 3, powerConsumption: 0 },
-  { id: 'B30', name: '聚变电站', description: '磁约束等离子体核心反应炉，将轻元素直接转化为巨量热能发电。殖民地从矿石社会迈向工业文明的真正标志。电能产出 = 10 + 10×人口。', category: 'power', costGold: 25000, costMaterials: { quantum: 150 }, buildTurns: 4, maxCount: 3, minPop: 2, maxPop: 5, outputType: 'power', baseOutput: 10, popFactor: 10, requiresTech: 'T26', powerConsumption: 0 },
+  { id: BUILDING_SOLAR_ARRAY, name: '太阳能阵列', description: '铺设在殖民地外围的巨型光伏矩阵，利用恒星辐射为基地提供基础电力。转化效率不高，但建造简单、无需原料。电能产出 = 5 + 3×人口。', category: 'power', costGold: 10000, costMaterials: { silicon: 300 }, buildTurns: 2, minPop: 1, maxPop: 3, outputType: 'power', baseOutput: 5, popFactor: 3, powerConsumption: 0 },
+  { id: BUILDING_FUSION_PLANT, name: '聚变电站', description: '磁约束等离子体核心反应炉，将轻元素直接转化为巨量热能发电。殖民地从矿石社会迈向工业文明的真正标志。电能产出 = 10 + 10×人口。', category: 'power', costGold: 25000, costMaterials: { quantum: 150 }, buildTurns: 4, maxCount: 3, minPop: 2, maxPop: 5, outputType: 'power', baseOutput: 10, popFactor: 10, requiresTech: 'T26', powerConsumption: 0 },
   { id: 'B31', name: '反物质反应堆', description: '悬浮在真空舱内的反质子环——每一毫克反物质湮灭释放的能量足以驱动整座城市。建造代价极高，但让电能不再成为制约。电能产出 = 20 + 16×人口。', category: 'power', costGold: 80000, costMaterials: { dark_matter: 300 }, buildTurns: 6, maxCount: 2, minPop: 3, maxPop: 8, outputType: 'power', baseOutput: 20, popFactor: 16, requiresTech: 'T27', powerConsumption: 0 },
 ];
 
@@ -67,7 +72,7 @@ export function getBuildingEffect(bd: BuildingDef): string {
   // 功能类特殊建筑
   if (bd.id === 'B1') return '提供5人口上限';
   if (bd.id === 'B2') return '提供额外10人口上限';
-  if (bd.id === 'B26') return '使所有研究实验室产出翻倍';
+  if (bd.id === BUILDING_QUANTUM_LAB) return '使所有研究实验室产出翻倍';
   if (bd.id === 'B27') return '解锁领袖招募功能';
   if (bd.id === 'B28') return '每回合自动招募1人口';
   if (bd.category === 'housing') return '提供居住空间，提升人口上限';

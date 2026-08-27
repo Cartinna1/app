@@ -39,11 +39,12 @@ import LoanPanel from './LoanPanel';
 import TradePanel from './TradePanel';
 import { getInvestmentTier, getBuffDescription } from '@/data/factions';
 import { RECIPES } from '@/data/gameData';
-import { getSellPriceBreakdown } from '@/data/modules';
+import { getSellPriceBreakdown, MODULE_BIO_KITCHEN, MODULE_NANO_FARM, MODULE_SIXTH_FARM, MODULE_DYSON_COLLECTOR } from '@/data/modules';
 import GoldLogViewer from './GoldLogViewer';
 import ModulePanel from './ModulePanel';
 import ColonyPanel from './colony/ColonyPanel';
 import { computeColonyEconomy } from '@/lib/colony/economy';
+import { computeCrewFoodCost } from '@/lib/turn/shipTurn';
 import { MATERIAL_NAME_MAP } from '@/data/materialNames';
 
 // 背景音乐曲目列表（放 public/ 目录下，按顺序自动循环播放）
@@ -775,21 +776,14 @@ function OverviewTab({
 
       {/* 资源收支明细 */}
       {(() => {
-        const t = gameState.turn;
-        let crewFoodCost: number;
-        if (t <= 5) crewFoodCost = 1; else if (t <= 10) crewFoodCost = 3;
-        else if (t <= 15) crewFoodCost = 7; else if (t <= 20) crewFoodCost = 15;
-        else if (t <= 25) crewFoodCost = 23; else if (t <= 30) crewFoodCost = 26;
-        else crewFoodCost = t;
-        const preserve = ship.relics.some((r) => r.id === 'r_007') ? 0.5 : 0;
-        const actualCrewCost = Math.floor(crewFoodCost * (1 - preserve));
+        const actualCrewCost = computeCrewFoodCost(gameState.turn, ship);
         // 母舰模块食物产出
         let modFood = 0;
-        if (ship.installedModuleIds.includes('bio_kitchen')) modFood += 15;
-        if (ship.installedModuleIds.includes('nano_farm')) modFood += 30;
-        if (ship.installedModuleIds.includes('sixth_farm')) modFood += 60;
+        if (ship.installedModuleIds.includes(MODULE_BIO_KITCHEN)) modFood += 15;
+        if (ship.installedModuleIds.includes(MODULE_NANO_FARM)) modFood += 30;
+        if (ship.installedModuleIds.includes(MODULE_SIXTH_FARM)) modFood += 60;
         // 殖民地数据（统一走 economy 模块估算，金币/领袖科研取中值）
-        const eco = ship.colony?.phase === 'active' ? computeColonyEconomy(ship.colony) : null;
+        const eco = ship.colony?.phase === 'active' ? computeColonyEconomy(ship.colony, { relics: ship.relics }) : null;
         const colFood = eco?.food ?? 0, colAlloy = eco?.alloy ?? 0, colStardust = eco?.stardust ?? 0;
         const colGold = eco?.gold ?? 0, colRP = eco?.research ?? 0, colFoodCost = eco?.foodCost ?? 0;
         const colMats: Record<string, number> = eco?.materials ?? {};
@@ -802,7 +796,7 @@ function OverviewTab({
               <div><span className="text-slate-500">食物净增减:</span> <span className={(colFood+modFood - actualCrewCost - colFoodCost) >= 0 ? 'text-green-400 font-bold' : 'text-red-400 font-bold'}>{colFood+modFood - actualCrewCost - colFoodCost >= 0 ? '+' : ''}{colFood+modFood - actualCrewCost - colFoodCost}</span></div>
               <div><span className="text-slate-500">当前食物:</span> <span className={ship.food >= 0 ? 'text-green-400 font-bold' : 'text-red-400 font-bold'}>{ship.food}</span></div>
               {colAlloy > 0 && <div><span className="text-slate-500">合金产出:</span> <span className="text-slate-300 font-bold">+{colAlloy} (殖民地)</span></div>}
-              {colStardust > 0 && <div><span className="text-slate-500">星尘产出:</span> <span className="text-purple-400 font-bold">+{colStardust}{ship.modules?.some(m => m.active && m.id === 'dyson_collector') ? ' + 3(母舰)' : ''} (殖民地)</span></div>}
+              {colStardust > 0 && <div><span className="text-slate-500">星尘产出:</span> <span className="text-purple-400 font-bold">+{colStardust}{ship.modules?.some(m => m.active && m.id === MODULE_DYSON_COLLECTOR) ? ' + 3(母舰)' : ''} (殖民地)</span></div>}
               {colGold > 0 && <div><span className="text-slate-500">金币产出:</span> <span className="text-yellow-400 font-bold">+{colGold} (殖民地)</span></div>}
               {colRP > 0 && <div><span className="text-slate-500">科研产出:</span> <span className="text-cyan-400 font-bold">+{colRP} (殖民地)</span></div>}
               {(() => { const mc: Record<string,string> = MATERIAL_NAME_MAP; return Object.entries(colMats).map(([k,v]) => v>0 && <div key={k}><span className="text-slate-500">{mc[k]||k}:</span> <span className="text-amber-400 font-bold">+{v} (殖民地)</span></div>); })()}
