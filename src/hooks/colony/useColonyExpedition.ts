@@ -85,10 +85,11 @@ export function useColonyExpedition(
     if (ex.paidThisTurn) return { success: false, message: '本回合已支付，请结束回合推进' };
     const route = getLeaderExpedition(ex.leaderId);
     const node = ex.currentNodeId ? route?.nodes[ex.currentNodeId] : undefined;
-    if (!node || !node.cost) return { success: false, message: '当前节点无需支付' };
+    const cost = node?.cost;
+    if (!node || !cost) return { success: false, message: '当前节点无需支付' };
 
     // 资源校验
-    for (const [key, amount] of Object.entries(node.cost)) {
+    for (const [key, amount] of Object.entries(cost)) {
       if (resourceAmount(ship, colony, key) < amount) {
         return { success: false, message: `资源不足：${RESOURCE_LABELS[key] || key}不足（需要 ${amount}）` };
       }
@@ -101,7 +102,7 @@ export function useColonyExpedition(
         const ships = [...prev.ships];
         const s = { ...ships[0], colony: { ...ships[0].colony! } };
         const c = { ...s.colony, expedition: { ...s.colony.expedition! } };
-        for (const [key, amount] of Object.entries(node.cost)) {
+        for (const [key, amount] of Object.entries(cost)) {
           deductResource(s, c, key, amount);
         }
         c.expedition = { ...c.expedition, paidThisTurn: true };

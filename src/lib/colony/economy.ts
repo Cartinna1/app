@@ -174,7 +174,7 @@ export function computeColonyEconomy(colony: Colony, opts: ColonyEconomyOptions)
     // 终极技能：远征 12/12 解锁后，在 Lv3 产出加成基础上再叠加 bonus（数据驱动，无新机制）
     if (colony.expeditionUnlocks?.includes(l.id) && ld.ultimateSkill) {
       const lv3 = ld.levelBonuses[ld.levelBonuses.length - 1] || {};
-      for (const [bid, b] of Object.entries(lv3)) {
+      for (const bid of Object.keys(lv3)) {
         if (bid === 'ALL' || bid === 'ALL_MATERIAL') continue;
         leaderBonusMap[bid] = (leaderBonusMap[bid] || 0) + ld.ultimateSkill.bonus;
       }
