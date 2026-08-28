@@ -323,11 +323,12 @@ function ColonyPanel(props: ColonyPanelProps) {
         </div>
       </div>
 
-      <div className="flex gap-1.5 mb-3">
+      {/* 标签栏：移动端独立横向滑块（同星际贸易），不拖动整页 */}
+      <div className="flex gap-1.5 mb-3 overflow-x-auto scrollbar-hide">
         {tabs.map((t) => {
           const Icon = t.icon;
           return (<button key={t.id} onClick={() => setTab(t.id)}
-            className={`px-3 py-1.5 rounded-lg text-sm font-bold transition-all flex items-center gap-1.5 ${tab === t.id ? 'bg-cyan-600 text-white' : 'bg-slate-800/60 text-slate-400 hover:bg-slate-700'}`}>
+            className={`flex-shrink-0 px-3 py-1.5 rounded-lg text-sm font-bold transition-all flex items-center gap-1.5 ${tab === t.id ? 'bg-cyan-600 text-white' : 'bg-slate-800/60 text-slate-400 hover:bg-slate-700'}`}>
             <Icon size={14} />{t.label}</button>);
         })}
       </div>
