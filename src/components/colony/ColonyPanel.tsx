@@ -950,6 +950,8 @@ function ColonyPanel(props: ColonyPanelProps) {
                     if (!ld) return null;
                     const currBonuses = ld.levelBonuses[l.level-1] || {};
                     const currExtras = ld.levelExtras[l.level-1] || {};
+                    // 终极技能是否已解锁（集齐 12 结局后，在远征界面解锁）
+                    const ultimateUnlocked = (colony.expeditionUnlocks?.includes(l.id) || false) && !!ld.ultimateSkill;
                     let skillText = '';
                     if (Object.keys(currBonuses).length>0) {
                       const bids = Object.keys(currBonuses);
@@ -1002,7 +1004,10 @@ function ColonyPanel(props: ColonyPanelProps) {
                           <span className="text-sm text-slate-200 font-bold ml-2">{l.name}</span>
                           <span className="text-sm text-amber-400 ml-2">· {l.abilityName}</span>
                           <span className="text-xs text-cyan-400 ml-2">结局 {(colony.expeditionEndings?.[l.id] || []).length}/12</span>
-                          <span className="text-sm text-slate-600 ml-2">- {skillText}{parts.length>0?' | '+parts.join(' | '):''}</span>
+                          {ultimateUnlocked && ld.ultimateSkill && (
+                            <span className="text-xs md:text-sm text-amber-400 font-bold ml-2">· 终极技能「{ld.ultimateSkill.name}」</span>
+                          )}
+                          <span className="text-sm text-slate-600 ml-2">- {skillText}{parts.length>0?' | '+parts.join(' | '):''}{ultimateUnlocked && ld.ultimateSkill ? ` | ${ld.ultimateSkill.description}` : ''}</span>
                         </div>
                         {l.level < 3 && (
                           <button onClick={() => {
