@@ -233,11 +233,11 @@ export interface ExpeditionNodeDef {
   motto?: string;
 }
 
-/** 隐藏图条目（集齐 12 结局后图鉴开放；图片 /expeditions/<leaderId>/<id>.webp，id 如 H1） */
+/** CG 图集条目（集齐 12 结局后图鉴开放；图片 /expeditions/<leaderId>/<id>.webp，id 如 H1） */
 export interface LeaderHiddenImage {
   id: string;        // 如 H1..H9，对应图片文件名 <id>.webp
-  title: string;     // 隐藏图标题
-  desc?: string;     // 隐藏图说明（弹大图时展示）
+  title?: string;    // 显示名；缺省时图鉴按数组顺序自动显示 CG1/CG2/…（写则覆盖，支持自定义名）
+  desc?: string;     // 说明文字（弹大图时展示）
 }
 
 /** 单个领袖的远征路线（22 领袖同构，内容独立） */
@@ -247,7 +247,7 @@ export interface LeaderExpedition {
   planetIntro: string;           // 星球介绍
   landing: string;               // 降落正文
   nodes: Record<string, ExpeditionNodeDef>;
-  /** 隐藏图收藏（集齐 12 结局后开放；每图一张 webp，id 如 H1..H9） */
+  /** CG 图集（集齐 12 结局后开放；每图一张 webp，id 如 H1..H9，标题缺省自动编号 CG{n}） */
   hiddenImages?: LeaderHiddenImage[];
 }
 

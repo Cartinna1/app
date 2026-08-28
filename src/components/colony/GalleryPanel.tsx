@@ -43,20 +43,23 @@ function GalleryPanel({ colony }: GalleryPanelProps) {
         </div>
       );
     }
-    // 隐藏收藏大图（集齐 12 结局后开放）
+    // CG 图集大图（集齐 12 结局后开放，纯欣赏）
     if (selected.kind === 'hidden') {
       const img = route.hiddenImages?.find((h) => h.id === selected.nodeId);
       if (!img) return null;
+      // 显示名：写 title 用自定义名，缺省按数组顺序自动编号 CG1/CG2/…
+      const imgIndex = route.hiddenImages?.findIndex((x) => x.id === img.id) ?? -1;
+      const imgLabel = img.title || (imgIndex >= 0 ? `CG${imgIndex + 1}` : img.id);
       return (
         <div className="bg-slate-900/60 border border-amber-700/40 rounded-xl p-4 mb-4">
           <img
             src={imgPath(selected.leaderId, `${img.id}.webp`)}
-            alt={img.title}
+            alt={imgLabel}
             onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
             className="w-full max-w-2xl aspect-video object-cover mx-auto rounded-lg border border-amber-700/40"
           />
-          <h4 className="font-bold text-amber-300 text-center mt-2 mb-1">隐藏收藏 {img.id} · {img.title}</h4>
-          {img.desc && <p className="text-sm text-amber-200/80 text-center leading-relaxed">{img.desc}</p>}
+          <h4 className="font-bold text-amber-300 text-center mt-2 mb-1 text-base md:text-lg">{imgLabel}</h4>
+          {img.desc && <p className="text-sm md:text-base text-amber-200/80 text-center leading-relaxed">{img.desc}</p>}
         </div>
       );
     }
@@ -128,37 +131,37 @@ function GalleryPanel({ colony }: GalleryPanelProps) {
                         onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
                         className="w-full aspect-video object-cover"
                       />
-                      <p className="text-[10px] text-slate-400 px-1.5 py-1 truncate">
+                      <p className="text-xs md:text-sm text-slate-400 px-1.5 py-1 truncate">
                         {c.id === 'planet' ? '降落' : c.id} · {c.title}
                       </p>
                     </>
                   ) : (
                     <div className="aspect-video flex flex-col items-center justify-center text-slate-700">
                       <Lock size={16} />
-                      <span className="text-[10px] mt-1">{c.id}</span>
+                      <span className="text-xs mt-1">{c.id}</span>
                     </div>
                   )}
                 </button>
               ))}
-              {/* 隐藏收藏入口（紧跟 D12；集齐 12 结局后解锁） */}
+              {/* CG 图集入口（紧跟 D12；集齐 12 结局后解锁） */}
               <button
                 onClick={() => { if (unlocked) setHiddenOpen((prev) => ({ ...prev, [l.id]: !prev[l.id] })); }}
                 className={`rounded-lg border overflow-hidden aspect-video flex flex-col items-center justify-center gap-0.5 text-center ${unlocked ? 'cursor-pointer border-amber-500/60 bg-amber-900/20 text-amber-300 hover:border-amber-400' : 'cursor-default border-slate-800 bg-slate-900/40 text-slate-700'}`}
               >
-                {unlocked ? (hiddenOpen[l.id] ? <ChevronUp size={16} /> : <Sparkles size={16} />) : <Lock size={16} />}
-                <span className="text-[10px]">{unlocked ? `隐藏收藏 ${route.hiddenImages?.length || 0} 张` : '隐藏剧情'}</span>
-                {!unlocked && <span className="text-[10px] text-slate-600">集齐12结局解锁</span>}
+                {unlocked ? (hiddenOpen[l.id] ? <ChevronUp size={18} /> : <Sparkles size={18} />) : <Lock size={18} />}
+                <span className="text-sm">{unlocked ? `CG图集 ${route.hiddenImages?.length || 0} 张` : 'CG图集'}</span>
+                {!unlocked && <span className="text-xs text-slate-600">集齐12结局解锁</span>}
               </button>
             </div>
             )}
-            {/* 隐藏收藏展开区（集齐 12 结局后开放） */}
+            {/* CG 图集展开区（集齐 12 结局后开放） */}
             {hiddenOpen[l.id] && unlocked && (
               <div className="mt-3 pt-3 border-t border-slate-700/60">
-                <p className="text-xs font-bold text-amber-300 mb-2 flex items-center gap-1.5">
-                  <Sparkles size={12} />隐藏收藏（{route.hiddenImages?.length || 0} 张）
+                <p className="text-base font-bold text-amber-300 mb-2 flex items-center gap-1.5">
+                  <Sparkles size={14} />CG 图集（{route.hiddenImages?.length || 0} 张）
                 </p>
                 <div className="grid grid-cols-3 gap-2">
-                  {(route.hiddenImages || []).map((h) => (
+                  {(route.hiddenImages || []).map((h, i) => (
                     <button
                       key={h.id}
                       onClick={() => setSelected({ leaderId: l.id, nodeId: h.id, kind: 'hidden' })}
@@ -166,11 +169,11 @@ function GalleryPanel({ colony }: GalleryPanelProps) {
                     >
                       <img
                         src={imgPath(l.id, `${h.id}.webp`)}
-                        alt={h.title}
+                        alt={h.title || `CG${i + 1}`}
                         onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
                         className="w-full aspect-video object-cover"
                       />
-                      <p className="text-[10px] text-amber-200/90 px-1.5 py-1 truncate">{h.id} · {h.title}</p>
+                      <p className="text-xs md:text-sm text-amber-200/90 px-1.5 py-1 truncate">{h.title || `CG${i + 1}`}</p>
                     </button>
                   ))}
                 </div>

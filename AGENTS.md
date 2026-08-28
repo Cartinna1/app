@@ -102,7 +102,7 @@ src/
 - 遗物 ID 一律走 `data/relics.ts` 常量（`RELIC_*`），逻辑层勿硬编码 `'r_xxx'` 字符串
 - 兑换码表 `REDEEM_CODES`（`data/gameData.ts`，30 组正常码，无调试码——不要加回 DEBUG 码）
 - 远征录入规则（`data/colony/expeditions.ts`）：A 节点全免费（忽略文档 A 的条件）；文档「人口×N」统一改为合金×50；D 结局统一金币×20000；文本一律用模板字符串（反引号）防 ASCII 引号截断；树结构 A×3→B×2→C×2→D×1，可跑 `validateExpeditionTree()` 自检；图片 `/expeditions/<leaderId>/{planet,D1..D12}.webp`（统一 WebP）；终极技能= Lv3 产出加成基础上叠加 `ultimateSkill.bonus`（数据驱动，勿新机制）
-- 远征隐藏图（图鉴）：远征对象加 `hiddenImages: [{id:'H1',title,desc?},…]`，图片 `/expeditions/<leaderId>/<id>.webp`（如 H1..H9，WebP）；集齐 12 结局自动开放（`GalleryPanel` 判定 `list.length >= EXPEDITION_UNLOCK_COUNT`，每领袖可自定义张数，勿硬编码 9）；id 唯一且按序命名，无图时 `onError` 隐藏
+- 远征 CG 图集（图鉴，纯欣赏与剧情无关）：远征对象加 `hiddenImages: [{id:'H1',title?,desc?},…]`，图片 `/expeditions/<leaderId>/<id>.webp`（如 H1..H9，WebP）；集齐 12 结局自动开放（`GalleryPanel` 判定 `list.length >= EXPEDITION_UNLOCK_COUNT`，每领袖张数自定，勿硬编码 9）；**title 缺省时图鉴按数组顺序自动显示 CG1/CG2/…，写 title 则覆盖（自定义名）**；id 唯一且按序命名，无图时 `onError` 隐藏；UI 文案一律叫「CG 图集」，勿写「隐藏剧情」
 
 ## 八、命名与文案
 
