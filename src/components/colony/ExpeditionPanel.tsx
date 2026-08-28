@@ -104,7 +104,18 @@ function ExpeditionPanel({ colony, onStartExpedition, onPayExpeditionNode, onUnl
               <p className="text-[10px] text-slate-500 mb-1">节点 {node.id}</p>
               <h4 className="font-bold text-slate-100 mb-2">{node.title}</h4>
               {ex.paidThisTurn ? (
-                <p className="text-sm text-slate-300 leading-relaxed whitespace-pre-line">{node.text}</p>
+                <div>
+                  {/* D 层结局节点：支付后即显示结局图（箴言回合仍会再展示一次） */}
+                  {ex.stage === 5 && node.isEnding && (
+                    <img
+                      src={imgPath(ex.leaderId, `${node.id}.webp`)}
+                      alt={node.title}
+                      onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+                      className="w-full max-w-2xl aspect-video object-cover mx-auto rounded-lg border border-purple-700/40 mb-3"
+                    />
+                  )}
+                  <p className="text-sm text-slate-300 leading-relaxed whitespace-pre-line">{node.text}</p>
+                </div>
               ) : (
                 <div>
                   <button

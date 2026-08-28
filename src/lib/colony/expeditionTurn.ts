@@ -18,7 +18,8 @@ export function processExpeditionTurn(colony: Colony): void {
   ex.paidThisTurn = false;
   if (!ex.history) ex.history = [];
 
-  // 进入新节点时记入剧情历史（供「回顾剧情」）
+  // 记入剧情历史（供「回顾剧情」）：A 节点免费、进入即记；B/C/D 付费节点在支付后才记，
+  // 未支付前回顾看不到正文（防白嫖付费剧情）
   const enterNode = (nodeId: string | null): void => {
     if (nodeId && !ex.history!.includes(nodeId)) ex.history!.push(nodeId);
   };
@@ -76,31 +77,31 @@ export function processExpeditionTurn(colony: Colony): void {
       break;
     }
     case 2:
-      // A 已展示（免费），下一回合自动进 B
+      // A 已展示（免费），下一回合自动进 B（B 为付费层，进入时不记 history，支付后才记）
       ex.stage = 3;
       ex.currentNodeId = rollChild(ex.currentNodeId);
-      enterNode(ex.currentNodeId);
       break;
     case 3:
-      // B：上回合支付才进 C（收集导向：优先 C 的 D 未收集）
+      // B：上回合支付才进 C（收集导向：优先 C 的 D 未收集）。支付后先记 B，再进 C（不记）
       if (paid) {
+        enterNode(ex.currentNodeId);
         ex.stage = 4;
         ex.currentNodeId = rollFreshC(ex.currentNodeId);
-        enterNode(ex.currentNodeId);
       }
       break;
     case 4:
-      // C：上回合支付才进 D
+      // C：上回合支付才进 D。支付后先记 C，再进 D（不记）
       if (paid) {
+        enterNode(ex.currentNodeId);
         ex.stage = 5;
         ex.currentNodeId = rollChild(ex.currentNodeId);
         ex.endingId = ex.currentNodeId;
-        enterNode(ex.currentNodeId);
       }
       break;
     case 5:
-      // D：上回合支付 → 记录结局，进入箴言终局
+      // D：上回合支付 → 记录结局，进入箴言终局（支付后先记 D）
       if (paid) {
+        enterNode(ex.currentNodeId);
         const endingId = ex.endingId;
         if (endingId) {
           const list = [...(colony.expeditionEndings?.[ex.leaderId] || [])];
