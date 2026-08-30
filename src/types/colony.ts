@@ -235,9 +235,8 @@ export interface ExpeditionNodeDef {
 
 /** CG 图集条目（集齐 12 结局后图鉴开放；图片 /expeditions/<leaderId>/<id>.webp，id 如 H1） */
 export interface LeaderHiddenImage {
-  id: string;        // 如 H1..H9，对应图片文件名 <id>.webp
+  id: string;        // 如 H1..H11，对应图片文件名 <id>.webp；统一只写 id，不写 title/desc
   title?: string;    // 显示名；缺省时图鉴按数组顺序自动显示 CG1/CG2/…（写则覆盖，支持自定义名）
-  desc?: string;     // 说明文字（弹大图时展示）
 }
 
 /** 单个领袖的远征路线（22 领袖同构，内容独立） */

@@ -59,7 +59,6 @@ function GalleryPanel({ colony }: GalleryPanelProps) {
             className="w-full max-w-2xl aspect-video object-cover mx-auto rounded-lg border border-amber-700/40"
           />
           <h4 className="font-bold text-amber-300 text-center mt-2 mb-1 text-base md:text-lg">{imgLabel}</h4>
-          {img.desc && <p className="text-sm md:text-base text-amber-200/80 text-center leading-relaxed">{img.desc}</p>}
         </div>
       );
     }
