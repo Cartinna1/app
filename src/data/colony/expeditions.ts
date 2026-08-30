@@ -9,6 +9,8 @@
 import type { LeaderExpedition } from '@/types/colony';
 import { expeditionL1 } from './expeditions/L1';
 import { expeditionL2 } from './expeditions/L2';
+import { expeditionL13 } from './expeditions/L13';
+import { expeditionL22 } from './expeditions/L22';
 
 /** 远征启动星尘费（唯一数字锚点） */
 export const EXPEDITION_COST = 30;
@@ -32,6 +34,8 @@ export const RESOURCE_LABELS: Record<string, string> = {
 export const LEADER_EXPEDITIONS: Record<string, LeaderExpedition> = {
   L1: expeditionL1,
   L2: expeditionL2,
+  L13: expeditionL13,
+  L22: expeditionL22,
 };
 
 /** 获取领袖远征路线（未开发返回 undefined，UI 提示"敬请期待"） */
