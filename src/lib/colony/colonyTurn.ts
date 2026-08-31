@@ -6,10 +6,18 @@ import type { Colony, PlanetTypeId } from '@/types/colony';
 import { ALL_PLANETS } from '@/data/colony/planets';
 import { getBuildingDef } from '@/data/colony/buildings';
 import { getTechById, REPEATABLE_TECHS } from '@/data/colony/techs';
-import { getLeaderDef, LEADER_AFTERGLOW_PULSE } from '@/data/colony/leaders';
+import { getLeaderDef } from '@/data/colony/leaders';
 import { computeColonyEconomy, computeColonyPower } from './economy';
 import { processWonderTurn } from './wonderTurn';
 import { processExpeditionTurn } from './expeditionTurn';
+
+/** 是否有领袖提供停电免疫（levelExtras.blackoutImmune，如 L22 诺娃·永昼 Lv3 余晖脉冲）——回合判定与 UI 显示共用 */
+export function hasBlackoutImmunity(colony: Colony): boolean {
+  return (colony.leaders || []).some((l) => {
+    const ex = getLeaderDef(l.id)?.levelExtras[l.level - 1];
+    return ex?.blackoutImmune === true;
+  });
+}
 
 /** 处理殖民地每个回合的推进（在 useTurn 中调用） */
 export function processColonyTurn(ship: Mothership, _turn: number): void {
@@ -61,8 +69,8 @@ export function processColonyTurn(ship: Mothership, _turn: number): void {
   // ===== 电能计算（在产出计算之前） =====
   if (colony.energy === undefined) colony.energy = 0;
   const power = computeColonyPower(colony);
-  // 余晖脉冲 Lv3——停电保护
-  const hasL22Lv3 = colony.leaders.some(l => l.id === LEADER_AFTERGLOW_PULSE && l.level >= 3);
+  // 停电免疫（数据驱动：levelExtras.blackoutImmune，如 L22 诺娃·永昼 Lv3 余晖脉冲）
+  const hasL22Lv3 = hasBlackoutImmunity(colony);
   // 电能累积（容量上限 50，防止无限堆）
   const prevEnergy = typeof colony.energy === 'number' ? colony.energy : 0;
   const newEnergy = Math.max(-1, Math.min(50, prevEnergy + power.net));

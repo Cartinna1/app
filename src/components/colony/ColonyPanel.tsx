@@ -4,9 +4,9 @@ import type { PlanetTypeId, PlanetDef } from '@/types/colony';
 import { getBuildableBuildings, getBuildingDef, getBuildingEffect, BUILDING_QUANTUM_LAB } from '@/data/colony/buildings';
 import { getPlanetById } from '@/data/colony/planets';
 import { getTechById, getAvailableTechs, REPEATABLE_TECHS, getRepeatableCost } from '@/data/colony/techs';
-import { getLeaderDef, getLeaderUpgradeCost, getRecruitRollCost, LEADER_LOAD_BALANCE, LEADER_AFTERGLOW_PULSE } from '@/data/colony/leaders';
+import { getLeaderDef, getLeaderUpgradeCost, getRecruitRollCost } from '@/data/colony/leaders';
 import { computeColonyEconomy, computeColonyPower } from '@/lib/colony/economy';
-import { getRecruitCapPerTurn } from '@/lib/colony/colonyTurn';
+import { getRecruitCapPerTurn, hasBlackoutImmunity } from '@/lib/colony/colonyTurn';
 import { MATERIAL_NAME_MAP } from '@/data/materialNames';
 import { Home, Users, Wrench, Play, UserPlus, FlaskConical, Crown, Trophy, Rocket, Images } from 'lucide-react';
 import WonderPanel from './WonderPanel';
@@ -370,7 +370,7 @@ function ColonyPanel(props: ColonyPanelProps) {
           {(() => {
             const power = computeColonyPower(colony);
             const netPwr = (colony.energy ?? 0);
-            const hasL22Lv3 = colony.leaders?.some(l => l.id === LEADER_AFTERGLOW_PULSE && l.level >= 3);
+            const hasL22Lv3 = hasBlackoutImmunity(colony);
             return (
               <div className={`rounded-xl p-4 border ${netPwr < 0 ? 'bg-red-900/30 border-red-700/50' : 'bg-slate-900/60 border-slate-700'}`}>
                 <div className="flex justify-between items-center">
@@ -909,12 +909,9 @@ function ColonyPanel(props: ColonyPanelProps) {
                       if (ex1.stardustPerTurn) skillDesc += ` | 星尘+${ex1.stardustPerTurn}/回合`;
                       if (ex1.darkMatterPerTurn) skillDesc += ` | 暗物质+${ex1.darkMatterPerTurn}/回合`;
                       if (ex1.quantumPerTurn) skillDesc += ` | 量子簇+${ex1.quantumPerTurn}/回合`;
-                      {/* L16 穹顶之父（硬编码追加） */}
+                      if (ex1.powerUseReduction) skillDesc += ' | 所有建筑电能消耗-'+ex1.powerUseReduction+'%';
+                      {/* L16 穹顶之父（硬编码追加，待清理） */}
                       {ld.id === 'L16' && (skillDesc += ' | 穹顶都市/居住舱人口效果+50%')}
-                      {/* LEADER_LOAD_BALANCE 索林·瓦特 */}
-                      {ld.id === LEADER_LOAD_BALANCE && (skillDesc += ' | Lv1所有建筑电能消耗-10% | Lv2 -15% | Lv3 -25%')}
-                      {/* LEADER_AFTERGLOW_PULSE 诺娃·永昼 */}
-                      {ld.id === LEADER_AFTERGLOW_PULSE && (skillDesc += ' | Lv1太阳能阵列+30% | Lv2聚变电站+30% | Lv3停电保护5回合')}
                       return (
                         <div key={i} className="bg-slate-800/60 border border-slate-700 rounded-lg p-3 flex justify-between items-center gap-3">
                           <img
@@ -975,19 +972,13 @@ function ColonyPanel(props: ColonyPanelProps) {
                     if (currExtras.randomMatsPerTurn) parts.push(`随机原料+${currExtras.randomMatsPerTurn}/回合`);
                     if (currExtras.leaderCostReduction) parts.push(`领袖招募费-${currExtras.leaderCostReduction}`);
                     if (currExtras.b26Mult) parts.push(`量子实验室×${currExtras.b26Mult}`);
-                    {/* L16 穹顶之父（硬编码追加） */}
+                    if (currExtras.powerUseReduction) parts.push(`所有建筑电能消耗 -${currExtras.powerUseReduction}%`);
+                    if (currExtras.blackoutImmune) parts.push('停电免疫');
+                    {/* L16 穹顶之父（硬编码追加，待清理） */}
                     {ld.id === 'L16' && (() => {
                       const popPct = [50, 100, 150][l.level-1] || 0;
                       parts.push(`穹顶都市/居住舱人口效果+${popPct}%`);
                       if (l.level >= 2) parts.push(`B2造价-${l.level===2?30:50}%`);
-                    })()}
-                    {/* LEADER_LOAD_BALANCE 索林·瓦特 */}
-                    {ld.id === LEADER_LOAD_BALANCE && parts.push(`所有建筑电能消耗 -${[10,15,25][l.level-1]}%`)}
-                    {/* LEADER_AFTERGLOW_PULSE 诺娃·永昼 */}
-                    {ld.id === LEADER_AFTERGLOW_PULSE && (() => {
-                      if (l.level >= 1) parts.push('太阳能阵列产出+30%');
-                      if (l.level >= 2) parts.push('聚变电站产出+30%');
-                      if (l.level >= 3) parts.push('停电后保持5回合正常产出');
                     })()}
                     return (
                     <div key={i} className="bg-slate-800/60 border border-slate-700 rounded-lg p-3 mb-2 flex gap-3 items-start">

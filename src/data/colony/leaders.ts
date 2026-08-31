@@ -17,7 +17,7 @@ export interface LeaderDef {
   levelExtras: Partial<LeaderExtraEffects>[];
   /** 终极技能（远征 12/12 结局解锁）：在 Lv3 效果基础上再叠加 bonus（数据驱动，无新机制）。
    *  有建筑产出加成的领袖（L1/L2/L5）：bonus = 百分比点，叠加到 Lv3 levelBonuses 的建筑上（economy.ts 统一结算）；
-   *  无建筑产出加成的领袖按主题解释：L13 = 每回合免费人口再 +bonus（colonyTurn.ts），L22 = 余晖脉冲 30% 再 +bonus%（economy.ts）。 */
+   *  无建筑产出加成的领袖按主题解释：L13 = 每回合免费人口再 +bonus（colonyTurn.ts），L22 = 电力建筑 levelBonuses 由 economy.ts 电力循环统一结算、终极再叠加 +bonus%。 */
   ultimateSkill?: { name: string; description: string; bonus: number };
 }
 
@@ -37,6 +37,8 @@ export interface LeaderExtraEffects {
   quantumPerTurn: number;                  // 量子簇/回合
   b26Mult?: number;                        // 量子实验室倍率替代
   stardustPerTurn: number;                 // 星尘/回合
+  powerUseReduction: number;               // 所有建筑电能消耗减少%（如 L21 负载平衡 10/15/25）
+  blackoutImmune: boolean;                 // 停电免疫（如 L22 诺娃·永昼 Lv3 余晖脉冲保护）
 }
 
 export const ALL_LEADERS: LeaderDef[] = [
@@ -131,11 +133,12 @@ export const ALL_LEADERS: LeaderDef[] = [
   { id: LEADER_LOAD_BALANCE, rarity: 'SR', name: '索林·瓦特', abilityName: '负载平衡',
     description: '永远叼着一根绝缘电缆代替香烟的前电网工程师。他说电缆的焦味比烟草好闻，因为那意味着有人在用电。',
     levelBonuses: [{}, {}, {}],
-    levelExtras: [{}, {}, {}] },
+    levelExtras: [{ powerUseReduction: 10 }, { powerUseReduction: 15 }, { powerUseReduction: 25 }] },
   { id: LEADER_AFTERGLOW_PULSE, rarity: 'SSR', name: '诺娃·永昼', abilityName: '余晖脉冲',
     description: '一位来自能量生命体的意识——在聚变事故中与反应堆核心融合，从此以纯能形态存在。殖民地停电的瞬间她总能醒来。',
-    levelBonuses: [{}, {}, {}],
-    levelExtras: [{}, {}, {}],
+    // 余晖脉冲（数据驱动）：太阳能阵列 B29 产出+30%（Lv1+）、聚变电站 B30 产出+30%（Lv2+）；Lv3 停电免疫
+    levelBonuses: [{ B29: 30 }, { B29: 30, B30: 30 }, { B29: 30, B30: 30 }],
+    levelExtras: [{}, {}, { blackoutImmune: true }],
     ultimateSkill: { name: '永昼', description: '太阳能阵列/聚变电站产出额外+10%（与余晖脉冲叠加，合计+40%）', bonus: 10 } },
 ];
 

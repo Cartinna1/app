@@ -5,14 +5,14 @@
 // 修改产出规则时只需改这里，UI 与结算不会再分叉。
 
 import type { BuildingDef, Colony } from '@/types/colony';
-import { getBuildingDef, BUILDING_QUANTUM_LAB, BUILDING_SOLAR_ARRAY, BUILDING_FUSION_PLANT } from '@/data/colony/buildings';
-import { getLeaderDef, LEADER_LOAD_BALANCE, LEADER_AFTERGLOW_PULSE } from '@/data/colony/leaders';
+import { getBuildingDef, BUILDING_QUANTUM_LAB, BUILDING_SOLAR_ARRAY } from '@/data/colony/buildings';
+import { getLeaderDef } from '@/data/colony/leaders';
 import { getPlanetById } from '@/data/colony/planets';
 import { RELIC_ALLOY_MANUAL } from '@/data/relics';
 
 /** 电能结算结果 */
 export interface ColonyPowerInfo {
-  /** 总发电（逐建筑 floor，含 余晖脉冲/星球/领袖全员加成） */
+  /** 总发电（逐建筑 floor，含 领袖电力加成/星球/领袖全员加成） */
   gen: number;
   /** 总耗电（含 负载平衡折扣与星球倍率，ceil） */
   use: number;
@@ -87,10 +87,35 @@ function sumAllLeaderBonus(colony: Colony): number {
   return all;
 }
 
+/** 领袖电力建筑加成（levelBonuses 中 outputType==='power' 的建筑 id；如 L22 余晖脉冲：B29 太阳能 Lv1+、B30 聚变 Lv2+）。
+ *  终极技能解锁后叠加到 Lv3 电力建筑键上（与 computeColonyEconomy 的材料建筑口径一致）。 */
+function sumPowerLeaderBonus(colony: Colony): Record<string, number> {
+  const map: Record<string, number> = {};
+  for (const l of colony.leaders) {
+    const ld = getLeaderDef(l.id);
+    if (!ld) continue;
+    const bonuses = ld.levelBonuses[l.level - 1] || {};
+    for (const [bid, b] of Object.entries(bonuses)) {
+      const bd = getBuildingDef(bid);
+      if (bd && bd.outputType === 'power') map[bid] = (map[bid] || 0) + b;
+    }
+    // 终极技能：远征 12/12 解锁后，叠加到 Lv3 levelBonuses 的电力建筑键上
+    if (colony.expeditionUnlocks?.includes(l.id) && ld.ultimateSkill) {
+      const lv3 = ld.levelBonuses[ld.levelBonuses.length - 1] || {};
+      for (const bid of Object.keys(lv3)) {
+        const bd = getBuildingDef(bid);
+        if (bd && bd.outputType === 'power') map[bid] = (map[bid] || 0) + ld.ultimateSkill.bonus;
+      }
+    }
+  }
+  return map;
+}
+
 /** 电能结算：发电、耗电、净电能 */
 export function computeColonyPower(colony: Colony): ColonyPowerInfo {
   const planet = colony.planetType ? getPlanetById(colony.planetType) : undefined;
   const lAllBonus = sumAllLeaderBonus(colony);
+  const powerLeaderBonus = sumPowerLeaderBonus(colony);
 
   // 发电
   const powerGenPlanetMult = planet?.buffs.powerGenMult || 1;
@@ -101,16 +126,9 @@ export function computeColonyPower(colony: Colony): ColonyPowerInfo {
     if (!def || def.outputType !== 'power') continue;
     if (inst.assignedPop < def.minPop) continue;
     let base = (def.baseOutput || 0) + (def.popFactor || 0) * inst.assignedPop;
-    // 余晖脉冲加成（终极技能「永昼」：远征 12/12 解锁后，在 30% 基础上再叠加 ultimateSkill.bonus，合计 30% + bonus%）
-    for (const l of colony.leaders) {
-      const ld = getLeaderDef(l.id);
-      if (ld?.id === LEADER_AFTERGLOW_PULSE) {
-        if ((def.id === BUILDING_SOLAR_ARRAY && l.level >= 1) || (def.id === BUILDING_FUSION_PLANT && l.level >= 2)) {
-          const ultPct = (colony.expeditionUnlocks?.includes(l.id) && ld.ultimateSkill) ? ld.ultimateSkill.bonus : 0;
-          base *= (1.30 + ultPct / 100);
-        }
-      }
-    }
+    // 领袖电力建筑加成（数据驱动：levelBonuses 里的电力建筑键，如 L22 余晖脉冲；含终极技能「永昼」叠加）
+    const pwrPct = powerLeaderBonus[def.id] || 0;
+    if (pwrPct > 0) base *= (1 + pwrPct / 100);
     // 星球修正（仅太阳能阵列）
     if (def.id === BUILDING_SOLAR_ARRAY && powerGenPlanetMult !== 1) base *= powerGenPlanetMult;
     // 领袖全员加成
@@ -126,11 +144,11 @@ export function computeColonyPower(colony: Colony): ColonyPowerInfo {
     if (!def || def.outputType === 'power') continue; // 电力建筑自身不耗电
     totalUse += def.powerConsumption || 0;
   }
-  // 负载平衡（总消耗 × 折扣，ceil 取整）
+  // 负载平衡（总消耗 × 折扣，ceil 取整）——数据驱动：levelExtras.powerUseReduction（%），多领袖取最高
   let l21Pct = 0;
   for (const l of colony.leaders) {
-    const ld = getLeaderDef(l.id);
-    if (ld?.id === LEADER_LOAD_BALANCE) { l21Pct = [0.10, 0.15, 0.25][l.level - 1] || 0; }
+    const ex = getLeaderDef(l.id)?.levelExtras[l.level - 1];
+    l21Pct = Math.max(l21Pct, (ex?.powerUseReduction || 0) / 100);
   }
   const effectiveUse = l21Pct > 0 ? Math.ceil(totalUse * (1 - l21Pct)) : totalUse;
   // 星球电能消耗修正
