@@ -101,11 +101,14 @@ export function computeColonyPower(colony: Colony): ColonyPowerInfo {
     if (!def || def.outputType !== 'power') continue;
     if (inst.assignedPop < def.minPop) continue;
     let base = (def.baseOutput || 0) + (def.popFactor || 0) * inst.assignedPop;
-    // 余晖脉冲加成
+    // 余晖脉冲加成（终极技能「永昼」：远征 12/12 解锁后，在 30% 基础上再叠加 ultimateSkill.bonus，合计 30% + bonus%）
     for (const l of colony.leaders) {
       const ld = getLeaderDef(l.id);
       if (ld?.id === LEADER_AFTERGLOW_PULSE) {
-        if ((def.id === BUILDING_SOLAR_ARRAY && l.level >= 1) || (def.id === BUILDING_FUSION_PLANT && l.level >= 2)) base *= 1.30;
+        if ((def.id === BUILDING_SOLAR_ARRAY && l.level >= 1) || (def.id === BUILDING_FUSION_PLANT && l.level >= 2)) {
+          const ultPct = (colony.expeditionUnlocks?.includes(l.id) && ld.ultimateSkill) ? ld.ultimateSkill.bonus : 0;
+          base *= (1.30 + ultPct / 100);
+        }
       }
     }
     // 星球修正（仅太阳能阵列）

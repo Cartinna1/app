@@ -15,7 +15,9 @@ export interface LeaderDef {
   levelBonuses: BonusMap[];
   /** 每级的额外效果（可选） */
   levelExtras: Partial<LeaderExtraEffects>[];
-  /** 终极技能（远征 12/12 结局解锁）：在 Lv3 产出加成基础上再叠加 bonus（百分比点），无新机制 */
+  /** 终极技能（远征 12/12 结局解锁）：在 Lv3 效果基础上再叠加 bonus（数据驱动，无新机制）。
+   *  有建筑产出加成的领袖（L1/L2/L5）：bonus = 百分比点，叠加到 Lv3 levelBonuses 的建筑上（economy.ts 统一结算）；
+   *  无建筑产出加成的领袖按主题解释：L13 = 每回合免费人口再 +bonus（colonyTurn.ts），L22 = 余晖脉冲 30% 再 +bonus%（economy.ts）。 */
   ultimateSkill?: { name: string; description: string; bonus: number };
 }
 
@@ -60,7 +62,8 @@ export const ALL_LEADERS: LeaderDef[] = [
   { id: 'L5', rarity: 'R', name: '金脉·奥莉薇', abilityName: '贵金属共鸣',
     description: '她曾用声波共振仪在废弃小行星带找到一条纯金矿脉，被矿业公会称为金色女巫。',
     levelBonuses: [{ B14:20,B22:20 }, { B14:35,B22:35 }, { B14:50,B22:50 }],
-    levelExtras: [{}, {}, { popCapBonus: { B22:5 } }] },
+    levelExtras: [{}, {}, { popCapBonus: { B22:5 } }],
+    ultimateSkill: { name: '黄金回响', description: '贵金属建筑产出额外+20%（与Lv3叠加，合计+70%）', bonus: 20 } },
   { id: 'L6', rarity: 'R', name: '碳语者·莫里斯', abilityName: '碳基统御',
     description: '曾在一颗被烧成焦炭的星球上发现碳块富集层，坚信碳是宇宙最诚实的通货。',
     levelBonuses: [{ B15:20,B20:20 }, { B15:35,B20:35 }, { B15:50,B20:50 }],
@@ -93,7 +96,8 @@ export const ALL_LEADERS: LeaderDef[] = [
   { id: 'L13', rarity: 'SR', name: '克隆·艾琳', abilityName: '生命复制协议',
     description: '她是克隆中心伦理争议的核心人物，却坚称每个克隆体都是独立的星辰。',
     levelBonuses: [{}, {}, {}],
-    levelExtras: [{ freePopEveryTurns: 1 }, { freePopEveryTurns: 1, populationCapBonus: 5 }, { freePopEveryTurns: 1, populationCapBonus: 10, foodConsumptionDelta: -1 }] },
+    levelExtras: [{ freePopEveryTurns: 1 }, { freePopEveryTurns: 1, populationCapBonus: 5 }, { freePopEveryTurns: 1, populationCapBonus: 10, foodConsumptionDelta: -1 }],
+    ultimateSkill: { name: '克隆潮', description: '每回合免费人口再+1（与Lv3叠加，每回合共2）', bonus: 1 } },
   { id: 'L14', rarity: 'SR', name: '玛尔塔·丰穗', abilityName: '后勤艺术',
     description: '舰队后勤官出身，据说她曾用一船口粮喂饱三船人——直到有人发现，她连培养舱的菌毯都编进了食谱。',
     levelBonuses: [{}, {}, {}],
@@ -131,7 +135,8 @@ export const ALL_LEADERS: LeaderDef[] = [
   { id: LEADER_AFTERGLOW_PULSE, rarity: 'SSR', name: '诺娃·永昼', abilityName: '余晖脉冲',
     description: '一位来自能量生命体的意识——在聚变事故中与反应堆核心融合，从此以纯能形态存在。殖民地停电的瞬间她总能醒来。',
     levelBonuses: [{}, {}, {}],
-    levelExtras: [{}, {}, {}] },
+    levelExtras: [{}, {}, {}],
+    ultimateSkill: { name: '永昼', description: '太阳能阵列/聚变电站产出额外+10%（与余晖脉冲叠加，合计+40%）', bonus: 10 } },
 ];
 
 // ==================== 领袖升级星尘费用（唯一真值） ====================
