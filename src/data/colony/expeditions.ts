@@ -9,6 +9,7 @@
 import type { LeaderExpedition } from '@/types/colony';
 import { expeditionL1 } from './expeditions/L1';
 import { expeditionL2 } from './expeditions/L2';
+import { expeditionL5 } from './expeditions/L5';
 import { expeditionL13 } from './expeditions/L13';
 import { expeditionL22 } from './expeditions/L22';
 
@@ -34,6 +35,7 @@ export const RESOURCE_LABELS: Record<string, string> = {
 export const LEADER_EXPEDITIONS: Record<string, LeaderExpedition> = {
   L1: expeditionL1,
   L2: expeditionL2,
+  L5: expeditionL5,
   L13: expeditionL13,
   L22: expeditionL22,
 };
