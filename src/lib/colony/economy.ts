@@ -10,6 +10,22 @@ import { getLeaderDef } from '@/data/colony/leaders';
 import { getPlanetById } from '@/data/colony/planets';
 import { RELIC_ALLOY_MANUAL } from '@/data/relics';
 
+/** 单个电力建筑实例的发电明细（供 UI 展示加成来源） */
+export interface PowerBuildingEntry {
+  uid: string;
+  defId: string;
+  /** 基础产出（加成前） */
+  base: number;
+  /** 领袖电力建筑加成（%，如 L22 余晖脉冲 +30，含终极技能叠加） */
+  leaderPct: number;
+  /** 星球修正（%，仅太阳能阵列，如热带 -30） */
+  planetPct: number;
+  /** 领袖全员加成（%） */
+  allPct: number;
+  /** 最终发电（floor 后） */
+  value: number;
+}
+
 /** 电能结算结果 */
 export interface ColonyPowerInfo {
   /** 总发电（逐建筑 floor，含 领袖电力加成/星球/领袖全员加成） */
@@ -22,6 +38,8 @@ export interface ColonyPowerInfo {
   l21Pct: number;
   planetGenMult: number;
   planetUseMult: number;
+  /** 发电建筑明细（加成来源分解） */
+  buildings: PowerBuildingEntry[];
 }
 
 /** 单个建筑实例的产出明细（供 UI 展示分解） */
@@ -119,21 +137,24 @@ export function computeColonyPower(colony: Colony): ColonyPowerInfo {
 
   // 发电
   const powerGenPlanetMult = planet?.buffs.powerGenMult || 1;
+  const powerBuildings: PowerBuildingEntry[] = [];
   let gen = 0;
   for (const inst of colony.buildings) {
     if (!inst.active) continue;
     const def = getBuildingDef(inst.defId);
     if (!def || def.outputType !== 'power') continue;
     if (inst.assignedPop < def.minPop) continue;
-    let base = (def.baseOutput || 0) + (def.popFactor || 0) * inst.assignedPop;
-    // 领袖电力建筑加成（数据驱动：levelBonuses 里的电力建筑键，如 L22 余晖脉冲；含终极技能「永昼」叠加）
+    const baseRaw = (def.baseOutput || 0) + (def.popFactor || 0) * inst.assignedPop;
+    // 加成加算合并（与其他资源口径一致：1 + 各加成%之和）：
+    // 领袖电力建筑加成（levelBonuses 电力键，如 L22 余晖脉冲；含终极技能「永昼」叠加）
+    // + 星球修正（仅太阳能阵列，如热带 −30%）+ 领袖全员加成
     const pwrPct = powerLeaderBonus[def.id] || 0;
-    if (pwrPct > 0) base *= (1 + pwrPct / 100);
-    // 星球修正（仅太阳能阵列）
-    if (def.id === BUILDING_SOLAR_ARRAY && powerGenPlanetMult !== 1) base *= powerGenPlanetMult;
-    // 领袖全员加成
-    if (lAllBonus > 0) base *= (1 + lAllBonus / 100);
-    gen += Math.floor(base);
+    const planetPct = (def.id === BUILDING_SOLAR_ARRAY && powerGenPlanetMult !== 1) ? Math.round((powerGenPlanetMult - 1) * 100) : 0;
+    const allPct = lAllBonus;
+    const combinedPct = pwrPct + planetPct + allPct;
+    const value = Math.floor(combinedPct !== 0 ? baseRaw * (1 + combinedPct / 100) : baseRaw);
+    powerBuildings.push({ uid: inst.uid, defId: def.id, base: baseRaw, leaderPct: pwrPct, planetPct, allPct, value });
+    gen += value;
   }
 
   // 耗电
@@ -155,7 +176,7 @@ export function computeColonyPower(colony: Colony): ColonyPowerInfo {
   const planetUseMult = planet?.buffs.powerUseMult || 1;
   const use = Math.ceil(effectiveUse * planetUseMult);
 
-  return { gen, use, net: gen - use, l21Pct, planetGenMult: powerGenPlanetMult, planetUseMult };
+  return { gen, use, net: gen - use, l21Pct, planetGenMult: powerGenPlanetMult, planetUseMult, buildings: powerBuildings };
 }
 
 /** 人口食物消耗（含星球与领袖修正，最低每人 1） */
@@ -192,11 +213,14 @@ export function computeColonyEconomy(colony: Colony, opts: ColonyEconomyOptions)
       else if (bid === 'ALL_MATERIAL') lMat += b;
       else leaderBonusMap[bid] = (leaderBonusMap[bid] || 0) + b;
     }
-    // 终极技能：远征 12/12 解锁后，在 Lv3 产出加成基础上再叠加 bonus（数据驱动，无新机制）
+    // 终极技能：远征 12/12 解锁后，在 Lv3 产出加成基础上再叠加 bonus（数据驱动，无新机制）。
+    // 电力建筑键（如 L22 的 B29/B30）不在此结算——由 sumPowerLeaderBonus 统一处理，避免死值交叉
     if (colony.expeditionUnlocks?.includes(l.id) && ld.ultimateSkill) {
       const lv3 = ld.levelBonuses[ld.levelBonuses.length - 1] || {};
       for (const bid of Object.keys(lv3)) {
         if (bid === 'ALL' || bid === 'ALL_MATERIAL') continue;
+        const bd = getBuildingDef(bid);
+        if (bd && bd.outputType === 'power') continue;
         leaderBonusMap[bid] = (leaderBonusMap[bid] || 0) + ld.ultimateSkill.bonus;
       }
     }

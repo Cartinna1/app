@@ -19,6 +19,9 @@ export function hasBlackoutImmunity(colony: Colony): boolean {
   });
 }
 
+/** 余晖脉冲停电保护回合数（L22 Lv3：连续缺电时免疫 N 个回合，耗尽后仍未恢复供电则停电） */
+export const BLACKOUT_GUARD_TURNS = 10;
+
 /** 处理殖民地每个回合的推进（在 useTurn 中调用） */
 export function processColonyTurn(ship: Mothership, _turn: number): void {
   const colony = ship.colony;
@@ -75,7 +78,22 @@ export function processColonyTurn(ship: Mothership, _turn: number): void {
   const prevEnergy = typeof colony.energy === 'number' ? colony.energy : 0;
   const newEnergy = Math.max(-1, Math.min(50, prevEnergy + power.net));
   colony.energy = newEnergy;
-  const blackout = newEnergy < 0 && !hasL22Lv3;
+  // 余晖脉冲保护：连续缺电时免疫 BLACKOUT_GUARD_TURNS 个回合（首次缺电开启），
+  // 保护耗尽后仍未恢复供电 → 正常停电；中途恢复供电则重置计数
+  const blackoutBase = newEnergy < 0;
+  let blackout = blackoutBase;
+  if (blackoutBase && hasL22Lv3) {
+    blackout = false;
+    if (colony.blackoutGuardTurns === undefined) colony.blackoutGuardTurns = 0;
+    if (colony.blackoutGuardTurns > 0) {
+      colony.blackoutGuardTurns--;
+    } else {
+      colony.blackoutGuardTurns = BLACKOUT_GUARD_TURNS;
+    }
+    if (colony.blackoutGuardTurns === 0) blackout = true; // 10 回合保护耗尽，仍缺电 → 停电
+  } else if (!blackoutBase) {
+    colony.blackoutGuardTurns = 0; // 供电正常，重置保护计数
+  }
 
   // ===== 建筑产出 + 领袖每回合特效（统一走 economy 模块） =====
   const eco = computeColonyEconomy(colony, { blackout, random: true, relics: ship.relics });
@@ -183,6 +201,10 @@ export function calcPopCap(colony: Colony): number {
   for (const l of colony.leaders) {
     const ld = getLeaderDef(l.id); const ex = ld?.levelExtras[l.level-1];
     cap += (ex?.populationCapBonus || 0);
+    // 终极技能（数据驱动）：type 为 populationCap 的叠加人口上限（如 L14 菌毯之宴，Lv3 +10 → 合计 +20）
+    if (colony.expeditionUnlocks?.includes(l.id) && ld?.ultimateSkill?.type === 'populationCap') {
+      cap += ld.ultimateSkill.bonus;
+    }
     // L16 穹顶之父：居住建筑上限+
     if (l.id === 'L16') {
       const mult = [0.5, 1.0, 1.5][l.level-1] || 0;

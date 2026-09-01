@@ -16,9 +16,10 @@ export interface LeaderDef {
   /** 每级的额外效果（可选） */
   levelExtras: Partial<LeaderExtraEffects>[];
   /** 终极技能（远征 12/12 结局解锁）：在 Lv3 效果基础上再叠加 bonus（数据驱动，无新机制）。
-   *  有建筑产出加成的领袖（L1/L2/L5）：bonus = 百分比点，叠加到 Lv3 levelBonuses 的建筑上（economy.ts 统一结算）；
-   *  无建筑产出加成的领袖按主题解释：L13 = 每回合免费人口再 +bonus（colonyTurn.ts），L22 = 电力建筑 levelBonuses 由 economy.ts 电力循环统一结算、终极再叠加 +bonus%。 */
-  ultimateSkill?: { name: string; description: string; bonus: number };
+   *  有建筑产出加成的领袖（L1/L2/L5/L8）：bonus = 百分比点，叠加到 Lv3 levelBonuses 的建筑上（economy.ts 统一结算）；
+   *  无建筑产出加成的领袖按主题解释：L13 = 每回合免费人口再 +bonus（colonyTurn.ts），L22 = 电力建筑 levelBonuses 由 economy.ts 电力循环统一结算、终极再叠加 +bonus%，
+   *  L14 = 人口上限再 +bonus（type: 'populationCap'，colonyTurn.ts calcPopCap 消费，防误叠加到其他领袖）。 */
+  ultimateSkill?: { name: string; description: string; bonus: number; type?: 'populationCap' };
 }
 
 export interface LeaderExtraEffects {
@@ -77,7 +78,8 @@ export const ALL_LEADERS: LeaderDef[] = [
   { id: 'L8', rarity: 'R', name: '量子·瑟琳娜', abilityName: '涨落编织者',
     description: '出身于量子谐振器实验室，她能在虚空中听见量子簇的震颤。',
     levelBonuses: [{ B17:20,B23:20 }, { B17:35,B23:35 }, { B17:50,B23:50 }],
-    levelExtras: [{}, {}, { popCapBonus: { B23:5 } }] },
+    levelExtras: [{}, {}, { popCapBonus: { B23:5 } }],
+    ultimateSkill: { name: '量子共鸣', description: '量子簇建筑产出额外+20%（与Lv3叠加，合计+70%）', bonus: 20 } },
   { id: 'L9', rarity: 'R', name: '晶芒·哈罗德', abilityName: '硅晶之眼',
     description: '曾是硅晶提取站的技工，被同行称为硅片诗人。',
     levelBonuses: [{ B18:20,B24:20 }, { B18:35,B24:35 }, { B18:50,B24:50 }],
@@ -103,7 +105,8 @@ export const ALL_LEADERS: LeaderDef[] = [
   { id: 'L14', rarity: 'SR', name: '玛尔塔·丰穗', abilityName: '后勤艺术',
     description: '舰队后勤官出身，据说她曾用一船口粮喂饱三船人——直到有人发现，她连培养舱的菌毯都编进了食谱。',
     levelBonuses: [{}, {}, {}],
-    levelExtras: [{ foodConsumptionDelta: -1 }, { foodConsumptionDelta: -1, populationCapBonus: 5 }, { foodConsumptionDelta: -2, populationCapBonus: 10 }] },
+    levelExtras: [{ foodConsumptionDelta: -1 }, { foodConsumptionDelta: -1, populationCapBonus: 5 }, { foodConsumptionDelta: -2, populationCapBonus: 10 }],
+    ultimateSkill: { name: '菌毯之宴', description: '人口上限额外+10（与Lv3叠加，合计+20）', bonus: 10, type: 'populationCap' } },
   { id: 'L15', rarity: 'SR', name: '诺亚·方舟', abilityName: '移民浪潮',
     description: '他曾在殖民地大饥荒中带出三千名幸存者。此后无论走到哪里，追随者都如潮水般涌来——他的名字本身，就是一张船票。',
     levelBonuses: [{}, {}, {}],

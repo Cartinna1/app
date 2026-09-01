@@ -377,15 +377,40 @@ function ColonyPanel(props: ColonyPanelProps) {
                   <div>
                     <p className="text-sm font-bold text-slate-300">⚡ 电能</p>
                     <p className="text-xs text-slate-500">
-                      发电 {power.gen}{power.planetGenMult !== 1 ? ` (星球×${power.planetGenMult})` : ''}
+                      发电 {power.gen}{power.planetGenMult !== 1 ? ` (星球${(Math.round((power.planetGenMult - 1) * 100) > 0 ? '+' : '')}${Math.round((power.planetGenMult - 1) * 100)}%)` : ''}
                       {' − '}消耗 {power.use}{power.l21Pct > 0 ? ` (L21 -${Math.round(power.l21Pct*100)}%)` : ''}{power.planetUseMult !== 1 ? ` (星球×${power.planetUseMult})` : ''}
                     </p>
                   </div>
                   <div className="text-right">
                     <p className={`text-xl font-bold ${netPwr < 0 ? 'text-red-400' : 'text-green-400'}`}>{netPwr >= 0 ? '+' : ''}{netPwr}</p>
-                    {netPwr < 0 && <p className="text-xs text-red-400 mt-1">{hasL22Lv3 ? '⚠ 停电中（余晖脉冲保护）' : '⚠ 停电：所有建筑停工'}</p>}
+                    {netPwr < 0 && (
+                      <p className="text-xs text-red-400 mt-1">
+                        {hasL22Lv3 && (colony.blackoutGuardTurns || 0) > 0
+                          ? `⚠ 停电中（余晖脉冲保护，剩余 ${colony.blackoutGuardTurns} 回合）`
+                          : '⚠ 停电：所有建筑停工'}
+                      </p>
+                    )}
                   </div>
                 </div>
+                {/* 发电来源明细（加成来源分解，同产出汇总口径） */}
+                {power.buildings.length > 0 && (
+                  <div className="mt-2 pt-2 border-t border-slate-700/50 space-y-0.5">
+                    {power.buildings.map((b) => {
+                      const bd = getBuildingDef(b.defId);
+                      const parts = [`基础${b.base}`];
+                      if (b.planetPct !== 0) parts.push(`星球${b.planetPct > 0 ? '+' : ''}${b.planetPct}%`);
+                      if (b.leaderPct > 0) parts.push(`领袖+${b.leaderPct}%`);
+                      if (b.allPct > 0) parts.push(`全员+${b.allPct}%`);
+                      return (
+                        <p key={b.uid} className="text-xs text-slate-500 flex flex-wrap items-baseline gap-x-1">
+                          <span>{bd?.name || b.defId}:</span>
+                          <span className="text-cyan-400">+{b.value}</span>
+                          <span className="text-slate-600">（{parts.join(' | ')}）</span>
+                        </p>
+                      );
+                    })}
+                  </div>
+                )}
               </div>
             );
           })()}

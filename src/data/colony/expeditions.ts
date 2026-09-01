@@ -10,7 +10,9 @@ import type { LeaderExpedition } from '@/types/colony';
 import { expeditionL1 } from './expeditions/L1';
 import { expeditionL2 } from './expeditions/L2';
 import { expeditionL5 } from './expeditions/L5';
+import { expeditionL8 } from './expeditions/L8';
 import { expeditionL13 } from './expeditions/L13';
+import { expeditionL14 } from './expeditions/L14';
 import { expeditionL22 } from './expeditions/L22';
 
 /** 远征启动星尘费（唯一数字锚点） */
@@ -36,7 +38,9 @@ export const LEADER_EXPEDITIONS: Record<string, LeaderExpedition> = {
   L1: expeditionL1,
   L2: expeditionL2,
   L5: expeditionL5,
+  L8: expeditionL8,
   L13: expeditionL13,
+  L14: expeditionL14,
   L22: expeditionL22,
 };
 

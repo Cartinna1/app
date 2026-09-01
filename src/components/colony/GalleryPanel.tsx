@@ -56,7 +56,7 @@ function GalleryPanel({ colony }: GalleryPanelProps) {
             src={imgPath(selected.leaderId, `${img.id}.webp`)}
             alt={imgLabel}
             onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
-            className="w-full max-w-2xl aspect-video object-cover mx-auto rounded-lg border border-amber-700/40"
+            className="w-full aspect-video object-cover rounded-lg border border-amber-700/40"
           />
           <h4 className="font-bold text-amber-300 text-center mt-2 mb-1 text-base md:text-lg">{imgLabel}</h4>
         </div>
@@ -70,7 +70,7 @@ function GalleryPanel({ colony }: GalleryPanelProps) {
           src={imgPath(selected.leaderId, `${selected.nodeId}.webp`)}
           alt={node.title}
           onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
-          className="w-full max-w-2xl aspect-video object-cover mx-auto rounded-lg border border-purple-700/40"
+          className="w-full aspect-video object-cover rounded-lg border border-purple-700/40"
         />
         <h4 className="font-bold text-purple-300 text-center mt-2 mb-1">结局 {selected.nodeId} · {node.title}</h4>
         <p className="text-sm italic text-purple-200/90 text-center leading-relaxed">{node.motto}</p>
@@ -159,7 +159,7 @@ function GalleryPanel({ colony }: GalleryPanelProps) {
                 <p className="text-base font-bold text-amber-300 mb-2 flex items-center gap-1.5">
                   <Sparkles size={14} />CG 图集（{route.hiddenImages?.length || 0} 张）
                 </p>
-                <div className="grid grid-cols-3 gap-2">
+                <div className="grid grid-cols-3 md:grid-cols-4 gap-2">
                   {(route.hiddenImages || []).map((h, i) => (
                     <button
                       key={h.id}

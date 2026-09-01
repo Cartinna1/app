@@ -117,6 +117,7 @@ export function migrateSave(loaded: GameState): GameState {
         recruitedThisTurn: s.colony.recruitedThisTurn || 0,
         expeditionEndings: s.colony.expeditionEndings || {},
         expeditionUnlocks: s.colony.expeditionUnlocks || [],
+        blackoutGuardTurns: s.colony.blackoutGuardTurns || 0,
       } : s.colony,
     }));
   }

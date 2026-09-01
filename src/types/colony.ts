@@ -162,6 +162,8 @@ export interface Colony {
   recruitPool?: any[];               // 招募池（领袖选项，暂存）
   wonder?: WonderState;              // 奇观建设状态
   energy: number;                    // 当前净电能（-1以下=停电）
+  /** 余晖脉冲保护剩余回合（L22 Lv3 停电免疫 10 回合，0=未保护/已耗尽） */
+  blackoutGuardTurns?: number;
   expedition?: ExpeditionState;                 // 远征状态（领袖剧情树）
   expeditionEndings?: Record<string, string[]>; // 领袖 → 已触发结局 id（去重，12/12 解锁终极技能）
   expeditionUnlocks?: string[];                 // 已解锁终极技能的领袖 id

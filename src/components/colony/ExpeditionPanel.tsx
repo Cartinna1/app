@@ -111,7 +111,7 @@ function ExpeditionPanel({ colony, onStartExpedition, onPayExpeditionNode, onUnl
                       src={imgPath(ex.leaderId, `${node.id}.webp`)}
                       alt={node.title}
                       onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
-                      className="w-full max-w-2xl aspect-video object-cover mx-auto rounded-lg border border-purple-700/40 mb-3"
+                      className="w-full aspect-video object-cover rounded-lg border border-purple-700/40 mb-3"
                     />
                   )}
                   <p className="text-sm text-slate-300 leading-relaxed whitespace-pre-line">{node.text}</p>
@@ -135,7 +135,7 @@ function ExpeditionPanel({ colony, onStartExpedition, onPayExpeditionNode, onUnl
                 src={imgPath(ex.leaderId, `${node.id}.webp`)}
                 alt={node.title}
                 onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
-                className="w-full max-w-2xl aspect-video object-cover mx-auto rounded-lg border border-purple-700/40 mb-3"
+                className="w-full aspect-video object-cover rounded-lg border border-purple-700/40 mb-3"
               />
               <p className="text-[10px] text-slate-500 mb-1">结局 {node.id} · 已记录（{endingsCount(ex.leaderId)}/12）</p>
               <h4 className="font-bold text-purple-300 mb-2">{node.title}</h4>
