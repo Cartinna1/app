@@ -375,7 +375,14 @@ function TradePanel({ factions, ship, factionPrices, factionSellMultipliers, bla
                   {currentRepTier.discount > 0 && <div><p className="text-xs text-green-400">投资优惠</p><p className="text-sm text-green-400 font-bold">-{(currentRepTier.discount * 100).toFixed(0)}%</p></div>}
                   <div><p className="text-xs text-slate-500">基价</p><p className="text-sm text-slate-500 line-through">{currentFaction.basePrice.toLocaleString()} 金</p></div>
                   <div><p className="text-xs text-slate-500">本回合剩余库存</p><p className={`text-sm font-bold ${buyStockLeft <= 0 ? 'text-red-400' : 'text-slate-300'}`}>{buyStockLeft.toLocaleString()} 个</p></div>
-                  {buyBuffMult > 1 && <div><p className="text-xs text-orange-400">涨价中</p><p className="text-sm text-orange-400 font-bold">×{buyBuffMult.toFixed(2)}</p></div>}
+                  {currentFaction && buyBuffMult > 1 && (
+                    <div>
+                      <p className="text-xs text-orange-400">涨价中 ×{buyBuffMult.toFixed(2)}</p>
+                      {(buyBuffs?.[currentFaction.id] || []).map((b, i) => (
+                        <p key={i} className="text-[10px] text-orange-400/80 whitespace-nowrap">×{b.multiplier.toFixed(2)} 剩 {Math.max(0, b.expiresTurn - currentTurn)} 回合</p>
+                      ))}
+                    </div>
+                  )}
                 </div>
                 </div>
               </div>
@@ -427,7 +434,16 @@ function TradePanel({ factions, ship, factionPrices, factionSellMultipliers, bla
                   <p className="text-xs text-slate-500">当前库存（在{currentFaction?.name}卖出）：</p>
                   <div className="flex items-center gap-3 text-xs">
                     <span className="text-slate-400">本回合剩余需求：<span className={`font-bold ${sellDemandLeft <= 0 ? 'text-red-400' : 'text-slate-300'}`}>{sellDemandLeft.toLocaleString()} 个</span></span>
-                    {sellBuffMult < 1 && <span className="text-orange-400 font-bold">降价中 ×{sellBuffMult.toFixed(2)}</span>}
+                    {sellBuffMult < 1 && (
+                      <span className="text-orange-400 font-bold">
+                        降价中 ×{sellBuffMult.toFixed(2)}
+                        <span className="block text-[10px] font-normal mt-0.5 text-orange-400/80">
+                          {(sellBuffs?.[curFid] || []).map((b, i) => (
+                            <span key={i} className="mr-2">×{b.multiplier.toFixed(2)} 剩 {Math.max(0, b.expiresTurn - currentTurn)} 回合</span>
+                          ))}
+                        </span>
+                      </span>
+                    )}
                   </div>
                   {inventoryEntries.map(([fid, count]) => {
                     const f = factions.find((fa) => fa.id === fid);
@@ -605,7 +621,7 @@ function TradePanel({ factions, ship, factionPrices, factionSellMultipliers, bla
                       <div className="flex-1 min-w-0">
                         <p className="text-sm font-bold text-slate-200">{blackFactionData.name}</p>
                         <p className="text-xs text-slate-400">特产：{blackFactionData.specialtyName}</p>
-                        <p className="text-xs text-slate-500 mt-0.5">单价 <span className="text-purple-300 font-bold">{blackPrice.toLocaleString()}</span> 金币（市场价 {blackBasePrice.toLocaleString()} × {blackMarketMultiplier || 3.2}{blackBuffMult > 1 ? ` × 涨价${blackBuffMult.toFixed(2)}` : ''}）</p>
+                        <p className="text-xs text-slate-500 mt-0.5">单价 <span className="text-purple-300 font-bold">{blackPrice.toLocaleString()}</span> 金币（市场价 {blackBasePrice.toLocaleString()} × {blackMarketMultiplier || 3.2}{blackBuffMult > 1 ? ` × 涨价${blackBuffMult.toFixed(2)}（${(buyBuffs?.[blackFaction] || []).map((b) => `剩${Math.max(0, b.expiresTurn - currentTurn)}回`).join('，')}）` : ''}）</p>
                       </div>
                     </div>
                     <div className="flex items-center gap-2 mb-3">
