@@ -12,6 +12,7 @@ import { expeditionL2 } from './expeditions/L2';
 import { expeditionL3 } from './expeditions/L3';
 import { expeditionL4 } from './expeditions/L4';
 import { expeditionL5 } from './expeditions/L5';
+import { expeditionL6 } from './expeditions/L6';
 import { expeditionL8 } from './expeditions/L8';
 import { expeditionL13 } from './expeditions/L13';
 import { expeditionL14 } from './expeditions/L14';
@@ -42,6 +43,7 @@ export const LEADER_EXPEDITIONS: Record<string, LeaderExpedition> = {
   L3: expeditionL3,
   L4: expeditionL4,
   L5: expeditionL5,
+  L6: expeditionL6,
   L8: expeditionL8,
   L13: expeditionL13,
   L14: expeditionL14,
