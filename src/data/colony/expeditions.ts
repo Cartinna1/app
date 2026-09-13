@@ -13,7 +13,12 @@ import { expeditionL3 } from './expeditions/L3';
 import { expeditionL4 } from './expeditions/L4';
 import { expeditionL5 } from './expeditions/L5';
 import { expeditionL6 } from './expeditions/L6';
+import { expeditionL7 } from './expeditions/L7';
 import { expeditionL8 } from './expeditions/L8';
+import { expeditionL9 } from './expeditions/L9';
+import { expeditionL10 } from './expeditions/L10';
+import { expeditionL11 } from './expeditions/L11';
+import { expeditionL12 } from './expeditions/L12';
 import { expeditionL13 } from './expeditions/L13';
 import { expeditionL14 } from './expeditions/L14';
 import { expeditionL22 } from './expeditions/L22';
@@ -44,7 +49,12 @@ export const LEADER_EXPEDITIONS: Record<string, LeaderExpedition> = {
   L4: expeditionL4,
   L5: expeditionL5,
   L6: expeditionL6,
+  L7: expeditionL7,
   L8: expeditionL8,
+  L9: expeditionL9,
+  L10: expeditionL10,
+  L11: expeditionL11,
+  L12: expeditionL12,
   L13: expeditionL13,
   L14: expeditionL14,
   L22: expeditionL22,

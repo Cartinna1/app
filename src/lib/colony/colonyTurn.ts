@@ -124,10 +124,11 @@ export function processColonyTurn(ship: Mothership, _turn: number): void {
   colony.population.cap = calcPopCap(colony);
 
   // 领袖免费人口效果（终极技能「克隆潮」：远征 12/12 解锁后每回合免费人口再 +bonus，L13 = +1 合计每回合2；带上限钳制防溢出）
+  // 终极叠加以 type === 'freePop' 为守卫，避免其他领袖的终极 bonus 被误当作免费人口加成
   for (const l of colony.leaders) {
     const ld = getLeaderDef(l.id); const ex = ld?.levelExtras[l.level-1];
     if (ex?.freePopEveryTurns && _turn % ex.freePopEveryTurns === 0 && colony.population.total < colony.population.cap) {
-      const ultGain = (colony.expeditionUnlocks?.includes(l.id) && ld?.ultimateSkill) ? ld.ultimateSkill.bonus : 0;
+      const ultGain = (colony.expeditionUnlocks?.includes(l.id) && ld?.ultimateSkill?.type === 'freePop') ? ld.ultimateSkill.bonus : 0;
       const gain = Math.min(1 + ultGain, colony.population.cap - colony.population.total);
       colony.population.total += gain; colony.population.available += gain;
     }

@@ -16,10 +16,11 @@ export interface LeaderDef {
   /** 每级的额外效果（可选） */
   levelExtras: Partial<LeaderExtraEffects>[];
   /** 终极技能（远征 12/12 结局解锁）：在 Lv3 效果基础上再叠加 bonus（数据驱动，无新机制）。
-   *  有建筑产出加成的领袖（L1/L2/L5/L8）：bonus = 百分比点，叠加到 Lv3 levelBonuses 的建筑上（economy.ts 统一结算）；
-   *  无建筑产出加成的领袖按主题解释：L13 = 每回合免费人口再 +bonus（colonyTurn.ts），L22 = 电力建筑 levelBonuses 由 economy.ts 电力循环统一结算、终极再叠加 +bonus%，
-   *  L14 = 人口上限再 +bonus（type: 'populationCap'，colonyTurn.ts calcPopCap 消费，防误叠加到其他领袖）。 */
-  ultimateSkill?: { name: string; description: string; bonus: number; type?: 'populationCap' };
+   *  有建筑产出加成的领袖（L1/L2/L3/L4/L5/L6/L7/L8/L9/L11/L12）：bonus = 百分比点，叠加到 Lv3 levelBonuses 的建筑上（economy.ts 统一结算）；
+   *  无建筑产出加成的领袖按主题解释，并用 type 标记守卫对应消费点，勿通用叠加：
+   *  L13 = 每回合免费人口再 +bonus（type: 'freePop'，colonyTurn.ts 免费人口块），L22 = 电力建筑 levelBonuses 由 economy.ts 电力循环统一结算、终极再叠加 +bonus%，
+   *  L14 = 人口上限再 +bonus（type: 'populationCap'，colonyTurn.ts calcPopCap 消费），L10 = 每回合科研再 +bonus（type: 'researchPerTurn'，economy.ts 领袖特效块消费）。 */
+  ultimateSkill?: { name: string; description: string; bonus: number; type?: 'populationCap' | 'researchPerTurn' | 'freePop' };
 }
 
 export interface LeaderExtraEffects {
@@ -77,7 +78,8 @@ export const ALL_LEADERS: LeaderDef[] = [
   { id: 'L7', rarity: 'R', name: '幽影·泽维尔', abilityName: '暗影捕手',
     description: '"他曾在黑洞阴影区捕获一缕暗物质流，并将其命名为"宇宙的呼吸"。没有人知道他如何做到的。"',
     levelBonuses: [{ B16:20,B21:20 }, { B16:35,B21:35 }, { B16:50,B21:50 }],
-    levelExtras: [{}, {}, { popCapBonus: { B21:4 } }] },
+    levelExtras: [{}, {}, { popCapBonus: { B21:4 } }],
+    ultimateSkill: { name: '暗质永夜', description: '暗物质建筑（暗物质捕获阱/暗物质压缩阱）产出额外+20%（与Lv3叠加，合计+70%）', bonus: 20 } },
   { id: 'L8', rarity: 'R', name: '量子·瑟琳娜', abilityName: '涨落编织者',
     description: '出身于量子谐振器实验室，她能在虚空中听见量子簇的震颤。',
     levelBonuses: [{ B17:20,B23:20 }, { B17:35,B23:35 }, { B17:50,B23:50 }],
@@ -86,25 +88,29 @@ export const ALL_LEADERS: LeaderDef[] = [
   { id: 'L9', rarity: 'R', name: '晶芒·哈罗德', abilityName: '硅晶之眼',
     description: '曾是硅晶提取站的技工，被同行称为硅片诗人。',
     levelBonuses: [{ B18:20,B24:20 }, { B18:35,B24:35 }, { B18:50,B24:50 }],
-    levelExtras: [{}, {}, { popCapBonus: { B24:6 } }] },
+    levelExtras: [{}, {}, { popCapBonus: { B24:6 } }],
+    ultimateSkill: { name: '晶圆圣典', description: '硅片建筑（硅晶提取站/硅基晶圆制造矩阵）产出额外+20%（与Lv3叠加，合计+70%）', bonus: 20 } },
   // ===== SR级 (27%) =====
   { id: 'L10', rarity: 'SR', name: '艾萨克·星图', abilityName: '智识洪流',
     description: '能用心算解出轨道方程的学界怪杰，办公室墙上写满无人看懂的公式。他坚信科研不是工作，而是与宇宙的对弈。',
     levelBonuses: [{}, {}, {}],
-    levelExtras: [{ researchPerTurn:[30,60] }, { researchPerTurn:[40,80] }, { researchPerTurn:[50,100] }] },
+    levelExtras: [{ researchPerTurn:[30,60] }, { researchPerTurn:[40,80] }, { researchPerTurn:[50,100] }],
+    ultimateSkill: { name: '星辰推演', description: '每回合额外+50科研点（与Lv3的50~100区间叠加）', bonus: 50, type: 'researchPerTurn' } },
   { id: 'L11', rarity: 'SR', name: '学识·赫尔曼', abilityName: '知识圣殿',
     description: '他一生拒绝离开实验室，却通过数据分析预言了三个星系的文明崩溃。',
     levelBonuses: [{ B25:30 }, { B25:50 }, { B25:70 }],
-    levelExtras: [{}, { b26Mult: 1.7 }, { b26Mult: 2.0, researchPerTurn:[50,50] }] },
+    levelExtras: [{}, { b26Mult: 1.7 }, { b26Mult: 2.0, researchPerTurn:[50,50] }],
+    ultimateSkill: { name: '万卷星穹', description: '研究实验室产出额外+20%（与Lv3叠加，合计+90%）', bonus: 20 } },
   { id: 'L12', rarity: 'SR', name: '共鸣·菲尼克斯', abilityName: '星尘咏者',
     description: '她是星尘共鸣尖塔的第一任主工程师，声称曾听到尖塔唱出了一首超新星挽歌。',
     levelBonuses: [{ B9:30,B10:30 }, { B9:50,B10:50 }, { B9:70,B10:70 }],
-    levelExtras: [{}, {}, { stardustPerTurn: 1 }] },
+    levelExtras: [{}, {}, { stardustPerTurn: 1 }],
+    ultimateSkill: { name: '恒星咏叹', description: '星尘建筑（星尘捕获网/星尘共鸣尖塔）产出额外+20%（与Lv3叠加，合计+90%）', bonus: 20 } },
   { id: 'L13', rarity: 'SR', name: '克隆·艾琳', abilityName: '生命复制协议',
     description: '她是克隆中心伦理争议的核心人物，却坚称每个克隆体都是独立的星辰。',
     levelBonuses: [{}, {}, {}],
     levelExtras: [{ freePopEveryTurns: 1 }, { freePopEveryTurns: 1, populationCapBonus: 5 }, { freePopEveryTurns: 1, populationCapBonus: 10, foodConsumptionDelta: -1 }],
-    ultimateSkill: { name: '克隆潮', description: '每回合免费人口再+1（与Lv3叠加，每回合共2）', bonus: 1 } },
+    ultimateSkill: { name: '克隆潮', description: '每回合免费人口再+1（与Lv3叠加，每回合共2）', bonus: 1, type: 'freePop' } },
   { id: 'L14', rarity: 'SR', name: '玛尔塔·丰穗', abilityName: '后勤艺术',
     description: '舰队后勤官出身，据说她曾用一船口粮喂饱三船人——直到有人发现，她连培养舱的菌毯都编进了食谱。',
     levelBonuses: [{}, {}, {}],

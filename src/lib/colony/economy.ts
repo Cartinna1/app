@@ -320,7 +320,12 @@ export function computeColonyEconomy(colony: Colony, opts: ColonyEconomyOptions)
 
   // ===== 领袖每回合特效 =====
   for (const l of colony.leaders) {
-    const ex = getLeaderDef(l.id)?.levelExtras[l.level - 1];
+    const ld = getLeaderDef(l.id);
+    const ex = ld?.levelExtras[l.level - 1];
+    // 终极技能（数据驱动）：type 为 researchPerTurn 的叠加每回合科研（如 L10 星辰推演，与 Lv3 区间叠加）
+    if (colony.expeditionUnlocks?.includes(l.id) && ld?.ultimateSkill?.type === 'researchPerTurn') {
+      result.research += ld.ultimateSkill.bonus;
+    }
     if (!ex) continue;
     if (ex.researchPerTurn) {
       const [lo, hi] = ex.researchPerTurn;
