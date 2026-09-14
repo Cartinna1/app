@@ -119,7 +119,8 @@ export const ALL_LEADERS: LeaderDef[] = [
   { id: 'L15', rarity: 'SR', name: '诺亚·方舟', abilityName: '移民浪潮',
     description: '他曾在殖民地大饥荒中带出三千名幸存者。此后无论走到哪里，追随者都如潮水般涌来——他的名字本身，就是一张船票。',
     levelBonuses: [{}, {}, {}],
-    levelExtras: [{ freePopEveryTurns: 4 }, { freePopEveryTurns: 3 }, { freePopEveryTurns: 2, recruitCapPerTurn: 3 }] },
+    levelExtras: [{ freePopEveryTurns: 4 }, { freePopEveryTurns: 3 }, { freePopEveryTurns: 2, recruitCapPerTurn: 3 }],
+    ultimateSkill: { name: '人潮如海', description: '免费人口再+1（与Lv3叠加：每2回合免费2人）', bonus: 1, type: 'freePop' } },
   // ===== SSR级 (3%) =====
   { id: 'L16', rarity: 'SSR', name: '苍穹·奥丁', abilityName: '穹顶之父',
     description: '传说他曾以一己之力设计出穹顶都市的第三代生态循环系统，让一座濒死殖民地重获新生。',
