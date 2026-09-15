@@ -6,7 +6,7 @@ import type { Colony, PlanetTypeId } from '@/types/colony';
 import { ALL_PLANETS } from '@/data/colony/planets';
 import { getBuildingDef } from '@/data/colony/buildings';
 import { getTechById, REPEATABLE_TECHS } from '@/data/colony/techs';
-import { getLeaderDef } from '@/data/colony/leaders';
+import { getLeaderDef, getUltimateBonus } from '@/data/colony/leaders';
 import { computeColonyEconomy, computeColonyPower } from './economy';
 import { processWonderTurn } from './wonderTurn';
 import { processExpeditionTurn } from './expeditionTurn';
@@ -110,11 +110,24 @@ export function processColonyTurn(ship: Mothership, _turn: number): void {
     ship.goldLog = [{ turn: _turn, amount: eco.gold, reason: `殖民地「${colony.planetName}」贸易收入`, balanceAfter: ship.gold }, ...(ship.goldLog || [])].slice(0, 200);
   }
 
-  // B28 克隆中心：每2回合免费1人口
+  // B28 克隆中心：基础每2回合免费1人口；L13 克隆·艾琳的克隆体强化（触发间隔缩至1回合、每回合人口取最高值），终极「克隆潮」再叠加
   const b28 = colony.buildings.find((b) => b.active && b.defId === 'B28' && b.assignedPop > 0);
-  if (b28 && _turn % 2 === 0 && colony.population.total < colony.population.cap) {
-    colony.population.total += 1;
-    colony.population.available += 1;
+  if (b28) {
+    let interval = 2;
+    let amount = 1;
+    let ultAdd = 0;
+    for (const l of colony.leaders) {
+      const ld = getLeaderDef(l.id);
+      const boost = ld?.levelExtras[l.level - 1]?.cloneCenterPop || 0;
+      if (boost > 0) { interval = 1; amount = Math.max(amount, boost); }
+      if (colony.expeditionUnlocks?.includes(l.id)) ultAdd += getUltimateBonus(ld, 'cloneCenter');
+    }
+    amount += ultAdd;
+    if (_turn % interval === 0 && colony.population.total < colony.population.cap) {
+      const gain = Math.min(amount, colony.population.cap - colony.population.total);
+      colony.population.total += gain;
+      colony.population.available += gain;
+    }
   }
 
   // 人口食物消耗（含领袖食物减免）
@@ -124,11 +137,11 @@ export function processColonyTurn(ship: Mothership, _turn: number): void {
   colony.population.cap = calcPopCap(colony);
 
   // 领袖免费人口效果（终极技能「克隆潮」：远征 12/12 解锁后每回合免费人口再 +bonus，L13 = +1 合计每回合2；带上限钳制防溢出）
-  // 终极叠加以 type === 'freePop' 为守卫，避免其他领袖的终极 bonus 被误当作免费人口加成
+  // 终极叠加取 getUltimateBonus(ld, 'freePop')，避免其他领袖的终极 bonus 被误当作免费人口加成
   for (const l of colony.leaders) {
     const ld = getLeaderDef(l.id); const ex = ld?.levelExtras[l.level-1];
     if (ex?.freePopEveryTurns && _turn % ex.freePopEveryTurns === 0 && colony.population.total < colony.population.cap) {
-      const ultGain = (colony.expeditionUnlocks?.includes(l.id) && ld?.ultimateSkill?.type === 'freePop') ? ld.ultimateSkill.bonus : 0;
+      const ultGain = colony.expeditionUnlocks?.includes(l.id) ? getUltimateBonus(ld, 'freePop') : 0;
       const gain = Math.min(1 + ultGain, colony.population.cap - colony.population.total);
       colony.population.total += gain; colony.population.available += gain;
     }
@@ -178,12 +191,16 @@ export function processColonyTurn(ship: Mothership, _turn: number): void {
   processExpeditionTurn(colony);
 }
 
-/** 每回合招募人口上限（基础5 + 领袖 recruitCapPerTurn）——单一真值，UI 与逻辑共用 */
+/** 每回合招募人口上限（基础5 + 领袖 recruitCapPerTurn + 终极技能 recruitCap 目标）——单一真值，UI 与逻辑共用 */
 export function getRecruitCapPerTurn(colony: Colony): number {
   let cap = 5;
   for (const l of colony.leaders || []) {
     const ld = getLeaderDef(l.id);
     cap += (ld?.levelExtras[l.level - 1]?.recruitCapPerTurn || 0);
+    // 终极技能（数据驱动）：type/extra 指向 recruitCap 的叠加（如 L15 无垠船票 +5/回合）
+    if (colony.expeditionUnlocks?.includes(l.id)) {
+      cap += getUltimateBonus(ld, 'recruitCap');
+    }
   }
   return cap;
 }
@@ -202,21 +219,23 @@ export function calcPopCap(colony: Colony): number {
   for (const l of colony.leaders) {
     const ld = getLeaderDef(l.id); const ex = ld?.levelExtras[l.level-1];
     cap += (ex?.populationCapBonus || 0);
-    // 终极技能（数据驱动）：type 为 populationCap 的叠加人口上限（如 L14 菌毯之宴，Lv3 +10 → 合计 +20）
-    if (colony.expeditionUnlocks?.includes(l.id) && ld?.ultimateSkill?.type === 'populationCap') {
-      cap += ld.ultimateSkill.bonus;
+    // 终极技能（数据驱动）：type/extra 指向 populationCap 的叠加人口上限（如 L14 菌毯之宴 +10、L15 无垠船票 +15）
+    if (colony.expeditionUnlocks?.includes(l.id)) {
+      cap += getUltimateBonus(ld, 'populationCap');
     }
-    // L16 穹顶之父：居住建筑上限+
-    if (l.id === 'L16') {
-      const mult = [0.5, 1.0, 1.5][l.level-1] || 0;
+    // 居住建筑人口效果加成（数据驱动：housingPopBonusPct，作用于 B1/B2 基础上限；终极「永恒穹顶」再叠加 housingPop）
+    let housingPct = ex?.housingPopBonusPct || 0;
+    if (colony.expeditionUnlocks?.includes(l.id)) housingPct += getUltimateBonus(ld, 'housingPop');
+    if (housingPct > 0) {
       for (const inst of colony.buildings) {
         if (!inst.active || (inst.defId !== 'B1' && inst.defId !== 'B2')) continue;
-        cap += Math.ceil((inst.defId === 'B1' ? 5 : 20) * mult);
+        cap += Math.ceil((inst.defId === 'B1' ? 5 : 20) * (housingPct / 100));
       }
-      if (l.level >= 3) {
-        const b2Count = colony.buildings.filter((b) => b.active && b.defId === 'B2').length;
-        cap += b2Count * 5;
-      }
+    }
+    // 每座穹顶都市（B2）额外人口上限（数据驱动：b2FlatCap）
+    if (ex?.b2FlatCap) {
+      const b2Count = colony.buildings.filter((b) => b.active && b.defId === 'B2').length;
+      cap += b2Count * ex.b2FlatCap;
     }
   }
   return cap;

@@ -6,7 +6,7 @@
 
 import type { BuildingDef, Colony } from '@/types/colony';
 import { getBuildingDef, BUILDING_QUANTUM_LAB, BUILDING_SOLAR_ARRAY } from '@/data/colony/buildings';
-import { getLeaderDef } from '@/data/colony/leaders';
+import { getLeaderDef, getUltimateBonus } from '@/data/colony/leaders';
 import { getPlanetById } from '@/data/colony/planets';
 import { RELIC_ALLOY_MANUAL } from '@/data/relics';
 
@@ -322,9 +322,9 @@ export function computeColonyEconomy(colony: Colony, opts: ColonyEconomyOptions)
   for (const l of colony.leaders) {
     const ld = getLeaderDef(l.id);
     const ex = ld?.levelExtras[l.level - 1];
-    // 终极技能（数据驱动）：type 为 researchPerTurn 的叠加每回合科研（如 L10 星辰推演，与 Lv3 区间叠加）
-    if (colony.expeditionUnlocks?.includes(l.id) && ld?.ultimateSkill?.type === 'researchPerTurn') {
-      result.research += ld.ultimateSkill.bonus;
+    // 终极技能（数据驱动）：type/extra 指向 researchPerTurn 的叠加每回合科研（如 L10 星辰推演，与 Lv3 区间叠加）
+    if (colony.expeditionUnlocks?.includes(l.id)) {
+      result.research += getUltimateBonus(ld, 'researchPerTurn');
     }
     if (!ex) continue;
     if (ex.researchPerTurn) {

@@ -922,6 +922,7 @@ function ColonyPanel(props: ColonyPanelProps) {
                       if (ex1.researchPerTurn) skillDesc += ' | 研究+'+ex1.researchPerTurn[0]+'-'+ex1.researchPerTurn[1]+'/回合';
                       if (ex1.foodConsumptionDelta) skillDesc += ' | 食物消耗'+ex1.foodConsumptionDelta;
                       if (ex1.freePopEveryTurns) skillDesc += ' | 每'+ex1.freePopEveryTurns+'回合免费1人口';
+                      if (ex1.cloneCenterPop) skillDesc += ` | 克隆中心每回合+${ex1.cloneCenterPop}人口（需B28）`;
                       if (ex1.populationCapBonus) skillDesc += ' | 人口上限+'+ex1.populationCapBonus;
                       if (ex1.leaderCapBonus) skillDesc += ' | 领袖上限+'+ex1.leaderCapBonus;
                       if (ex1.popCapBonus) { for (const [bid, n] of Object.entries(ex1.popCapBonus)) { const bd = getBuildingDef(bid); skillDesc += ` | ${bd?.name||bid}上限+${n}`; } }
@@ -935,8 +936,8 @@ function ColonyPanel(props: ColonyPanelProps) {
                       if (ex1.darkMatterPerTurn) skillDesc += ` | 暗物质+${ex1.darkMatterPerTurn}/回合`;
                       if (ex1.quantumPerTurn) skillDesc += ` | 量子簇+${ex1.quantumPerTurn}/回合`;
                       if (ex1.powerUseReduction) skillDesc += ' | 所有建筑电能消耗-'+ex1.powerUseReduction+'%';
-                      {/* L16 穹顶之父（硬编码追加，待清理） */}
-                      {ld.id === 'L16' && (skillDesc += ' | 穹顶都市/居住舱人口效果+50%')}
+                      if (ex1.housingPopBonusPct) skillDesc += ` | 穹顶都市/居住舱人口效果+${ex1.housingPopBonusPct}%`;
+                      if (ex1.b2CostReduction) skillDesc += ` | 穹顶都市造价-${ex1.b2CostReduction}%`;
                       return (
                         <div key={i} className="bg-slate-800/60 border border-slate-700 rounded-lg p-3 flex justify-between items-center gap-3">
                           <img
@@ -986,6 +987,7 @@ function ColonyPanel(props: ColonyPanelProps) {
                     if (currExtras.foodConsumptionDelta) parts.push(`食物消耗${currExtras.foodConsumptionDelta}`);
                     if (currExtras.populationCapBonus) parts.push(`人口上限+${currExtras.populationCapBonus}`);
                     if (currExtras.freePopEveryTurns) parts.push(`每${currExtras.freePopEveryTurns}回合免费1人口`);
+                    if (currExtras.cloneCenterPop) parts.push(`克隆中心每回合+${currExtras.cloneCenterPop}人口（需B28）`);
                     if (currExtras.stardustPerTurn) parts.push(`星尘+${currExtras.stardustPerTurn}/回合`);
                     if (currExtras.darkMatterPerTurn) parts.push(`暗物质+${currExtras.darkMatterPerTurn}/回合`);
                     if (currExtras.quantumPerTurn) parts.push(`量子簇+${currExtras.quantumPerTurn}/回合`);
@@ -999,12 +1001,9 @@ function ColonyPanel(props: ColonyPanelProps) {
                     if (currExtras.b26Mult) parts.push(`量子实验室×${currExtras.b26Mult}`);
                     if (currExtras.powerUseReduction) parts.push(`所有建筑电能消耗 -${currExtras.powerUseReduction}%`);
                     if (currExtras.blackoutImmune) parts.push('停电免疫');
-                    {/* L16 穹顶之父（硬编码追加，待清理） */}
-                    {ld.id === 'L16' && (() => {
-                      const popPct = [50, 100, 150][l.level-1] || 0;
-                      parts.push(`穹顶都市/居住舱人口效果+${popPct}%`);
-                      if (l.level >= 2) parts.push(`B2造价-${l.level===2?30:50}%`);
-                    })()}
+                    if (currExtras.housingPopBonusPct) parts.push(`穹顶都市/居住舱人口效果+${currExtras.housingPopBonusPct}%`);
+                    if (currExtras.b2CostReduction) parts.push(`穹顶都市造价-${currExtras.b2CostReduction}%`);
+                    if (currExtras.b2FlatCap) parts.push(`每座穹顶都市额外+${currExtras.b2FlatCap}人口上限`);
                     return (
                     <div key={i} className="bg-slate-800/60 border border-slate-700 rounded-lg p-3 mb-2 flex gap-3 items-start">
                       <img

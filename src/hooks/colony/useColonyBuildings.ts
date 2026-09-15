@@ -43,12 +43,10 @@ export function useColonyBuildings(
         let leaderCostRedPct = 0;
         for (const l of s.colony!.leaders || []) {
           const ld = getLeaderDef(l.id);
-          // L18 盖亚通用造价减免
+          // 通用造价减免（数据驱动：buildCostReduction，如 L18 盖亚）
           leaderCostRedPct += (ld?.levelExtras[l.level-1]?.buildCostReduction || 0);
-          // L16 穹顶之父 B2专属减免
-          if (l.id === 'L16' && defId === 'B2' && l.level >= 2) {
-            leaderCostRedPct += (l.level === 2 ? 30 : 50);
-          }
+          // 穹顶都市（B2）专属减免（数据驱动：b2CostReduction，如 L16 穹顶之父 30/50）
+          if (defId === 'B2') leaderCostRedPct += (ld?.levelExtras[l.level-1]?.b2CostReduction || 0);
         }
         const costMult = Math.max(0.1, planetCostMult * (1 - leaderCostRedPct / 100));
         const turnDelta = planetDef2?.buffs.buildTurnDelta || 0;

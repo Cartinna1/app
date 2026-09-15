@@ -74,7 +74,7 @@ export function getBuildingEffect(bd: BuildingDef): string {
   if (bd.id === 'B2') return '提供额外10人口上限';
   if (bd.id === BUILDING_QUANTUM_LAB) return '使所有研究实验室产出翻倍';
   if (bd.id === 'B27') return '解锁领袖招募功能';
-  if (bd.id === 'B28') return '每回合自动招募1人口';
+  if (bd.id === 'B28') return '每2回合免费+1人口（需1人入驻）';
   if (bd.category === 'housing') return '提供居住空间，提升人口上限';
   if (bd.category === 'power') {
     const lo = (bd.baseOutput || 0) + (bd.popFactor || 0) * bd.minPop;

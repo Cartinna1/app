@@ -18,10 +18,23 @@ export interface LeaderDef {
   /** 终极技能（远征 12/12 结局解锁）：在 Lv3 效果基础上再叠加 bonus（数据驱动，无新机制）。
    *  有建筑产出加成的领袖（L1/L2/L3/L4/L5/L6/L7/L8/L9/L11/L12）：bonus = 百分比点，叠加到 Lv3 levelBonuses 的建筑上（economy.ts 统一结算）；
    *  无建筑产出加成的领袖按主题解释，并用 type 标记守卫对应消费点，勿通用叠加：
-   *  L13 = 每回合免费人口再 +bonus（type: 'freePop'，colonyTurn.ts 免费人口块），L22 = 电力建筑 levelBonuses 由 economy.ts 电力循环统一结算、终极再叠加 +bonus%，
-   *  L14 = 人口上限再 +bonus（type: 'populationCap'，colonyTurn.ts calcPopCap 消费），L10 = 每回合科研再 +bonus（type: 'researchPerTurn'，economy.ts 领袖特效块消费）。 */
-  ultimateSkill?: { name: string; description: string; bonus: number; type?: 'populationCap' | 'researchPerTurn' | 'freePop' };
+   *  L22 = 电力建筑 levelBonuses 由 economy.ts 电力循环统一结算（终极再叠加 +bonus%），
+   *  L10 = 每回合科研再 +bonus（type: 'researchPerTurn'，economy.ts 领袖特效块消费），
+   *  L14 = 人口上限再 +bonus（type: 'populationCap'，colonyTurn.ts calcPopCap 消费），
+   *  L15 = 招募上限 +bonus 且人口上限 +extra.bonus（双目标，招募上限由 getRecruitCapPerTurn 消费），
+   *  L13 = 克隆中心（B28）每回合人口再 +bonus（type: 'cloneCenter'，colonyTurn.ts B28 结算块消费）。
+   *  extra 为可选第二加成目标（目前仅 L15 使用）。 */
+  ultimateSkill?: {
+    name: string;
+    description: string;
+    bonus: number;
+    type?: UltimateTarget;
+    extra?: { type: UltimateTarget; bonus: number };
+  };
 }
+
+/** 终极技能的加成目标（决定由哪个消费点结算） */
+export type UltimateTarget = 'populationCap' | 'researchPerTurn' | 'freePop' | 'recruitCap' | 'cloneCenter' | 'housingPop';
 
 export interface LeaderExtraEffects {
   popCapBonus: Record<string, number>;     // buildingId → 额外人口槽位
@@ -29,6 +42,10 @@ export interface LeaderExtraEffects {
   populationCapBonus: number;              // 人口上限增加
   recruitCostBonus: number;                 // 招募费用变动(负数=减少)
   freePopEveryTurns: number;               // 每N回合免费1人口
+  cloneCenterPop: number;                  // 克隆中心（B28）每回合人口（>0 时触发间隔缩至1回合，如 L13）
+  housingPopBonusPct: number;              // 居住建筑（B1/B2）人口上限效果 +%（如 L16 穹顶之父 50/100/150）
+  b2FlatCap: number;                       // 每座穹顶都市（B2）额外人口上限（如 L16 Lv3 = 5）
+  b2CostReduction: number;                 // 穹顶都市（B2）造价减免 %（如 L16 Lv2 30 / Lv3 50）
   researchPerTurn: [number, number];       // [min, max]科研点
   buildCostReduction: number;              // 建筑费用减少%
   leaderCapBonus: number;                  // 领袖上限增加
@@ -41,6 +58,15 @@ export interface LeaderExtraEffects {
   stardustPerTurn: number;                 // 星尘/回合
   powerUseReduction: number;               // 所有建筑电能消耗减少%（如 L21 负载平衡 10/15/25）
   blackoutImmune: boolean;                 // 停电免疫（如 L22 诺娃·永昼 Lv3 余晖脉冲保护）
+}
+
+/** 取终极技能对某目标的加成值（主 type + 可选 extra 合计）；是否已解锁由调用方自行判断 */
+export function getUltimateBonus(ld: LeaderDef | undefined, target: UltimateTarget): number {
+  if (!ld?.ultimateSkill) return 0;
+  let total = 0;
+  if (ld.ultimateSkill.type === target) total += ld.ultimateSkill.bonus;
+  if (ld.ultimateSkill.extra?.type === target) total += ld.ultimateSkill.extra.bonus;
+  return total;
 }
 
 export const ALL_LEADERS: LeaderDef[] = [
@@ -109,8 +135,8 @@ export const ALL_LEADERS: LeaderDef[] = [
   { id: 'L13', rarity: 'SR', name: '克隆·艾琳', abilityName: '生命复制协议',
     description: '她是克隆中心伦理争议的核心人物，却坚称每个克隆体都是独立的星辰。',
     levelBonuses: [{}, {}, {}],
-    levelExtras: [{ freePopEveryTurns: 1 }, { freePopEveryTurns: 1, populationCapBonus: 5 }, { freePopEveryTurns: 1, populationCapBonus: 10, foodConsumptionDelta: -1 }],
-    ultimateSkill: { name: '克隆潮', description: '每回合免费人口再+1（与Lv3叠加，每回合共2）', bonus: 1, type: 'freePop' } },
+    levelExtras: [{ cloneCenterPop: 1 }, { cloneCenterPop: 2 }, { cloneCenterPop: 2, populationCapBonus: 10 }],
+    ultimateSkill: { name: '克隆潮', description: '克隆中心每回合再+1（与Lv3叠加：每回合共3人）', bonus: 1, type: 'cloneCenter' } },
   { id: 'L14', rarity: 'SR', name: '玛尔塔·丰穗', abilityName: '后勤艺术',
     description: '舰队后勤官出身，据说她曾用一船口粮喂饱三船人——直到有人发现，她连培养舱的菌毯都编进了食谱。',
     levelBonuses: [{}, {}, {}],
@@ -119,13 +145,18 @@ export const ALL_LEADERS: LeaderDef[] = [
   { id: 'L15', rarity: 'SR', name: '诺亚·方舟', abilityName: '移民浪潮',
     description: '他曾在殖民地大饥荒中带出三千名幸存者。此后无论走到哪里，追随者都如潮水般涌来——他的名字本身，就是一张船票。',
     levelBonuses: [{}, {}, {}],
-    levelExtras: [{ freePopEveryTurns: 4 }, { freePopEveryTurns: 3 }, { freePopEveryTurns: 2, recruitCapPerTurn: 3 }],
-    ultimateSkill: { name: '人潮如海', description: '免费人口再+1（与Lv3叠加：每2回合免费2人）', bonus: 1, type: 'freePop' } },
+    levelExtras: [{ populationCapBonus: 15, recruitCapPerTurn: 3 }, { populationCapBonus: 30, recruitCapPerTurn: 6 }, { populationCapBonus: 45, recruitCapPerTurn: 10 }],
+    ultimateSkill: { name: '无垠船票', description: '人口上限额外+15、招募上限额外+5/回合', bonus: 5, type: 'recruitCap', extra: { type: 'populationCap', bonus: 15 } } },
   // ===== SSR级 (3%) =====
   { id: 'L16', rarity: 'SSR', name: '苍穹·奥丁', abilityName: '穹顶之父',
     description: '传说他曾以一己之力设计出穹顶都市的第三代生态循环系统，让一座濒死殖民地重获新生。',
     levelBonuses: [{}, {}, {}],
-    levelExtras: [{}, {}, { populationCapBonus: 0 }] },
+    levelExtras: [
+      { housingPopBonusPct: 50 },
+      { housingPopBonusPct: 100, b2CostReduction: 30 },
+      { housingPopBonusPct: 150, b2CostReduction: 50, b2FlatCap: 5 },
+    ],
+    ultimateSkill: { name: '永恒穹顶', description: '居住建筑人口效果再+50%（与Lv3叠加，合计+200%）', bonus: 50, type: 'housingPop' } },
   { id: 'L17', rarity: 'SSR', name: '永动·卡尔文', abilityName: '永恒循环',
     description: '他宣称自己找到了资源循环的终极公式，任何废弃物在他手中都会变成某种生产的起点。',
     levelBonuses: [{ 'ALL_MATERIAL':25 }, { 'ALL_MATERIAL':40 }, { 'ALL_MATERIAL':60 }],
