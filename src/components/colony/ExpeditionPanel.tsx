@@ -198,13 +198,16 @@ function ExpeditionPanel({ colony, onStartExpedition, onPayExpeditionNode, onUnl
                   {unlocked && ld?.ultimateSkill ? ` · 终极技能已解锁「${ld.ultimateSkill.name}」` : ''}
                 </p>
                 <div className="mt-2 flex flex-wrap gap-2">
-                  {!unlocked && count >= 12 && ld?.ultimateSkill && (
+                  {!unlocked && count >= 12 && ld?.ultimateSkill && l.level >= 3 && (
                     <button
                       onClick={() => handleUnlock(l.id)}
                       className="px-3 py-1.5 bg-purple-600 hover:bg-purple-500 rounded-lg text-sm font-bold text-white transition-colors flex items-center gap-1"
                     >
                       <Lock size={14} /> 解锁终极技能
                     </button>
+                  )}
+                  {!unlocked && count >= 12 && ld?.ultimateSkill && l.level < 3 && (
+                    <span className="text-xs text-slate-500">结局已集齐，需将该领袖升至 Lv3 才能解锁终极技能</span>
                   )}
                   <button
                     onClick={() => handleStart(l.id)}

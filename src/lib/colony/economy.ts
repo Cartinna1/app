@@ -8,6 +8,7 @@ import type { BuildingDef, Colony } from '@/types/colony';
 import { getBuildingDef, BUILDING_QUANTUM_LAB, BUILDING_SOLAR_ARRAY } from '@/data/colony/buildings';
 import { getLeaderDef, getUltimateBonus } from '@/data/colony/leaders';
 import { getPlanetById } from '@/data/colony/planets';
+import { getEffectiveMaxPop } from './costs';
 import { RELIC_ALLOY_MANUAL } from '@/data/relics';
 
 /** 单个电力建筑实例的发电明细（供 UI 展示加成来源） */
@@ -214,7 +215,9 @@ export function computeColonyEconomy(colony: Colony, opts: ColonyEconomyOptions)
       else leaderBonusMap[bid] = (leaderBonusMap[bid] || 0) + b;
     }
     // 终极技能：远征 12/12 解锁后，在 Lv3 产出加成基础上再叠加 bonus（数据驱动，无新机制）。
-    // 电力建筑键（如 L22 的 B29/B30）不在此结算——由 sumPowerLeaderBonus 统一处理，避免死值交叉
+    // 电力建筑键（如 L22 的 B29/B30）不在此结算——由 sumPowerLeaderBonus 统一处理，避免死值交叉。
+    // ⚠ 守卫约定：带 type/extra 的终极技能（走 getUltimateBonus 的消费点）不得配非空 levelBonuses，
+    //    否则同一 bonus 会在本块与对应 type 消费点各加一次（双计）。当前带 type 的领袖 levelBonuses 均为空。
     if (colony.expeditionUnlocks?.includes(l.id) && ld.ultimateSkill) {
       const lv3 = ld.levelBonuses[ld.levelBonuses.length - 1] || {};
       for (const bid of Object.keys(lv3)) {
@@ -255,12 +258,8 @@ export function computeColonyEconomy(colony: Colony, opts: ColonyEconomyOptions)
     // 停电：跳过非电力产出
     if (blackout) continue;
 
-    // 领袖指定建筑人口槽位扩展
-    let effMaxPop = def.maxPop;
-    for (const l of colony.leaders) {
-      const extras = getLeaderDef(l.id)?.levelExtras[l.level - 1];
-      if (extras?.popCapBonus?.[inst.defId]) effMaxPop = Math.max(effMaxPop, extras.popCapBonus[inst.defId]);
-    }
+    // 领袖指定建筑人口槽位扩展（唯一真值 getEffectiveMaxPop，UI/分配校验同源）
+    const effMaxPop = getEffectiveMaxPop(inst.defId, colony);
     const effPop = Math.min(inst.assignedPop, effMaxPop);
 
     const leaderPct = ((leaderBonusMap[inst.defId] || 0) + lAll + (def.category === 'material' ? lMat : 0)) / 100;

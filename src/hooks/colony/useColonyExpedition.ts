@@ -119,7 +119,7 @@ export function useColonyExpedition(
     return result;
   }, [gameState.ships, dispatch]);
 
-  // 解锁终极技能（12/12 结局后可点击解锁；数据驱动 leaderDef.ultimateSkill）
+  // 解锁终极技能（需 12/12 结局 + 领袖 Lv3；数据驱动 leaderDef.ultimateSkill）
   const unlockUltimate = useCallback((leaderId: string): { success: boolean; message: string } => {
     const colony = gameState.ships[0]?.colony;
     if (!colony) return { success: false, message: '殖民地未激活' };
@@ -128,6 +128,10 @@ export function useColonyExpedition(
     if (colony.expeditionUnlocks?.includes(leaderId)) return { success: false, message: '该领袖终极技能已解锁' };
     const ld = getLeaderDef(leaderId);
     if (!ld?.ultimateSkill) return { success: false, message: '该领袖暂无终极技能' };
+    // Lv3 门槛：终极加成按 Lv3 键集结算，故解锁时要求领袖已满级
+    const leaderInst = (colony.leaders || []).find((x) => x.id === leaderId);
+    if (!leaderInst) return { success: false, message: '该领袖尚未招募' };
+    if (leaderInst.level < 3) return { success: false, message: `需先将该领袖升至 Lv3（当前 Lv${leaderInst.level}）` };
 
     let result = { success: false, message: '' };
     dispatch({

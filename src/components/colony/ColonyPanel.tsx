@@ -7,6 +7,7 @@ import { getTechById, getAvailableTechs, REPEATABLE_TECHS, getRepeatableCost } f
 import { getLeaderDef, getLeaderUpgradeCost, getRecruitRollCost } from '@/data/colony/leaders';
 import { computeColonyEconomy, computeColonyPower } from '@/lib/colony/economy';
 import { getRecruitCapPerTurn, hasBlackoutImmunity } from '@/lib/colony/colonyTurn';
+import { getEffectiveMaxCount, getEffectiveMaxPop, getBuildingCostProfile, getRecruitCostPerPop, RECRUIT_BASE_COST } from '@/lib/colony/costs';
 import { MATERIAL_NAME_MAP } from '@/data/materialNames';
 import { Home, Users, Wrench, Play, UserPlus, FlaskConical, Crown, Trophy, Rocket, Images } from 'lucide-react';
 import WonderPanel from './WonderPanel';
@@ -141,6 +142,7 @@ function ColonyPanel(props: ColonyPanelProps) {
   const [msgType, setMsgType] = useState<'success' | 'error'>('success');
   const [recruitQty, setRecruitQty] = useState(1);
   const recruitCap = useMemo(() => (colony ? getRecruitCapPerTurn(colony) : 5), [colony]);
+  const recruitCostPerPop = useMemo(() => (colony ? getRecruitCostPerPop(colony) : RECRUIT_BASE_COST), [colony]);
   const remainingRecruit = Math.max(0, recruitCap - (colony?.recruitedThisTurn || 0));
   const recruitRollCost = useMemo(() => (colony ? getRecruitRollCost(colony.leaders) : 10), [colony]);
   const [planetName, setPlanetName] = useState('');
@@ -556,7 +558,9 @@ function ColonyPanel(props: ColonyPanelProps) {
             </div>
             {getBuildableBuildings(colony.techState?.researched || []).filter((d) => d.category === buildCatFilter).map((def) => {
               const count = colony.buildings.filter((b) => b.defId === def.id).length;
-              const limited = !!(def.maxCount && count >= def.maxCount);
+              const effMaxCount = getEffectiveMaxCount(def, colony);
+              const limited = !!(effMaxCount && count >= effMaxCount);
+              const cost = getBuildingCostProfile(def, colony);
               return (
                 <div key={def.id} className={`bg-slate-900/60 border rounded-lg p-3 mb-2 flex gap-3 ${limited ? 'opacity-50 border-slate-800' : 'border-slate-700'}`}>
                   <img
@@ -580,40 +584,28 @@ function ColonyPanel(props: ColonyPanelProps) {
                     </div>
                     <p className="text-sm text-slate-500 mb-1">{def.description}</p>
                     <div className="flex flex-wrap gap-x-3 gap-y-0.5 text-sm">
-                    {(() => {
-                      const costMult = planet?.buffs.buildCostMult || 1;
-                      const actualGoldCost = Math.ceil(def.costGold * costMult);
-                      return (
-                    <span className={ship.gold >= actualGoldCost ? 'text-yellow-400' : 'text-red-400'}>
-                      金币 {actualGoldCost.toLocaleString()}{costMult !== 1 ? <span className="text-slate-600"> (基础{def.costGold.toLocaleString()} ×{costMult})</span> : ''}{!ship.gold || ship.gold < actualGoldCost ? ' (不足)' : ''}
+                    <span className={ship.gold >= cost.gold ? 'text-yellow-400' : 'text-red-400'}>
+                      金币 {cost.gold.toLocaleString()}{cost.costMult !== 1 ? <span className="text-slate-600"> (基础{def.costGold.toLocaleString()} ×{cost.costMult.toFixed(2)})</span> : ''}{!ship.gold || ship.gold < cost.gold ? ' (不足)' : ''}
                     </span>
-                      );
-                    })()}
-                    {def.costAlloy && (() => {
-                      const aCost = Math.ceil((def.costAlloy || 0) * (planet?.buffs.buildCostMult || 1));
-                      return <span className={ship.alloy >= aCost ? 'text-slate-300' : 'text-red-400'}>
-                        合金 {ship.alloy}/{aCost}{ship.alloy < aCost ? ' (不足)' : ''}
-                      </span>;
-                    })()}
+                    {def.costAlloy && (
+                      <span className={ship.alloy >= cost.alloy ? 'text-slate-300' : 'text-red-400'}>
+                        合金 {ship.alloy}/{cost.alloy}{ship.alloy < cost.alloy ? ' (不足)' : ''}
+                      </span>
+                    )}
                     {/* 原料成本 */}
-                    {def.costMaterials && Object.entries(def.costMaterials).map(([matId, amt]) => {
-                      const costMult = planet?.buffs.buildCostMult || 1;
-                      const actualAmt = Math.ceil(amt * costMult);
+                    {def.costMaterials && Object.keys(def.costMaterials).map((matId) => {
+                      const actualAmt = cost.materials[matId];
                       const have = ship.materials[matId] || 0;
                       const enough = have >= actualAmt;
                       return (
                         <span key={matId} className={enough ? 'text-slate-400' : 'text-red-400'}>
-                          {matLabel(matId)} {have}/{actualAmt}{costMult !== 1 ? <span className="text-slate-600"> ({amt}×{costMult})</span> : ''}{!enough ? ' (不足)' : ''}
+                          {matLabel(matId)} {have}/{actualAmt}{cost.costMult !== 1 ? <span className="text-slate-600"> (×{cost.costMult.toFixed(2)})</span> : ''}{!enough ? ' (不足)' : ''}
                         </span>
                       );
                     })}
-                    {(() => {
-                      const td = planet?.buffs.buildTurnDelta || 0;
-                      const actualTurns = Math.max(1, def.buildTurns + td);
-                      return <span className="text-slate-600">| {actualTurns}回合{td !== 0 ? <span className="text-slate-600"> ({def.buildTurns}+{td})</span> : ''}</span>;
-                    })()}
-                    {def.maxCount && <span className="text-slate-600">| 上限{def.maxCount} (已建{count})</span>}
-                    {!def.maxCount && <span className="text-slate-600">| 已建{count}座</span>}
+                    <span className="text-slate-600">| {cost.turns}回合{planet?.buffs.buildTurnDelta ? <span className="text-slate-600"> ({def.buildTurns}+{planet.buffs.buildTurnDelta})</span> : ''}</span>
+                    {effMaxCount && <span className="text-slate-600">| 上限{effMaxCount} (已建{count})</span>}
+                    {!effMaxCount && <span className="text-slate-600">| 已建{count}座</span>}
                     {def.minPop > 0 && <span className="text-slate-600">| 需要{def.minPop}-{def.maxPop}人入驻</span>}
                     {def.powerConsumption !== undefined && def.powerConsumption > 0 && (
                       <span className="text-amber-500">| ⚡ {def.powerConsumption}</span>
@@ -729,15 +721,15 @@ function ColonyPanel(props: ColonyPanelProps) {
         <div className="space-y-4">
           <div className="bg-slate-900/60 border border-slate-700 rounded-xl p-4">
             <h4 className="font-bold text-slate-200 mb-3 flex items-center gap-2"><UserPlus size={16} className="text-green-400" />招募人口</h4>
-            <p className="text-sm text-slate-400 mb-2">每人口花费 {(planet?.buffs.recruitCostDelta ? 2000 + planet.buffs.recruitCostDelta : 2000).toLocaleString()} 金币，每回合最多 {recruitCap} 人（本回合还可招募 <span className="text-green-400 font-bold">{remainingRecruit}</span> 人），当前上限 {colony.population.cap}</p>
+            <p className="text-sm text-slate-400 mb-2">每人口花费 {recruitCostPerPop.toLocaleString()} 金币，每回合最多 {recruitCap} 人（本回合还可招募 <span className="text-green-400 font-bold">{remainingRecruit}</span> 人），当前上限 {colony.population.cap}</p>
             <div className="flex gap-2">
               <input type="number" min={1} max={recruitCap} value={recruitQty}
                 onChange={(e) => setRecruitQty(Math.min(recruitCap, Math.max(1, parseInt(e.target.value) || 1)))}
                 className="w-16 bg-slate-800 border border-slate-600 rounded px-2 py-1.5 text-sm text-slate-200 text-center" />
               <button onClick={() => { const r = onRecruitPop(recruitQty); showMsg(r.message, r.success ? 'success' : 'error'); }}
-                disabled={ship.gold < 2000 * recruitQty || colony.population.total >= colony.population.cap || remainingRecruit <= 0}
+                disabled={ship.gold < recruitCostPerPop * recruitQty || colony.population.total >= colony.population.cap || remainingRecruit <= 0}
                 className="px-4 py-1.5 bg-green-700 hover:bg-green-600 disabled:bg-slate-700 disabled:text-slate-500 rounded text-sm font-bold text-white">
-                招募 ({(2000 * recruitQty).toLocaleString()}G)
+                招募 ({(recruitCostPerPop * recruitQty).toLocaleString()}G)
               </button>
             </div>
           </div>
@@ -764,12 +756,7 @@ function ColonyPanel(props: ColonyPanelProps) {
               const def = getBuildingDef(inst.defId);
               if (!def) return null;
               // 领袖扩展的最大人口
-              let effMax = def.maxPop;
-              for (const l of (colony?.leaders || [])) {
-                const ld = getLeaderDef(l.id);
-                const ex = ld?.levelExtras[l.level - 1];
-                if (ex?.popCapBonus?.[def.id]) effMax = Math.max(effMax, ex.popCapBonus[def.id]);
-              }
+              const effMax = colony ? getEffectiveMaxPop(def.id, colony) : def.maxPop;
               const extended = effMax > def.maxPop;
               const num = buildingNumbers[inst.uid] || '01';
               return (

@@ -1,8 +1,7 @@
 import { useCallback } from 'react';
 import type { GameState } from '@/types/game';
-import { ALL_PLANETS } from '@/data/colony/planets';
 import { getBuildingDef } from '@/data/colony/buildings';
-import { getLeaderDef } from '@/data/colony/leaders';
+import { getEffectiveMaxCount, getBuildingCostProfile } from '@/lib/colony/costs';
 
 /** 殖民地建筑建造 / 取消 / 拆除（从 useColony 拆出） */
 export function useColonyBuildings(
@@ -22,13 +21,8 @@ export function useColonyBuildings(
           result = { success: false, message: '殖民地未激活' };
           return prev;
         }
-        // 数量限制校验（含领袖扩展）
-        let effMaxCount: number | undefined = def.maxCount;
-        if (defId === 'B9') {
-          for (const l of s.colony!.leaders || []) {
-            if (l.id === 'L12' && l.level >= 2) effMaxCount = (effMaxCount ?? 0) + 1;
-          }
-        }
+        // 数量限制校验（含领袖扩展；唯一真值 getEffectiveMaxCount，UI 同源）
+        const effMaxCount = getEffectiveMaxCount(def, s.colony!);
         if (effMaxCount != null) {
           const count = s.colony.buildings.filter((b) => b.defId === defId).length;
           if (count >= effMaxCount) {
@@ -36,34 +30,22 @@ export function useColonyBuildings(
             return prev;
           }
         }
-        // 星球BUFF
-        const planetDef2 = s.colony!.planetType ? ALL_PLANETS.find((p) => p.id === s.colony!.planetType) : null;
-        const planetCostMult = planetDef2?.buffs.buildCostMult || 1;
-        // 领袖造价减免
-        let leaderCostRedPct = 0;
-        for (const l of s.colony!.leaders || []) {
-          const ld = getLeaderDef(l.id);
-          // 通用造价减免（数据驱动：buildCostReduction，如 L18 盖亚）
-          leaderCostRedPct += (ld?.levelExtras[l.level-1]?.buildCostReduction || 0);
-          // 穹顶都市（B2）专属减免（数据驱动：b2CostReduction，如 L16 穹顶之父 30/50）
-          if (defId === 'B2') leaderCostRedPct += (ld?.levelExtras[l.level-1]?.b2CostReduction || 0);
-        }
-        const costMult = Math.max(0.1, planetCostMult * (1 - leaderCostRedPct / 100));
-        const turnDelta = planetDef2?.buffs.buildTurnDelta || 0;
-        const actualGoldCost = Math.ceil(def.costGold * costMult);
-        const actualBuildTurns = Math.max(1, def.buildTurns + turnDelta);
+        // 实际造价与工期（唯一真值 getBuildingCostProfile：含星球倍率 + 领袖减免，UI 同源）
+        const costProfile = getBuildingCostProfile(def, s.colony!);
+        const actualGoldCost = costProfile.gold;
+        const actualBuildTurns = costProfile.turns;
 
         // 资源校验
         if (s.gold < actualGoldCost) {
           result = { success: false, message: `金币不足（需要${actualGoldCost.toLocaleString()}金币）` };
           return prev;
         }
-        if (def.costAlloy && s.alloy < Math.ceil(def.costAlloy * costMult)) {
+        if (def.costAlloy && s.alloy < costProfile.alloy) {
           result = { success: false, message: '合金不足' }; return prev;
         }
         if (def.costMaterials) {
-          for (const [matId, amt] of Object.entries(def.costMaterials)) {
-            const actualMatAmt = Math.ceil(amt * costMult);
+          for (const matId of Object.keys(def.costMaterials)) {
+            const actualMatAmt = costProfile.materials[matId];
             if ((s.materials[matId] || 0) < actualMatAmt) {
               result = { success: false, message: `原料不足（需要${actualMatAmt}个${matId}）` };
               return prev;
@@ -72,11 +54,11 @@ export function useColonyBuildings(
         }
         s.gold -= actualGoldCost;
         s.goldLog = [{ turn: prev.turn, amount: -actualGoldCost, reason: `建造「${def.name}」`, balanceAfter: s.gold }, ...s.goldLog].slice(0, 200);
-        if (def.costAlloy) s.alloy -= Math.ceil(def.costAlloy * costMult);
+        if (def.costAlloy) s.alloy -= costProfile.alloy;
         if (def.costMaterials) {
           s.materials = { ...s.materials };
-          for (const [matId, amt] of Object.entries(def.costMaterials)) {
-            s.materials[matId] = (s.materials[matId] || 0) - Math.ceil(amt * costMult);
+          for (const matId of Object.keys(def.costMaterials)) {
+            s.materials[matId] = (s.materials[matId] || 0) - costProfile.materials[matId];
           }
         }
         const uid = `${defId}_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;

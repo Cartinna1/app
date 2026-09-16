@@ -37,7 +37,7 @@ export interface LeaderDef {
 export type UltimateTarget = 'populationCap' | 'researchPerTurn' | 'freePop' | 'recruitCap' | 'cloneCenter' | 'housingPop';
 
 export interface LeaderExtraEffects {
-  popCapBonus: Record<string, number>;     // buildingId → 额外人口槽位
+  popCapBonus: Record<string, number>;     // buildingId → 该建筑人口上限（取最高值覆盖，非累加）
   foodConsumptionDelta: number;             // 每人食物消耗变动(负数=减少)
   populationCapBonus: number;              // 人口上限增加
   recruitCostBonus: number;                 // 招募费用变动(负数=减少)
@@ -135,7 +135,7 @@ export const ALL_LEADERS: LeaderDef[] = [
   { id: 'L13', rarity: 'SR', name: '克隆·艾琳', abilityName: '生命复制协议',
     description: '她是克隆中心伦理争议的核心人物，却坚称每个克隆体都是独立的星辰。',
     levelBonuses: [{}, {}, {}],
-    levelExtras: [{ cloneCenterPop: 1 }, { cloneCenterPop: 2 }, { cloneCenterPop: 2, populationCapBonus: 10 }],
+    levelExtras: [{ cloneCenterPop: 1 }, { cloneCenterPop: 2 }, { cloneCenterPop: 2, populationCapBonus: 10, freePopEveryTurns: 4 }],
     ultimateSkill: { name: '克隆潮', description: '克隆中心每回合再+1（与Lv3叠加：每回合共3人）', bonus: 1, type: 'cloneCenter' } },
   { id: 'L14', rarity: 'SR', name: '玛尔塔·丰穗', abilityName: '后勤艺术',
     description: '舰队后勤官出身，据说她曾用一船口粮喂饱三船人——直到有人发现，她连培养舱的菌毯都编进了食谱。',
@@ -145,7 +145,7 @@ export const ALL_LEADERS: LeaderDef[] = [
   { id: 'L15', rarity: 'SR', name: '诺亚·方舟', abilityName: '移民浪潮',
     description: '他曾在殖民地大饥荒中带出三千名幸存者。此后无论走到哪里，追随者都如潮水般涌来——他的名字本身，就是一张船票。',
     levelBonuses: [{}, {}, {}],
-    levelExtras: [{ populationCapBonus: 15, recruitCapPerTurn: 3 }, { populationCapBonus: 30, recruitCapPerTurn: 6 }, { populationCapBonus: 45, recruitCapPerTurn: 10 }],
+    levelExtras: [{ populationCapBonus: 15, recruitCapPerTurn: 3 }, { populationCapBonus: 30, recruitCapPerTurn: 6 }, { populationCapBonus: 45, recruitCapPerTurn: 10, freePopEveryTurns: 2 }],
     ultimateSkill: { name: '无垠船票', description: '人口上限额外+15、招募上限额外+5/回合', bonus: 5, type: 'recruitCap', extra: { type: 'populationCap', bonus: 15 } } },
   // ===== SSR级 (3%) =====
   { id: 'L16', rarity: 'SSR', name: '苍穹·奥丁', abilityName: '穹顶之父',

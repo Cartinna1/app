@@ -1,9 +1,8 @@
 import { useCallback } from 'react';
 import type { GameState } from '@/types/game';
-import { ALL_PLANETS } from '@/data/colony/planets';
 import { getBuildingDef } from '@/data/colony/buildings';
-import { getLeaderDef } from '@/data/colony/leaders';
 import { getRecruitCapPerTurn } from '@/lib/colony/colonyTurn';
+import { getEffectiveMaxPop, getRecruitCostPerPop } from '@/lib/colony/costs';
 
 /** 殖民地人口招募 / 分配（从 useColony 拆出） */
 export function useColonyPop(
@@ -22,18 +21,8 @@ export function useColonyPop(
           result = { success: false, message: '殖民地未激活' };
           return prev;
         }
-        const baseCost = 2000;
-        const planetDelta = (() => {
-          if (!s.colony?.planetType) return 0;
-          const pd = ALL_PLANETS.find((p) => p.id === s.colony!.planetType);
-          return pd?.buffs.recruitCostDelta || 0;
-        })();
-        // 领袖招募费用减免
-        let recruitCostBonus = 0;
-        for (const l of s.colony!.leaders || []) {
-          const ld = getLeaderDef(l.id);
-          recruitCostBonus += (ld?.levelExtras[l.level-1]?.recruitCostBonus || 0);
-        }
+        // 每人实际费用（唯一真值 getRecruitCostPerPop：基础 2000 + 星球修正 + 领袖减免，UI 同源）
+        const costPerPop = getRecruitCostPerPop(s.colony!);
         const maxRecruit = getRecruitCapPerTurn(s.colony!);
         const recruitedThisTurn = s.colony!.recruitedThisTurn || 0;
         const remaining = maxRecruit - recruitedThisTurn;
@@ -41,7 +30,7 @@ export function useColonyPop(
           result = { success: false, message: `本回合剩余可招募${remaining}人（每回合最多${maxRecruit}人）` };
           return prev;
         }
-        const cost = Math.max(0, (baseCost + planetDelta + recruitCostBonus) * amount);
+        const cost = costPerPop * amount;
         if (s.gold < cost) {
           result = { success: false, message: `金币不足（需要${cost.toLocaleString()}金币）` };
           return prev;
@@ -89,14 +78,7 @@ export function useColonyPop(
         if (!def) { result = { success: false, message: '建筑定义不存在' }; return prev; }
 
         // 计算领袖扩展后的最大入驻人口
-        let effMax = def.maxPop;
-        if (s.colony) {
-          for (const l of s.colony.leaders) {
-            const ld = getLeaderDef(l.id);
-            const extras = ld?.levelExtras[l.level - 1];
-            if (extras?.popCapBonus?.[inst.defId]) effMax = Math.max(effMax, extras.popCapBonus[inst.defId]);
-          }
-        }
+        const effMax = s.colony ? getEffectiveMaxPop(inst.defId, s.colony) : def.maxPop;
 
         const delta = count - inst.assignedPop;
         if (delta > 0 && s.colony.population.available < delta) {
