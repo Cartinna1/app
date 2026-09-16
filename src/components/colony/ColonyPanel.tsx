@@ -417,7 +417,7 @@ function ColonyPanel(props: ColonyPanelProps) {
             );
           })()}
           {/* 产出汇总（统一走 economy 模块估算） */}
-          {liveBuildings.length > 0 && (() => {
+          {(liveBuildings.length > 0 || (colony.leaders?.length || 0) > 0) && (() => {
             const eco = computeColonyEconomy(colony, { relics: ship.relics });
             const MAT_CN: Record<string, string> = MATERIAL_NAME_MAP;
             const OUT_LABEL: Record<string, string> = { food:'食物', alloy:'合金', stardust:'星尘', gold:'金币', research:'科研' };
@@ -431,6 +431,7 @@ function ColonyPanel(props: ColonyPanelProps) {
               if (e.leaderPct > 0) parts.push(`领袖+${Math.round(e.leaderPct*100)}%`);
               if (e.repeatPct > 0) parts.push(`循环+${Math.round(e.repeatPct*100)}%`);
               if (e.b26Pct > 0) parts.push(`量子实验室+${Math.round(e.b26Pct*100)}%`);
+              if (e.relicBonus) parts.push(`遗物+${e.relicBonus}`);
               if (e.outputType === 'material' && e.materialId) {
                 matLines.push({ k: e.materialId, v: e.value, detail: parts.join(' ') });
               } else {
@@ -469,7 +470,24 @@ function ColonyPanel(props: ColonyPanelProps) {
                     <span className="text-slate-600">（{v.details.join(' | ')}）</span>
                   </div>
                 ))}
-                {Object.keys(agg).length===0 && Object.keys(aggMat).length===0 && <span className="text-slate-500">暂无产出（建筑无人入驻）</span>}
+                {/* 领袖每回合特效（不来自建筑，单独列出以免与产出明细混淆） */}
+                {(eco.leaderPerTurn.research > 0 || eco.leaderPerTurn.stardust > 0 || Object.keys(eco.leaderPerTurn.materials).length > 0 || eco.leaderPerTurn.randomMats > 0) && (
+                  <div className="flex flex-wrap items-baseline gap-x-1">
+                    <span className="text-slate-500">领袖特效:</span>
+                    <span className="text-cyan-400">
+                      {[
+                        eco.leaderPerTurn.research > 0 ? `科研+${eco.leaderPerTurn.research}` : '',
+                        eco.leaderPerTurn.stardust > 0 ? `星尘+${eco.leaderPerTurn.stardust}` : '',
+                        ...Object.entries(eco.leaderPerTurn.materials).map(([mid, n]) => `${MAT_CN[mid] || mid}+${n}`),
+                        eco.leaderPerTurn.randomMats > 0 ? `随机原料+${eco.leaderPerTurn.randomMats}（结算时掷骰）` : '',
+                      ].filter(Boolean).join(' | ')}
+                    </span>
+                  </div>
+                )}
+                {Object.keys(agg).length===0 && Object.keys(aggMat).length===0
+                  && eco.leaderPerTurn.research === 0 && eco.leaderPerTurn.stardust === 0
+                  && Object.keys(eco.leaderPerTurn.materials).length === 0 && eco.leaderPerTurn.randomMats === 0
+                  && <span className="text-slate-500">暂无产出（建筑无人入驻）</span>}
               </div>
               <div className="text-sm text-red-400 mt-2">
                 {`食物消耗: -${eco.foodCost} (每人${eco.foodPerPop})`}
@@ -510,6 +528,7 @@ function ColonyPanel(props: ColonyPanelProps) {
           if (e.leaderPct > 0) detail += `领袖+${Math.round(e.leaderPct * 100)}%`;
           if (e.repeatPct > 0) detail += `循环+${Math.round(e.repeatPct * 100)}%`;
           if (e.b26Pct > 0) detail += `量子实验室+${Math.round(e.b26Pct * 100)}%`;
+          if (e.relicBonus) detail += `遗物+${e.relicBonus}`;
           return { v: e.value, un, detail };
         };
         // 渲染单个建筑实例卡片（折叠展开态复用）
@@ -912,7 +931,7 @@ function ColonyPanel(props: ColonyPanelProps) {
                       if (ex1.cloneCenterPop) skillDesc += ` | 克隆中心每回合+${ex1.cloneCenterPop}人口（需B28）`;
                       if (ex1.populationCapBonus) skillDesc += ' | 人口上限+'+ex1.populationCapBonus;
                       if (ex1.leaderCapBonus) skillDesc += ' | 领袖上限+'+ex1.leaderCapBonus;
-                      if (ex1.popCapBonus) { for (const [bid, n] of Object.entries(ex1.popCapBonus)) { const bd = getBuildingDef(bid); skillDesc += ` | ${bd?.name||bid}上限+${n}`; } }
+                      if (ex1.popCapBonus) { for (const [bid, n] of Object.entries(ex1.popCapBonus)) { const bd = getBuildingDef(bid); skillDesc += ` | ${bd?.name||bid}每座可入驻${n}人`; } }
                       if (ex1.recruitCostBonus) skillDesc += ` | 招募费用${ex1.recruitCostBonus}`;
                       if (ex1.recruitCapPerTurn) skillDesc += ` | 招募上限+${ex1.recruitCapPerTurn}/回合`;
                       if (ex1.randomMatsPerTurn) skillDesc += ` | 随机原料+${ex1.randomMatsPerTurn}/回合`;
@@ -925,6 +944,7 @@ function ColonyPanel(props: ColonyPanelProps) {
                       if (ex1.powerUseReduction) skillDesc += ' | 所有建筑电能消耗-'+ex1.powerUseReduction+'%';
                       if (ex1.housingPopBonusPct) skillDesc += ` | 穹顶都市/居住舱人口效果+${ex1.housingPopBonusPct}%`;
                       if (ex1.b2CostReduction) skillDesc += ` | 穹顶都市造价-${ex1.b2CostReduction}%`;
+                      if (ex1.buildingMaxCountBonus) { for (const [bid, n] of Object.entries(ex1.buildingMaxCountBonus)) { const bd = getBuildingDef(bid); skillDesc += ` | ${bd?.name||bid}可建造+${n}`; } }
                       return (
                         <div key={i} className="bg-slate-800/60 border border-slate-700 rounded-lg p-3 flex justify-between items-center gap-3">
                           <img
@@ -980,7 +1000,7 @@ function ColonyPanel(props: ColonyPanelProps) {
                     if (currExtras.quantumPerTurn) parts.push(`量子簇+${currExtras.quantumPerTurn}/回合`);
                     if (currExtras.leaderCapBonus) parts.push(`领袖上限+${currExtras.leaderCapBonus}`);
                     if (currExtras.buildCostReduction) parts.push(`造价-${currExtras.buildCostReduction}%`);
-                    if (currExtras.popCapBonus) { for (const [bid, n] of Object.entries(currExtras.popCapBonus)) { const bd = getBuildingDef(bid); parts.push(`${bd?.name||bid}上限+${n}`); } }
+                    if (currExtras.popCapBonus) { for (const [bid, n] of Object.entries(currExtras.popCapBonus)) { const bd = getBuildingDef(bid); parts.push(`${bd?.name||bid}每座可入驻${n}人`); } }
                     if (currExtras.recruitCostBonus) parts.push(`招募费用${currExtras.recruitCostBonus}`);
                     if (currExtras.recruitCapPerTurn) parts.push(`招募上限+${currExtras.recruitCapPerTurn}/回合`);
                     if (currExtras.randomMatsPerTurn) parts.push(`随机原料+${currExtras.randomMatsPerTurn}/回合`);
@@ -991,6 +1011,7 @@ function ColonyPanel(props: ColonyPanelProps) {
                     if (currExtras.housingPopBonusPct) parts.push(`穹顶都市/居住舱人口效果+${currExtras.housingPopBonusPct}%`);
                     if (currExtras.b2CostReduction) parts.push(`穹顶都市造价-${currExtras.b2CostReduction}%`);
                     if (currExtras.b2FlatCap) parts.push(`每座穹顶都市额外+${currExtras.b2FlatCap}人口上限`);
+                    if (currExtras.buildingMaxCountBonus) { for (const [bid, n] of Object.entries(currExtras.buildingMaxCountBonus)) { const bd = getBuildingDef(bid); parts.push(`${bd?.name||bid}可建造+${n}`); } }
                     return (
                     <div key={i} className="bg-slate-800/60 border border-slate-700 rounded-lg p-3 mb-2 flex gap-3 items-start">
                       <img

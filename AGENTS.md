@@ -51,7 +51,7 @@ src/
 | 逻辑 | 唯一位置 |
 |---|---|
 | 舰队总资产（口径：不含售价加成） | `lib/game/assets.ts` → `getShipTotalAssets` |
-| 殖民地经济/电力/食物/产出 | `lib/colony/economy.ts` → `computeColonyEconomy` / `computeColonyPower` / `computeColonyFoodCost` |
+| 殖民地经济/电力/食物/产出 | `lib/colony/economy.ts` → `computeColonyEconomy`（含 `leaderPerTurn` 领袖特效明细、`BuildingEconomyEntry.relicBonus` 遗物标注）/ `computeColonyPower` / `computeColonyFoodCost` |
 | 殖民地回合推进、人口上限、招募上限 | `lib/colony/colonyTurn.ts` → `processColonyTurn` / `calcPopCap` / `getRecruitCapPerTurn` |
 | 远征回合推进（领袖剧情树） | `lib/colony/expeditionTurn.ts` → `processExpeditionTurn`（数据在 `data/colony/expeditions.ts`，节点消耗走 cost 勿硬编码） |
 | 奇观回合推进 | `lib/colony/wonderTurn.ts` → `processWonderTurn`（lib 层，勿放回 hooks/useWonder） |
@@ -64,7 +64,7 @@ src/
 | 原料中文名 | `data/materialNames.ts` → `MATERIAL_NAME_MAP` / `getMaterialName`（gold_ore=黄金、quantum=量子簇、silicon=硅片，禁止硬编码译名） |
 | 配方生产回合数 | `data/gameData.ts` 的 `RECIPES`（`INITIAL_PRODUCTS` 不重复维护，由 `createProducts()` 派生） |
 | 生产上限加成 | `data/modules.ts` → `getProductionLimitBonus` |
-| 殖民地建筑「实际成本与上限」 | `lib/colony/costs.ts` → `getEffectiveMaxCount`（数量上限，含 L12 B9 +1）/ `getEffectiveMaxPop`（建筑人口上限，含 popCapBonus 覆盖）/ `getBuildingCostProfile`（金币·合金·原料·工期，含星球倍率+领袖减免）/ `getRecruitCostPerPop`（招募单价，含星球修正+领袖减免）/ `RECRUIT_BASE_COST`（2000 基础价锚点）——hook 结算与 UI 显示必须同源，勿就地重算（历史上面板只算星球倍率导致显示与实扣分叉） |
+| 殖民地建筑「实际成本与上限」 | `lib/colony/costs.ts` → `getEffectiveMaxCount`（数量上限 = 基础 `maxCount` + 领袖 `levelExtras.buildingMaxCountBonus[建筑id]`，全数据驱动无硬编码）/ `getEffectiveMaxPop`（建筑人口上限，含 popCapBonus 覆盖）/ `getBuildingCostProfile`（金币·合金·原料·工期，含星球倍率+领袖减免）/ `getRecruitCostPerPop`（招募单价，含星球修正+领袖减免）/ `RECRUIT_BASE_COST`（2000 基础价锚点）——hook 结算与 UI 显示必须同源，勿就地重算（历史上面板只算星球倍率导致显示与实扣分叉） |
 | 产品卖出价加成 | `data/modules.ts` → `getSellPriceBreakdown`（母舰技能+事件套装+联盟，逻辑层与显示层共用；含 multiplier/eventPercent/skillPercent/alliancePercent） |
 
 ## 四、改 GameState 字段：存档三处同步
@@ -102,7 +102,7 @@ src/
 - 走私合同成功率 65%（`roll > 0.65` 失败；持有遗物 `RELIC_DECIPHERER` 情报破译器时 100% 成功；判定在 `useTrade.ts completeContract`）
 - 遗物 ID 一律走 `data/relics.ts` 常量（`RELIC_*`），逻辑层勿硬编码 `'r_xxx'` 字符串
 - 兑换码表 `REDEEM_CODES`（`data/gameData.ts`，30 组正常码，无调试码——不要加回 DEBUG 码）
-- 远征录入规则（`data/colony/expeditions.ts`）：A 节点全免费（忽略文档 A 的条件）；文档「人口×N」统一改为合金×50；D 结局统一金币×20000；文本一律用模板字符串（反引号）防 ASCII 引号截断；树结构 A×3→B×2→C×2→D×1，可跑 `validateExpeditionTree()` 自检；图片 `/expeditions/<leaderId>/{planet,D1..D12}.webp`（统一 WebP）；终极技能= Lv3 产出加成基础上叠加 `ultimateSkill.bonus`（数据驱动，勿新机制），**解锁需 12/12 结局 + 领袖达 Lv3**（`useColonyExpedition.unlockUltimate`；因加成按 Lv3 键集结算，低等级解锁会提前吃到满级键集，故设 Lv3 门槛）；`freePopEveryTurns`（每 N 回合免费 +1 人口，受上限钳制）已由 L13/L15 的 Lv3 使用（4/2 回合）；有建筑产出加成的领袖（L1/L2/L3/L4/L5/L6/L7/L8/L9/L11/L12）由 `economy.ts` 统一结算叠加到 Lv3 建筑上，无建筑产出加成的领袖按主题解释并就地叠加：L13=克隆中心（B28）每回合人口再 +bonus（`ultimateSkill.type: 'cloneCenter'`，`colonyTurn.ts` B28 结算块消费；L13 的 `levelExtras.cloneCenterPop` 让 B28 间隔 2→1 回合并提升每回合人口），L22=电力建筑 levelBonuses（B29/B30）由 `economy.ts` 电力循环统一结算、终极再叠加 +bonus%，L14=人口上限再 +bonus（`ultimateSkill.type: 'populationCap'`，`colonyTurn.ts` calcPopCap 消费），L15=招募上限 +bonus 且人口上限 +extra.bonus（双目标：`type: 'recruitCap'` 由 getRecruitCapPerTurn 消费、`extra` 指向 populationCap），L20=领袖容量+费用减免（leaderCapBonus/leaderCostReduction），L16=居住建筑人口效果（`levelExtras.housingPopBonusPct` 50/100/150，终极 `type: 'housingPop'` 再叠加）——终极技能用 `type`（+可选 `extra`）标记消费点，取值统一走 `leaders.ts` 的 `getUltimateBonus(ld, target)`，只在对应消费点生效（populationCap/researchPerTurn/freePop/recruitCap/cloneCenter/housingPop 六类），勿通用叠加（否则会误加到所有领袖）；L21/L22 电能效果已全数据化：电力建筑加成走 levelBonuses（economy 电力循环消费）、电能消耗减免走 `levelExtras.powerUseReduction`、停电免疫走 `levelExtras.blackoutImmune`——免疫为 **10 回合保护**（`colonyTurn.ts` 的 `BLACKOUT_GUARD_TURNS=10`，连续缺电计数 `colony.blackoutGuardTurns`，耗尽后仍未恢复供电则停电，中途恢复重置；存档字段三处同步：types + save.ts migrateSave 兜底 + useColonyBase 初始化），`colonyTurn.hasBlackoutImmunity` 回合判定与 UI 显示共用，UI 技能文案全数据驱动，勿再硬编码（L16 已全数据化：`housingPopBonusPct`/`b2CostReduction`/`b2FlatCap` 三个 levelExtras 字段，consumers 在 `colonyTurn.calcPopCap` 与 `useColonyBuildings` 造价计算）；**加成一律加算**：电力与食物/合金/原料等口径一致，`产出 × (1 + 各加成%之和)`（星球%+领袖%+循环%…），勿写成逐项相乘（电力曾乘算，已修正为加算）
+- 远征录入规则（`data/colony/expeditions.ts`）：A 节点全免费（忽略文档 A 的条件）；文档「人口×N」统一改为合金×50；D 结局统一金币×20000；文本一律用模板字符串（反引号）防 ASCII 引号截断；树结构 A×3→B×2→C×2→D×1，可跑 `validateExpeditionTree()` 自检；图片 `/expeditions/<leaderId>/{planet,D1..D12}.webp`（统一 WebP）；终极技能= Lv3 产出加成基础上叠加 `ultimateSkill.bonus`（数据驱动，勿新机制），**解锁需 12/12 结局 + 领袖达 Lv3**（`useColonyExpedition.unlockUltimate`；因加成按 Lv3 键集结算，低等级解锁会提前吃到满级键集，故设 Lv3 门槛）；`freePopEveryTurns`（每 N 回合免费 +1 人口，受上限钳制）已由 L13/L15 的 Lv3 使用（4/2 回合）；**原料建筑数量上限**：12 座原料建筑基础 `maxCount: 2`，六位原料领袖（L4 石油 / L5 黄金 / L6 碳块 / L7 暗物质 / L8 量子簇 / L9 硅片）Lv2 给对应**低级**建筑 +1、Lv3 给**低级与高级各 +1**（同用 `buildingMaxCountBonus`；因 levelExtras 按当前等级取档，Lv3 必须写明低级 +1 否则升级会丢失该加成）；有建筑产出加成的领袖（L1/L2/L3/L4/L5/L6/L7/L8/L9/L11/L12）由 `economy.ts` 统一结算叠加到 Lv3 建筑上，无建筑产出加成的领袖按主题解释并就地叠加：L13=克隆中心（B28）每回合人口再 +bonus（`ultimateSkill.type: 'cloneCenter'`，`colonyTurn.ts` B28 结算块消费；L13 的 `levelExtras.cloneCenterPop` 让 B28 间隔 2→1 回合并提升每回合人口），L22=电力建筑 levelBonuses（B29/B30）由 `economy.ts` 电力循环统一结算、终极再叠加 +bonus%，L14=人口上限再 +bonus（`ultimateSkill.type: 'populationCap'`，`colonyTurn.ts` calcPopCap 消费），L15=招募上限 +bonus 且人口上限 +extra.bonus（双目标：`type: 'recruitCap'` 由 getRecruitCapPerTurn 消费、`extra` 指向 populationCap），L20=领袖容量+费用减免（leaderCapBonus/leaderCostReduction），L16=居住建筑人口效果（`levelExtras.housingPopBonusPct` 50/100/150，终极 `type: 'housingPop'` 再叠加）——终极技能用 `type`（+可选 `extra`）标记消费点，取值统一走 `leaders.ts` 的 `getUltimateBonus(ld, target)`，只在对应消费点生效（populationCap/researchPerTurn/freePop/recruitCap/cloneCenter/housingPop 六类），勿通用叠加（否则会误加到所有领袖）；L21/L22 电能效果已全数据化：电力建筑加成走 levelBonuses（economy 电力循环消费）、电能消耗减免走 `levelExtras.powerUseReduction`、停电免疫走 `levelExtras.blackoutImmune`——免疫为 **10 回合保护**（`colonyTurn.ts` 的 `BLACKOUT_GUARD_TURNS=10`，连续缺电计数 `colony.blackoutGuardTurns`，耗尽后仍未恢复供电则停电，中途恢复重置；存档字段三处同步：types + save.ts migrateSave 兜底 + useColonyBase 初始化），`colonyTurn.hasBlackoutImmunity` 回合判定与 UI 显示共用，UI 技能文案全数据驱动，勿再硬编码（L16 已全数据化：`housingPopBonusPct`/`b2CostReduction`/`b2FlatCap` 三个 levelExtras 字段，consumers 在 `colonyTurn.calcPopCap` 与 `useColonyBuildings` 造价计算）；**加成一律加算**：电力与食物/合金/原料等口径一致，`产出 × (1 + 各加成%之和)`（星球%+领袖%+循环%…），勿写成逐项相乘（电力曾乘算，已修正为加算）
 - 远征 CG 图集（图鉴，纯欣赏与剧情无关）：远征对象加 `hiddenImages: [{id:'H1'},…]`，图片 `/expeditions/<leaderId>/<id>.webp`（如 H1..H11，WebP）；集齐 12 结局自动开放（`GalleryPanel` 判定 `list.length >= EXPEDITION_UNLOCK_COUNT`，每领袖张数自定，勿硬编码 9）；**统一只写 id，不写 title/desc（title 缺省按数组顺序自动显示 CG1/CG2/…）**；id 唯一且按序命名，无图时 `onError` 隐藏；UI 文案一律叫「CG 图集」，勿写「隐藏剧情」
 
 ## 八、命名与文案
@@ -110,6 +110,7 @@ src/
 - 真值函数命名 `getXxx` / `computeXxx`；避免 `import { x as y }` 别名（现存一例 `useGameState.ts` 的 `getShipTotalAssets as computeShipTotalAssets`，待清理，勿新增）。
 - 原料译名一律走 `getMaterialName()`（事件/建筑的 flavor 文学描述除外）。
 - 代码用 ASCII 直引号；游戏文案用中文标点、正常中文句式，非必要不用破折号。
+- **科技描述只保留引号台词**（`data/colony/techs.ts`）：格式为 `'"台词。"'`，台词后的技术说明段一律不写（原为"台词 + 一段说明"，平均 89 字，已精简为平均 22 字；循环科技的效果描述照常）。其余数据（建筑/领袖/星球）描述保持 30~60 字的单段说明。
 
 ## 九、历史坑（都修过，勿复现）
 
@@ -126,6 +127,9 @@ src/
 | 领袖升级费用 UI/hook 分叉 | UI 写 50/100、hook 写 20/45，玩家被误挡且账实不符 | 已收敛到 `data/colony/leaders.ts` 的 `getLeaderUpgradeCost`（50/100） |
 | 招募上限形同虚设 | 每回合最多招N人只校验单次 amount、无累计字段，反复点可无限招 | Colony 加 `recruitedThisTurn`，`getRecruitCapPerTurn` 共享；「字段+动作检查+回合重置」三段式 |
 | 远征文本 ASCII 引号致语法错误 | 故事文档里 `'xxx'`（如「叫'回头青'」）是 ASCII 单引号，逐字搬进单引号字符串会截断（TS1005） | 远征数据文本一律用模板字符串（反引号）或转义 `\'`；录入新路线后 grep `[\u4e00-\u9fff]'[\u4e00-\u9fff]` 自检（该模式只在文本内部引号时命中） |
+| 总览漏显"领袖每回合特效"产出 | 领袖特效（科研/星尘/暗物质/量子/随机原料）直接累加总量、不进 `buildings` 明细，而总览只遍历明细 | `ColonyEconomy.leaderPerTurn` 明细 + 总览「领袖特效」单列（估算模式下随机原料标注"结算时掷骰"） |
+| 产出明细漏标遗物加成 | 合金精炼手册 r_008 直接 `value += 1`，明细无来源标注，玩家对不上总数 | `BuildingEconomyEntry.relicBonus` → 总览与建筑 tab 明细显示「遗物+1」 |
+| 领袖槽位文案歧义 | `popCapBonus` 显示为「XX上限+5」，玩家误读成"能多造 5 座" | 文案统一为「XX每座可入驻5人」；数量上限另用「XX可建造+N」（`buildingMaxCountBonus`） |
 
 ---
 

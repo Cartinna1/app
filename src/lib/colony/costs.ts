@@ -14,10 +14,10 @@ export const RECRUIT_BASE_COST = 2000;
 /** 建筑实际可建造数量上限（含领袖扩展，如 L12 共鸣·菲尼克斯 Lv2 给星尘捕获网 +1）；无上限返回 undefined */
 export function getEffectiveMaxCount(def: BuildingDef, colony: Colony): number | undefined {
   let max = def.maxCount;
-  if (def.id === 'B9') {
-    for (const l of colony.leaders || []) {
-      if (l.id === 'L12' && l.level >= 2) max = (max ?? 0) + 1;
-    }
+  // 数据驱动：levelExtras.buildingMaxCountBonus（如 L6/L9 的原料建筑 +1、L12 的 B9 +1）
+  for (const l of colony.leaders || []) {
+    const bonus = getLeaderDef(l.id)?.levelExtras[l.level - 1]?.buildingMaxCountBonus?.[def.id] || 0;
+    if (bonus) max = (max ?? 0) + bonus;
   }
   return max;
 }

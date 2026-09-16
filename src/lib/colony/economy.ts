@@ -64,6 +64,19 @@ export interface BuildingEconomyEntry {
   value: number;
   /** outputType === 'material' 时的原料 ID */
   materialId?: string;
+  /** 遗物直接加成的产出量（如 r_008 合金精炼手册每座 +1 合金），计入 value 但需单独标注来源 */
+  relicBonus?: number;
+}
+
+/** 领袖每回合特效产出的明细（不来自建筑，供总览单列显示） */
+export interface LeaderPerTurnEntry {
+  /** 每回合科研（含终极技能叠加；估算模式取区间中值） */
+  research: number;
+  stardust: number;
+  /** 原料 id → 每回合固定产出（暗物质/量子簇等） */
+  materials: Record<string, number>;
+  /** 随机原料总量（仅实际结算掷骰，估算模式为 0） */
+  randomMats: number;
 }
 
 export interface ColonyEconomy {
@@ -79,6 +92,8 @@ export interface ColonyEconomy {
   foodCost: number;
   /** 正在产出的非电能建筑明细 */
   buildings: BuildingEconomyEntry[];
+  /** 领袖每回合特效明细（科研/星尘/原料），供总览单列显示（已计入上方总量） */
+  leaderPerTurn: LeaderPerTurnEntry;
   power: ColonyPowerInfo;
 }
 
@@ -242,11 +257,13 @@ export function computeColonyEconomy(colony: Colony, opts: ColonyEconomyOptions)
     }
   }
 
+  const leaderPerTurn: LeaderPerTurnEntry = { research: 0, stardust: 0, materials: {}, randomMats: 0 };
   const result: ColonyEconomy = {
     food: 0, alloy: 0, stardust: 0, gold: 0, research: 0,
     materials: {},
     ...computeColonyFoodCost(colony),
     buildings: [],
+    leaderPerTurn,
     power: computeColonyPower(colony),
   };
 
@@ -307,8 +324,8 @@ export function computeColonyEconomy(colony: Colony, opts: ColonyEconomyOptions)
       const pm = mult ? (mult - 1) : 0;
       entry.base = base; entry.planetPct = pm;
       entry.value = Math.ceil(base * (1 + pm + leaderPct + repeatPct));
-      // 合金精炼手册 r_008：每座在产合金建筑 +1 合金（结算与显示共用）
-      if (def.outputType === 'alloy' && hasAlloyManual) entry.value += 1;
+      // 合金精炼手册 r_008：每座在产合金建筑 +1 合金（结算与显示共用；relicBonus 供 UI 标注来源）
+      if (def.outputType === 'alloy' && hasAlloyManual) { entry.value += 1; entry.relicBonus = 1; }
       if (def.outputType === 'food') result.food += entry.value;
       else if (def.outputType === 'alloy') result.alloy += entry.value;
       else result.stardust += entry.value;
@@ -323,20 +340,34 @@ export function computeColonyEconomy(colony: Colony, opts: ColonyEconomyOptions)
     const ex = ld?.levelExtras[l.level - 1];
     // 终极技能（数据驱动）：type/extra 指向 researchPerTurn 的叠加每回合科研（如 L10 星辰推演，与 Lv3 区间叠加）
     if (colony.expeditionUnlocks?.includes(l.id)) {
-      result.research += getUltimateBonus(ld, 'researchPerTurn');
+      const ultResearch = getUltimateBonus(ld, 'researchPerTurn');
+      result.research += ultResearch;
+      leaderPerTurn.research += ultResearch;
     }
     if (!ex) continue;
     if (ex.researchPerTurn) {
       const [lo, hi] = ex.researchPerTurn;
-      result.research += random
+      const gain = random
         ? Math.floor(Math.random() * (hi - lo + 1)) + lo
         : Math.floor((lo + hi) / 2);
+      result.research += gain;
+      leaderPerTurn.research += gain;
     }
-    if (ex.stardustPerTurn) result.stardust += ex.stardustPerTurn;
-    if (ex.darkMatterPerTurn) result.materials['dark_matter'] = (result.materials['dark_matter'] || 0) + ex.darkMatterPerTurn;
-    if (ex.quantumPerTurn) result.materials['quantum'] = (result.materials['quantum'] || 0) + ex.quantumPerTurn;
-    // 随机原料无法估算，仅在实际结算时掷骰
+    if (ex.stardustPerTurn) {
+      result.stardust += ex.stardustPerTurn;
+      leaderPerTurn.stardust += ex.stardustPerTurn;
+    }
+    if (ex.darkMatterPerTurn) {
+      result.materials['dark_matter'] = (result.materials['dark_matter'] || 0) + ex.darkMatterPerTurn;
+      leaderPerTurn.materials['dark_matter'] = (leaderPerTurn.materials['dark_matter'] || 0) + ex.darkMatterPerTurn;
+    }
+    if (ex.quantumPerTurn) {
+      result.materials['quantum'] = (result.materials['quantum'] || 0) + ex.quantumPerTurn;
+      leaderPerTurn.materials['quantum'] = (leaderPerTurn.materials['quantum'] || 0) + ex.quantumPerTurn;
+    }
+    // 随机原料无法估算，仅在实际结算时掷骰（估算模式下 randomMats 保持 0，总览会标注"结算时掷骰"）
     if (random && ex.randomMatsPerTurn) {
+      leaderPerTurn.randomMats += ex.randomMatsPerTurn;
       for (let i = 0; i < ex.randomMatsPerTurn; i++) {
         const mid = RANDOM_MAT_IDS[Math.floor(Math.random() * RANDOM_MAT_IDS.length)];
         result.materials[mid] = (result.materials[mid] || 0) + 1;

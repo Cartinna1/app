@@ -46,6 +46,7 @@ export interface LeaderExtraEffects {
   housingPopBonusPct: number;              // 居住建筑（B1/B2）人口上限效果 +%（如 L16 穹顶之父 50/100/150）
   b2FlatCap: number;                       // 每座穹顶都市（B2）额外人口上限（如 L16 Lv3 = 5）
   b2CostReduction: number;                 // 穹顶都市（B2）造价减免 %（如 L16 Lv2 30 / Lv3 50）
+  buildingMaxCountBonus: Record<string, number>; // buildingId → 数量上限 +N（如 L6 Lv2 给 B15 +1、L12 Lv2 给 B9 +1）
   researchPerTurn: [number, number];       // [min, max]科研点
   buildCostReduction: number;              // 建筑费用减少%
   leaderCapBonus: number;                  // 领袖上限增加
@@ -89,32 +90,32 @@ export const ALL_LEADERS: LeaderDef[] = [
   { id: 'L4', rarity: 'R', name: '沙尘·艾德', abilityName: '黑金血脉',
     description: '前半生是沙漠行星的勘探队长，后半生是石油泵站的守护者。他说，每一滴黑色液体都是星球的时间胶囊。',
     levelBonuses: [{ B13:20,B19:20 }, { B13:35,B19:35 }, { B13:50,B19:50 }],
-    levelExtras: [{}, {}, { popCapBonus: { B13:5 } }],
+    levelExtras: [{}, { buildingMaxCountBonus: { B13: 1 } }, { buildingMaxCountBonus: { B13: 1, B19: 1 }, popCapBonus: { B19:6 } }],
     ultimateSkill: { name: '黑色王座', description: '石油建筑（碳氢化合物泵站/地壳深钻平台）产出额外+30%（与Lv3叠加，合计+80%）', bonus: 30 } },
   { id: 'L5', rarity: 'R', name: '金脉·奥莉薇', abilityName: '贵金属共鸣',
     description: '她曾用声波共振仪在废弃小行星带找到一条纯金矿脉，被矿业公会称为金色女巫。',
     levelBonuses: [{ B14:20,B22:20 }, { B14:35,B22:35 }, { B14:50,B22:50 }],
-    levelExtras: [{}, {}, { popCapBonus: { B22:5 } }],
+    levelExtras: [{}, { buildingMaxCountBonus: { B14: 1 } }, { buildingMaxCountBonus: { B14: 1, B22: 1 }, popCapBonus: { B22:5 } }],
     ultimateSkill: { name: '黄金回响', description: '贵金属建筑产出额外+20%（与Lv3叠加，合计+70%）', bonus: 20 } },
   { id: 'L6', rarity: 'R', name: '碳语者·莫里斯', abilityName: '碳基统御',
     description: '曾在一颗被烧成焦炭的星球上发现碳块富集层，坚信碳是宇宙最诚实的通货。',
     levelBonuses: [{ B15:20,B20:20 }, { B15:35,B20:35 }, { B15:50,B20:50 }],
-    levelExtras: [{}, {}, { popCapBonus: { B20:6 } }],
+    levelExtras: [{}, { buildingMaxCountBonus: { B15: 1 } }, { buildingMaxCountBonus: { B15: 1, B20: 1 }, popCapBonus: { B20:6 } }],
     ultimateSkill: { name: '碳之精华', description: '碳块建筑（碳沉积采集器/碳基材料合成器）产出额外+60%（与Lv3叠加，合计+110%）', bonus: 60 } },
   { id: 'L7', rarity: 'R', name: '幽影·泽维尔', abilityName: '暗影捕手',
     description: '"他曾在黑洞阴影区捕获一缕暗物质流，并将其命名为"宇宙的呼吸"。没有人知道他如何做到的。"',
     levelBonuses: [{ B16:20,B21:20 }, { B16:35,B21:35 }, { B16:50,B21:50 }],
-    levelExtras: [{}, {}, { popCapBonus: { B21:4 } }],
+    levelExtras: [{}, { buildingMaxCountBonus: { B16: 1 } }, { buildingMaxCountBonus: { B16: 1, B21: 1 }, popCapBonus: { B21:4 } }],
     ultimateSkill: { name: '暗质永夜', description: '暗物质建筑（暗物质捕获阱/暗物质压缩阱）产出额外+20%（与Lv3叠加，合计+70%）', bonus: 20 } },
   { id: 'L8', rarity: 'R', name: '量子·瑟琳娜', abilityName: '涨落编织者',
     description: '出身于量子谐振器实验室，她能在虚空中听见量子簇的震颤。',
     levelBonuses: [{ B17:20,B23:20 }, { B17:35,B23:35 }, { B17:50,B23:50 }],
-    levelExtras: [{}, {}, { popCapBonus: { B23:5 } }],
+    levelExtras: [{}, { buildingMaxCountBonus: { B17: 1 } }, { buildingMaxCountBonus: { B17: 1, B23: 1 }, popCapBonus: { B23:5 } }],
     ultimateSkill: { name: '量子共鸣', description: '量子簇建筑产出额外+20%（与Lv3叠加，合计+70%）', bonus: 20 } },
   { id: 'L9', rarity: 'R', name: '晶芒·哈罗德', abilityName: '硅晶之眼',
     description: '曾是硅晶提取站的技工，被同行称为硅片诗人。',
     levelBonuses: [{ B18:20,B24:20 }, { B18:35,B24:35 }, { B18:50,B24:50 }],
-    levelExtras: [{}, {}, { popCapBonus: { B24:6 } }],
+    levelExtras: [{}, { buildingMaxCountBonus: { B18: 1 } }, { buildingMaxCountBonus: { B18: 1, B24: 1 }, popCapBonus: { B24:6 } }],
     ultimateSkill: { name: '晶圆圣典', description: '硅片建筑（硅晶提取站/硅基晶圆制造矩阵）产出额外+20%（与Lv3叠加，合计+70%）', bonus: 20 } },
   // ===== SR级 (27%) =====
   { id: 'L10', rarity: 'SR', name: '艾萨克·星图', abilityName: '智识洪流',
@@ -130,7 +131,7 @@ export const ALL_LEADERS: LeaderDef[] = [
   { id: 'L12', rarity: 'SR', name: '共鸣·菲尼克斯', abilityName: '星尘咏者',
     description: '她是星尘共鸣尖塔的第一任主工程师，声称曾听到尖塔唱出了一首超新星挽歌。',
     levelBonuses: [{ B9:30,B10:30 }, { B9:50,B10:50 }, { B9:70,B10:70 }],
-    levelExtras: [{}, {}, { stardustPerTurn: 1 }],
+    levelExtras: [{}, { buildingMaxCountBonus: { B9: 1 } }, { buildingMaxCountBonus: { B9: 1 }, stardustPerTurn: 1 }],
     ultimateSkill: { name: '恒星咏叹', description: '星尘建筑（星尘捕获网/星尘共鸣尖塔）产出额外+20%（与Lv3叠加，合计+90%）', bonus: 20 } },
   { id: 'L13', rarity: 'SR', name: '克隆·艾琳', abilityName: '生命复制协议',
     description: '她是克隆中心伦理争议的核心人物，却坚称每个克隆体都是独立的星辰。',

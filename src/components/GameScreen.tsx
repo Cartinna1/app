@@ -796,6 +796,16 @@ function OverviewTab({
         const colFood = eco?.food ?? 0, colAlloy = eco?.alloy ?? 0, colStardust = eco?.stardust ?? 0;
         const colGold = eco?.gold ?? 0, colRP = eco?.research ?? 0, colFoodCost = eco?.foodCost ?? 0;
         const colMats: Record<string, number> = eco?.materials ?? {};
+        // 产出来源分解（与殖民地面板同源：economy 的 relicBonus / leaderPerTurn 明细）
+        const relicTotal = (eco?.buildings || []).reduce((s, b) => s + (b.relicBonus || 0), 0);
+        const leaderRP = eco?.leaderPerTurn.research ?? 0;
+        const leaderSD = eco?.leaderPerTurn.stardust ?? 0;
+        const leaderMats: Record<string, number> = eco?.leaderPerTurn.materials ?? {};
+        // 生成"（殖民地 建筑X+<标签>Y）"标注；无附加来源时退回"（殖民地）"
+        const srcText = (total: number, label: string, value: number): string => {
+          const base = total - value;
+          return ` (殖民地 ${base > 0 ? `建筑${base}+` : ''}${label}${value})`;
+        };
         return (
           <div className="mb-4 bg-slate-900/60 border border-slate-700 rounded-xl p-3 md:p-4">
             <h3 className="text-xs text-amber-400 font-bold mb-3">资源收支</h3>
@@ -804,11 +814,11 @@ function OverviewTab({
               <div><span className="text-slate-500">食物总消耗:</span> <span className="text-red-400 font-bold">-{actualCrewCost+colFoodCost}{colFoodCost>0?` (船员${actualCrewCost}+殖民${colFoodCost})`:` (船员)`}</span></div>
               <div><span className="text-slate-500">食物净增减:</span> <span className={(colFood+modFood - actualCrewCost - colFoodCost) >= 0 ? 'text-green-400 font-bold' : 'text-red-400 font-bold'}>{colFood+modFood - actualCrewCost - colFoodCost >= 0 ? '+' : ''}{colFood+modFood - actualCrewCost - colFoodCost}</span></div>
               <div><span className="text-slate-500">当前食物:</span> <span className={ship.food >= 0 ? 'text-green-400 font-bold' : 'text-red-400 font-bold'}>{ship.food}</span></div>
-              {colAlloy > 0 && <div><span className="text-slate-500">合金产出:</span> <span className="text-slate-300 font-bold">+{colAlloy} (殖民地)</span></div>}
-              {colStardust > 0 && <div><span className="text-slate-500">星尘产出:</span> <span className="text-purple-400 font-bold">+{colStardust}{ship.modules?.some(m => m.active && m.id === MODULE_DYSON_COLLECTOR) ? ' + 3(母舰)' : ''} (殖民地)</span></div>}
+              {colAlloy > 0 && <div><span className="text-slate-500">合金产出:</span> <span className="text-slate-300 font-bold">+{colAlloy}</span><span className="text-slate-500">{relicTotal > 0 ? srcText(colAlloy, '遗物', relicTotal) : ' (殖民地)'}</span></div>}
+              {colStardust > 0 && <div><span className="text-slate-500">星尘产出:</span> <span className="text-purple-400 font-bold">+{colStardust}{ship.modules?.some(m => m.active && m.id === MODULE_DYSON_COLLECTOR) ? ' + 3(母舰)' : ''}</span><span className="text-slate-500">{leaderSD > 0 ? srcText(colStardust, '领袖', leaderSD) : ' (殖民地)'}</span></div>}
               {colGold > 0 && <div><span className="text-slate-500">金币产出:</span> <span className="text-yellow-400 font-bold">+{colGold} (殖民地)</span></div>}
-              {colRP > 0 && <div><span className="text-slate-500">科研产出:</span> <span className="text-cyan-400 font-bold">+{colRP} (殖民地)</span></div>}
-              {(() => { const mc: Record<string,string> = MATERIAL_NAME_MAP; return Object.entries(colMats).map(([k,v]) => v>0 && <div key={k}><span className="text-slate-500">{mc[k]||k}:</span> <span className="text-amber-400 font-bold">+{v} (殖民地)</span></div>); })()}
+              {colRP > 0 && <div><span className="text-slate-500">科研产出:</span> <span className="text-cyan-400 font-bold">+{colRP}</span><span className="text-slate-500">{leaderRP > 0 ? srcText(colRP, '领袖', leaderRP) : ' (殖民地)'}</span></div>}
+              {(() => { const mc: Record<string,string> = MATERIAL_NAME_MAP; return Object.entries(colMats).map(([k,v]) => v>0 && <div key={k}><span className="text-slate-500">{mc[k]||k}:</span> <span className="text-amber-400 font-bold">+{v}</span><span className="text-slate-500">{leaderMats[k] > 0 ? srcText(v, '领袖', leaderMats[k]) : ' (殖民地)'}</span></div>); })()}
             </div>
           </div>
         );
