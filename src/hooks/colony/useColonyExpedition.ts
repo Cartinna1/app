@@ -7,6 +7,7 @@ import type { GameState } from '@/types/game';
 import type { Colony } from '@/types/colony';
 import { EXPEDITION_COST, RESOURCE_LABELS, getLeaderExpedition } from '@/data/colony/expeditions';
 import { getLeaderDef } from '@/data/colony/leaders';
+import { enterExpeditionHistory, recordExpeditionEnding } from '@/lib/colony/expeditionTurn';
 
 interface ExpeditionActions {
   startExpedition: (leaderId: string) => { success: boolean; message: string };
@@ -110,6 +111,12 @@ export function useColonyExpedition(
           s.goldLog = [{ turn: prev.turn, amount: -cost.gold, reason: `远征「${node.title}」支付`, balanceAfter: s.gold }, ...s.goldLog].slice(0, 200);
         }
         c.expedition = { ...c.expedition, paidThisTurn: true };
+        // 结局节点：支付即记账（写入 expeditionEndings + 记入剧情回顾），回合结算收尾时再幂等兜底一次；
+        // 避免「付了 20000 金币但没点结束回合就退出」导致结局白付
+        if (node.isEnding) {
+          enterExpeditionHistory(c, node.id);
+          recordExpeditionEnding(c, ex.leaderId, node.id);
+        }
         s.colony = c;
         ships[0] = s;
         result = { success: true, message: `已支付，解锁「${node.title}」！` };

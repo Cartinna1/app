@@ -53,7 +53,7 @@ src/
 | 舰队总资产（口径：不含售价加成） | `lib/game/assets.ts` → `getShipTotalAssets` |
 | 殖民地经济/电力/食物/产出 | `lib/colony/economy.ts` → `computeColonyEconomy`（含 `leaderPerTurn` 领袖特效明细、`BuildingEconomyEntry.relicBonus` 遗物标注）/ `computeColonyPower` / `computeColonyFoodCost` |
 | 殖民地回合推进、人口上限、招募上限 | `lib/colony/colonyTurn.ts` → `processColonyTurn` / `calcPopCap` / `getRecruitCapPerTurn` |
-| 远征回合推进（领袖剧情树） | `lib/colony/expeditionTurn.ts` → `processExpeditionTurn`（数据在 `data/colony/expeditions.ts`，节点消耗走 cost 勿硬编码） |
+| 远征回合推进（领袖剧情树） | `lib/colony/expeditionTurn.ts` → `processExpeditionTurn`（数据在 `data/colony/expeditions.ts`，节点消耗走 cost 勿硬编码）/ `recordExpeditionEnding`（结局记账）/ `enterExpeditionHistory`（剧情回顾，两者均由支付动作与回合结算共用，幂等） |
 | 奇观回合推进 | `lib/colony/wonderTurn.ts` → `processWonderTurn`（lib 层，勿放回 hooks/useWonder） |
 | 游戏初始状态（新开局/重置/选船共用） | `hooks/gameReducer.ts` → `createInitialGameState`（勿在 SELECT_SHIP 另抄字段，嵌套对象由工厂新建防引用共享） |
 | 单舰船回合结算、游戏结束判定 | `lib/turn/shipTurn.ts` → `processShipTurn` / `getGameOverReason` / `computeCrewFoodCost` |
@@ -130,6 +130,7 @@ src/
 | 总览漏显"领袖每回合特效"产出 | 领袖特效（科研/星尘/暗物质/量子/随机原料）直接累加总量、不进 `buildings` 明细，而总览只遍历明细 | `ColonyEconomy.leaderPerTurn` 明细 + 总览「领袖特效」单列（估算模式下随机原料标注"结算时掷骰"） |
 | 产出明细漏标遗物加成 | 合金精炼手册 r_008 直接 `value += 1`，明细无来源标注，玩家对不上总数 | `BuildingEconomyEntry.relicBonus` → 总览与建筑 tab 明细显示「遗物+1」 |
 | 领袖槽位文案歧义 | `popCapBonus` 显示为「XX上限+5」，玩家误读成"能多造 5 座" | 文案统一为「XX每座可入驻5人」；数量上限另用「XX可建造+N」（`buildingMaxCountBonus`） |
+| 远征结局"付钱不落地"、结局图看两遍 | 结局记账只在回合结算做（付了 20000 金币却不点结束回合就退出，结局丢失）；D 层与箴言原本分属两个回合，同一张结局图展示两遍 | `recordExpeditionEnding`/`enterExpeditionHistory` 由支付动作与回合结算共用（幂等；history 用重新赋值而非 push，避免 hook 侧 mutate prev）；D 支付后同屏显示结局图+箴言，回合结算即收尾；`stage 6` 分支保留作**旧存档兜底**，删掉会让在途老档永久卡死 |
 
 ---
 

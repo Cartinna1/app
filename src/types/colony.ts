@@ -231,7 +231,7 @@ export interface ExpeditionNodeDef {
   children?: string[];
   /** 结局节点（D） */
   isEnding?: boolean;
-  /** 结局箴言（箴言回合显示） */
+  /** 结局箴言（D 结局回合与结局图同屏显示） */
   motto?: string;
 }
 
@@ -255,13 +255,13 @@ export interface LeaderExpedition {
 /** 远征运行状态（挂在 colony.expedition） */
 export interface ExpeditionState {
   leaderId: string;
-  /** 0准备 1降落 2A 3B 4C 5D 6箴言/记录 */
+  /** 0准备 1降落 2A 3B 4C 5D（结局与箴言同屏、支付即记账）；6 为旧存档遗留的箴言回合，仅兜底清空 */
   stage: number;
   currentNodeId: string | null;  // 当前节点（B/C/D 需支付）
   /** 本回合是否已支付当前节点（回合结算重置） */
   paidThisTurn: boolean;
   startedTurn: number;
-  /** 已抵达的结局节点 id（stage 6 时写入 expeditionEndings） */
+  /** 已抵达的结局节点 id（支付该结局节点时写入 expeditionEndings，回合结算再幂等兜底） */
   endingId: string | null;
   /** 已展示过的节点 id（按顺序，供「回顾剧情」） */
   history: string[];

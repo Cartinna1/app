@@ -1,9 +1,9 @@
 // ==================== 远征面板（领袖剧情树） ====================
-// 展示远征进行中的回合推进（准备/降落/A/B/C/D/箴言）、已招募领袖的结局收集进度与终极技能解锁。
+// 展示远征进行中的回合推进（准备/降落/A/B/C/D+结局箴言）、已招募领袖的结局收集进度与终极技能解锁。
 // 资源消耗明细与提示均从节点数据（cost）渲染，不硬编码数字。
 
 import { useState, memo } from 'react';
-import type { Colony } from '@/types/colony';
+import type { Colony, ExpeditionNodeDef } from '@/types/colony';
 import { EXPEDITION_COST, RESOURCE_LABELS, getLeaderExpedition } from '@/data/colony/expeditions';
 import { getLeaderDef } from '@/data/colony/leaders';
 import { Rocket, Sparkles, Crown, Lock } from 'lucide-react';
@@ -37,6 +37,16 @@ function ExpeditionPanel({ colony, onStartExpedition, onPayExpeditionNode, onUnl
   const node = ex && route && ex.currentNodeId ? route.nodes[ex.currentNodeId] : undefined;
   const endingsCount = (leaderId: string) => colony.expeditionEndings?.[leaderId]?.length || 0;
   const imgPath = (leaderId: string, name: string) => `/expeditions/${leaderId}/${name}`;
+
+  /** 结局屏（D 节点支付后与旧存档 stage 6 共用同一段 UI，勿写两份） */
+  const renderEndingBlock = (leaderId: string, endingNode: ExpeditionNodeDef) => (
+    <div className="mt-4 pt-3 border-t border-purple-700/30 text-center">
+      <p className="text-[10px] text-slate-500 mb-1">结局 {endingNode.id} · 已记录（{endingsCount(leaderId)}/12）</p>
+      <h4 className="font-bold text-purple-300 mb-2">{endingNode.title}</h4>
+      <p className="text-sm italic text-purple-200/90 leading-relaxed whitespace-pre-line">{endingNode.motto}</p>
+      <p className="text-xs text-slate-500 mt-3">远征结束，结束回合后返回选领袖界面。</p>
+    </div>
+  );
 
   const handleStart = (leaderId: string) => {
     const r = onStartExpedition(leaderId);
@@ -105,7 +115,7 @@ function ExpeditionPanel({ colony, onStartExpedition, onPayExpeditionNode, onUnl
               <h4 className="font-bold text-slate-100 mb-2">{node.title}</h4>
               {ex.paidThisTurn ? (
                 <div>
-                  {/* D 层结局节点：支付后即显示结局图（箴言回合仍会再展示一次） */}
+                  {/* D 层结局节点：支付后同屏显示结局图 + 箴言（本回合即终局，结束回合后返回选领袖界面） */}
                   {ex.stage === 5 && node.isEnding && (
                     <img
                       src={imgPath(ex.leaderId, `${node.id}.webp`)}
@@ -115,6 +125,7 @@ function ExpeditionPanel({ colony, onStartExpedition, onPayExpeditionNode, onUnl
                     />
                   )}
                   <p className="text-sm text-slate-300 leading-relaxed whitespace-pre-line">{node.text}</p>
+                  {ex.stage === 5 && node.isEnding && renderEndingBlock(ex.leaderId, node)}
                 </div>
               ) : (
                 <div>
@@ -129,18 +140,16 @@ function ExpeditionPanel({ colony, onStartExpedition, onPayExpeditionNode, onUnl
             </div>
           )}
 
+          {/* stage 6：旧存档在途远征的箴言屏（新流程在 stage 5 支付后即收尾，不再进入 6） */}
           {ex.stage === 6 && node && node.isEnding && (
-            <div className="text-center">
+            <div>
               <img
                 src={imgPath(ex.leaderId, `${node.id}.webp`)}
                 alt={node.title}
                 onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
                 className="w-full aspect-video object-cover rounded-lg border border-purple-700/40 mb-3"
               />
-              <p className="text-[10px] text-slate-500 mb-1">结局 {node.id} · 已记录（{endingsCount(ex.leaderId)}/12）</p>
-              <h4 className="font-bold text-purple-300 mb-2">{node.title}</h4>
-              <p className="text-sm italic text-purple-200/90 leading-relaxed whitespace-pre-line">{node.motto}</p>
-              <p className="text-xs text-slate-500 mt-3">远征结束，结束回合后返回选领袖界面。</p>
+              {renderEndingBlock(ex.leaderId, node)}
             </div>
           )}
 

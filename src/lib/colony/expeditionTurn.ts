@@ -1,10 +1,28 @@
 // ==================== 远征回合推进（纯逻辑，仿 wonderTurn 模式） ====================
 // 由 processColonyTurn 在每回合结算时调用；直接改写传入的 colony 草稿（调用方已克隆）。
-// 状态机：0准备 → 1降落 → 2A → 3B → 4C → 5D → 6箴言/记录。
+// 状态机：0准备 → 1降落 → 2A → 3B → 4C → 5D（结局与箴言同屏，支付即记账）→ 收尾。
 // B/C/D 每层需要上回合支付（paidThisTurn）才能推进；未支付则停留在当前层。
+// stage 6 为旧存档遗留（曾单开一个箴言回合），只作兜底清空，新流程不再进入。
 
 import type { Colony } from '@/types/colony';
 import { getLeaderExpedition } from '@/data/colony/expeditions';
+
+/** 记入剧情历史（供「回顾剧情」）：A 免费进入即记，B/C/D 支付后才记。
+ *  支付动作（useColonyExpedition）复用本函数，勿另写一份；history 用重新赋值而非 push，便于 hook 侧保持不可变。 */
+export function enterExpeditionHistory(colony: Colony, nodeId: string | null): void {
+  const ex = colony.expedition;
+  if (!ex || !nodeId) return;
+  if (ex.history?.includes(nodeId)) return;
+  ex.history = [...(ex.history || []), nodeId];
+}
+
+/** 记录结局（幂等）：支付结局节点时由 hook 调用，回合结算收尾时兜底再调一次 */
+export function recordExpeditionEnding(colony: Colony, leaderId: string, endingId: string | null): void {
+  if (!endingId) return;
+  const list = [...(colony.expeditionEndings?.[leaderId] || [])];
+  if (!list.includes(endingId)) list.push(endingId);
+  colony.expeditionEndings = { ...(colony.expeditionEndings || {}), [leaderId]: list };
+}
 
 /** 处理远征每回合的推进（在 processColonyTurn 中调用） */
 export function processExpeditionTurn(colony: Colony): void {
@@ -20,9 +38,7 @@ export function processExpeditionTurn(colony: Colony): void {
 
   // 记入剧情历史（供「回顾剧情」）：A 节点免费、进入即记；B/C/D 付费节点在支付后才记，
   // 未支付前回顾看不到正文（防白嫖付费剧情）
-  const enterNode = (nodeId: string | null): void => {
-    if (nodeId && !ex.history!.includes(nodeId)) ex.history!.push(nodeId);
-  };
+  const enterNode = (nodeId: string | null): void => enterExpeditionHistory(colony, nodeId);
 
   // 从节点的 children 中随机选一个后继（数据驱动，未配置返回 null）
   const rollChild = (parentId: string | null): string | null => {
@@ -99,20 +115,15 @@ export function processExpeditionTurn(colony: Colony): void {
       }
       break;
     case 5:
-      // D：上回合支付 → 记录结局，进入箴言终局（支付后先记 D）
+      // D：上回合支付 → 记 D、记录结局，直接收尾（结局图与箴言在支付后的同一屏展示，不再单开箴言回合）
       if (paid) {
         enterNode(ex.currentNodeId);
-        const endingId = ex.endingId;
-        if (endingId) {
-          const list = [...(colony.expeditionEndings?.[ex.leaderId] || [])];
-          if (!list.includes(endingId)) list.push(endingId);
-          colony.expeditionEndings = { ...(colony.expeditionEndings || {}), [ex.leaderId]: list };
-        }
-        ex.stage = 6;
+        recordExpeditionEnding(colony, ex.leaderId, ex.endingId);
+        colony.expedition = undefined;
       }
       break;
     case 6:
-      // 箴言回合已展示完毕，结束远征（回到选领袖界面；结局已记录在 expeditionEndings）
+      // 旧存档兜底：老档可能停在 stage 6（箴言回合），照常收尾
       colony.expedition = undefined;
       break;
   }
