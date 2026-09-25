@@ -822,7 +822,7 @@ export const RESOURCE_EVENTS: ChoiceEvent[] = [
             probability: 15,
             description: '就在交易完成时，缉私队的信号出现在雷达上！你紧急启动跃迁逃离。',
             message: '缉私队来了！紧急逃跑！丢失了一部分合金！',
-            resources: { goldChange: -800, alloyChange: 5, stockFreeze: true },
+            resources: { goldChange: -800, alloyChange: 5 },
           },
         ],
       },

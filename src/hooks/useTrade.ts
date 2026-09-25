@@ -2,6 +2,7 @@ import { useCallback } from 'react';
 import type { GameState } from '@/types/game';
 import { FACTIONS, getTravelTurns, getSellPrice, RELATION_MATRIX, getReputationTier } from '@/data/factions';
 import { RECIPES } from '@/data/gameData';
+import { getContractItemKind } from '@/lib/turn/contracts';
 import { MATERIAL_NAME_MAP } from '@/data/materialNames';
 import { MODULE_TRADE_HUB } from '@/data/modules';
 import { RELIC_JUMP_ACCELERATOR, RELIC_ANTI_MONOPOLY, RELIC_DECIPHERER, RELIC_BARGAIN_AI } from '@/data/relics';
@@ -407,7 +408,7 @@ export function useTrade(
         }
 
         // 扣除货物
-        const isProduct = contract.targetItemId.startsWith('p');
+        const isProduct = getContractItemKind(contract) === 'product';
         if (isProduct) {
           let remaining = contract.targetQty;
           s.products = s.products.filter((p) => {

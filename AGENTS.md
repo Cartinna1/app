@@ -59,6 +59,7 @@ src/
 | 单舰船回合结算、游戏结束判定 | `lib/turn/shipTurn.ts` → `processShipTurn` / `getGameOverReason` / `computeCrewFoodCost` |
 | 船员食物消耗（阶梯+遗物保鲜减半） | `lib/turn/shipTurn.ts` → `computeCrewFoodCost`（结算与总览显示共用，勿就地重写阶梯） |
 | 价格波动、市场/政策刷新、合同、被动收入 | `lib/turn/priceFluctuation.ts` / `factionTurn.ts` / `contracts.ts` |
+| 合同物品名与持有量（大总览「进行中的合同」与贸易面板共用） | `lib/turn/contracts.ts` → `getContractItemName`（物品名）/ `getContractItemKind`（产品 vs 特产，`useTrade.completeContract` 扣货同用，勿再写 `startsWith('p')`）/ `getContractHeldCount`（采购数 `ship.products` 条目、走私读 `tradeStatus.inventory`）/ `getContractEarliestExpiry`（产品最早过期回合）——UI 勿再各写一份命名逻辑（曾有两份） |
 | **回合结算的调用顺序** | `hooks/useTurn.ts`（编排器，唯一权威） |
 | 存档字段清单与迁移 | `lib/save.ts` |
 | 原料中文名 | `data/materialNames.ts` → `MATERIAL_NAME_MAP` / `getMaterialName`（gold_ore=黄金、quantum=量子簇、silicon=硅片，禁止硬编码译名） |
@@ -131,6 +132,7 @@ src/
 | 产出明细漏标遗物加成 | 合金精炼手册 r_008 直接 `value += 1`，明细无来源标注，玩家对不上总数 | `BuildingEconomyEntry.relicBonus` → 总览与建筑 tab 明细显示「遗物+1」 |
 | 领袖槽位文案歧义 | `popCapBonus` 显示为「XX上限+5」，玩家误读成"能多造 5 座" | 文案统一为「XX每座可入驻5人」；数量上限另用「XX可建造+N」（`buildingMaxCountBonus`） |
 | 远征结局"付钱不落地"、结局图看两遍 | 结局记账只在回合结算做（付了 20000 金币却不点结束回合就退出，结局丢失）；D 层与箴言原本分属两个回合，同一张结局图展示两遍 | `recordExpeditionEnding`/`enterExpeditionHistory` 由支付动作与回合结算共用（幂等；history 用重新赋值而非 push，避免 hook 侧 mutate prev）；D 支付后同屏显示结局图+箴言，回合结算即收尾；`stage 6` 分支保留作**旧存档兜底**，删掉会让在途老档永久卡死 |
+| 事件系统伸手进市场（已彻底拆除） | 事件结果用 `grantTip: 'stock'\|'material'` 发"下回合股价/原料价定向偏移"（`nextTurn*Tip` → `*TipThisTurn` → `priceFluctuation` 里 0.6/0.3 权重的 `intelEffect`），用 `stockFreeze` 冻结股市——冻结三处全是 `if (false)` / `{false && …}` 死代码，玩家侧毫无反馈；`useEvent.isPenaltyEvent` 还把 `stockFreeze` 当作惩罚判据 | 已全删：`ResourceChange` 去掉 `grantTip`/`stockFreeze`，`Mothership` 去掉 4 个提示字段，`priceFluctuation`/`shipTurn`/`EventPanel`/`GameScreen`/`useStock`/`StockMarket` 不再读写任何事件字段，事件数据里 15 处 `grantTip`、9 处 `stockFreeze` 一并清除。**事件玩法与股票玩法双向隔绝（既定规划，勿再接通）**：事件侧不读 `stocks`/股价、不写任何价格字段，股票侧不读事件字段与情报字段；新增市场影响一律走独立的态势/消息面机制（股票因子的唯一接入点在 `priceFluctuation` 的 `totalChange` 处），勿再从事件回接。**事件文案也不得承诺市场影响**：原"获得内幕消息/矿产分布图/赏金名单 → 股价或原料价会怎样"的措辞已统一改为"把情报转手变现"（17 处，见 `choiceEvents.ts`），写新事件时别再写"股价将暴涨""买入后被套牢"这类与机制不符的话 |
 
 ---
 

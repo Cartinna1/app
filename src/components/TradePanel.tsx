@@ -1,7 +1,7 @@
 import { useState, memo } from 'react';
 import type { Mothership, Faction, TradePolicy, PolicyEffect, FactionContract } from '@/types/game';
 import { getDistance, getTravelTurns, getSellPrice, getReputationTier, FACTIONS as FACTIONS_DATA, RELATION_MATRIX } from '@/data/factions';
-import { RECIPES } from '@/data/gameData';
+import { getContractItemName } from '@/lib/turn/contracts';
 import { Globe, ShoppingCart, TrendingUp, Compass, Coins, Rocket, BarChart3, Radio, AlertTriangle } from 'lucide-react';
 
 interface TradePanelProps {
@@ -59,21 +59,6 @@ function TradePanel({ factions, ship, factionPrices, factionSellMultipliers, bla
   const currentFaction = factions.find((f) => f.id === ts.currentFactionId);
   const currentRep = (factionReputation || {})[ts.currentFactionId] || 0;
   const currentRepTier = getReputationTier(currentRep);
-  /** 获取合同目标物品名 */
-  const getContractItemName = (c: FactionContract): string => {
-    if (c.type === 'smuggling') {
-      const f = FACTIONS_DATA.find((ff) => ff.id === c.targetItemId);
-      return f ? `${f.specialtyName}（${f.name}）` : c.targetItemId;
-    } else {
-      const recipe = RECIPES.find((r) => r.id === c.targetItemId);
-      if (recipe) return recipe.productName;
-      const f = FACTIONS_DATA.find((ff) => ff.id === c.targetItemId);
-      return f ? `${f.specialtyName}（${f.name}特产）` : c.targetItemId;
-    }
-  };
-
-  /** 获取合同目标物品名 */
-  
 
   const isTraveling = ts.travelTurnsRemaining > 0;
   const travelTarget = ts.targetFactionId ? factions.find((f) => f.id === ts.targetFactionId) : null;
@@ -567,7 +552,7 @@ function TradePanel({ factions, ship, factionPrices, factionSellMultipliers, bla
                     <div key={c.id} className="flex items-center justify-between bg-slate-800/60 rounded p-2 mb-1 text-xs">
                       <div className="flex-1">
                         <span className={c.type==='smuggling'?'text-red-400':'text-cyan-400'}>{c.type==='smuggling'?'走私':'采购'}</span>
-                        <span className="text-slate-100 font-bold ml-1">{getContractItemName(c)}</span>
+                        <span className="text-slate-100 font-bold ml-1">{getContractItemName(c, FACTIONS_DATA)}</span>
                         <span className="text-slate-300 ml-1">x{c.targetQty}</span>
                         <span className="text-slate-500 ml-1">| +{c.rewardGold}金 +{c.rewardRep}声望</span>
                         <span className="text-slate-600 ml-1">| 剩余 {Math.max(0, c.expiresTurn - currentTurn)} 回合可接取</span>
@@ -577,7 +562,7 @@ function TradePanel({ factions, ship, factionPrices, factionSellMultipliers, bla
                   ))}
                   {activeContracts.map((c) => (
                     <div key={c.id} className="flex items-center justify-between bg-green-900/30 rounded p-2 mb-1 text-xs">
-                      <span className="text-green-400">{c.type==='smuggling'?'走私':'采购'} <span className="font-bold">{getContractItemName(c)}</span> x{c.targetQty} | +{c.rewardGold}金 +{c.rewardRep}声望 | 剩余 {Math.max(0, c.expiresTurn - currentTurn)} 回合完成</span>
+                      <span className="text-green-400">{c.type==='smuggling'?'走私':'采购'} <span className="font-bold">{getContractItemName(c, FACTIONS_DATA)}</span> x{c.targetQty} | +{c.rewardGold}金 +{c.rewardRep}声望 | 剩余 {Math.max(0, c.expiresTurn - currentTurn)} 回合完成</span>
                       <button onClick={() => { const r = onCompleteContract(c.id); setMessage(r.message); setMsgType(r.success ? 'success' : 'error'); }} className="px-2 py-1 bg-green-700 hover:bg-green-600 rounded text-xs">提交</button>
                     </div>
                   ))}

@@ -151,12 +151,6 @@ export function processShipTurn(
     s.goldLog = [{ turn, amount: catBonus, reason: "遗物「招财猫」收益", balanceAfter: s.gold }, ...s.goldLog].slice(0, 200);
   }
 
-  // 情报提示延续
-  if (s.nextTurnStockTip) { s.stockTipThisTurn = s.nextTurnStockTip; s.nextTurnStockTip = undefined; }
-  else { s.stockTipThisTurn = undefined; }
-  if (s.nextTurnMatTip) { s.matTipThisTurn = s.nextTurnMatTip; s.nextTurnMatTip = undefined; }
-  else { s.matTipThisTurn = undefined; }
-
   // ==================== 破产/饥荒/叛乱倒计时处理 ====================
   // 破产倒计时
   if (s.bankrupt && s.bankruptTimer > 0) {

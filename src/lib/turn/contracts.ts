@@ -1,6 +1,6 @@
 // ==================== 势力合同生成（纯逻辑，从 useTurn 抽离） ====================
 
-import type { GameState, FactionContract } from '@/types/game';
+import type { GameState, FactionContract, Faction, Mothership } from '@/types/game';
 import { RECIPES } from '@/data/gameData';
 import { RELATION_MATRIX } from '@/data/factions';
 
@@ -53,4 +53,38 @@ export function generateContracts(prev: GameState): FactionContract[] {
     }
   }
   return kept;
+}
+
+// ==================== 合同展示口径（结算与 UI 共用的唯一真值） ====================
+
+/** 合同目标物品类别：`p` 开头是配方产品，否则是势力特产（走私合同的 targetItemId 即敌对方势力 id） */
+export function getContractItemKind(contract: FactionContract): 'product' | 'specialty' {
+  return contract.targetItemId.startsWith('p') ? 'product' : 'specialty';
+}
+
+/** 合同目标物品名（TradePanel 与 GameScreen 共用，勿另写一份） */
+export function getContractItemName(contract: FactionContract, factions: Faction[]): string {
+  if (contract.type === 'smuggling') {
+    const f = factions.find((ff) => ff.id === contract.targetItemId);
+    return f ? `${f.specialtyName}（${f.name}）` : contract.targetItemId;
+  }
+  const recipe = RECIPES.find((r) => r.id === contract.targetItemId);
+  if (recipe) return recipe.productName;
+  const f = factions.find((ff) => ff.id === contract.targetItemId);
+  return f ? `${f.specialtyName}（${f.name}特产）` : contract.targetItemId;
+}
+
+/** 当前持有量：产品数货舱条目（每件一条记录，过期清理归 shipTurn），特产读势力库存 */
+export function getContractHeldCount(ship: Mothership, contract: FactionContract): number {
+  if (getContractItemKind(contract) === 'product') {
+    return ship.products.filter((p) => p.productId === contract.targetItemId).length;
+  }
+  return ship.tradeStatus.inventory[contract.targetItemId] || 0;
+}
+
+/** 持有物中最早的过期回合（仅产品，特产无过期返回 null） */
+export function getContractEarliestExpiry(ship: Mothership, contract: FactionContract): number | null {
+  if (getContractItemKind(contract) !== 'product') return null;
+  const expiries = ship.products.filter((p) => p.productId === contract.targetItemId).map((p) => p.expiresAt);
+  return expiries.length > 0 ? Math.min(...expiries) : null;
 }

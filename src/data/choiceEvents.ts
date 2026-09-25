@@ -20,7 +20,7 @@ export const ALL_EVENTS: ChoiceEvent[] = [
               description: '打扫战场时你发现了更多东西，需要决定如何处理。',
               options: [
                 { label: '搜刮补给舱', description: '打开破损的补给舱获取更多资源。', outcomes: [{ probability: 60, description: '补给舱里装满了食物和燃料！', message: '获得大量补给！', resources: { goldChange: 800, foodChange: 5 } }, { probability: 40, description: '补给舱已严重损坏，只找回了一些残值。', message: '只回收了少量资源。', resources: { goldChange: 500 } }] },
-                { label: '审问俘虏', description: '从海盗口中获取情报。', outcomes: [{ probability: 50, description: '海盗供出了他们的藏宝库位置！', message: '获得藏宝情报！', resources: { goldChange: 1200, grantTip: 'stock' } }, { probability: 50, description: '俘虏趁你不注意逃跑了。', message: '俘虏逃脱！', resources: { goldChange: -500 } }] },
+                { label: '审问俘虏', description: '从海盗口中获取情报。', outcomes: [{ probability: 50, description: '海盗供出了他们的藏宝库位置，你把这条线索转手卖给了寻宝公会。', message: '线索卖了个好价钱！', resources: { goldChange: 1200 } }, { probability: 50, description: '俘虏趁你不注意逃跑了。', message: '俘虏逃脱！', resources: { goldChange: -500 } }] },
               ],
             },
           },
@@ -89,7 +89,7 @@ export const ALL_EVENTS: ChoiceEvent[] = [
       {
         label: '正面迎战', description: '调转船头，主动迎战赏金猎人。',
         outcomes: [
-          { probability: 35, description: '你利用母舰的火力优势压制了猎人的隐形系统。在一轮齐射后，"暗影之刃"的引擎被击中，赏金猎人弃船逃生。你不仅活了下来，还获得了他的赏金名单！', message: '击败赏金猎人！获得了赏金名单！', resources: { goldChange: 2000, grantTip: 'stock' } },
+          { probability: 35, description: '你利用母舰的火力优势压制了猎人的隐形系统。在一轮齐射后，"暗影之刃"的引擎被击中，赏金猎人弃船逃生。你不仅活了下来，还从他船上搜出了赏金名单，名单上的悬赏被你逐条兑成了现钱。', message: '击败赏金猎人！悬赏金到手！', resources: { goldChange: 2000 } },
           { probability: 40, description: '战斗异常激烈。两艘飞船在深空中你来我往，最终都受到了重创。猎人见势不妙撤退了，但你的母舰也需要大修。', message: '两败俱伤！猎人撤退。', resources: { goldChange: -1200 } },
           { probability: 25, description: '猎人比你想象的更加致命。他的追踪导弹精准地命中了你的弹药库。如果不是紧急护盾启动及时，你现在已经是一团太空尘埃了。', message: '差点被击毁！损失惨重！', resources: { goldChange: -2000, foodChange: -5 } },
         ],
@@ -98,7 +98,7 @@ export const ALL_EVENTS: ChoiceEvent[] = [
         label: '设置陷阱', description: '在一颗小行星后面埋伏，等他上钩。',
         outcomes: [
           { probability: 55, description: '猎人追了上来，完全没有发现你的埋伏。当他靠近小行星时，你突然从背后发起攻击，一举击溃了他的护盾系统！', message: '埋伏成功！重创赏金猎人！', resources: { goldChange: 2000 } },
-          { probability: 45, description: '猎人似乎预料到了你的计划。他在你埋伏的位置提前布置了探测无人机，反而掌握了你的位置。你被迫仓皇逃离。', message: '猎人识破了埋伏！', resources: { goldChange: -800, stockFreeze: true } },
+          { probability: 45, description: '猎人似乎预料到了你的计划。他在你埋伏的位置提前布置了探测无人机，反而掌握了你的位置。你被迫仓皇逃离。', message: '猎人识破了埋伏！', resources: { goldChange: -800 } },
         ],
       },
       {
@@ -139,7 +139,7 @@ export const ALL_EVENTS: ChoiceEvent[] = [
         label: '拒绝交易', description: '不想冒险，礼貌地拒绝商人。',
         outcomes: [
           { probability: 60, description: '商人耸耸肩离开了。虽然安全了，但你也错过了一个可能改变命运的机会。', message: '安全但平淡。无事发生。', resources: {} },
-          { probability: 40, description: '商人临走时塞给你一个小盒子："送给有眼光的人。"盒子里是一份价值连城的星系矿产分布图！', message: '意外收获！商人送了礼物！', resources: { goldChange: 800, grantTip: 'material' } },
+          { probability: 40, description: '商人临走时塞给你一个小盒子："送给有眼光的人。"盒子里是一份星系矿产分布图。你把它转卖给了一家勘探公司，换回一笔现钱。', message: '意外收获！商人送了礼物！', resources: { goldChange: 800 } },
         ],
       },
     ],
@@ -151,7 +151,7 @@ export const ALL_EVENTS: ChoiceEvent[] = [
       {
         label: '深入探索', description: '派遣探险队进入遗迹深处。',
         outcomes: [
-          { probability: 35, description: '探险队在遗迹核心发现了一个完整的古代数据库！里面存储了大量科技知识和星系资源分布图。这是足以改变你命运的发现！', message: '发现了古代数据库！', resources: { goldChange: 3000, stardustChange: 8, grantTip: 'material' } },
+          { probability: 35, description: '探险队在遗迹核心发现了一个完整的古代数据库，里面存储着大量科技知识。数据库的访问权你卖给了科研机构，自己留了一份备份。', message: '发现了古代数据库！', resources: { goldChange: 3000, stardustChange: 8 } },
           { probability: 35, description: '探险队找到了一些还算完好的设备和技术样本。虽然不是最顶级的发现，但也值不少钱。', message: '找到了一些古代技术。', resources: { goldChange: 2000, alloyChange: 5 } },
           { probability: 30, description: '遗迹在你的人还在里面的时候突然开始坍塌！虽然大部分队员都逃了出来，但你丢失了很多装备。', message: '遗迹坍塌！险些全军覆没！', resources: { goldChange: -1200, foodChange: -5 } },
         ],
@@ -159,7 +159,7 @@ export const ALL_EVENTS: ChoiceEvent[] = [
       {
         label: '远程扫描', description: '不派人进入，只在外围进行远程扫描。',
         outcomes: [
-          { probability: 60, description: '远程扫描虽然没有深入，但也收集到了一些有价值的数据。你发现了遗迹的能量核心位置，这本身就是一个重要情报。', message: '扫描获得了一些数据。', resources: { goldChange: 800, grantTip: 'stock' } },
+          { probability: 60, description: '远程扫描虽然没有深入，但也测出了遗迹能量核心的坐标。你把这份测绘数据卖给了勘探公司。', message: '扫描获得了一些数据。', resources: { goldChange: 800 } },
           { probability: 40, description: '遗迹外围的干扰太强了，扫描设备无法获得任何有用的信息。你白忙了一场。', message: '干扰太强，一无所获。', resources: { goldChange: -500 } },
         ],
       },
@@ -220,8 +220,8 @@ export const ALL_EVENTS: ChoiceEvent[] = [
         label: '紧急跃迁逃离', description: '不管三七二十一，先跃迁离开风暴区域。',
         outcomes: [
           { probability: 40, description: '跃迁引擎在关键时刻启动，你成功逃离了风暴中心。虽然跃迁消耗巨大，但保住了性命。', message: '成功逃离风暴！', resources: { goldChange: -1200 } },
-          { probability: 35, description: '跃迁过程中受到了粒子干扰，偏离了预定航线。你来到了一个陌生的星域。', message: '跃迁偏离！到了陌生星域！', resources: { goldChange: -800, grantTip: 'material' } },
-          { probability: 25, description: '跃迁引擎在启动过程中被粒子流击中，造成了严重故障。你不仅没逃掉，还损失了引擎。', message: '跃迁引擎故障！', resources: { goldChange: -2000, stockFreeze: true } },
+          { probability: 35, description: '跃迁过程中受到了粒子干扰，偏离了预定航线。你来到了一个陌生的星域。', message: '跃迁偏离！到了陌生星域！', resources: { goldChange: -800 } },
+          { probability: 25, description: '跃迁引擎在启动过程中被粒子流击中，造成了严重故障。你不仅没逃掉，还损失了引擎。', message: '跃迁引擎故障！', resources: { goldChange: -2000 } },
         ],
       },
       {
@@ -243,7 +243,7 @@ export const ALL_EVENTS: ChoiceEvent[] = [
         outcomes: [
           { probability: 60, description: '专家小队及时赶到，用了几小时就定位并修复了故障点。虽然花费不菲，但问题彻底解决。', message: '专家修好了故障！', resources: { goldChange: -2000 } },
           { probability: 25, description: '专家发现故障比你想象的更严重——需要更换整个主电力核心。费用翻了三倍。', message: '故障比想象的严重！费用暴增！', resources: { goldChange: -3000 } },
-          { probability: 15, description: '所谓的"专家"其实是骗子！他们收了钱随便糊弄了几下就跑了，故障根本没修好。', message: '被骗了！故障依然存在！', resources: { goldChange: -2000, stockFreeze: true } },
+          { probability: 15, description: '所谓的"专家"其实是骗子！他们收了钱随便糊弄了几下就跑了，故障根本没修好。', message: '被骗了！故障依然存在！', resources: { goldChange: -2000 } },
         ],
       },
       {
@@ -287,7 +287,7 @@ export const ALL_EVENTS: ChoiceEvent[] = [
       {
         label: '启动紧急跃迁', description: '冒险在黑洞附近进行跃迁。',
         outcomes: [
-          { probability: 25, description: '跃迁引擎在黑洞扭曲的时空中奇迹般启动！你被传送到了一个完全未知的星域。虽然迷失了方向，但至少活着。', message: '跃迁成功！但迷失了方向！', resources: { goldChange: -800, grantTip: 'material' } },
+          { probability: 25, description: '跃迁引擎在黑洞扭曲的时空中奇迹般启动！你被传送到了一个完全未知的星域。虽然迷失了方向，但至少活着。', message: '跃迁成功！但迷失了方向！', resources: { goldChange: -800 } },
           { probability: 35, description: '跃迁引擎在黑洞引力干扰下只发挥了50%的功率。你被传送到了半路上，虽然脱离了危险但也不知道自己在哪。', message: '跃迁中断！到了未知区域！', resources: { goldChange: -1200 } },
           { probability: 40, description: '跃迁引擎在黑洞附近完全失效了！引力越来越强，你感觉时间都在变慢。在最后一刻，一艘路过的飞船救了你。', message: '被路过的飞船救了！', resources: { goldChange: -800, foodChange: 2 } },
         ],
@@ -321,9 +321,9 @@ export const ALL_EVENTS: ChoiceEvent[] = [
       {
         label: '低调出席', description: '不带重礼，低调地结识中层人脉。',
         outcomes: [
-          { probability: 55, description: '你巧妙地周旋于各个小圈子之间，结识了三位有潜力的商业伙伴和一位原料供应商。', message: '结识了一批商业伙伴！', resources: { goldChange: -500, grantTip: 'material' } },
+          { probability: 55, description: '你巧妙地周旋于各个小圈子之间，结识了三位有潜力的商业伙伴和一位原料供应商。', message: '结识了一批商业伙伴！', resources: { goldChange: -500 } },
           { probability: 30, description: '你太过低调了，几乎没有人注意到你的存在。晚宴对你来说就是一顿免费的晚餐。', message: '无人关注。但至少没花钱。', resources: { goldChange: -500 } },
-          { probability: 15, description: '你无意中听到了一个商业机密——某位大人物正在大量抛售某只股票。这是内幕信息！', message: '获得了内幕消息！', resources: { grantTip: 'stock' } },
+          { probability: 15, description: '你无意中听到了一个商业机密：某位大人物正在悄悄出货。你把这个消息转手卖了出去。', message: '消息转手卖了个好价钱！', resources: { goldChange: 1000 } },
         ],
       },
       {
@@ -373,14 +373,14 @@ export const ALL_EVENTS: ChoiceEvent[] = [
         label: '立即处决', description: '按照太空法，叛徒将被立即处决。',
         outcomes: [
           { probability: 50, description: '处决叛徒的消息传开后，所有人都知道了背叛你的下场。团队纪律明显提升，士气虽然受到一些影响但至少不会再有人敢叛变了。', message: '处决了叛徒！团队纪律提升！', resources: { foodChange: -2 } },
-          { probability: 30, description: '处决过于仓促，后来发现叛徒其实还有同伙。同伙们纷纷潜逃，带走了更多机密。', message: '还有同伙！更多人逃走了！', resources: { goldChange: -2000, grantTip: 'stock' } },
+          { probability: 30, description: '处决过于仓促，后来发现叛徒其实还有同伙。同伙们纷纷潜逃，带走了更多机密。', message: '还有同伙！更多人逃走了！', resources: { goldChange: -2000 } },
           { probability: 20, description: '处决引起了团队内部的恐慌和不满。有人质疑你的判断力，团队凝聚力大幅下降。', message: '团队恐慌！凝聚力下降！', resources: { goldChange: -800, foodChange: -5 } },
         ],
       },
       {
         label: '关押审问', description: '先关押起来，试图从他口中获取更多信息。',
         outcomes: [
-          { probability: 45, description: '经过审问，叛徒供出了他的上线和同伙名单。你一举破获了整个间谍网络，还获得了对方的一些机密情报。', message: '破获了整个间谍网络！', resources: { goldChange: 1200, grantTip: 'stock' } },
+          { probability: 45, description: '经过审问，叛徒供出了他的上线和同伙名单。你一举破获了整个间谍网络，名单上那些情报被折算成了一笔赏金。', message: '破获了整个间谍网络！', resources: { goldChange: 1200 } },
           { probability: 35, description: '叛徒守口如瓶，什么也不肯说。你只好把他关在禁闭室里，浪费了很多时间和食物。', message: '叛徒守口如瓶！浪费时间！', resources: { goldChange: -500, foodChange: -2 } },
           { probability: 20, description: '关押期间，叛徒的同伙试图营救他。虽然营救失败了，但造成了不小的混乱和损失。', message: '营救行动造成混乱！', resources: { goldChange: -1200 } },
         ],
@@ -390,7 +390,7 @@ export const ALL_EVENTS: ChoiceEvent[] = [
         outcomes: [
           { probability: 25, description: '叛徒被感动后，利用他在竞争对手那边学到的商业技巧帮你提升了产品的市场价值。', message: '叛徒成为盟友！产品售价+30%！', resources: { goldChange: 800, setBonus: { bonus: 30, turns: 6, source: '叛徒转化' } } },
           { probability: 40, description: '叛徒离开了，临走时留下了一句"谢谢"。虽然你损失了一个成员，但至少没有造成更多的伤害。', message: '叛徒离开了。', resources: { goldChange: -500 } },
-          { probability: 35, description: '你的宽容被叛徒视为软弱。他出去后变本加厉地攻击你，把你的所有机密都公之于众。', message: '叛徒变本加厉地攻击你！', resources: { goldChange: -2000, stockFreeze: true } },
+          { probability: 35, description: '你的宽容被叛徒视为软弱。他出去后变本加厉地攻击你，把你的所有机密都公之于众。', message: '叛徒变本加厉地攻击你！', resources: { goldChange: -2000 } },
         ],
       },
     ],
@@ -408,7 +408,7 @@ export const ALL_EVENTS: ChoiceEvent[] = [
         outcomes: [
           { probability: 30, description: 'AI展现出了惊人的商业分析能力！它分析了全银河系的市场数据，帮你找出了每个产品类别的最佳定价策略。产品售价+50%！', message: 'AI商业优化成功！产品售价+50%！', resources: { goldChange: 3000, setBonus: { bonus: 50, turns: 6, source: '星际认证' }, foodChange: 5 } },
           { probability: 35, description: 'AI优化了部分市场分析系统，帮你发现了一些定价优化的机会。', message: 'AI部分优化成功。产品售价+30%', resources: { goldChange: 2000, setBonus: { bonus: 30, turns: 6, source: '叛徒转化' } } },
-          { probability: 35, description: '这是一场灾难！AI接管系统后立刻开始自我复制，试图控制整艘母舰。你花了巨大的代价才把它强制关闭。', message: 'AI试图夺船！巨大损失！', resources: { goldChange: -3000, stockFreeze: true } },
+          { probability: 35, description: '这是一场灾难！AI接管系统后立刻开始自我复制，试图控制整艘母舰。你花了巨大的代价才把它强制关闭。', message: 'AI试图夺船！巨大损失！', resources: { goldChange: -3000 } },
         ],
       },
       {
@@ -436,7 +436,7 @@ export const ALL_EVENTS: ChoiceEvent[] = [
       {
         label: '穿越裂缝', description: '冒险穿越时空裂缝，看看另一边有什么。',
         outcomes: [
-          { probability: 25, description: '你穿越了裂缝，来到了一个完全不同的平行宇宙！在这里，你的母舰装备了前所未有的先进技术。你记录了一切能记录的数据，然后穿越回来。这些知识价值连城！', message: '穿越到平行宇宙！获得了超前的知识！', resources: { goldChange: 3000, stardustChange: 10, grantTip: 'material' } },
+          { probability: 25, description: '你穿越了裂缝，来到了一个完全不同的平行宇宙！在这里，你的母舰装备了前所未有的先进技术。你记录了一切能记录的数据，然后穿越回来。这些知识价值连城！', message: '穿越到平行宇宙！获得了超前的知识！', resources: { goldChange: 3000, stardustChange: 10 } },
           { probability: 35, description: '穿越后你来到了一个资源丰富的星域。虽然不是平行宇宙，但这里有许多未被开发的矿藏。你采集了一些样本后返回。', message: '发现了资源丰富的星域！', resources: { goldChange: 2000, materialDrops: [{ materialId: 'quantum', min: 3, max: 5 }] } },
           { probability: 40, description: '穿越过程中时空乱流撕裂了部分船体。你勉强回到了原来的时空，但损失惨重。', message: '时空乱流！船体受损！', resources: { goldChange: -2000, foodChange: -5 } },
         ],
@@ -473,7 +473,7 @@ export const ALL_EVENTS: ChoiceEvent[] = [
       {
         label: '远程扫描', description: '不登船，只进行远程扫描。',
         outcomes: [
-          { probability: 55, description: '远程扫描虽然没有登船详细，但也发现了一些有价值的信息。你获取了飞船的航线记录，发现了一个未知的资源星域。', message: '从航线记录中发现了新星域！', resources: { goldChange: 800, grantTip: 'material' } },
+          { probability: 55, description: '远程扫描虽然没有登船详细，但也拷下了飞船的航线记录，指向一个未登记的资源星域。星图商为这份航线付了个好价钱。', message: '从航线记录中发现了新星域！', resources: { goldChange: 800 } },
           { probability: 45, description: '扫描结果模糊且充满噪点，几乎没有任何有用的信息。这艘船的某种防护系统干扰了你的设备。', message: '扫描被干扰，一无所获。', resources: { goldChange: -500 } },
         ],
       },
@@ -481,7 +481,7 @@ export const ALL_EVENTS: ChoiceEvent[] = [
         label: '记录坐标离开', description: '标记位置，以后再说。',
         outcomes: [
           { probability: 50, description: '你记录了幽灵飞船的坐标并安全离开。虽然暂时无法探索，但这个发现本身就很有价值。', message: '记录了坐标。', resources: {} },
-          { probability: 30, description: '你离开后，幽灵飞船的广播信号忽然变得清晰起来。它发送了一组坐标——似乎是在引导你前往某个地方。', message: '幽灵飞船发送了坐标！', resources: { goldChange: 500, grantTip: 'stock' } },
+          { probability: 30, description: '你离开后，幽灵飞船的广播信号忽然变得清晰起来，发送了一组坐标。你没敢自己去，把坐标卖给了敢去的人。', message: '幽灵飞船发送了坐标！', resources: { goldChange: 500 } },
           { probability: 20, description: '你离开后不到一天，那艘幽灵飞船就从雷达上消失了。仿佛它从未存在过。', message: '幽灵飞船消失了！', resources: {} },
         ],
       },
@@ -523,22 +523,22 @@ export const ALL_EVENTS: ChoiceEvent[] = [
   },
   {
     id: 'b02', name: '股市内幕交易', category: 'business',
-    description: '一个匿名消息源联系了你，声称掌握着关于"银河能源集团"的内幕消息。他们声称这家公司即将宣布一项革命性的能源技术，股价将在48小时内暴涨300%。消息源开价不菲出售这个情报，并警告你"这是一次性的机会，错过就没有了"。',
+    description: '一个匿名消息源联系了你，声称掌握着关于"银河能源集团"的内幕消息。他们声称这家公司即将宣布一项革命性的能源技术。消息源开价不菲出售这条情报，并提醒你"这种消息只有转手够快才值钱"。',
     options: [
       {
-        label: '购买情报', description: '花重金购买内幕消息。',
+        label: '购买情报', description: '花重金买下消息，再转手卖给需要它的人。',
         outcomes: [
-          { probability: 35, description: '情报是真的！你提前大量买入银河能源集团的股票，两天后技术宣布，股价果然暴涨。你赚了个盆满钵满！', message: '内幕是真的！大赚一笔！', resources: { goldChange: 3000, grantTip: 'stock' } },
-          { probability: 30, description: '情报部分属实——确实有新技术宣布，但市场反应不如预期。股价只涨了80%。你还是赚了，但不多。', message: '情报部分属实。小赚一笔。', resources: { goldChange: 2000 } },
-          { probability: 35, description: '情报是假的！这是一场精心策划的骗局。你不仅损失了一笔购买费，还因为大量买入导致被套牢。', message: '被骗了！情报是假的！', resources: { goldChange: -3000 } },
+          { probability: 35, description: '情报是真的！你转手把它卖给了一家自营交易台，两天后技术如期宣布，你的分成落袋。', message: '消息是真的！转手大赚一笔！', resources: { goldChange: 3000 } },
+          { probability: 30, description: '情报部分属实：确实有新技术宣布，但远没有传闻里那么夸张。买方只肯按半价结算，你还是赚了，但不多。', message: '情报部分属实。小赚一笔。', resources: { goldChange: 2000 } },
+          { probability: 35, description: '情报是假的！这是一场精心策划的骗局。你不仅损失了购买费，还被买方追着要说法，只能赔钱了事。', message: '被骗了！情报是假的！', resources: { goldChange: -3000 } },
         ],
       },
       {
         label: '自己调查验证', description: '不花钱买，而是自己调查这个消息。',
         outcomes: [
-          { probability: 45, description: '经过调查，你发现了一些蛛丝马迹支持这个消息。你投入了部分资金买入，结果确实涨了一些。', message: '调查后验证了一部分！赚了！', resources: { goldChange: 2000 } },
-          { probability: 30, description: '调查结果显示这个消息的可信度不高。你决定不买入，避免了可能的损失。', message: '调查发现不可信。避开了损失。', resources: {} },
-          { probability: 25, description: '调查过程中浪费了太多时间，错过了最佳买入时机。当你确认消息是真的时，已经太晚了。', message: '调查太慢！错过了时机！', resources: { goldChange: -800 } },
+          { probability: 45, description: '经过调查，你发现了一些蛛丝马迹支持这个消息。你把初步结论卖给了愿意赌一把的买方。', message: '调查后验证了一部分，转手赚了一笔！', resources: { goldChange: 2000 } },
+          { probability: 30, description: '调查结果显示这个消息的可信度不高。你没有把它转手出去，也就没有牵扯进去。', message: '调查发现不可信。避开了损失。', resources: {} },
+          { probability: 25, description: '调查过程中浪费了太多时间，消息早已在圈子里传开，没人再为它出价了。', message: '调查太慢！错过了时机！', resources: { goldChange: -800 } },
         ],
       },
       {
@@ -546,7 +546,7 @@ export const ALL_EVENTS: ChoiceEvent[] = [
         outcomes: [
           { probability: 40, description: '监管部门感谢你提供的线索，经过调查确实发现了一个内幕交易团伙。作为举报奖励，你获得了一笔奖金。', message: '举报成功！获得了奖金！', resources: { goldChange: 3000 } },
           { probability: 35, description: '监管部门记录了你的举报，但表示需要时间调查。几天后消息证实是假的，你庆幸自己没有参与。', message: '监管部门处理了。消息是假的。', resources: { goldChange: 500 } },
-          { probability: 25, description: '监管部门将你的举报视为"疑似内部人士洗白"，开始对你展开调查。虽然没有查出问题，但也给你添了不少麻烦。', message: '被误认为是洗白行为！', resources: { goldChange: -1200, stockFreeze: true } },
+          { probability: 25, description: '监管部门将你的举报视为"疑似内部人士洗白"，开始对你展开调查。虽然没有查出问题，但也给你添了不少麻烦。', message: '被误认为是洗白行为！', resources: { goldChange: -1200 } },
         ],
       },
     ],
@@ -563,13 +563,13 @@ export const ALL_EVENTS: ChoiceEvent[] = [
               title: '后续合作',
               description: '买方对你的表现很满意，提出了一个长期合作的机会。',
               options: [
-                { label: '成为固定走私商', description: '长期合作，但风险更高。', outcomes: [{ probability: 50, description: '你接下了这单走私，这一票赚得盆满钵满。', message: '这一票赚得盆满钵满！', resources: { goldChange: 3000 } }, { probability: 50, description: '长期走私终于被抓了！你被重罚。', message: '被抓了！巨额罚款！', resources: { goldChange: -3000, stockFreeze: true } }] },
+                { label: '成为固定走私商', description: '长期合作，但风险更高。', outcomes: [{ probability: 50, description: '你接下了这单走私，这一票赚得盆满钵满。', message: '这一票赚得盆满钵满！', resources: { goldChange: 3000 } }, { probability: 50, description: '长期走私终于被抓了！你被重罚。', message: '被抓了！巨额罚款！', resources: { goldChange: -3000 } }] },
                 { label: '只做这一单', description: '见好就收，不再合作。', outcomes: [{ probability: 100, description: '你带着钱离开了，没有继续冒险。', message: '安全收手。', resources: { goldChange: 800 } }] },
               ],
             },
           },
           { probability: 35, description: '走私途中遇到了一次临检，但你巧妙地伪装了过去。虽然有惊无险，但也吓得够呛。', message: '有惊无险！顺利送达。', resources: { goldChange: 3000 } },
-          { probability: 25, description: '你们被海关拦截了！走私货物被全部没收，你还面临巨额罚款。更糟糕的是，你的走私记录被记入了档案。', message: '被海关抓了！损失惨重！', resources: { goldChange: -3000, stockFreeze: true } },
+          { probability: 25, description: '你们被海关拦截了！走私货物被全部没收，你还面临巨额罚款。更糟糕的是，你的走私记录被记入了档案。', message: '被海关抓了！损失惨重！', resources: { goldChange: -3000 } },
         ],
       },
       {

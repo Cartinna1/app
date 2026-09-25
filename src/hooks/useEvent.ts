@@ -106,24 +106,6 @@ export function useEvent(
       if (res.productLoss && s.products.length > 0) {
         s.products = s.products.slice(0, Math.max(0, s.products.length - res.productLoss));
       }
-      if (res.grantTip === 'stock') {
-        const pool = prev.stocks.filter((stk) => stk.volatility >= 0.12);
-        if (pool.length > 0) {
-          const target = pool[Math.floor(Math.random() * pool.length)];
-          const dir = Math.random() > 0.3 ? '上涨' : '下跌';
-          const mag = Math.round(Math.random() * 15 + 5);
-          s.nextTurnStockTip = `「${target.name}」(${target.sector}) 下回合可能${dir} ${mag}%`;
-        }
-      }
-      if (res.grantTip === 'material') {
-        const pool = prev.materials;
-        if (pool.length > 0) {
-          const target = pool[Math.floor(Math.random() * pool.length)];
-          const dir = Math.random() > 0.3 ? '上涨' : '下跌';
-          const mag = Math.round(Math.random() * 10 + 3);
-          s.nextTurnMatTip = `「${target.name}」下回合可能${dir} ${mag}%`;
-        }
-      }
       if (res.setBonus) {
         s.sellBonuses = [...(s.sellBonuses || []), { bonus: res.setBonus.bonus, remainingTurns: res.setBonus.turns, source: res.setBonus.source }];
       }
@@ -183,8 +165,6 @@ export function useEvent(
             if (sub.resources.materialDrops) res.materialDrops = [...(res.materialDrops || []), ...sub.resources.materialDrops];
             if (sub.resources.materialCost) res.materialCost = [...(res.materialCost || []), ...sub.resources.materialCost];
             if (sub.resources.productLoss) res.productLoss = (res.productLoss || 0) + sub.resources.productLoss;
-            if (sub.resources.stockFreeze) res.stockFreeze = true;
-            if (sub.resources.grantTip) res.grantTip = sub.resources.grantTip;
             if (sub.resources.setBonus) {
               const existing = res.setBonus;
               res.setBonus = existing ? { ...existing, bonus: existing.bonus + sub.resources.setBonus.bonus } : sub.resources.setBonus;
@@ -218,8 +198,7 @@ export function useEvent(
                (r.foodChange && r.foodChange < 0) ||
                (r.alloyChange && r.alloyChange < 0) ||
                (r.stardustChange && r.stardustChange < 0) ||
-               (r.productLoss && r.productLoss > 0) ||
-               r.stockFreeze;
+               (r.productLoss && r.productLoss > 0);
       })
     );
   };
@@ -296,8 +275,6 @@ export function useEvent(
       if (processed.res.materialCost) newAcc.materialCost = [...(newAcc.materialCost || []), ...processed.res.materialCost];
       if (processed.res.materialBuys) newAcc.materialBuys = [...(newAcc.materialBuys || []), ...processed.res.materialBuys];
       if (processed.res.productLoss) newAcc.productLoss = (newAcc.productLoss || 0) + (processed.res.productLoss || 0);
-      if (processed.res.stockFreeze) newAcc.stockFreeze = true;
-      if (processed.res.grantTip) newAcc.grantTip = processed.res.grantTip;
       if (processed.res.setBonus) newAcc.setBonus = processed.res.setBonus;
       if (processed.res.allianceRounds) newAcc.allianceRounds = (newAcc.allianceRounds || 0) + (processed.res.allianceRounds || 0);
 

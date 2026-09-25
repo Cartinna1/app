@@ -38,7 +38,7 @@ import SaveManager from './SaveManager';
 import LoanPanel from './LoanPanel';
 import TradePanel from './TradePanel';
 import { getInvestmentTier, getBuffDescription } from '@/data/factions';
-import { RECIPES } from '@/data/gameData';
+import { getContractItemName, getContractItemKind, getContractHeldCount, getContractEarliestExpiry } from '@/lib/turn/contracts';
 import { getSellPriceBreakdown, MODULE_BIO_KITCHEN, MODULE_NANO_FARM, MODULE_SIXTH_FARM, MODULE_DYSON_COLLECTOR } from '@/data/modules';
 import GoldLogViewer from './GoldLogViewer';
 import ModulePanel from './ModulePanel';
@@ -481,8 +481,6 @@ export default function GameScreen({
               activeEvent={activeEvent}
               eventDodged={eventDodged}
               eventProcessedThisTurn={currentShip?.eventProcessedThisTurn || false}
-              stockTipThisTurn={currentShip?.stockTipThisTurn}
-              matTipThisTurn={currentShip?.matTipThisTurn}
               eventLog={gameState.eventLog}
               currentTurn={gameState.turn}
               eventTriggeredThisTurn={currentShip?.eventTriggeredThisTurn || false}
@@ -749,6 +747,13 @@ function OverviewTab({
       {(() => {
         const activeContracts = (gameState.factionContracts || []).filter((c) => c.accepted);
         if (activeContracts.length === 0) return null;
+        // 同一物品可能被多张合同需要，而货舱/特产库存是共享池：按物品汇总需求，避免两行都显示"已够"
+        const requiredByItem: Record<string, number> = {};
+        const contractsByItem: Record<string, number> = {};
+        for (const c of activeContracts) {
+          requiredByItem[c.targetItemId] = (requiredByItem[c.targetItemId] || 0) + c.targetQty;
+          contractsByItem[c.targetItemId] = (contractsByItem[c.targetItemId] || 0) + 1;
+        }
         return (
           <div className="mb-4 md:mb-6 bg-amber-900/20 border border-amber-700/30 rounded-xl p-3 md:p-4">
             <h3 className="text-xs text-amber-400 font-bold mb-3 flex items-center gap-2">
@@ -757,21 +762,29 @@ function OverviewTab({
             <div className="space-y-2">
               {activeContracts.map((c) => {
                 const pubFaction = gameState.factions.find((f) => f.id === c.factionId);
-                let itemName = c.targetItemId;
-                if (c.type === 'procurement') {
-                  const r = RECIPES.find((rr) => rr.id === c.targetItemId);
-                  if (r) itemName = r.productName;
-                } else {
-                  const targetF = gameState.factions.find((f) => f.id === c.targetItemId);
-                  if (targetF) itemName = `${targetF.specialtyName}（${targetF.name}）`;
-                }
+                const itemName = getContractItemName(c, gameState.factions);
+                const isSpecialty = getContractItemKind(c) === 'specialty';
+                const held = getContractHeldCount(ship, c);
+                const needTotal = requiredByItem[c.targetItemId] ?? c.targetQty;
+                const sharedCount = contractsByItem[c.targetItemId] ?? 1;
+                const expiry = getContractEarliestExpiry(ship, c);
+                const heldEnough = held >= needTotal;
                 const remain = Math.max(0, c.expiresTurn - gameState.turn);
                 return (
                   <div key={c.id} className="flex items-center gap-2 bg-slate-800/60 rounded-lg px-3 py-2">
                     <span className={`text-[10px] px-1.5 py-0.5 rounded font-bold flex-shrink-0 ${c.type === 'smuggling' ? 'bg-red-900/50 text-red-300' : 'bg-cyan-900/50 text-cyan-300'}`}>{c.type === 'smuggling' ? '走私' : '采购'}</span>
                     <div className="flex-1 min-w-0">
-                      <span className="text-xs md:text-sm text-slate-200 font-bold">{itemName} ×{c.targetQty}</span>
-                      <span className="text-[10px] md:text-xs text-slate-500 ml-2">← {pubFaction?.name || c.factionId}</span>
+                      <div>
+                        <span className="text-xs md:text-sm text-slate-200 font-bold">{itemName} ×{c.targetQty}</span>
+                        <span className="text-[10px] md:text-xs text-slate-500 ml-2">← {pubFaction?.name || c.factionId}</span>
+                      </div>
+                      <div className="text-[10px] md:text-xs mt-0.5">
+                        <span className={`font-bold ${heldEnough ? 'text-green-400' : held === 0 ? 'text-slate-500' : 'text-amber-400'}`}>持有 {held}/{needTotal}</span>
+                        <span className={`ml-1 ${heldEnough ? 'text-green-400' : 'text-amber-400'}`}>{heldEnough ? '· 可交付' : `· 还差 ${needTotal - held}`}</span>
+                        {sharedCount > 1 && <span className="text-slate-500 ml-1">（{sharedCount} 张合同合计需求）</span>}
+                        {isSpecialty && <span className="text-slate-500 ml-1">· 特产库存</span>}
+                        {expiry !== null && <span className="text-slate-500 ml-1">· 最早第{expiry}回合过期</span>}
+                      </div>
                     </div>
                     <span className={`text-[10px] md:text-xs flex-shrink-0 ${remain <= 2 ? 'text-red-400 font-bold' : 'text-slate-400'}`}>剩余 {remain} 回合</span>
                     <span className="text-[10px] md:text-xs text-slate-500 flex-shrink-0">{c.rewardGold > 0 ? `+${c.rewardGold}金 ` : ''}+{c.rewardRep}声望</span>
@@ -824,36 +837,14 @@ function OverviewTab({
         );
       })()}
 
-      {/* 情报提示 */}
-      {(ship.stockTipThisTurn || ship.matTipThisTurn || allianceActive) && (
-        <div className="mb-4 md:mb-6 space-y-2">
-          {ship.stockTipThisTurn && (
-            <div className="flex items-center gap-2 bg-purple-900/30 border border-purple-700/40 rounded-lg px-3 py-2 md:px-4 md:py-2.5">
-              <TrendingUp size={16} className="text-purple-400 flex-shrink-0" />
-              <div>
-                <span className="text-[10px] md:text-xs text-purple-400 font-semibold">股票情报</span>
-                <p className="text-xs md:text-sm text-slate-200">{ship.stockTipThisTurn}</p>
-              </div>
-            </div>
-          )}
-          {ship.matTipThisTurn && (
-            <div className="flex items-center gap-2 bg-green-900/30 border border-green-700/40 rounded-lg px-3 py-2 md:px-4 md:py-2.5">
-              <Package size={16} className="text-green-400 flex-shrink-0" />
-              <div>
-                <span className="text-[10px] md:text-xs text-green-400 font-semibold">原料情报</span>
-                <p className="text-xs md:text-sm text-slate-200">{ship.matTipThisTurn}</p>
-              </div>
-            </div>
-          )}
-          {allianceActive && (
-            <div className="flex items-center gap-2 bg-blue-900/30 border border-blue-700/40 rounded-lg px-3 py-2 md:px-4 md:py-2.5">
-              <Users size={16} className="text-blue-400 flex-shrink-0" />
-              <div>
-                <span className="text-[10px] md:text-xs text-blue-400 font-semibold">联盟加成</span>
-                <p className="text-xs md:text-sm text-slate-200">产品售价+15%，剩余 {ship.allianceRounds} 回合</p>
-              </div>
-            </div>
-          )}
+      {/* 联盟加成提示 */}
+      {allianceActive && (
+        <div className="mb-4 md:mb-6 flex items-center gap-2 bg-blue-900/30 border border-blue-700/40 rounded-lg px-3 py-2 md:px-4 md:py-2.5">
+          <Users size={16} className="text-blue-400 flex-shrink-0" />
+          <div>
+            <span className="text-[10px] md:text-xs text-blue-400 font-semibold">联盟加成</span>
+            <p className="text-xs md:text-sm text-slate-200">产品售价+15%，剩余 {ship.allianceRounds} 回合</p>
+          </div>
         </div>
       )}
 

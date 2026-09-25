@@ -15,7 +15,6 @@ export function useStock(
           const ships = [...prev.ships];
           const ship = { ...ships[shipIndex] };
           if (ship.gold <= 0) { result = { error: '金币不足无法买入' }; return prev; }
-          if (false) { result = { error: '股票交易已被冻结' }; return prev; }
           const stock = prev.stocks.find((s) => s.id === stockId);
           if (!stock) { result = { error: '股票不存在' }; return prev; }
 
@@ -52,7 +51,6 @@ export function useStock(
         updater: (prev) => {
           const ships = [...prev.ships];
           const ship = { ...ships[shipIndex] };
-          if (false) { result = { error: '股票交易已被冻结' }; return prev; }
           const bt = ship.stockBuyTurn[stockId];
           if (bt !== undefined && prev.turn <= bt) { result = { error: `第${bt}回合买入，需第${bt + 1}回合后卖出` }; return prev; }
           const stock = prev.stocks.find((s) => s.id === stockId);

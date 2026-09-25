@@ -6,15 +6,12 @@ import {
   Briefcase, ChevronRight, Lock, Clock, Sparkles,
   CheckCircle, Zap, ArrowLeft, Layers,
   Coins, Wheat, Cog, Sparkle, Shield,
-  TrendingUp, Package,
 } from 'lucide-react';
 
 interface EventPanelProps {
   activeEvent: ChoiceEvent | null;
   eventDodged: DodgeReason;
   eventProcessedThisTurn: boolean;
-  stockTipThisTurn?: string;
-  matTipThisTurn?: string;
   eventLog: EventLogEntry[];
   currentTurn: number;
   eventTriggeredThisTurn: boolean;
@@ -35,7 +32,7 @@ const categoryConfig = {
 };
 
 function EventPanel({
-  activeEvent, eventDodged, eventProcessedThisTurn, stockTipThisTurn, matTipThisTurn, eventLog, currentTurn,
+  activeEvent, eventDodged, eventProcessedThisTurn, eventLog, currentTurn,
   eventTriggeredThisTurn, onDrawEvent, onChooseOption, onApplyResources, onClearActiveEvent, onClearDodged,
 }: EventPanelProps) {
   // 最终结果展示
@@ -111,30 +108,6 @@ function EventPanel({
           遭遇星际间的各种事件，做出选择影响你的命运。部分事件包含多重选择，走向不同结局。
         </p>
       </div>
-
-      {/* 情报提示 */}
-      {(stockTipThisTurn || matTipThisTurn) && (
-        <div className="space-y-2">
-          {stockTipThisTurn && (
-            <div className="flex items-center gap-2 bg-purple-900/30 border border-purple-700/40 rounded-lg px-3 py-2 md:px-4 md:py-2.5">
-              <TrendingUp size={16} className="text-purple-400 flex-shrink-0" />
-              <div>
-                <span className="text-[10px] md:text-xs text-purple-400 font-semibold">股票情报</span>
-                <p className="text-xs md:text-sm text-slate-200">{stockTipThisTurn}</p>
-              </div>
-            </div>
-          )}
-          {matTipThisTurn && (
-            <div className="flex items-center gap-2 bg-green-900/30 border border-green-700/40 rounded-lg px-3 py-2 md:px-4 md:py-2.5">
-              <Package size={16} className="text-green-400 flex-shrink-0" />
-              <div>
-                <span className="text-[10px] md:text-xs text-green-400 font-semibold">原料情报</span>
-                <p className="text-xs md:text-sm text-slate-200">{matTipThisTurn}</p>
-              </div>
-            </div>
-          )}
-        </div>
-      )}
 
       {/* 结果展示 */}
       {result && (

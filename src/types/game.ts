@@ -193,10 +193,6 @@ export interface Mothership {
   famineTimer: number;     // 饥荒倒计时（回合数），食物<0时触发，从10开始
   isRebellion: boolean;    // 饥荒升级为叛乱状态（10回合未回正）
   relics: Relic[];
-  nextTurnStockTip?: string;
-  nextTurnMatTip?: string;
-  stockTipThisTurn?: string;
-  matTipThisTurn?: string;
   // 产品售价加成列表（每个加成独立计算回合数，过期自动移除）
   sellBonuses?: { bonus: number; remainingTurns: number; source: string }[];
   allianceRounds?: number;
@@ -219,8 +215,6 @@ export interface ResourceChange {
   materialCost?: { materialId: string; amount: number }[];
   materialBuys?: { materialId: string; amount: number; discount: number }[];
   productLoss?: number;
-  stockFreeze?: boolean;
-  grantTip?: 'stock' | 'material';
   setBonus?: { bonus: number; turns: number; source: string };
   allianceRounds?: number;
 }

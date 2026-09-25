@@ -1,5 +1,8 @@
 // ==================== 价格波动（纯逻辑，从 useTurn 抽离） ====================
-// 四因子模型 + 情报兑现；computePriceFluctuation 直接作为 FUNCTIONAL_UPDATE 的 updater。
+// 股票四因子（基础随机 + 均值回归 + 动量 + 板块联动 + 供需）；computePriceFluctuation
+// 直接作为 FUNCTIONAL_UPDATE 的 updater。
+// ⚠ 事件系统不参与市场价格：历史上的"情报"（事件发放 → 下回合定向偏移）已彻底移除，
+//   新增的市场影响一律走独立的态势/消息面机制（见本文件股票因子的接入点），勿再从事件回接。
 
 import type { GameState, Mothership } from '@/types/game';
 import { MAT_MAX_UP, PRODUCT_PRICE_LIMITS } from '@/data/gameData';
@@ -29,29 +32,8 @@ function calculateDemandEffect(ships: Mothership[], stockId: string, currentTurn
   return (netBuy / CIRCULATION_BASE) * DEMAND_COEFF;
 }
 
-// ==================== 情报兑现辅助函数 ====================
-// 解析股票情报字符串，返回 { name, direction(1=涨,-1=跌), magnitude }
-function parseStockTip(tip: string | undefined): { name: string; direction: number; magnitude: number } | null {
-  if (!tip) return null;
-  const match = tip.match(/「(.+?)」.+?可能(上涨|下跌)\s+(\d+)%/);
-  if (!match) return null;
-  return { name: match[1], direction: match[2] === '上涨' ? 1 : -1, magnitude: parseInt(match[3], 10) };
-}
-// 解析原料情报字符串
-function parseMatTip(tip: string | undefined): { name: string; direction: number; magnitude: number } | null {
-  if (!tip) return null;
-  const match = tip.match(/「(.+?)」下回合可能(上涨|下跌)\s+(\d+)%/);
-  if (!match) return null;
-  return { name: match[1], direction: match[2] === '上涨' ? 1 : -1, magnitude: parseInt(match[3], 10) };
-}
-
-/** 价格波动 updater：四因子模型 + 情报兑现 */
+/** 价格波动 updater：股票多因子模型 */
 export function computePriceFluctuation(prev: GameState): GameState {
-  // 从舰船获取当前回合情报
-  const ship = prev.ships[0];
-  const stockTip = parseStockTip(ship?.stockTipThisTurn);
-  const matTip = parseMatTip(ship?.matTipThisTurn);
-
   // 1. 先计算板块风气（每回合一次性生成，同板块共享）
   const sectorBiases: Record<string, number> = {};
   SECTORS.forEach((sector) => {
@@ -68,14 +50,8 @@ export function computePriceFluctuation(prev: GameState): GameState {
     const sectorBias = sectorBiases[s.sector] || 0; // 板块联动
     const demandEffect = calculateDemandEffect(prev.ships, s.id, prev.turn); // 供需影响
 
-    // 情报兑现：如果情报匹配该股票，施加定向偏移
-    let intelEffect = 0;
-    if (stockTip && s.name.includes(stockTip.name)) {
-      // 情报兑现：偏移 = 方向 * 幅度% * 0.6（兑现60%的承诺，留一点随机性）
-      intelEffect = stockTip.direction * (stockTip.magnitude / 100) * 0.6;
-    }
-
-    const totalChange = baseChange + meanReversion + momentum + sectorBias + demandEffect + intelEffect;
+    // ===== 市场态势接入点：将来新增的板块/个股影响因子（政策、局势、财报等）在此处加算 =====
+    const totalChange = baseChange + meanReversion + momentum + sectorBias + demandEffect;
     // 价格保护：下限 basePrice*0.2，上限 basePrice*3.0
     const rawPrice = Math.round(s.currentPrice * (1 + totalChange));
     const newPrice = Math.max(Math.round(s.basePrice * 0.2), Math.min(Math.round(s.basePrice * 3.0), rawPrice));
@@ -99,11 +75,6 @@ export function computePriceFluctuation(prev: GameState): GameState {
     }
 
     let newPrice = Math.round(base * multiplier);
-
-    // 情报兑现：额外加/减基于基准价的固定金额
-    if (matTip && m.name.includes(matTip.name)) {
-      newPrice += Math.round(matTip.direction * base * (matTip.magnitude / 100) * 0.3);
-    }
 
     // 上下限保护
     const upperLimit = Math.round(base * (1 + maxUp));

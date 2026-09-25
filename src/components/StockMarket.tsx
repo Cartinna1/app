@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect, useCallback, useMemo, memo } from 'react';
 import type { Stock, Mothership } from '@/types/game';
 import { getStockFeeMult } from '@/data/gameData';
-import { TrendingUp, TrendingDown, Search, Lock, Clock, ArrowLeft } from 'lucide-react';
+import { TrendingUp, TrendingDown, Search, Clock, ArrowLeft } from 'lucide-react';
 
 interface StockMarketProps {
   stocks: Stock[];
@@ -167,14 +167,6 @@ function StockMarket({ stocks, ship, shipIndex, currentTurn, onBuy, onSell }: St
   return (
     <div>
       <h2 className="text-xl md:text-2xl font-bold text-white mb-3 md:mb-4">银河股票交易所</h2>
-
-      {/* 冻结提示 */}
-      {false && (
-        <div className="mb-3 md:mb-4 bg-red-900/20 border border-red-700/50 rounded-lg px-3 py-2 md:px-4 md:py-3 flex items-center gap-2 text-red-400 text-sm">
-          <Lock size={16} />
-          <span className="font-bold">股市交易已冻结（下回合自动恢复）</span>
-        </div>
-      )}
 
       {/* ========== 移动端：全屏交易面板 ========== */}
       {mobileTradeStock && (
