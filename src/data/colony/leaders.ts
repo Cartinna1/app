@@ -34,7 +34,7 @@ export interface LeaderDef {
 }
 
 /** 终极技能的加成目标（决定由哪个消费点结算） */
-export type UltimateTarget = 'populationCap' | 'researchPerTurn' | 'freePop' | 'recruitCap' | 'cloneCenter' | 'housingPop';
+export type UltimateTarget = 'populationCap' | 'researchPerTurn' | 'freePop' | 'recruitCap' | 'cloneCenter' | 'housingPop' | 'all' | 'allMaterial' | 'randomMats' | 'powerUse';
 
 export interface LeaderExtraEffects {
   popCapBonus: Record<string, number>;     // buildingId → 该建筑人口上限（取最高值覆盖，非累加）
@@ -161,24 +161,29 @@ export const ALL_LEADERS: LeaderDef[] = [
   { id: 'L17', rarity: 'SSR', name: '永动·卡尔文', abilityName: '永恒循环',
     description: '他宣称自己找到了资源循环的终极公式，任何废弃物在他手中都会变成某种生产的起点。',
     levelBonuses: [{ 'ALL_MATERIAL':25 }, { 'ALL_MATERIAL':40 }, { 'ALL_MATERIAL':60 }],
-    levelExtras: [{}, {}, { randomMatsPerTurn: 6 }] },
+    levelExtras: [{}, {}, { randomMatsPerTurn: 6 }],
+    ultimateSkill: { name: '万物归环', description: '每回合随机原料再+6（与Lv3叠加：每回合共12单位）', bonus: 6, type: 'randomMats' } },
   { id: 'L18', rarity: 'SSR', name: '盖亚·行星之心', abilityName: '行星意志',
     description: '没有人见过她的真容。只听说她与行星共生——她入睡时，矿脉会自主生长；她苏醒时，荒芜之地会泛起绿意。殖民地视她为行走的奇迹。',
     levelBonuses: [{ 'ALL':20 }, { 'ALL':35 }, { 'ALL':50 }],
-    levelExtras: [{ buildCostReduction: 10 }, { buildCostReduction: 20 }, { buildCostReduction: 30, darkMatterPerTurn: 2, quantumPerTurn: 2 }] },
+    levelExtras: [{ buildCostReduction: 10 }, { buildCostReduction: 20 }, { buildCostReduction: 30, darkMatterPerTurn: 2, quantumPerTurn: 2 }],
+    ultimateSkill: { name: '行星恩泽', description: '所有建筑产出额外+20%（与Lv3叠加，合计+70%）', bonus: 20, type: 'all' } },
   { id: 'L19', rarity: 'SSR', name: '普罗米修斯·薪火', abilityName: '生生不息',
     description: '基因方舟计划的发起人，坚信文明的火种必须撒向每一颗星球。他走到哪里，哪里就会响起新生儿的啼哭与引擎的轰鸣。',
     levelBonuses: [{}, {}, {}],
-    levelExtras: [{ populationCapBonus: 10, recruitCostBonus: -500 }, { populationCapBonus: 20, recruitCostBonus: -1000, recruitCapPerTurn: 4 }, { populationCapBonus: 30, recruitCostBonus: -1500, recruitCapPerTurn: 7 }] },
+    levelExtras: [{ populationCapBonus: 10, recruitCostBonus: -500 }, { populationCapBonus: 20, recruitCostBonus: -1000, recruitCapPerTurn: 4 }, { populationCapBonus: 30, recruitCostBonus: -1500, recruitCapPerTurn: 7 }],
+    ultimateSkill: { name: '文明火种', description: '人口上限额外+20（与Lv3叠加，合计+50）', bonus: 20, type: 'populationCap' } },
   { id: 'L20', rarity: 'SSR', name: '贤者·塞拉斯', abilityName: '贤者议会',
     description: '他曾是星际贤才招募法案的起草人，坚信一个文明的伟大程度取决于它容纳天才的胸怀。',
     levelBonuses: [{}, {}, {}],
-    levelExtras: [{ leaderCapBonus: 1 }, { leaderCapBonus: 2, leaderCostReduction: 2 }, { leaderCapBonus: 3, leaderCostReduction: 3, researchPerTurn: [50,100] }] },
+    levelExtras: [{ leaderCapBonus: 1 }, { leaderCapBonus: 2, leaderCostReduction: 2 }, { leaderCapBonus: 3, leaderCostReduction: 3, researchPerTurn: [50,100] }],
+    ultimateSkill: { name: '万贤归位', description: '每回合科研再+50（与Lv3的50~100区间叠加）', bonus: 50, type: 'researchPerTurn' } },
   // ===== 电能领袖 =====
   { id: LEADER_LOAD_BALANCE, rarity: 'SR', name: '索林·瓦特', abilityName: '负载平衡',
     description: '永远叼着一根绝缘电缆代替香烟的前电网工程师。他说电缆的焦味比烟草好闻，因为那意味着有人在用电。',
     levelBonuses: [{}, {}, {}],
-    levelExtras: [{ powerUseReduction: 10 }, { powerUseReduction: 15 }, { powerUseReduction: 25 }] },
+    levelExtras: [{ powerUseReduction: 10 }, { powerUseReduction: 15 }, { powerUseReduction: 25 }],
+    ultimateSkill: { name: '恒稳电网', description: '所有建筑电能消耗再-10%（与Lv3叠加，合计-35%）', bonus: 10, type: 'powerUse' } },
   { id: LEADER_AFTERGLOW_PULSE, rarity: 'SSR', name: '诺娃·永昼', abilityName: '余晖脉冲',
     description: '一位来自能量生命体的意识——在聚变事故中与反应堆核心融合，从此以纯能形态存在。殖民地停电的瞬间她总能醒来。',
     // 余晖脉冲（数据驱动）：太阳能阵列 B29 产出+30%（Lv1+）、聚变电站 B30 产出+30%（Lv2+）；Lv3 停电免疫

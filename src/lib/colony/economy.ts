@@ -181,12 +181,16 @@ export function computeColonyPower(colony: Colony): ColonyPowerInfo {
     if (!def || def.outputType === 'power') continue; // 电力建筑自身不耗电
     totalUse += def.powerConsumption || 0;
   }
-  // 负载平衡（总消耗 × 折扣，ceil 取整）——数据驱动：levelExtras.powerUseReduction（%），多领袖取最高
+  // 负载平衡（总消耗 × 折扣，ceil 取整）——数据驱动：levelExtras.powerUseReduction（%），多领袖取最高；
+  // 终极技能 type 'powerUse'（如 L21 零损耗电网）在此之上叠加，合计钳制 ≤100%
   let l21Pct = 0;
   for (const l of colony.leaders) {
-    const ex = getLeaderDef(l.id)?.levelExtras[l.level - 1];
+    const ld = getLeaderDef(l.id);
+    const ex = ld?.levelExtras[l.level - 1];
     l21Pct = Math.max(l21Pct, (ex?.powerUseReduction || 0) / 100);
+    if (colony.expeditionUnlocks?.includes(l.id)) l21Pct += getUltimateBonus(ld, 'powerUse') / 100;
   }
+  l21Pct = Math.min(1, l21Pct);
   const effectiveUse = l21Pct > 0 ? Math.ceil(totalUse * (1 - l21Pct)) : totalUse;
   // 星球电能消耗修正
   const planetUseMult = planet?.buffs.powerUseMult || 1;
@@ -242,6 +246,10 @@ export function computeColonyEconomy(colony: Colony, opts: ColonyEconomyOptions)
         leaderBonusMap[bid] = (leaderBonusMap[bid] || 0) + ld.ultimateSkill.bonus;
       }
     }
+    // 终极技能 type 'all'：叠加到全员建筑加成（如 L18 行星恩泽，与 'ALL' 键同口径）
+    if (colony.expeditionUnlocks?.includes(l.id)) lAll += getUltimateBonus(ld, 'all');
+    // 终极技能 type 'allMaterial'：叠加到全员原料加成（与 'ALL_MATERIAL' 键同口径）
+    if (colony.expeditionUnlocks?.includes(l.id)) lMat += getUltimateBonus(ld, 'allMaterial');
   }
 
   // ===== 循环科技加成 =====
@@ -365,10 +373,13 @@ export function computeColonyEconomy(colony: Colony, opts: ColonyEconomyOptions)
       result.materials['quantum'] = (result.materials['quantum'] || 0) + ex.quantumPerTurn;
       leaderPerTurn.materials['quantum'] = (leaderPerTurn.materials['quantum'] || 0) + ex.quantumPerTurn;
     }
-    // 随机原料无法估算，仅在实际结算时掷骰（估算模式下 randomMats 保持 0，总览会标注"结算时掷骰"）
-    if (random && ex.randomMatsPerTurn) {
-      leaderPerTurn.randomMats += ex.randomMatsPerTurn;
-      for (let i = 0; i < ex.randomMatsPerTurn; i++) {
+    // 随机原料无法估算，仅在实际结算时掷骰（估算模式下 randomMats 保持 0，总览会标注"结算时掷骰"）；
+    // 终极技能 type 'randomMats'（如 L17 万物归环）与 levelExtras.randomMatsPerTurn 相加
+    const ultRandom = colony.expeditionUnlocks?.includes(l.id) ? getUltimateBonus(ld, 'randomMats') : 0;
+    const randomCount = (ex.randomMatsPerTurn || 0) + ultRandom;
+    if (random && randomCount > 0) {
+      leaderPerTurn.randomMats += randomCount;
+      for (let i = 0; i < randomCount; i++) {
         const mid = RANDOM_MAT_IDS[Math.floor(Math.random() * RANDOM_MAT_IDS.length)];
         result.materials[mid] = (result.materials[mid] || 0) + 1;
       }

@@ -23,6 +23,11 @@ import { expeditionL13 } from './expeditions/L13';
 import { expeditionL14 } from './expeditions/L14';
 import { expeditionL15 } from './expeditions/L15';
 import { expeditionL16 } from './expeditions/L16';
+import { expeditionL17 } from './expeditions/L17';
+import { expeditionL18 } from './expeditions/L18';
+import { expeditionL19 } from './expeditions/L19';
+import { expeditionL20 } from './expeditions/L20';
+import { expeditionL21 } from './expeditions/L21';
 import { expeditionL22 } from './expeditions/L22';
 
 /** 远征启动星尘费（唯一数字锚点） */
@@ -61,6 +66,11 @@ export const LEADER_EXPEDITIONS: Record<string, LeaderExpedition> = {
   L14: expeditionL14,
   L15: expeditionL15,
   L16: expeditionL16,
+  L17: expeditionL17,
+  L18: expeditionL18,
+  L19: expeditionL19,
+  L20: expeditionL20,
+  L21: expeditionL21,
   L22: expeditionL22,
 };
 
