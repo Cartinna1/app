@@ -14,7 +14,8 @@
 
 - React 19 + Vite 7 + TypeScript + Tailwind 3.4 + lucide-react，包管理 npm。
 - 状态管理：`useReducer`（`hooks/gameReducer.ts`）+ 业务 hook，无第三方状态库。
-- UI 全部自研；shadcn/Radix 及其 `components/ui/`、`cn()` 工具已删除，**不要重新引入**。
+- UI 全部自研；shadcn/Radix 及其 `components/ui/`、`cn()` 工具已删除，**不要重新引入**（脚手架残留 `info.md`、`components.json` 也一并删除，别按它们重建 shadcn）。
+- 构建链保持最小：`vite.config.ts` 只用 `@vitejs/plugin-react`，**不要引入 AI 工具链插件**（曾有 `kimi-plugin-inspect-react`，会重写全部 JSX，已从 `vite.config.ts`／`package.json`／`package-lock.json` 三处移除）。
 
 ```
 src/
