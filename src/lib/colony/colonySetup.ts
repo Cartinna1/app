@@ -1,5 +1,6 @@
 // ==================== 殖民地建立初始化（唯一真值） ====================
-// 由星图 foundColony 开启的 2 回合建设期结束时，colonyTurn 通过 Object.assign 应用本函数。
+// 由殖民面板的「建立殖民地」动作（hooks/colony/useColonyBase.foundColony）**立即调用**：母舰已停泊在该星球，无建设等待期。
+// colonyTurn 的 scouting 分支只在旧存档（曾是 2 回合建设期）里走到，用 Object.assign 应用本函数。
 // 旧的「面板 3 选 1 选星球」流程已随《星图更新》删除，勿再引回随机星球池。
 
 import type { Colony, PlanetTypeId, BuildingInstance } from '@/types/colony';

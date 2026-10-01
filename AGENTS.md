@@ -73,7 +73,7 @@ src/
 | 势力信息可见性（迷雾） | `lib/galaxy/knowledge.ts` → `getKnownFactionIds(ship)`（已探明势力 = `visitedNodes` 里的势力节点）/ `isFactionKnown` / `getKnownRelation(factionId, knownIds)`（只保留已到访的相关势力 + `hiddenCount`）——星图信息卡与贸易面板「星际势力分布」共用，**勿再各写内联过滤**（曾出现星图过滤 / 贸易面板全露的分叉） |
 | 资源成本校验与扣减（远征 + 考古共用） | `lib/turn/resourceCost.ts` → `resourceAmount` / `deductResource` / `canAfford` / `firstMissing` / `payCost` / `flattenCost` / `formatCost`——科研点扣殖民地、其余扣母舰，hook 里勿再各写一份 |
 | 考古成功率与阶段推进 | `lib/galaxy/archaeologyTurn.ts` → `excavationSuccessRate`（唯一公式）/ `resolveStage`（阶段成败·危险·保底）/ `processArchaeologyTurn`（由 `useTurn` 每回合调用）/ `grantReward`（遗物·永久加成·称号·资源；无殖民地时科研点按 1:10 折金币） |
-| 殖民地建立初始化 | `lib/colony/colonySetup.ts` → `applyColonyFounding`（星球类型·初始人口·遗落星球赠送 B7/B20/B21）；由殖民面板的"建立殖民地"（`foundColony`，星球类型取母舰当前所在的星图节点）触发，2 回合建设期结束时由 `colonyTurn` 应用 |
+| 殖民地建立初始化 | `lib/colony/colonySetup.ts` → `applyColonyFounding`（星球类型·初始人口·遗落星球赠送 B7/B20/B21）；由殖民面板的"建立殖民地"（`foundColony`，星球类型取母舰当前所在的星图节点）触发后**立即建成**（母舰已停泊在该星球，无建设等待期）；`colonyTurn` 的 `scouting` 分支仅作**旧存档兜底**（曾是 2 回合建设期），勿在新流程里再写等待回合 |
 | 考古永久加成取值 | `data/galaxy/permaBonuses.ts` → `getPermaBonusValue(ids, kind)`（foodPct/researchPct/powerPct/blackoutGuardTurns/travelTurnReduce），economy/colonyTurn/graph 勿就地判断 id |
 | **回合结算的调用顺序** | `hooks/useTurn.ts`（编排器，唯一权威） |
 | 存档字段清单与迁移 | `lib/save.ts` |

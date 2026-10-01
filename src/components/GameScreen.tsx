@@ -127,6 +127,7 @@ const EMPTY_CONTRACTS: NonNullable<GameState['factionContracts']> = [];
 
 const tabs: { id: TabId; label: string; shortLabel: string; icon: React.ElementType }[] = [
   { id: 'overview', label: '总览', shortLabel: '总览', icon: LayoutDashboard },
+  { id: 'galaxy', label: '星图', shortLabel: '星图', icon: Globe },
   { id: 'stocks', label: '股票', shortLabel: '股票', icon: TrendingUp },
   { id: 'materials', label: '原料', shortLabel: '原料', icon: Package },
   { id: 'production', label: '生产', shortLabel: '生产', icon: Factory },
@@ -134,7 +135,6 @@ const tabs: { id: TabId; label: string; shortLabel: string; icon: React.ElementT
   { id: 'events', label: '事件', shortLabel: '事件', icon: Sparkles },
   { id: 'loan', label: '贷款', shortLabel: '贷款', icon: Banknote },
   { id: 'trade', label: '贸易', shortLabel: '贸易', icon: Coins },
-  { id: 'galaxy', label: '星图', shortLabel: '星图', icon: Globe },
   { id: 'archaeology', label: '考古', shortLabel: '考古', icon: Landmark },
   { id: 'colony', label: '殖民', shortLabel: '殖民', icon: Home },
   { id: 'module', label: '改造', shortLabel: '改造', icon: Wrench },

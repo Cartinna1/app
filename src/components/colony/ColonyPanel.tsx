@@ -209,7 +209,7 @@ function ColonyPanel(props: ColonyPanelProps) {
           <div className="bg-slate-900/60 border border-emerald-700/40 rounded-xl p-4 md:p-6">
             <h3 className="font-bold text-slate-100 mb-2">在「{herePlanet?.name || hereNode.name}」建立殖民地</h3>
             <p className="text-sm text-slate-400 mb-2">{herePlanet?.description}</p>
-            <p className="text-xs text-amber-400 mb-3">需要 30,000 金币，抵达后建设 2 回合；全局只能殖民一颗星球。</p>
+            <p className="text-xs text-amber-400 mb-3">需要 30,000 金币；建立后立刻投入运营（无建设等待期）。全局只能殖民一颗星球。</p>
             <div className="flex flex-col md:flex-row gap-2">
               <input
                 value={foundName}
@@ -244,8 +244,8 @@ function ColonyPanel(props: ColonyPanelProps) {
         <h2 className="text-xl font-bold text-white">星际殖民</h2>
         <div className="bg-slate-900/60 border border-cyan-700/40 rounded-xl p-6 text-center">
           <Play size={48} className="mx-auto mb-3 text-cyan-400" />
-          <p className="text-cyan-400 font-bold text-lg mb-2">远征军航行中</p>
-          <p className="text-slate-300 text-sm">预计 {colony.scoutTurnsRemaining} 回合后抵达目标星系</p>
+          <p className="text-cyan-400 font-bold text-lg mb-2">殖民地建设中</p>
+          <p className="text-slate-300 text-sm">预计 {colony.scoutTurnsRemaining} 回合后完成（旧存档的建设期收尾）</p>
         </div>
       </div>
     );

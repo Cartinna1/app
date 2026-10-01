@@ -29,11 +29,11 @@ export function processColonyTurn(ship: Mothership, _turn: number): void {
   const colony = ship.colony;
   if (!colony || colony.phase === 'inactive') return;
 
-  // 探索倒计时
+  // 建设期倒计时（**旧存档兜底**：现在建立殖民地是立即建成，只有改动前存档里的 scouting phase 会走到这里）
   if (colony.phase === 'scouting') {
     colony.scoutTurnsRemaining -= 1;
     if (colony.scoutTurnsRemaining <= 0) {
-      // 星图流程：目标星球在 foundColony 时已确定，建设期结束直接建成（初始化逻辑唯一真值）。
+      // 目标星球在建立时已确定，建设期结束直接建成（初始化逻辑唯一真值 colonySetup.ts）。
       // 旧的"3 选 1 随机星球池"分支已随《星图更新》删除。
       if (colony.planetType) {
         Object.assign(colony, applyColonyFounding(colony, colony.planetType, colony.planetName));

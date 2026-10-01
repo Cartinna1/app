@@ -141,13 +141,13 @@ export interface ColonyLeader {
 // ==================== 殖民地 ====================
 
 export type ColonyPhase =
-  | 'inactive'               // 未建立（入口在星图：foundColony）
-  | 'scouting'               // 远征军航行中（2 回合建设期，星球类型已确定）
+  | 'inactive'               // 未建立（入口在「殖民」页签：foundColony，母舰需停泊在可殖民星球）
+  | 'scouting'               // 建设期（**仅旧存档会处于此阶段**；现建立殖民地是立即建成）
   | 'active';                // 殖民地运行中
 
 export interface Colony {
   phase: ColonyPhase;
-  scoutTurnsRemaining: number;  // 探索剩余回合
+  scoutTurnsRemaining: number;  // 建设期剩余回合（仅旧存档非 0）
   planetType: PlanetTypeId | null;
   planetName: string;           // 玩家命名的星球名
   buildings: BuildingInstance[];

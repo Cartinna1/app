@@ -1,15 +1,17 @@
 import { useCallback } from 'react';
 import type { GameState } from '@/types/game';
+import type { Colony } from '@/types/colony';
 import { ALL_PLANETS } from '@/data/colony/planets';
 import { getGalaxyNode } from '@/data/galaxy/nodes';
+import { applyColonyFounding } from '@/lib/colony/colonySetup';
 
-/** 殖民解锁费用（唯一常量：殖民地面板已无入口，仅星图 foundColony 使用） */
+/** 建立殖民地费用（唯一常量；唯一入口是殖民面板的「建立殖民地」按钮） */
 const UNLOCK_COST = 30000;
 
 /**
- * 殖民地建立（入口已统一到星图）。
+ * 殖民地建立：入口在「殖民」页签，星球类型由母舰当前所在的星图节点决定（全局一颗）。
  * 旧流程的 unlockColony / selectPlanet / rescrollPlanets / generateScoutingPool（3 选 1 随机星球池）
- * 已随《星图更新》方案删除：星球类型由玩家在星图上选择的节点决定。
+ * 已随《星图更新》方案删除。
  */
 export function useColonyBase(
   gameState: GameState,
@@ -17,7 +19,7 @@ export function useColonyBase(
 ) {
   const ship = gameState.ships[0];
 
-  /** 星图流程：跃迁到殖民地星球后支付 30,000 建立殖民地（星球类型由节点决定；全局限一颗） */
+  /** 建立殖民地：母舰已停泊在该星球，支付后**立即建成**（不再有建设等待期） */
   const foundColony = useCallback((nodeId: string, name: string): { success: boolean; message: string } => {
     if (!ship) return { success: false, message: '舰队不存在' };
     const node = getGalaxyNode(nodeId);
@@ -27,6 +29,7 @@ export function useColonyBase(
     if (name.length < 3 || name.length > 16) return { success: false, message: '星球名称需3-16个字符' };
     if (ship.gold < UNLOCK_COST) return { success: false, message: `金币不足（需要${UNLOCK_COST.toLocaleString()}金币）` };
     const planetDef = ALL_PLANETS.find((p) => p.id === node.planetId);
+    const planetId = node.planetId;
     let result = { success: false, message: '' };
     dispatch({
       type: 'FUNCTIONAL_UPDATE',
@@ -34,12 +37,13 @@ export function useColonyBase(
         const ships = [...prev.ships];
         const s = { ...ships[0] };
         s.gold -= UNLOCK_COST;
-        s.goldLog = [{ turn: prev.turn, amount: -UNLOCK_COST, reason: `在「${planetDef?.name || node.name}」组建远征军`, balanceAfter: s.gold }, ...s.goldLog].slice(0, 200);
+        s.goldLog = [{ turn: prev.turn, amount: -UNLOCK_COST, reason: `在「${planetDef?.name || node.name}」建立殖民地`, balanceAfter: s.gold }, ...s.goldLog].slice(0, 200);
         s.galaxy = { ...s.galaxy, colonizedNodeId: nodeId };
-        s.colony = {
-          phase: 'scouting',
-          scoutTurnsRemaining: 2,
-          planetType: node.planetId!,
+        // 立刻建成：初始化唯一真值 lib/colony/colonySetup.ts（含遗落星球赠送的 B7/B20/B21）
+        const base: Colony = {
+          phase: 'active',
+          scoutTurnsRemaining: 0,
+          planetType: planetId,
           planetName: name,
           buildings: [],
           population: { total: 0, available: 0, cap: 5 },
@@ -51,8 +55,9 @@ export function useColonyBase(
           expeditionEndings: {},
           expeditionUnlocks: [],
         };
+        s.colony = applyColonyFounding(base, planetId, name);
         ships[0] = s;
-        result = { success: true, message: `远征军已出发，2 回合后将在「${planetDef?.name || node.name}」建成殖民地` };
+        result = { success: true, message: `已在「${planetDef?.name || node.name}」建立殖民地「${name}」` };
         return { ...prev, ships };
       },
     });
