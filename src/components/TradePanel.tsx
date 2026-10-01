@@ -69,6 +69,10 @@ function TradePanel({ factions, ship, factionPrices, factionSellMultipliers, bla
 
   const isTraveling = galaxy.travelTurnsRemaining > 0;
   const travelTarget = getGalaxyNode(galaxy.targetNodeId);
+  // 迷雾：跃迁途中不暴露未探测过的目的地名称（否则会泄露星球类型等信息）
+  const travelTargetName = travelTarget
+    ? ((ship.galaxy.visitedNodes || []).includes(travelTarget.id) ? travelTarget.name : '未探测星系')
+    : '未知星系';
 
   const inventoryEntries = Object.entries(ts.inventory).filter(([, count]) => count > 0);
 
@@ -181,7 +185,7 @@ function TradePanel({ factions, ship, factionPrices, factionSellMultipliers, bla
           {isTraveling && travelTarget && (
             <div className="text-right">
               <p className="text-xs text-yellow-400">跃迁中</p>
-              <p className="text-sm text-slate-300">前往 {travelTarget.name}</p>
+              <p className="text-sm text-slate-300">前往 {travelTargetName}</p>
               <p className="text-xs text-slate-500">剩余 {galaxy.travelTurnsRemaining} 回合</p>
             </div>
           )}
@@ -334,7 +338,7 @@ function TradePanel({ factions, ship, factionPrices, factionSellMultipliers, bla
               <Rocket size={16} /> {isHostile ? '该势力与你为敌，无法进入' : '确认跃迁'}
             </button>
           )}
-          {isTraveling && <div className="mt-4 text-center text-sm text-yellow-400 bg-yellow-900/20 rounded-lg py-2">跃迁中... 剩余 {galaxy.travelTurnsRemaining} 回合抵达 {travelTarget?.name}</div>}
+          {isTraveling && <div className="mt-4 text-center text-sm text-yellow-400 bg-yellow-900/20 rounded-lg py-2">跃迁中... 剩余 {galaxy.travelTurnsRemaining} 回合抵达 {travelTargetName}</div>}
         </div>
       )}
 
@@ -348,7 +352,7 @@ function TradePanel({ factions, ship, factionPrices, factionSellMultipliers, bla
 
       {/* 购买特产 */}
       {activeTab === 'buy' && (
-        isTraveling && travelTarget ? <TravelLockOverlay turnsRemaining={galaxy.travelTurnsRemaining} targetName={travelTarget.name} /> : (
+        isTraveling && travelTarget ? <TravelLockOverlay turnsRemaining={galaxy.travelTurnsRemaining} targetName={travelTargetName} /> : (
           <div className="bg-slate-900/60 border border-slate-700 rounded-xl p-5">
             <h3 className="text-lg font-bold text-slate-200 mb-4 flex items-center gap-2"><ShoppingCart size={18} className="text-green-400" /> 购买特产</h3>
             {currentFaction && (
@@ -403,7 +407,7 @@ function TradePanel({ factions, ship, factionPrices, factionSellMultipliers, bla
 
       {/* 声望投资（购买特产内的次级面板） */}
       {activeTab === 'buy-invest' && (
-        isTraveling && travelTarget ? <TravelLockOverlay turnsRemaining={galaxy.travelTurnsRemaining} targetName={travelTarget.name} /> : (
+        isTraveling && travelTarget ? <TravelLockOverlay turnsRemaining={galaxy.travelTurnsRemaining} targetName={travelTargetName} /> : (
           <div className="bg-slate-900/60 border border-slate-700 rounded-xl p-5">
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-lg font-bold text-slate-200 flex items-center gap-2"><BarChart3 size={18} className="text-blue-400" /> 投资 {currentFaction?.name}</h3>
@@ -425,7 +429,7 @@ function TradePanel({ factions, ship, factionPrices, factionSellMultipliers, bla
 
       {/* 贩卖特产 */}
       {activeTab === 'sell' && (
-        isTraveling && travelTarget ? <TravelLockOverlay turnsRemaining={galaxy.travelTurnsRemaining} targetName={travelTarget.name} /> : (
+        isTraveling && travelTarget ? <TravelLockOverlay turnsRemaining={galaxy.travelTurnsRemaining} targetName={travelTargetName} /> : (
           <div className="bg-slate-900/60 border border-slate-700 rounded-xl p-5">
             <h3 className="text-lg font-bold text-slate-200 mb-4 flex items-center gap-2"><TrendingUp size={18} className="text-yellow-400" /> 贩卖特产</h3>
             {inventoryEntries.length === 0 ? <p className="text-sm text-slate-500 text-center py-8">暂无特产库存</p> : (
@@ -507,7 +511,7 @@ function TradePanel({ factions, ship, factionPrices, factionSellMultipliers, bla
 
       {/* 探索 */}
       {activeTab === 'explore' && (
-        isTraveling && travelTarget ? <TravelLockOverlay turnsRemaining={galaxy.travelTurnsRemaining} targetName={travelTarget.name} /> : (
+        isTraveling && travelTarget ? <TravelLockOverlay turnsRemaining={galaxy.travelTurnsRemaining} targetName={travelTargetName} /> : (
           <div className="bg-slate-900/60 border border-slate-700 rounded-xl p-5">
             <h3 className="text-lg font-bold text-slate-200 mb-4 flex items-center gap-2"><Compass size={18} className="text-purple-400" /> 探索 {currentFaction?.name}</h3>
             <p className="text-sm text-slate-400 mb-4">在{currentFaction?.name || '当前势力'}的辖区内探索，可能发现随机原料资源。每回合限一次。</p>
@@ -534,7 +538,7 @@ function TradePanel({ factions, ship, factionPrices, factionSellMultipliers, bla
 
       {/* 打探消息 */}
       {activeTab === 'intel' && (
-        isTraveling && travelTarget ? <TravelLockOverlay turnsRemaining={galaxy.travelTurnsRemaining} targetName={travelTarget.name} /> : (
+        isTraveling && travelTarget ? <TravelLockOverlay turnsRemaining={galaxy.travelTurnsRemaining} targetName={travelTargetName} /> : (
           <div className="bg-slate-900/60 border border-slate-700 rounded-xl p-5">
             <h3 className="text-lg font-bold text-slate-200 mb-4 flex items-center gap-2"><Radio size={18} className="text-orange-400" /> 打探消息</h3>
             <p className="text-sm text-slate-400 mb-4">在{currentFaction?.name || '当前势力'}搜集情报。每个势力只能打探一次，跃迁到其他地方后才能再次打探（可以返回之前去过的势力）。</p>

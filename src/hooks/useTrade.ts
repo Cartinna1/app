@@ -110,7 +110,9 @@ export function useTrade(
           g.travelTurnsRemaining = turns;
           s.galaxy = g;
           ships[shipIndex] = s;
-          result = { success: true, message: `开始跃迁，预计${turns}回合后抵达「${targetNode.name}」` };
+          // 迷雾：未探测过的目的地不暴露名称（抵达后才揭晓）
+          const targetKnown = (s.galaxy.visitedNodes || []).includes(targetNodeId);
+          result = { success: true, message: targetKnown ? `开始跃迁，预计${turns}回合后抵达「${targetNode.name}」` : `开始跃迁，预计${turns}回合后抵达目标星系` };
           return { ...prev, ships };
         },
       });

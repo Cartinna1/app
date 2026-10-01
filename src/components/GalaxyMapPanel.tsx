@@ -3,7 +3,7 @@
 //      下方信息卡按节点类型给出操作：势力→内嵌贸易面板、殖民地→建立殖民地、遗迹→考古入口、空星系→待更新。
 // 位置与跃迁的唯一真值是 ship.galaxy（见 lib/galaxy/access.ts），本文件只读不写。
 
-import { memo, useMemo, useState } from 'react';
+import { memo, useEffect, useMemo, useRef, useState } from 'react';
 import type { Mothership } from '@/types/game';
 import type { GalaxyNode } from '@/types/galaxy';
 import { GALAXY_NODES, getGalaxyNode } from '@/data/galaxy/nodes';
@@ -50,6 +50,14 @@ const TYPE_LABEL: Record<GalaxyNode['type'], string> = {
   empty: '空星系',
 };
 
+/** 缩放范围与平移边界（viewBox 为 1000×700） */
+const MIN_SCALE = 0.6;
+const MAX_SCALE = 4;
+const MAX_PAN_X = 1500;
+const MAX_PAN_Y = 1050;
+
+interface ViewState { scale: number; x: number; y: number }
+
 function GalaxyMapPanel({ ship, factionReputation, onTravelToNode, onFoundColony, tradeProps }: GalaxyMapPanelProps) {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [colonyName, setColonyName] = useState('');
@@ -62,6 +70,122 @@ function GalaxyMapPanel({ ship, factionReputation, onTravelToNode, onFoundColony
 
   const blocked = useMemo(() => getBlockedNodeIds(factionReputation), [factionReputation]);
   const visited = useMemo(() => new Set(galaxy.visitedNodes), [galaxy.visitedNodes]);
+
+  // ==================== 视图（缩放 / 平移）====================
+  // 手机端整张星图过小：默认放大并居中，支持双指捏合、鼠标滚轮、拖拽平移与按钮缩放。
+  const initialView = useMemo<ViewState>(() => {
+    const narrow = typeof window !== 'undefined' && window.innerWidth < 768;
+    const scale = narrow ? 1.5 : 1;
+    return { scale, x: -500 * (scale - 1), y: -350 * (scale - 1) };
+  }, []);
+  const [view, setView] = useState<ViewState>(initialView);
+  const svgRef = useRef<SVGSVGElement | null>(null);
+  const pointersRef = useRef(new Map<number, { x: number; y: number }>());
+  const pinchRef = useRef<{ dist: number; scale: number } | null>(null);
+  const dragRef = useRef<{ x: number; y: number; moved: boolean; panning: boolean } | null>(null);
+  /** 拖拽结束后的那次 click 不应触发选点 */
+  const suppressClickRef = useRef(false);
+
+  const clampView = (v: ViewState): ViewState => ({
+    scale: Math.max(MIN_SCALE, Math.min(MAX_SCALE, v.scale)),
+    x: Math.max(-MAX_PAN_X, Math.min(MAX_PAN_X, v.x)),
+    y: Math.max(-MAX_PAN_Y, Math.min(MAX_PAN_Y, v.y)),
+  });
+
+  /** 客户端坐标 → viewBox 坐标（以某个屏幕点为锚点缩放时用） */
+  const clientToViewBox = (clientX: number, clientY: number) => {
+    const rect = svgRef.current?.getBoundingClientRect();
+    if (!rect || rect.width === 0 || rect.height === 0) return { x: 500, y: 350 };
+    return { x: ((clientX - rect.left) / rect.width) * 1000, y: ((clientY - rect.top) / rect.height) * 700 };
+  };
+
+  /** 以 viewBox 锚点缩放：锚点在屏幕上的位置保持不动 */
+  const zoomAt = (nextScale: number, anchor: { x: number; y: number }) => {
+    setView((v) => {
+      const scale = Math.max(MIN_SCALE, Math.min(MAX_SCALE, nextScale));
+      const ratio = scale / v.scale;
+      return clampView({ scale, x: anchor.x - (anchor.x - v.x) * ratio, y: anchor.y - (anchor.y - v.y) * ratio });
+    });
+  };
+
+  const zoomBy = (factor: number) => zoomAt(view.scale * factor, { x: 500, y: 350 });
+  const resetView = () => setView(initialView);
+
+  // 桌面端滚轮缩放（React 的 onWheel 监听是 passive，无法 preventDefault，故手动绑定）
+  useEffect(() => {
+    const el = svgRef.current?.parentElement;
+    if (!el) return;
+    const onWheel = (e: WheelEvent) => {
+      e.preventDefault();
+      const anchor = clientToViewBox(e.clientX, e.clientY);
+      setView((v) => {
+        const scale = Math.max(MIN_SCALE, Math.min(MAX_SCALE, v.scale * (e.deltaY < 0 ? 1.12 : 1 / 1.12)));
+        const ratio = scale / v.scale;
+        return clampView({ scale, x: anchor.x - (anchor.x - v.x) * ratio, y: anchor.y - (anchor.y - v.y) * ratio });
+      });
+    };
+    el.addEventListener('wheel', onWheel, { passive: false });
+    return () => el.removeEventListener('wheel', onWheel);
+  }, []);
+
+  // 指针事件（鼠标与触摸统一）：单指拖拽平移（放大后），双指捏合缩放
+  const handlePointerDown = (e: React.PointerEvent<SVGSVGElement>) => {
+    e.currentTarget.setPointerCapture?.(e.pointerId);
+    pointersRef.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    if (pointersRef.current.size >= 2) {
+      const [p1, p2] = [...pointersRef.current.values()];
+      pinchRef.current = { dist: Math.max(1, Math.hypot(p1.x - p2.x, p1.y - p2.y)), scale: view.scale };
+      dragRef.current = null;
+    } else {
+      dragRef.current = { x: e.clientX, y: e.clientY, moved: false, panning: view.scale > 1 };
+    }
+  };
+
+  const handlePointerMove = (e: React.PointerEvent<SVGSVGElement>) => {
+    if (!pointersRef.current.has(e.pointerId)) return;
+    pointersRef.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    const rect = svgRef.current?.getBoundingClientRect();
+    if (!rect) return;
+
+    // 双指捏合
+    if (pointersRef.current.size >= 2 && pinchRef.current) {
+      const [p1, p2] = [...pointersRef.current.values()];
+      const dist = Math.hypot(p1.x - p2.x, p1.y - p2.y);
+      zoomAt(pinchRef.current.scale * (dist / pinchRef.current.dist), clientToViewBox((p1.x + p2.x) / 2, (p1.y + p2.y) / 2));
+      return;
+    }
+
+    const drag = dragRef.current;
+    if (!drag) return;
+    const dx = e.clientX - drag.x;
+    const dy = e.clientY - drag.y;
+    if (Math.hypot(dx, dy) > 6) drag.moved = true;
+    if (!drag.panning || Math.hypot(dx, dy) < 2) return;
+    drag.x = e.clientX;
+    drag.y = e.clientY;
+    setView((v) => clampView({ scale: v.scale, x: v.x + (dx / rect.width) * 1000, y: v.y + (dy / rect.height) * 700 }));
+  };
+
+  const handlePointerEnd = (e: React.PointerEvent<SVGSVGElement>) => {
+    pointersRef.current.delete(e.pointerId);
+    if (pointersRef.current.size < 2) pinchRef.current = null;
+    if (pointersRef.current.size === 0) {
+      const drag = dragRef.current;
+      dragRef.current = null;
+      if (drag?.moved) {
+        // 这次是拖拽而非点击：抑制紧随其后的 click 选点
+        suppressClickRef.current = true;
+        setTimeout(() => { suppressClickRef.current = false; }, 0);
+      }
+    }
+  };
+
+  /** 迷雾下的显示名：未探测过的星系不暴露名称（跃迁途中也不泄露目的地内容） */
+  const displayNameOf = (id: string | null | undefined): string => {
+    const node = getGalaxyNode(id);
+    if (!node) return '未知星系';
+    return visited.has(node.id) ? node.name : '未探测星系';
+  };
 
   // 选中节点的最短路（用于回合数、途经提示与路线高亮）
   const route = useMemo(() => {
@@ -104,7 +228,7 @@ function GalaxyMapPanel({ ship, factionReputation, onTravelToNode, onFoundColony
           {isCurrent ? (
             <p className="text-xs text-cyan-400">母舰当前就在此处。</p>
           ) : traveling ? (
-            <p className="text-xs text-yellow-400">跃迁中：剩余 {galaxy.travelTurnsRemaining} 回合抵达「{travelTargetNode?.name || '未知'}」。</p>
+            <p className="text-xs text-yellow-400">跃迁中：剩余 {galaxy.travelTurnsRemaining} 回合抵达「{displayNameOf(galaxy.targetNodeId)}」。</p>
           ) : !enterable ? (
             <p className="text-xs text-red-400 flex items-center gap-1">
               <Lock size={12} /> 该势力边境已对你封锁，无法进入（提升该势力声望可解除）。
@@ -139,6 +263,25 @@ function GalaxyMapPanel({ ship, factionReputation, onTravelToNode, onFoundColony
           <span className="text-[10px] px-1.5 py-0.5 rounded bg-slate-800 text-slate-300 border border-slate-700">{TYPE_LABEL[node.type]}</span>
           {isCurrent && <span className="text-[10px] px-1.5 py-0.5 rounded bg-cyan-600 text-white">母舰所在</span>}
         </div>
+
+        {node.type === 'faction' && (() => {
+          const faction = FACTIONS.find((f) => f.id === node.factionId);
+          const rep = factionReputation[node.factionId || ''] || 0;
+          return (
+            <div className="flex items-center gap-3 mb-3">
+              <img
+                src={`/factions/${node.factionId}.png`}
+                alt={node.name}
+                onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+                className="w-[64px] h-[64px] md:w-[96px] md:h-[96px] rounded-lg object-cover border border-slate-700 flex-shrink-0"
+              />
+              <div className="min-w-0">
+                <p className="text-xs text-slate-400">特产：<span className="text-slate-200">{faction?.specialtyName || '未知'}</span></p>
+                <p className="text-xs text-slate-400 mt-1">声望：<span className={rep < 0 ? 'text-red-400' : rep > 0 ? 'text-emerald-300' : 'text-slate-300'}>{rep}</span></p>
+              </div>
+            </div>
+          );
+        })()}
 
         {node.type === 'faction' && (() => {
           // 关系探明规则：只显示"我已到访过"的相关势力（例：必须去过泰拉钢铁王座，才知道人类联邦与它敌对）
@@ -265,82 +408,120 @@ function GalaxyMapPanel({ ship, factionReputation, onTravelToNode, onFoundColony
       {traveling && travelTargetNode && (
         <div className="mb-3 bg-yellow-900/20 border border-yellow-700/40 rounded-lg px-3 py-2 flex items-center gap-2 text-yellow-300 text-sm">
           <Rocket size={16} />
-          <span>跃迁中：前往「{travelTargetNode.name}」，剩余 {galaxy.travelTurnsRemaining} 回合</span>
+          <span>跃迁中：前往「{displayNameOf(galaxy.targetNodeId)}」，剩余 {galaxy.travelTurnsRemaining} 回合</span>
         </div>
       )}
 
-      {/* ===== 星图本体 ===== */}
+      {/* ===== 星图本体（支持捏合/滚轮/按钮缩放与拖拽平移） ===== */}
       <div className="bg-slate-950/70 border border-slate-700 rounded-xl p-2 md:p-3 mb-3 md:mb-4">
-        <svg viewBox="0 0 1000 700" className="w-full h-auto select-none">
-          {/* 航道 */}
-          {GALAXY_LANES.map((lane) => {
-            const a = getGalaxyNode(lane.a);
-            const b = getGalaxyNode(lane.b);
-            if (!a || !b) return null;
-            const onRoute = routeLaneKeys.has(laneKey(lane.a, lane.b));
-            return (
-              <line
-                key={`${lane.a}-${lane.b}`}
-                x1={a.x}
-                y1={a.y}
-                x2={b.x}
-                y2={b.y}
-                stroke={onRoute ? '#22d3ee' : '#334155'}
-                strokeWidth={onRoute ? 3 : 1.5}
-                strokeDasharray={onRoute ? undefined : '6 6'}
-              />
-            );
-          })}
+        <svg
+          ref={svgRef}
+          viewBox="0 0 1000 700"
+          className="w-full h-auto select-none"
+          style={{ touchAction: view.scale > 1 ? 'none' : 'pan-y', cursor: view.scale > 1 ? 'grab' : 'pointer' }}
+          onPointerDown={handlePointerDown}
+          onPointerMove={handlePointerMove}
+          onPointerUp={handlePointerEnd}
+          onPointerCancel={handlePointerEnd}
+        >
+          <g transform={`translate(${view.x} ${view.y}) scale(${view.scale})`}>
+            {/* 航道 */}
+            {GALAXY_LANES.map((lane) => {
+              const a = getGalaxyNode(lane.a);
+              const b = getGalaxyNode(lane.b);
+              if (!a || !b) return null;
+              const onRoute = routeLaneKeys.has(laneKey(lane.a, lane.b));
+              return (
+                <line
+                  key={`${lane.a}-${lane.b}`}
+                  x1={a.x}
+                  y1={a.y}
+                  x2={b.x}
+                  y2={b.y}
+                  stroke={onRoute ? '#22d3ee' : '#334155'}
+                  strokeWidth={onRoute ? 3 : 1.5}
+                  strokeDasharray={onRoute ? undefined : '6 6'}
+                />
+              );
+            })}
 
-          {/* 节点 */}
-          {GALAXY_NODES.map((node) => {
-            const isVisited = visited.has(node.id);
-            const isCurrent = node.id === galaxy.currentNodeId;
-            const isSelected = selectedId === node.id;
-            const isTarget = galaxy.targetNodeId === node.id;
-            const r = NODE_RADIUS[node.type];
-            return (
-              <g key={node.id} onClick={() => setSelectedId(node.id)} style={{ cursor: 'pointer' }}>
-                {(isCurrent || isSelected || isTarget) && (
+            {/* 节点 */}
+            {GALAXY_NODES.map((node) => {
+              const isVisited = visited.has(node.id);
+              const isCurrent = node.id === galaxy.currentNodeId;
+              const isSelected = selectedId === node.id;
+              const isTarget = galaxy.targetNodeId === node.id;
+              const r = NODE_RADIUS[node.type];
+              return (
+                <g
+                  key={node.id}
+                  onClick={() => { if (!suppressClickRef.current) setSelectedId(node.id); }}
+                  style={{ cursor: 'pointer' }}
+                >
+                  {(isCurrent || isSelected || isTarget) && (
+                    <circle
+                      cx={node.x}
+                      cy={node.y}
+                      r={r + (isCurrent ? 9 : 5)}
+                      fill="none"
+                      stroke={isCurrent ? '#22d3ee' : isSelected ? '#f59e0b' : '#fbbf24'}
+                      strokeWidth={isCurrent ? 4 : 3}
+                      strokeDasharray={isTarget && !isCurrent ? '8 5' : undefined}
+                    />
+                  )}
                   <circle
                     cx={node.x}
                     cy={node.y}
-                    r={r + (isCurrent ? 9 : 5)}
-                    fill="none"
-                    stroke={isCurrent ? '#22d3ee' : isSelected ? '#f59e0b' : '#fbbf24'}
-                    strokeWidth={isCurrent ? 4 : 3}
-                    strokeDasharray={isTarget && !isCurrent ? '8 5' : undefined}
+                    r={r}
+                    fill={isVisited ? NODE_FILL[node.type] : '#1e293b'}
+                    stroke={isVisited ? NODE_STROKE[node.type] : '#475569'}
+                    strokeWidth={2}
+                    strokeDasharray={isVisited ? undefined : '5 4'}
                   />
-                )}
-                <circle
-                  cx={node.x}
-                  cy={node.y}
-                  r={r}
-                  fill={isVisited ? NODE_FILL[node.type] : '#1e293b'}
-                  stroke={isVisited ? NODE_STROKE[node.type] : '#475569'}
-                  strokeWidth={2}
-                  strokeDasharray={isVisited ? undefined : '5 4'}
-                />
-                {!isVisited && (
-                  <text x={node.x} y={node.y + 6} textAnchor="middle" fontSize={18} fill="#94a3b8">?</text>
-                )}
-                {isVisited && node.type !== 'empty' && (
-                  <text x={node.x} y={node.y + r + 20} textAnchor="middle" fontSize={19} fill="#cbd5e1">
-                    {node.name}
-                  </text>
-                )}
-              </g>
-            );
-          })}
+                  {!isVisited && (
+                    <text x={node.x} y={node.y + 7} textAnchor="middle" fontSize={20} fill="#94a3b8">?</text>
+                  )}
+                  {isVisited && node.type !== 'empty' && (
+                    <text x={node.x} y={node.y + r + 22} textAnchor="middle" fontSize={21} fill="#cbd5e1">
+                      {node.name}
+                    </text>
+                  )}
+                </g>
+              );
+            })}
 
-          {/* 母舰标识 */}
-          {currentNode && (
-            <g transform={`translate(${currentNode.x}, ${currentNode.y})`} style={{ pointerEvents: 'none' }}>
-              <path d="M0,-34 L11,-14 L-11,-14 Z" fill="#22d3ee" />
-              <text x={0} y={-40} textAnchor="middle" fontSize={17} fill="#22d3ee">母舰</text>
-            </g>
-          )}
+            {/* 母舰标识 */}
+            {currentNode && (
+              <g transform={`translate(${currentNode.x}, ${currentNode.y})`} style={{ pointerEvents: 'none' }}>
+                <path d="M0,-34 L11,-14 L-11,-14 Z" fill="#22d3ee" />
+                <text x={0} y={-40} textAnchor="middle" fontSize={17} fill="#22d3ee">母舰</text>
+              </g>
+            )}
+          </g>
         </svg>
+
+        {/* 缩放控件（移动端也有 40px 触控尺寸） */}
+        <div className="flex items-center justify-between gap-2 mt-2">
+          <p className="text-[10px] md:text-xs text-slate-500">
+            双指捏合或滚轮缩放，放大后可拖动平移　当前 {Math.round(view.scale * 100)}%
+          </p>
+          <div className="flex items-center gap-1 flex-shrink-0">
+            <button
+              onClick={() => zoomBy(1 / 1.25)}
+              aria-label="缩小"
+              className="w-10 h-10 flex items-center justify-center bg-slate-800 hover:bg-slate-700 border border-slate-600 rounded-lg text-slate-200 text-lg font-bold"
+            >−</button>
+            <button
+              onClick={() => zoomBy(1.25)}
+              aria-label="放大"
+              className="w-10 h-10 flex items-center justify-center bg-slate-800 hover:bg-slate-700 border border-slate-600 rounded-lg text-slate-200 text-lg font-bold"
+            >＋</button>
+            <button
+              onClick={resetView}
+              className="h-10 px-3 flex items-center justify-center bg-slate-800 hover:bg-slate-700 border border-slate-600 rounded-lg text-slate-200 text-xs font-bold"
+            >重置</button>
+          </div>
+        </div>
       </div>
 
       {/* ===== 信息卡 ===== */}

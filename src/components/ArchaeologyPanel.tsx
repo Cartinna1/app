@@ -74,6 +74,15 @@ function ArchaeologyPanel({
 
   const completed = ARCHAEOLOGY_SITES.filter((s) => archaeology[s.id]?.status === 'done');
 
+  // 发现机制：只有"到访过该遗迹星系"（或已有发掘进度）的遗迹才会出现在列表与图鉴里
+  const discoveredSiteIds = new Set(
+    galaxy.visitedNodes
+      .map((id) => getGalaxyNode(id)?.siteId)
+      .filter((sid): sid is string => !!sid)
+  );
+  const discoveredSites = ARCHAEOLOGY_SITES.filter((s) => discoveredSiteIds.has(s.id) || !!archaeology[s.id]);
+  const undiscoveredCount = ARCHAEOLOGY_SITE_COUNT - discoveredSites.length;
+
   /** 当前阶段的成功率（用于展示，公式唯一真值在 lib/galaxy/archaeologyTurn.ts） */
   const renderRate = (site: ArchaeologySite, stageIndex: number, leaderId: string | undefined) => {
     const stage = site.stages[stageIndex];
@@ -88,7 +97,7 @@ function ArchaeologyPanel({
       <h2 className="text-xl md:text-2xl font-bold text-white mb-1 md:mb-2">考古</h2>
       <p className="text-xs md:text-sm text-slate-400 mb-3 md:mb-4">
         派一名领袖驻守遗迹逐阶段发掘。阶段有成败判定，失败不倒退进度但会拖延时间，连续失败两次可稳妥推进。
-        同一时间只能发掘一处遗迹。
+        同一时间只能发掘一处遗迹。遗迹需要先在「星图」上跃迁抵达，抵达后才会出现在下方列表里。
       </p>
 
       {msg && (
@@ -215,11 +224,18 @@ function ArchaeologyPanel({
         );
       })()}
 
-      {/* ===== 遗迹列表 ===== */}
+      {/* ===== 遗迹列表（仅列出已发现的遗迹）===== */}
       <div className="mb-4">
-        <h3 className="text-xs text-purple-400 font-bold mb-2">遗迹列表（{completed.length}/{ARCHAEOLOGY_SITE_COUNT} 已完成）</h3>
+        <h3 className="text-xs text-purple-400 font-bold mb-2">
+          已发现遗迹（{discoveredSites.length}/{ARCHAEOLOGY_SITE_COUNT}）· 已完成 {completed.length}
+        </h3>
+        {discoveredSites.length === 0 ? (
+          <div className="bg-slate-900/50 border border-slate-700/60 rounded-lg p-4 text-center text-xs text-slate-500">
+            还没有发现任何遗迹。在「星图」上跃迁抵达遗迹星系，遗迹才会出现在这里。
+          </div>
+        ) : (
         <div className="space-y-2">
-          {ARCHAEOLOGY_SITES.map((site) => {
+          {discoveredSites.map((site) => {
             const st = archaeology[site.id];
             const status = st?.status === 'done' ? '已完成' : st ? '进行中' : '未发掘';
             const isHere = currentSiteId === site.id;
@@ -281,6 +297,12 @@ function ArchaeologyPanel({
             );
           })}
         </div>
+        )}
+        {undiscoveredCount > 0 && (
+          <p className="text-[10px] md:text-xs text-slate-500 mt-2">
+            还有 {undiscoveredCount} 处遗迹尚未被发现（到访对应星系后才会出现）。
+          </p>
+        )}
       </div>
 
       {/* ===== 考古图鉴 ===== */}
