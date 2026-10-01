@@ -29,8 +29,8 @@ export interface TradePanelProps {
   onAcceptContract: (contractId: string) => { success: boolean; message: string };
   onCompleteContract: (contractId: string) => { success: boolean; message: string };
   onBlackMarketBuy: (factionId: string, itemId: string, qty: number) => { success: boolean; message: string };
-  /** 由星图信息卡内嵌时置 true：隐藏"星际势力分布/跃迁"区（跃迁统一在星图页签操作） */
-  hideTravelSection?: boolean;
+  /** 由星图页签取代跃迁入口：置 true 时"星际势力分布"里不再显示跃迁按钮（只保留价格/声望/关系等信息） */
+  hideTravelActions?: boolean;
 }
 
 type TradeTab = 'overview' | 'buy' | 'sell' | 'explore' | 'buy-invest' | 'intel';
@@ -47,7 +47,7 @@ function TravelLockOverlay({ turnsRemaining, targetName }: { turnsRemaining: num
   );
 }
 
-function TradePanel({ factions, ship, factionPrices, factionSellMultipliers, blackMarketMultiplier, buyStocks, sellDemands, buyBuffs, sellBuffs, factionPolicy, policyRemainingTurns, onTravel, onBuy, onSell, onExplore, onInvest, onGatherIntel, factionReputation, factionContracts, currentTurn, onAcceptContract, onCompleteContract, onBlackMarketBuy, hideTravelSection = false }: TradePanelProps) {
+function TradePanel({ factions, ship, factionPrices, factionSellMultipliers, blackMarketMultiplier, buyStocks, sellDemands, buyBuffs, sellBuffs, factionPolicy, policyRemainingTurns, onTravel, onBuy, onSell, onExplore, onInvest, onGatherIntel, factionReputation, factionContracts, currentTurn, onAcceptContract, onCompleteContract, onBlackMarketBuy, hideTravelActions = false }: TradePanelProps) {
   const [activeTab, setActiveTab] = useState<TradeTab>('overview');
   const [selectedTarget, setSelectedTarget] = useState<string>('');
   const [buyQty, setBuyQty] = useState('1');
@@ -275,8 +275,8 @@ function TradePanel({ factions, ship, factionPrices, factionSellMultipliers, bla
         ))}
       </div>
 
-      {/* 星际势力分布（跃迁已迁到「星图」页签；内嵌到星图信息卡时用 hideTravelSection 隐藏本区） */}
-      {activeTab === 'overview' && !hideTravelSection && (
+      {/* 星际势力分布（跃迁入口统一在「星图」页签，本区只保留价格/声望/关系信息） */}
+      {activeTab === 'overview' && (
         <div className="bg-slate-900/60 border border-slate-700 rounded-xl p-5">
           <h3 className="text-lg font-bold text-slate-200 mb-4 flex items-center gap-2"><Globe size={18} className="text-cyan-400" /> 星际势力分布</h3>
           <div className="space-y-2 max-h-72 overflow-auto">
@@ -320,7 +320,7 @@ function TradePanel({ factions, ship, factionPrices, factionSellMultipliers, bla
                     </div>
                     {!isCurrent && <span className="text-xs text-slate-500 flex-shrink-0">距离 {dist} | {turns}回合</span>}
                   </div>
-                  {!isCurrent && !isTraveling && (
+                  {!isCurrent && !isTraveling && !hideTravelActions && (
                     <button onClick={() => setSelectedTarget(f.id)} className={`mt-2 text-sm px-4 py-2 rounded-lg font-bold transition-colors ${selectedTarget === f.id ? 'bg-cyan-600 text-white' : 'bg-slate-700 text-slate-300 hover:bg-slate-600'}`}>
                       {selectedTarget === f.id ? '✓ 已选择' : '选择跃迁'}
                     </button>
@@ -329,7 +329,7 @@ function TradePanel({ factions, ship, factionPrices, factionSellMultipliers, bla
               );
             })}
           </div>
-          {selectedTarget && !isTraveling && (
+          {selectedTarget && !isTraveling && !hideTravelActions && (
             <button
               onClick={handleTravel}
               disabled={isHostile}
@@ -338,15 +338,12 @@ function TradePanel({ factions, ship, factionPrices, factionSellMultipliers, bla
               <Rocket size={16} /> {isHostile ? '该势力与你为敌，无法进入' : '确认跃迁'}
             </button>
           )}
+          {hideTravelActions && !isTraveling && (
+            <p className="mt-3 text-[11px] md:text-xs text-slate-500 flex items-center gap-1">
+              <Globe size={12} /> 跃迁入口已统一到「星图」页签：在那里选择目标星系，并能看到航道与所需回合数。
+            </p>
+          )}
           {isTraveling && <div className="mt-4 text-center text-sm text-yellow-400 bg-yellow-900/20 rounded-lg py-2">跃迁中... 剩余 {galaxy.travelTurnsRemaining} 回合抵达 {travelTargetName}</div>}
-        </div>
-      )}
-
-      {/* 内嵌模式：跃迁统一在星图页签操作 */}
-      {activeTab === 'overview' && hideTravelSection && (
-        <div className="bg-slate-900/60 border border-slate-700 rounded-xl p-5 text-center">
-          <Globe size={24} className="text-cyan-400 mx-auto mb-2" />
-          <p className="text-sm text-slate-300">跃迁请在「星图」页签选择目标星系，那里会显示航道与所需的跃迁回合数。</p>
         </div>
       )}
 

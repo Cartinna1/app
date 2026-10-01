@@ -3,6 +3,7 @@ import type { Mothership } from '@/types/game';
 import type { PlanetDef } from '@/types/colony';
 import { getBuildableBuildings, getBuildingDef, getBuildingEffect, BUILDING_QUANTUM_LAB } from '@/data/colony/buildings';
 import { getPlanetById } from '@/data/colony/planets';
+import { getGalaxyNode } from '@/data/galaxy/nodes';
 import { getTechById, getAvailableTechs, REPEATABLE_TECHS, getRepeatableCost } from '@/data/colony/techs';
 import { getLeaderDef, getLeaderUpgradeCost, getRecruitRollCost } from '@/data/colony/leaders';
 import { computeColonyEconomy, computeColonyPower } from '@/lib/colony/economy';
@@ -108,6 +109,8 @@ const CAT_LABELS: Record<string, string> = {
 
 interface ColonyPanelProps {
   ship: Mothership;
+  /** 在母舰当前停泊的殖民地星球上建立殖民地（星球类型由星图节点决定，全局一颗） */
+  onFoundColony: (nodeId: string, name: string) => { success: boolean; message: string };
   onBuild: (defId: string) => { success: boolean; message: string };
   onRecruitPop: (amount: number) => { success: boolean; message: string };
   onAssignPop: (buildingUid: string, count: number) => { success: boolean; message: string };
@@ -131,7 +134,7 @@ interface ColonyPanelProps {
 type ColonyTab = 'overview' | 'buildings' | 'population' | 'research' | 'leaders' | 'wonders' | 'expedition' | 'gallery';
 
 function ColonyPanel(props: ColonyPanelProps) {
-  const { ship, onBuild, onRecruitPop, onAssignPop, onStartResearch, onRecruitLeader, onUpgradeLeader, onRollAndRecruit, onCancelBuilding, onDemolishBuilding, onSelectWonder, onSubmitWonderResources, onCompleteWonder, canStartWonder, onStartExpedition, onPayExpeditionNode, onUnlockUltimate } = props;
+  const { ship, onFoundColony, onBuild, onRecruitPop, onAssignPop, onStartResearch, onRecruitLeader, onUpgradeLeader, onRollAndRecruit, onCancelBuilding, onDemolishBuilding, onSelectWonder, onSubmitWonderResources, onCompleteWonder, canStartWonder, onStartExpedition, onPayExpeditionNode, onUnlockUltimate } = props;
   const colony = ship.colony;
   const [tab, setTab] = useState<ColonyTab>('overview');
   const [message, setMessage] = useState('');
@@ -141,6 +144,7 @@ function ColonyPanel(props: ColonyPanelProps) {
   const recruitCostPerPop = useMemo(() => (colony ? getRecruitCostPerPop(colony) : RECRUIT_BASE_COST), [colony]);
   const remainingRecruit = Math.max(0, recruitCap - (colony?.recruitedThisTurn || 0));
   const recruitRollCost = useMemo(() => (colony ? getRecruitRollCost(colony.leaders) : 10), [colony]);
+  const [foundName, setFoundName] = useState('');
   const [buildCatFilter, setBuildCatFilter] = useState<string>('housing');
   const [popCatFilter, setPopCatFilter] = useState<string>('all');
   const [liveBuildFilter, setLiveBuildFilter] = useState<string>('housing');
@@ -194,17 +198,41 @@ function ColonyPanel(props: ColonyPanelProps) {
     return map;
   }, [liveBuildings]);
 
-  // ===== 未建立殖民地：入口已统一到星图 =====
+  // ===== 未建立殖民地：建立入口在本页签（星球由你在星图上选择并抵达） =====
   if (!colony || colony.phase === 'inactive') {
+    const hereNode = getGalaxyNode(ship.galaxy.currentNodeId);
+    const herePlanet = hereNode?.type === 'colony' && hereNode.planetId ? getPlanetById(hereNode.planetId) : undefined;
     return (
       <div className="space-y-4">
         <h2 className="text-xl font-bold text-white">星际殖民</h2>
-        <div className="bg-slate-900/60 border border-slate-700 rounded-xl p-6 text-center">
-          <Home size={48} className="mx-auto mb-3 text-slate-600" />
-          <p className="text-slate-300 text-sm mb-2">尚未建立殖民地</p>
-          <p className="text-slate-500 text-sm mb-2">前往「星图」页签，跃迁到可殖民星球并花费 30,000 金币建立殖民地。</p>
-          <p className="text-slate-600 text-xs">星球类型由你选择的那颗星球决定，全局只能殖民一颗。</p>
-        </div>
+        {hereNode?.type === 'colony' ? (
+          <div className="bg-slate-900/60 border border-emerald-700/40 rounded-xl p-4 md:p-6">
+            <h3 className="font-bold text-slate-100 mb-2">在「{herePlanet?.name || hereNode.name}」建立殖民地</h3>
+            <p className="text-sm text-slate-400 mb-2">{herePlanet?.description}</p>
+            <p className="text-xs text-amber-400 mb-3">需要 30,000 金币，抵达后建设 2 回合；全局只能殖民一颗星球。</p>
+            <div className="flex flex-col md:flex-row gap-2">
+              <input
+                value={foundName}
+                onChange={(e) => setFoundName(e.target.value.slice(0, 16))}
+                placeholder="给殖民地起个名字（3-16 字）"
+                className="flex-1 bg-slate-800 border border-slate-600 rounded-lg px-3 py-2 text-sm text-slate-200 placeholder-slate-500 min-h-[40px]"
+              />
+              <button
+                onClick={() => { const r = onFoundColony(hereNode.id, foundName); showMsg(r.message, r.success ? 'success' : 'error'); }}
+                disabled={ship.gold < 30000}
+                className={`px-4 py-2 rounded-lg font-bold text-sm min-h-[40px] ${ship.gold >= 30000 ? 'bg-emerald-600 hover:bg-emerald-500 text-white' : 'bg-slate-700 text-slate-500 cursor-not-allowed'}`}
+              >{ship.gold >= 30000 ? '建立殖民地（30,000 金币）' : '金币不足（30,000）'}</button>
+            </div>
+            <FeedbackMessage message={message} type={msgType} />
+          </div>
+        ) : (
+          <div className="bg-slate-900/60 border border-slate-700 rounded-xl p-6 text-center">
+            <Home size={48} className="mx-auto mb-3 text-slate-600" />
+            <p className="text-slate-300 text-sm mb-2">尚未建立殖民地</p>
+            <p className="text-slate-500 text-sm mb-2">请先在「星图」页签跃迁到一颗可殖民星球，抵达后回到本页签建立殖民地。</p>
+            <p className="text-slate-600 text-xs">星球类型由你抵达的那颗星球决定，全局只能殖民一颗。</p>
+          </div>
+        )}
       </div>
     );
   }

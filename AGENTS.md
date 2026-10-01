@@ -21,7 +21,7 @@
 src/
 ├── components/     # UI：13 个面板（全部 memo）+ GameScreen/GameOverScreen/ShipSelection
 │   ├── colony/     # ColonyPanel、WonderPanel
-│   ├── GalaxyMapPanel.tsx    # 星图（SVG 50 节点 / 迷雾 / 信息卡，势力卡片内嵌 TradePanel）
+│   ├── GalaxyMapPanel.tsx    # 星图（SVG 50 节点 / 迷雾 / 缩放平移 / 只负责跃迁）
 │   └── ArchaeologyPanel.tsx  # 考古（独立页签 / 阶段图片位 / 图鉴）
 ├── data/           # 静态数据：gameData / factions / modules / relics / materialNames
 │                   #   / choiceEvents / resourceEvents / colony/ / galaxy/（nodes·lanes·archaeology·permaBonuses）
@@ -37,6 +37,10 @@ src/
 ```
 
 ## 二、代码放哪
+
+> **页签职责边界（既定规划，勿再混装）**：「星图」**只负责跃迁**——节点/航道/迷雾/母舰位置/点节点看信息/跃迁按钮（+ 缩放平移）。
+> 操作类功能一律留在各自页签：交易·合同·黑市·打探·投资 → 「贸易」；建立殖民地 → 「殖民」；遗迹发掘 → 「考古」。
+> **新增功能不要再往星图面板里加操作入口**（信息展示可以，操作不行）。历史上星图曾内嵌贸易面板与"建立殖民地"按钮，已按此原则移出。
 
 | 代码性质 | 位置 |
 |---|---|
@@ -68,7 +72,7 @@ src/
 | 星图通行与"当前势力" | `lib/galaxy/access.ts` → `HOSTILE_REP_THRESHOLD`（宿敌 −91，`useTrade.checkRepBlock` 同源）/ `getBlockedNodeIds` / `getCurrentFactionId(ship)`（停在非势力节点返回 null）/ `canEnterNode` |
 | 资源成本校验与扣减（远征 + 考古共用） | `lib/turn/resourceCost.ts` → `resourceAmount` / `deductResource` / `canAfford` / `firstMissing` / `payCost` / `flattenCost` / `formatCost`——科研点扣殖民地、其余扣母舰，hook 里勿再各写一份 |
 | 考古成功率与阶段推进 | `lib/galaxy/archaeologyTurn.ts` → `excavationSuccessRate`（唯一公式）/ `resolveStage`（阶段成败·危险·保底）/ `processArchaeologyTurn`（由 `useTurn` 每回合调用）/ `grantReward`（遗物·永久加成·称号·资源；无殖民地时科研点按 1:10 折金币） |
-| 殖民地建立初始化 | `lib/colony/colonySetup.ts` → `applyColonyFounding`（星球类型·初始人口·遗落星球赠送 B7/B20/B21）；面板选星球（旧流程）与星图 `foundColony`（新流程）共用 |
+| 殖民地建立初始化 | `lib/colony/colonySetup.ts` → `applyColonyFounding`（星球类型·初始人口·遗落星球赠送 B7/B20/B21）；由殖民面板的"建立殖民地"（`foundColony`，星球类型取母舰当前所在的星图节点）触发，2 回合建设期结束时由 `colonyTurn` 应用 |
 | 考古永久加成取值 | `data/galaxy/permaBonuses.ts` → `getPermaBonusValue(ids, kind)`（foodPct/researchPct/powerPct/blackoutGuardTurns/travelTurnReduce），economy/colonyTurn/graph 勿就地判断 id |
 | **回合结算的调用顺序** | `hooks/useTurn.ts`（编排器，唯一权威） |
 | 存档字段清单与迁移 | `lib/save.ts` |
@@ -106,7 +110,7 @@ src/
 
 改数值前先出表格化方案（前后对比），确认后再动手，改完 grep 自检锚点。易误伤的锚点：
 
-- `30000` 殖民解锁费用（`hooks/colony/useColonyBase.ts` 的 `UNLOCK_COST`；两个入口共用：面板 `unlockColony`（旧：随机会刷 3 星球）与星图 `foundColony`（新：节点决定星球类型，2 回合建设期后由 `applyColonyFounding` 建成），两处必须都读同一常量）
+- `30000` 殖民解锁费用（`hooks/colony/useColonyBase.ts` 的 `UNLOCK_COST`；唯一入口是殖民面板的"建立殖民地"→ `foundColony`，星球类型由母舰当前所在的星图节点决定；随机的"3 选 1 星球池"已删除）
 - 星图与考古数值锚点：`lib/galaxy/graph.ts` 的 `TURN_UNIT=80`（坐标→回合，改它等于同时改跃迁与贸易折价）与 `MAX_ROUTE_TURNS=9`；`lib/galaxy/archaeologyTurn.ts` 的成功率常数（`BASE_SUCCESS_RATE=0.80`、`LEADER_LEVEL_BONUS=0.05`、`DIFFICULTY_PENALTY=0.12`、`SAFE_CHOICE_BONUS=0.10`、`RELIC_SUCCESS_BONUS=0.10`、钳制 0.15~0.95）、`DISCOVERY_CHANCE=0.3`、`FAIL_EXTRA_TURNS=1`、`DANGER_LOSS_RATIO=0.5`、`RESEARCH_TO_GOLD=10`，以及 `data/galaxy/archaeology.ts` 里每处遗迹的 `turns/difficulty/cost/dangerRate`（改动前先出前后对比表）
 - `0.4` / `0.7` 建筑取消/拆除返还（`hooks/colony/useColonyBuildings.ts`）
 - `50` / `100` 领袖升级星尘费（唯一真值：`data/colony/leaders.ts` 的 `LEADER_UPGRADE_COST` / `getLeaderUpgradeCost`；UI 与 hook 均从该处取，勿就地硬编码）

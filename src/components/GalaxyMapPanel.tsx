@@ -1,6 +1,7 @@
 // ==================== 星图面板（固定布局 50 节点） ====================
-// 职责：SVG 画出节点与航道、迷雾（未探测节点不泄露类型）、母舰位置、选中路线高亮；
-//      下方信息卡按节点类型给出操作：势力→内嵌贸易面板、殖民地→建立殖民地、遗迹→考古入口、空星系→待更新。
+// 职责边界（重要）：星图**只负责跃迁**——画节点与航道、迷雾、母舰位置、选中路线高亮、点节点看信息、跃迁。
+// 其它操作一律留在各自页签：交易/合同/黑市→「贸易」，建立殖民地→「殖民」，发掘→「考古」。
+// 新增功能不要再往本面板里塞操作入口（信息展示可以）。
 // 位置与跃迁的唯一真值是 ship.galaxy（见 lib/galaxy/access.ts），本文件只读不写。
 
 import { memo, useEffect, useMemo, useRef, useState } from 'react';
@@ -13,16 +14,12 @@ import { getBlockedNodeIds, canEnterNode } from '@/lib/galaxy/access';
 import { RELATION_MATRIX, FACTIONS } from '@/data/factions';
 import { getArchaeologySite } from '@/data/galaxy/archaeology';
 import { ALL_PLANETS } from '@/data/colony/planets';
-import TradePanel, { type TradePanelProps } from './TradePanel';
-import { Rocket, Lock, HelpCircle, Sparkles, MapPin } from 'lucide-react';
+import { Rocket, Lock, HelpCircle, MapPin } from 'lucide-react';
 
 interface GalaxyMapPanelProps {
   ship: Mothership;
   factionReputation: Record<string, number>;
   onTravelToNode: (targetNodeId: string) => { success: boolean; message: string };
-  onFoundColony: (nodeId: string, name: string) => { success: boolean; message: string };
-  /** 内嵌势力信息卡所需的贸易面板数据（由 GameScreen 用 useMemo 组装，避免击穿 memo） */
-  tradeProps: Omit<TradePanelProps, 'hideTravelSection'>;
 }
 
 /** 无向航道的唯一键（排序后拼接，保证 a|b 与 b|a 同键） */
@@ -58,9 +55,8 @@ const MAX_PAN_Y = 1050;
 
 interface ViewState { scale: number; x: number; y: number }
 
-function GalaxyMapPanel({ ship, factionReputation, onTravelToNode, onFoundColony, tradeProps }: GalaxyMapPanelProps) {
+function GalaxyMapPanel({ ship, factionReputation, onTravelToNode }: GalaxyMapPanelProps) {
   const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [colonyName, setColonyName] = useState('');
   const [msg, setMsg] = useState('');
   const [msgType, setMsgType] = useState<'success' | 'error'>('success');
   const galaxy = ship.galaxy;
@@ -235,8 +231,11 @@ function GalaxyMapPanel({ ship, factionReputation, onTravelToNode, onFoundColony
 
   const selectedNode = getGalaxyNode(selectedId);
 
+  /** 跃迁：结果（成功提示/被封锁/不可达）显示在星图上方的提示条里 */
   const handleTravel = (nodeId: string) => {
-    onTravelToNode(nodeId);
+    const r = onTravelToNode(nodeId);
+    setMsg(r.message);
+    setMsgType(r.success ? 'success' : 'error');
   };
 
   /** 信息卡内容（按节点类型分派） */
@@ -350,9 +349,9 @@ function GalaxyMapPanel({ ship, factionReputation, onTravelToNode, onFoundColony
         })()}
 
         {node.type === 'faction' && (
-          <div className="mt-2">
-            <TradePanel {...tradeProps} hideTravelSection />
-          </div>
+          <p className="text-[11px] md:text-xs text-slate-500 mt-1">
+            交易、合同、黑市、打探、投资等操作都在「贸易」页签中进行（需母舰停泊在此势力）。
+          </p>
         )}
 
         {node.type === 'colony' && (() => {
@@ -369,30 +368,9 @@ function GalaxyMapPanel({ ship, factionReputation, onTravelToNode, onFoundColony
               ) : galaxy.colonizedNodeId ? (
                 <p className="text-xs text-slate-400">你已经在另一颗星球建立了殖民地，全局只能殖民一颗。</p>
               ) : (
-                <div className="space-y-2">
-                  <p className="text-xs text-amber-400 flex items-center gap-1">
-                    <Sparkles size={12} /> 可在此建立殖民地（需 30,000 金币，全局只能殖民一颗）
-                  </p>
-                  <div className="flex flex-col md:flex-row gap-2">
-                    <input
-                      value={colonyName}
-                      onChange={(e) => setColonyName(e.target.value)}
-                      placeholder="给殖民地起个名字（3-16 字）"
-                      maxLength={16}
-                      className="flex-1 bg-slate-800 border border-slate-600 rounded-lg px-3 py-2 text-sm text-slate-200 placeholder-slate-500 min-h-[40px]"
-                    />
-                    <button
-                      onClick={() => {
-                        const r = onFoundColony(node.id, colonyName);
-                        setMsg(r.message);
-                        setMsgType(r.success ? 'success' : 'error');
-                      }}
-                      className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 rounded-lg font-bold text-white text-sm min-h-[40px]"
-                    >
-                      建立殖民地（30,000 金币）
-                    </button>
-                  </div>
-                </div>
+                <p className="text-[11px] md:text-xs text-amber-400">
+                  可在此建立殖民地。建立操作在「殖民」页签中进行（需 30,000 金币，全局只能殖民一颗）。
+                </p>
               )}
             </div>
           );
@@ -428,7 +406,8 @@ function GalaxyMapPanel({ ship, factionReputation, onTravelToNode, onFoundColony
     <div>
       <h2 className="text-xl md:text-2xl font-bold text-white mb-1 md:mb-2">星图</h2>
       <p className="text-xs md:text-sm text-slate-400 mb-3 md:mb-4">
-        点击星系节点查看信息与操作。未探测的星系需要先跃迁抵达，航道长度决定跃迁所需的回合数。
+        点击星系节点查看信息并跃迁。未探测的星系需要先跃迁抵达，航道长度决定跃迁所需的回合数。
+        贸易、殖民、考古等操作分别在各自的页签中进行。
       </p>
 
       {msg && (

@@ -36,6 +36,7 @@ import EventPanel from './EventPanel';
 import RedeemCode from './RedeemCode';
 import SaveManager from './SaveManager';
 import LoanPanel from './LoanPanel';
+import TradePanel from './TradePanel';
 import GalaxyMapPanel from './GalaxyMapPanel';
 import ArchaeologyPanel from './ArchaeologyPanel';
 import { getInvestmentTier, getBuffDescription } from '@/data/factions';
@@ -118,7 +119,7 @@ interface GameScreenProps {
   getShipTotalAssets: (ship: GameState['ships'][0]) => number;
 }
 
-type TabId = 'overview' | 'stocks' | 'materials' | 'production' | 'products' | 'events' | 'loan' | 'galaxy' | 'archaeology' | 'colony' | 'module' | 'redeem' | 'goldlog' | 'save';
+type TabId = 'overview' | 'stocks' | 'materials' | 'production' | 'products' | 'events' | 'loan' | 'trade' | 'galaxy' | 'archaeology' | 'colony' | 'module' | 'redeem' | 'goldlog' | 'save';
 
 // 空引用常量：避免每次渲染新建 {} / [] 击穿内嵌面板的 memo
 const EMPTY_REPUTATION: Record<string, number> = {};
@@ -132,6 +133,7 @@ const tabs: { id: TabId; label: string; shortLabel: string; icon: React.ElementT
   { id: 'products', label: '集会', shortLabel: '集会', icon: ShoppingCart },
   { id: 'events', label: '事件', shortLabel: '事件', icon: Sparkles },
   { id: 'loan', label: '贷款', shortLabel: '贷款', icon: Banknote },
+  { id: 'trade', label: '贸易', shortLabel: '贸易', icon: Coins },
   { id: 'galaxy', label: '星图', shortLabel: '星图', icon: Globe },
   { id: 'archaeology', label: '考古', shortLabel: '考古', icon: Landmark },
   { id: 'colony', label: '殖民', shortLabel: '殖民', icon: Home },
@@ -266,8 +268,8 @@ export default function GameScreen({
   const currentShip = gameState.ships[0];
   const totalAssets = currentShip ? getShipTotalAssets(currentShip) : 0;
 
-  // 星图内嵌的势力信息卡数据：useMemo 保持引用稳定，避免每次渲染击穿 GalaxyMapPanel 的 memo
-  const galaxyTradeProps = useMemo(() => {
+  // 贸易面板数据：useMemo 保持引用稳定，避免每次渲染击穿 TradePanel 的 memo
+  const tradePanelProps = useMemo(() => {
     if (!currentShip) return null;
     return {
       factions: gameState.factions,
@@ -539,14 +541,17 @@ export default function GameScreen({
             />
           </div>
           )}
-          {currentShip && galaxyTradeProps && (
+          {currentShip && tradePanelProps && (
+          <div className={activeTab === 'trade' ? '' : 'hidden'}>
+            <TradePanel {...tradePanelProps} hideTravelActions />
+          </div>
+          )}
+          {currentShip && (
           <div className={activeTab === 'galaxy' ? '' : 'hidden'}>
             <GalaxyMapPanel
               ship={currentShip}
               factionReputation={gameState.factionReputation || EMPTY_REPUTATION}
               onTravelToNode={onTravelToNode}
-              onFoundColony={onFoundColony}
-              tradeProps={galaxyTradeProps}
             />
           </div>
           )}
@@ -567,6 +572,7 @@ export default function GameScreen({
           <div className={activeTab === 'colony' ? '' : 'hidden'}>
             <ColonyPanel
               ship={currentShip}
+              onFoundColony={onFoundColony}
               onBuild={onBuildColonyBuilding}
               onRecruitPop={onRecruitPop}
               onAssignPop={onAssignPop}
