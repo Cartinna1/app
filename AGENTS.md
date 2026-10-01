@@ -113,6 +113,7 @@ src/
 
 - `30000` 殖民解锁费用（`hooks/colony/useColonyBase.ts` 的 `UNLOCK_COST`；唯一入口是殖民面板的"建立殖民地"→ `foundColony`，星球类型由母舰当前所在的星图节点决定；随机的"3 选 1 星球池"已删除）
 - 星图与考古数值锚点：`lib/galaxy/graph.ts` 的 `TURN_UNIT=80`（坐标→回合，改它等于同时改跃迁与贸易折价）与 `MAX_ROUTE_TURNS=9`；`lib/galaxy/archaeologyTurn.ts` 的成功率常数（`BASE_SUCCESS_RATE=0.80`、`LEADER_LEVEL_BONUS=0.05`、`DIFFICULTY_PENALTY=0.12`、`SAFE_CHOICE_BONUS=0.10`、`RELIC_SUCCESS_BONUS=0.10`、钳制 0.15~0.95）、`DISCOVERY_CHANCE=0.3`、`FAIL_EXTRA_TURNS=1`、`DANGER_LOSS_RATIO=0.5`、`RESEARCH_TO_GOLD=10`，以及 `data/galaxy/archaeology.ts` 里每处遗迹的 `turns/difficulty/cost/dangerRate`（改动前先出前后对比表）
+- **特产卖出乘数**（`data/factions.ts`）：`DIST_SLOPE=0.05` + `DIST_QUADRATIC=0.015`（距离折价 `1+0.05d+0.015d²`）+ `MAX_SELL_MULTIPLIER=4.0`（距离×政策×波动的上限）。**为什么带二次项**：距离同时是"要跑的回合数"和加价乘数，纯线性会让"每回合利润"随距离单调下降（实测 dist9 只有近程的 19%，远程变成坏选择）；改这两个系数前必须重跑"按距离分桶的每回合利润对比表"（样本 = 90 个势力对 × 10 档政策）。改动**下个回合生效**（乘数每回合算好存入 `factionSellMultipliers`），旧档自愈，无需存档迁移
 - `0.4` / `0.7` 建筑取消/拆除返还（`hooks/colony/useColonyBuildings.ts`）
 - `50` / `100` 领袖升级星尘费（唯一真值：`data/colony/leaders.ts` 的 `LEADER_UPGRADE_COST` / `getLeaderUpgradeCost`；UI 与 hook 均从该处取，勿就地硬编码）
 - 招募领袖星尘费（基础 10，减领袖 `leaderCostReduction`，下限 1；唯一真值：`data/colony/leaders.ts` 的 `getRecruitRollCost`；UI 与 `useColonyLeaders` 均从该处取，勿就地硬编码）

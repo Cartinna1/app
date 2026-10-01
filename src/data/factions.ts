@@ -80,9 +80,23 @@ export function getBuyPrice(factionId: string, invested: number, factionPrices: 
   return Math.round(marketPrice * (1 - discount));
 }
 
+/**
+ * 距离折价系数：`1 + DIST_SLOPE×距离 + DIST_QUADRATIC×距离²`。
+ * 为什么带二次项：距离既是"要多跑的回合数"又是加价乘数，纯线性会让"每回合利润"随距离单调下降
+ * （实测 dist9 只有近程的 19%），远程变成坏选择。二次项让每回合利润随距离不再下降（132→177）。
+ * ⚠ 改这两个数等于改全部特产的空间收益，改前先跑一遍按距离分桶的利润对比表。
+ */
+export const DIST_SLOPE = 0.05;
+export const DIST_QUADRATIC = 0.015;
+/**
+ * 单势力卖出乘数上限（距离 × 政策 × 波动）。
+ * 防止「星际繁荣 1.75 × 远程 2.665 × 波动 1.15」这类极端叠加拿单件卖到失控（上限后最大约 4.0）。
+ * 钳制在结算处，玩家在贸易面板看到的乘数就是实收乘数，不会出现显示与实收分叉。
+ */
+export const MAX_SELL_MULTIPLIER = 4.0;
+
 // 计算每回合的固定卖出乘数（整回合内不变）
-// 距离系数 0.05：综合盈利概率≈60%
-// 固定随机因子 0.85~1.15（每回合用 Math.random() 生成，保证同步）
+// 构成：距离折价（见上）× 政策倍率 × 固定随机因子 0.85~1.15（每回合 Math.random()，保证整回合同步）
 export function calculateSellMultipliers(
   currentFactionId: string,
   policy: { type: TradePolicy; effect: PolicyEffect },
@@ -91,10 +105,11 @@ export function calculateSellMultipliers(
   const multipliers: Record<string, number> = {};
   for (const f of FACTIONS) {
     const dist = getDistance(currentFactionId, f.id);
-    const distanceBonus = 1 + dist * 0.05; // 每距离+5%
+    const distanceBonus = 1 + DIST_SLOPE * dist + DIST_QUADRATIC * dist * dist;
     const policyMult = policy.effect.multiplier;
     const localVariance = 0.85 + Math.random() * 0.3; // 0.85 ~ 1.15，固定整回合
-    multipliers[f.id] = Math.round(distanceBonus * policyMult * localVariance * 100) / 100;
+    const raw = distanceBonus * policyMult * localVariance;
+    multipliers[f.id] = Math.round(Math.min(raw, MAX_SELL_MULTIPLIER) * 100) / 100;
   }
   return multipliers;
 }

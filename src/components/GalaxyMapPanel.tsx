@@ -241,6 +241,45 @@ function GalaxyMapPanel({ ship, factionReputation, onTravelToNode }: GalaxyMapPa
     setMsgType(r.success ? 'success' : 'error');
   };
 
+  /**
+   * 跃迁操作区：**未探测与已探测节点共用**。
+   * ⚠ 星图的唯一操作就是跃迁，两类卡片都必须给出入口——曾因只写在迷雾分支，
+   *   导致已探明的节点点开只有信息、没有跃迁按钮（无法去已去过的地方）。
+   */
+  const renderTravelAction = (node: GalaxyNode) => {
+    if (node.id === galaxy.currentNodeId) {
+      return <p className="text-xs text-cyan-400">母舰当前就在此处。</p>;
+    }
+    if (traveling) {
+      return <p className="text-xs text-yellow-400">跃迁中：剩余 {galaxy.travelTurnsRemaining} 回合抵达「{displayNameOf(galaxy.targetNodeId)}」。</p>;
+    }
+    if (!canEnterNode(node.id, factionReputation)) {
+      return (
+        <p className="text-xs text-red-400 flex items-center gap-1">
+          <Lock size={12} /> 该势力边境已对你封锁，无法进入（提升该势力声望可解除）。
+        </p>
+      );
+    }
+    if (!route) {
+      return <p className="text-xs text-red-400">无法抵达：航线被封锁的势力割断，可先提升相关势力声望或选择其他路线。</p>;
+    }
+    return (
+      <div>
+        <button
+          onClick={() => handleTravel(node.id)}
+          className="px-4 py-2 bg-cyan-600 hover:bg-cyan-500 rounded-lg font-bold text-white text-sm transition-colors flex items-center gap-2 min-h-[40px]"
+        >
+          <Rocket size={14} /> 跃迁（{route.turns} 回合）
+        </button>
+        {route.path.length > 2 && (
+          <p className="text-[10px] text-slate-500 mt-2">
+            途经：{route.path.slice(1, -1).map((id) => (visited.has(id) ? getGalaxyNode(id)?.name : '未探测星系')).join(' → ')}
+          </p>
+        )}
+      </div>
+    );
+  };
+
   /** 信息卡内容（按节点类型分派） */
   const renderInfoCard = (node: GalaxyNode) => {
     const isVisited = visited.has(node.id);
@@ -248,7 +287,6 @@ function GalaxyMapPanel({ ship, factionReputation, onTravelToNode }: GalaxyMapPa
 
     if (!isVisited) {
       // ===== 迷雾：不泄露类型与名称 =====
-      const enterable = canEnterNode(node.id, factionReputation);
       return (
         <div>
           <div className="flex items-center gap-2 mb-2">
@@ -259,31 +297,7 @@ function GalaxyMapPanel({ ship, factionReputation, onTravelToNode }: GalaxyMapPa
           <p className="text-xs text-slate-400 mb-3">
             这里没有任何已知信息。跃迁抵达后才会显示该星系的名称、类型与可用操作。
           </p>
-          {isCurrent ? (
-            <p className="text-xs text-cyan-400">母舰当前就在此处。</p>
-          ) : traveling ? (
-            <p className="text-xs text-yellow-400">跃迁中：剩余 {galaxy.travelTurnsRemaining} 回合抵达「{displayNameOf(galaxy.targetNodeId)}」。</p>
-          ) : !enterable ? (
-            <p className="text-xs text-red-400 flex items-center gap-1">
-              <Lock size={12} /> 该势力边境已对你封锁，无法进入（提升该势力声望可解除）。
-            </p>
-          ) : !route ? (
-            <p className="text-xs text-red-400">无法抵达：航线被封锁的势力割断，可先提升相关势力声望或选择其他路线。</p>
-          ) : (
-            <div>
-              <button
-                onClick={() => handleTravel(node.id)}
-                className="px-4 py-2 bg-cyan-600 hover:bg-cyan-500 rounded-lg font-bold text-white text-sm transition-colors flex items-center gap-2"
-              >
-                <Rocket size={14} /> 跃迁（{route.turns} 回合）
-              </button>
-              {route.path.length > 2 && (
-                <p className="text-[10px] text-slate-500 mt-2">
-                  途经：{route.path.slice(1, -1).map((id) => (visited.has(id) ? getGalaxyNode(id)?.name : '未探测星系')).join(' → ')}
-                </p>
-              )}
-            </div>
-          )}
+          {renderTravelAction(node)}
         </div>
       );
     }
@@ -395,6 +409,11 @@ function GalaxyMapPanel({ ship, factionReputation, onTravelToNode }: GalaxyMapPa
         {node.type === 'empty' && (
           <p className="text-xs text-slate-400">此地暂未发现任何内容，后续更新。</p>
         )}
+
+        {/* 跃迁操作区：已探测节点同样必须有（去已去过的地方是最常见的操作） */}
+        <div className="mt-3 pt-3 border-t border-slate-700/60">
+          {renderTravelAction(node)}
+        </div>
       </div>
     );
   };
