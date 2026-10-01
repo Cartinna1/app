@@ -83,8 +83,8 @@ function GalaxyMapPanel({ ship, factionReputation, onTravelToNode, onFoundColony
   const pointersRef = useRef(new Map<number, { x: number; y: number }>());
   const pinchRef = useRef<{ dist: number; scale: number } | null>(null);
   const dragRef = useRef<{ x: number; y: number; moved: boolean; panning: boolean } | null>(null);
-  /** 拖拽结束后的那次 click 不应触发选点 */
-  const suppressClickRef = useRef(false);
+  /** 信息卡容器：选中节点后滚进视野（手机端卡片在星图下方，点完不看会以为没反应） */
+  const cardRef = useRef<HTMLDivElement | null>(null);
 
   const clampView = (v: ViewState): ViewState => ({
     scale: Math.max(MIN_SCALE, Math.min(MAX_SCALE, v.scale)),
@@ -166,19 +166,51 @@ function GalaxyMapPanel({ ship, factionReputation, onTravelToNode, onFoundColony
     setView((v) => clampView({ scale: v.scale, x: v.x + (dx / rect.width) * 1000, y: v.y + (dy / rect.height) * 700 }));
   };
 
+  /**
+   * 点选命中检测。
+   * ⚠ 不能用节点的 onClick：setPointerCapture 之后 pointerup 落在 <svg> 上，
+   *   浏览器把 click 派发给最近公共祖先（svg），子元素上的 onClick 永远不会触发。
+   */
+  const selectNodeAt = (clientX: number, clientY: number) => {
+    const rect = svgRef.current?.getBoundingClientRect();
+    if (!rect || rect.width === 0) return;
+    const vb = clientToViewBox(clientX, clientY);
+    const mx = (vb.x - view.x) / view.scale;
+    const my = (vb.y - view.y) / view.scale;
+    const pad = ((10 / rect.width) * 1000) / view.scale; // 10 CSS px 的触控容错
+    let hitNode: GalaxyNode | null = null;
+    let hitDist = Infinity;
+    for (const node of GALAXY_NODES) {
+      const r = NODE_RADIUS[node.type];
+      const d = Math.hypot(node.x - mx, node.y - my);
+      const nearMarker = d <= r + pad;
+      // 已探明节点下方还有名称文字，点文字同样算命中
+      const nearLabel = visited.has(node.id) && node.type !== 'empty'
+        && Math.abs(mx - node.x) <= 90 && my >= node.y + r - 4 && my <= node.y + r + 34;
+      if ((nearMarker || nearLabel) && d < hitDist) { hitNode = node; hitDist = d; }
+    }
+    if (hitNode) setSelectedId(hitNode.id);
+  };
+
   const handlePointerEnd = (e: React.PointerEvent<SVGSVGElement>) => {
     pointersRef.current.delete(e.pointerId);
     if (pointersRef.current.size < 2) pinchRef.current = null;
-    if (pointersRef.current.size === 0) {
-      const drag = dragRef.current;
-      dragRef.current = null;
-      if (drag?.moved) {
-        // 这次是拖拽而非点击：抑制紧随其后的 click 选点
-        suppressClickRef.current = true;
-        setTimeout(() => { suppressClickRef.current = false; }, 0);
-      }
-    }
+    if (pointersRef.current.size > 0) return;
+
+    const drag = dragRef.current;
+    dragRef.current = null;
+    if (drag?.moved) return; // 这次是拖拽平移，不是点选
+    // 浏览器接管了手势（页面滚动/系统缩放）时会派发 pointercancel，这种不算点选
+    if (e.type === 'pointercancel') return;
+    selectNodeAt(e.clientX, e.clientY);
   };
+
+  // 选中后把信息卡滚进视野（block: 'nearest' 只在必要时滚动，桌面端几乎不动）
+  useEffect(() => {
+    if (selectedId && cardRef.current?.scrollIntoView) {
+      cardRef.current.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+    }
+  }, [selectedId]);
 
   /** 迷雾下的显示名：未探测过的星系不暴露名称（跃迁途中也不泄露目的地内容） */
   const displayNameOf = (id: string | null | undefined): string => {
@@ -423,6 +455,7 @@ function GalaxyMapPanel({ ship, factionReputation, onTravelToNode, onFoundColony
           onPointerMove={handlePointerMove}
           onPointerUp={handlePointerEnd}
           onPointerCancel={handlePointerEnd}
+          onClick={(e) => selectNodeAt(e.clientX, e.clientY)}
         >
           <g transform={`translate(${view.x} ${view.y}) scale(${view.scale})`}>
             {/* 航道 */}
@@ -453,11 +486,7 @@ function GalaxyMapPanel({ ship, factionReputation, onTravelToNode, onFoundColony
               const isTarget = galaxy.targetNodeId === node.id;
               const r = NODE_RADIUS[node.type];
               return (
-                <g
-                  key={node.id}
-                  onClick={() => { if (!suppressClickRef.current) setSelectedId(node.id); }}
-                  style={{ cursor: 'pointer' }}
-                >
+                <g key={node.id} style={{ cursor: 'pointer' }}>
                   {(isCurrent || isSelected || isTarget) && (
                     <circle
                       cx={node.x}
@@ -526,7 +555,7 @@ function GalaxyMapPanel({ ship, factionReputation, onTravelToNode, onFoundColony
 
       {/* ===== 信息卡 ===== */}
       {selectedNode ? (
-        <div className="bg-slate-900/60 border border-slate-700 rounded-xl p-3 md:p-4">{renderInfoCard(selectedNode)}</div>
+        <div ref={cardRef} className="bg-slate-900/60 border border-slate-700 rounded-xl p-3 md:p-4">{renderInfoCard(selectedNode)}</div>
       ) : (
         <div className="bg-slate-900/40 border border-slate-700/60 rounded-xl p-4 text-center text-xs text-slate-500">
           点击上方任意星系节点查看详情。
