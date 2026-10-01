@@ -7,7 +7,7 @@ import type { GalaxyNode } from '@/types/galaxy';
 import { GALAXY_NODES, GALAXY_NODE_MAP, getGalaxyNode } from '@/data/galaxy/nodes';
 import { GALAXY_LANES } from '@/data/galaxy/lanes';
 
-/** 每 80 坐标单位 = 1 回合（唯一真值；此值使势力间最短路均值 5.58 与原 DISTANCE_MATRIX 的 5.33 一致） */
+/** 每 80 坐标单位 = 1 回合（唯一真值；量级对齐已删除的旧 DISTANCE_MATRIX，当前势力间最短路 2~9、均值 ≈5.87） */
 export const TURN_UNIT = 80;
 /** 单条航道回合数区间 */
 export const MIN_LANE_TURNS = 1;

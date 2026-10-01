@@ -72,6 +72,11 @@ function TradePanel({ factions, ship, factionPrices, factionSellMultipliers, bla
   const travelTarget = getGalaxyNode(galaxy.targetNodeId);
   /** 已探明势力（迷雾唯一真值：lib/galaxy/knowledge.ts，与星图信息卡同源） */
   const knownFactionIds = useMemo(() => getKnownFactionIds(ship), [ship]);
+  /** 列表顺序：已探明在前、未探明占位在后（组内保持原编号顺序；Array.sort 稳定） */
+  const orderedFactions = useMemo(
+    () => [...factions].sort((a, b) => Number(knownFactionIds.has(b.id)) - Number(knownFactionIds.has(a.id))),
+    [factions, knownFactionIds]
+  );
   // 迷雾：跃迁途中不暴露未探测过的目的地名称（否则会泄露星球类型等信息）
   const travelTargetName = travelTarget
     ? ((ship.galaxy.visitedNodes || []).includes(travelTarget.id) ? travelTarget.name : '未探测星系')
@@ -287,7 +292,7 @@ function TradePanel({ factions, ship, factionPrices, factionSellMultipliers, bla
           </h3>
           <p className="text-[10px] md:text-xs text-slate-500 mb-4">未探明的势力只显示占位，跃迁抵达后揭晓。</p>
           <div className="space-y-2 max-h-72 overflow-auto">
-            {factions.map((f) => {
+            {orderedFactions.map((f) => {
               const isCurrent = f.id === currentFactionId;
               // ===== 迷雾：未到访过的势力不暴露任何信息 =====
               if (!knownFactionIds.has(f.id)) {

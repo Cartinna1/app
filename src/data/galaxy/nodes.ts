@@ -8,10 +8,11 @@ import type { GalaxyNode, GalaxyState } from '@/types/galaxy';
 
 export const GALAXY_NODES: GalaxyNode[] = [
   // ==================== 10 势力（核心区） ====================
-  // 坐标经一次"最短路贴近旧 DISTANCE_MATRIX"的优化：平均偏差 1.53 回合，势力间距离均值 5.58（旧 5.33）
+  // 坐标经一次"最短路贴近旧 DISTANCE_MATRIX"的优化：平均偏差 1.53 回合。
+  // 当前势力间最短路区间 2~9 回合、均值 ≈5.87（再改任何坐标都要重跑该对比表与 validateGalaxy）
   { id: 'f01', type: 'faction', name: '银河人类联邦', x: 172, y: 129, factionId: 'f01' },
   { id: 'f02', type: 'faction', name: '齐戈尔统一集群', x: 75, y: 333, factionId: 'f02' },
-  { id: 'f03', type: 'faction', name: '泰拉钢铁王座', x: 555, y: 220, factionId: 'f03' },
+  { id: 'f03', type: 'faction', name: '泰拉钢铁王座', x: 565, y: 248, factionId: 'f03' },
   { id: 'f04', type: 'faction', name: '阿基米德圣咏体', x: 443, y: 177, factionId: 'f04' },
   { id: 'f05', type: 'faction', name: '盖亚环廊商贸联合体', x: 254, y: 555, factionId: 'f05' },
   { id: 'f06', type: 'faction', name: '灵能蔷薇王朝', x: 721, y: 384, factionId: 'f06' },
