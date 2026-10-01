@@ -336,7 +336,7 @@ export function useTrade(
     (shipIndex: number): { success: boolean; message: string; goldChange: number } => {
       const ship0 = gameState.ships?.[shipIndex];
       const hereBlockB = requireFactionHere(ship0);
-      if (hereBlockB) return { success: false, message: hereBlockB };
+      if (hereBlockB) return { success: false, message: hereBlockB, goldChange: 0 };
       const curFid0 = getCurrentFactionId(ship0);
       if (curFid0) {
         const repBlockI0 = checkRepBlock(gameState, curFid0, 'intel');

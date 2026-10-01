@@ -157,13 +157,13 @@ export function useGalaxy(
     if (st.pendingChoice) return { success: false, message: '请先完成本阶段的抉择' };
     if (st.fails < 2) return { success: false, message: '连续失败 2 次后才能稳妥推进' };
     let result = { success: false, message: '' };
-    let logs: string[] = [];
     dispatch({
       type: 'FUNCTIONAL_UPDATE',
       updater: (prev) => {
         const ships = [...prev.ships];
         const s = { ...ships[0], colony: ships[0].colony ? { ...ships[0].colony } : ships[0].colony };
-        logs = resolveStage(s, site, st.stageIndex, { forced: true, bonusMult: 0.5 }).logs;
+        // 阶段推进（含奖励发放与日志）由 lib/galaxy/archaeologyTurn.resolveStage 统一处理
+        resolveStage(s, site, st.stageIndex, { forced: true, bonusMult: 0.5 });
         ships[0] = s;
         result = { success: true, message: '稳妥推进完成，阶段奖励减半' };
         return { ...prev, ships };

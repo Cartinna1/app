@@ -73,7 +73,6 @@ function ArchaeologyPanel({
   const activeState = activeEntry ? activeEntry[1] : undefined;
 
   const completed = ARCHAEOLOGY_SITES.filter((s) => archaeology[s.id]?.status === 'done');
-  const selectedSite = getArchaeologySite(selectedSiteId || undefined);
 
   /** 当前阶段的成功率（用于展示，公式唯一真值在 lib/galaxy/archaeologyTurn.ts） */
   const renderRate = (site: ArchaeologySite, stageIndex: number, leaderId: string | undefined) => {
