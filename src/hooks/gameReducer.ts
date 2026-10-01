@@ -2,6 +2,7 @@ import type { GameState, GameAction } from '@/types/game';
 import { FACTIONS, POLICY_EFFECTS, refreshFactionPrices, calculateSellMultipliers } from '@/data/factions';
 import { createMotherships, createStocks, createMaterials, createProducts } from '@/data/gameData';
 import { migrateSave } from '@/lib/save';
+import { getCurrentFactionId } from '@/lib/galaxy/access';
 
 // ==================== 初始状态（单一真值：新开局/重置/选船共用，勿另抄一份） ====================
 
@@ -72,7 +73,7 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
         products,
         factionPrices: refreshFactionPrices(),
         factionSellMultipliers: calculateSellMultipliers(
-          myShip.tradeStatus.currentFactionId,
+          getCurrentFactionId(myShip) || FACTIONS[0].id,
           { type: 'normal', effect: POLICY_EFFECTS['normal'] },
         ),
         buyStocks,

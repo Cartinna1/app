@@ -6,6 +6,8 @@ import { computePriceFluctuation } from '@/lib/turn/priceFluctuation';
 import { processShipTurn, getGameOverReason } from '@/lib/turn/shipTurn';
 import { computeFactionTurn, applyPassiveIncome } from '@/lib/turn/factionTurn';
 import { generateContracts } from '@/lib/turn/contracts';
+import { getCurrentFactionId } from '@/lib/galaxy/access';
+import { processArchaeologyTurn } from '@/lib/galaxy/archaeologyTurn';
 
 /**
  * 回合推进 hook（编排器）。
@@ -37,14 +39,17 @@ export function useTurn(
         const ships = prev.ships.map((ship) => processShipTurn(ship, prev.turn, stocks, mats, prods));
 
         // 殖民地回合处理（先克隆 colony，避免共享引用原地 mutate 击穿 memo 面板的重渲染）
+        const archaeologyLogs: string[] = [];
         ships.forEach((s) => {
           if (s.colony) s.colony = { ...s.colony };
           processColonyTurn(s, prev.turn + 1);
+          // 考古推进（阶段倒计时、成功率判定、阶段完成/危险结算）
+          archaeologyLogs.push(...processArchaeologyTurn(s));
           if (s.food >= 0 && s.famineTimer > 0 && !s.isRebellion) s.famineTimer = 0;
         });
 
         // 贸易政策 / 势力价格 / 市场库存需求 / buff 清理 / 星尘集市
-        const currentFid = ships[0]?.tradeStatus?.currentFactionId || FACTIONS[0].id;
+        const currentFid = getCurrentFactionId(ships[0]) || FACTIONS[0].id;
         const market = computeFactionTurn(prev, currentFid);
 
         // 游戏结束检测
@@ -68,6 +73,10 @@ export function useTurn(
           ...market,
           buyTriggered: {},
           sellTriggered: {},
+          // 考古日志（每回合最多几条，挂到事件日志尾部）
+          eventLog: archaeologyLogs.length > 0
+            ? [...archaeologyLogs.map((detail, i) => ({ id: `${prev.turn}-arch-${i}-${Date.now()}`, turn: prev.turn, event: '考古', detail })), ...prev.eventLog]
+            : prev.eventLog,
         };
       },
     });

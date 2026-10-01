@@ -17,6 +17,14 @@ export const RELIC_LUCKY_CAT = 'r_013';          // 招财猫摆件：每回合+
 export const RELIC_ANTI_MONOPOLY = 'r_014';      // 反垄断法案：特产卖出价格+10%
 export const RELIC_BARGAIN_AI = 'r_015';         // 讨价还价AI机器人：买特产价格打9折
 
+// ===== 考古专属遗物（只能通过遗迹发掘获得，见 data/galaxy/archaeology.ts） =====
+export const RELIC_RESONANCE_FORK = 'r_016';     // 共鸣音叉：每回合+3星尘
+export const RELIC_UNFINISHED_MIRROR = 'r_017';  // 未完成的镜：每回合+2科研点
+export const RELIC_DEEP_DRILL = 'r_018';         // 深层钻头：所有原料建筑产出+1
+export const RELIC_ARBITRAGE_NOTE = 'r_019';     // 套利凭证：卖出特产+5%金币
+export const RELIC_SEVENTH_LAYER = 'r_020';      // 第七层手稿：考古阶段成功率+10%
+export const RELIC_BLANK_IDOL = 'r_021';         // 空白神像：全部建筑产出+10%
+
 /**
  * 遗物数据 - 共15个
  * 效果必须可在代码中实现（通过relicId判断）
@@ -132,7 +140,57 @@ export const ALL_RELICS: Relic[] = [
   },
 ];
 
-// 随机生成一个遗物（用于星尘集市每日刷新）
+/**
+ * 考古专属遗物（r_016~r_021）
+ * 只作为遗迹发掘的最终奖励发放，**不进星尘集市**（rollRelic 只从 ALL_RELICS 抽取）。
+ * stardustCost 固定 0 = 非卖品。
+ */
+export const ARCHAEOLOGY_RELICS: Relic[] = [
+  {
+    id: RELIC_RESONANCE_FORK,
+    name: '共鸣音叉',
+    description: '无声钟楼里唯一还能发出声音的部件，被拆下时仍在极轻地振动',
+    effect: '每回合 +3 星尘',
+    stardustCost: 0,
+  },
+  {
+    id: RELIC_UNFINISHED_MIRROR,
+    name: '未完成的镜',
+    description: '磨镜者留下的最后一面镜坯，表面只磨到了一半，却已经能照出结论',
+    effect: '每回合 +2 科研点',
+    stardustCost: 0,
+  },
+  {
+    id: RELIC_DEEP_DRILL,
+    name: '深层钻头',
+    description: '深掘者用来啃开行星外壳的钻头，碳壳在它面前像湿土',
+    effect: '所有原料建筑产出 +1',
+    stardustCost: 0,
+  },
+  {
+    id: RELIC_ARBITRAGE_NOTE,
+    name: '套利凭证',
+    description: '汇兑者网络里最后一张仍在计息的凭证，签名栏空着，谁持有就归谁',
+    effect: '卖出特产额外 +5% 金币',
+    stardustCost: 0,
+  },
+  {
+    id: RELIC_SEVENTH_LAYER,
+    name: '第七层手稿',
+    description: '倏忽人碑林最深处那一层的抄本，记的是如何把话说给时间听',
+    effect: '考古阶段成功率 +10%',
+    stardustCost: 0,
+  },
+  {
+    id: RELIC_BLANK_IDOL,
+    name: '空白神像',
+    description: '华胥人留下的最后一尊神像，脸上什么都没有刻，却谁都认得出来',
+    effect: '全部建筑产出 +10%',
+    stardustCost: 0,
+  },
+];
+
+// 随机生成一个遗物（用于星尘集市每日刷新；只出集市款）
 
 export function rollRelic(excludeIds: string[] = []): Relic | null {
   const pool = ALL_RELICS.filter((r) => !excludeIds.includes(r.id));
@@ -140,7 +198,7 @@ export function rollRelic(excludeIds: string[] = []): Relic | null {
   return pool[Math.floor(Math.random() * pool.length)];
 }
 
-// 根据ID获取遗物
+// 根据ID获取遗物（含考古专属遗物，供 UI 反查名称/描述）
 export function getRelicById(id: string): Relic | undefined {
-  return ALL_RELICS.find((r) => r.id === id);
+  return ALL_RELICS.find((r) => r.id === id) || ARCHAEOLOGY_RELICS.find((r) => r.id === id);
 }

@@ -1,5 +1,7 @@
 // ==================== 星际贸易 ====================
 
+import type { GalaxyState } from './galaxy';
+
 export interface Faction {
   id: string;
   name: string;
@@ -15,9 +17,7 @@ export interface FactionState {
 }
 
 export interface TradeStatus {
-  currentFactionId: string; // 当前停靠的势力
-  targetFactionId: string | null; // 跃迁目标
-  travelTurnsRemaining: number; // 剩余跃迁回合数
+  // ⚠ 位置与跃迁状态已迁往 ship.galaxy（星图，单一真值）：currentNodeId / targetNodeId / travelTurnsRemaining
   inventory: Record<string, number>; // 特产库存（factionId -> 数量）
   factionStates: Record<string, FactionState>; // 各势力投资状态（待 Phase3 迁移）
   exploredThisTurn: boolean; // 本回合是否已探索过
@@ -199,6 +199,7 @@ export interface Mothership {
   eventTriggeredThisTurn?: boolean;
   eventProcessedThisTurn?: boolean;
   tradeStatus: TradeStatus;
+  galaxy: GalaxyState;           // 星图状态（位置 / 跃迁 / 迷雾 / 考古），见 types/galaxy.ts
   goldLog: GoldLogEntry[];
   colony?: import('./colony').Colony; // 星际殖民（Phase 1）
 }

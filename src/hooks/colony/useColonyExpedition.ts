@@ -4,43 +4,15 @@
 
 import { useCallback } from 'react';
 import type { GameState } from '@/types/game';
-import type { Colony } from '@/types/colony';
-import { EXPEDITION_COST, RESOURCE_LABELS, getLeaderExpedition } from '@/data/colony/expeditions';
+import { EXPEDITION_COST, getLeaderExpedition } from '@/data/colony/expeditions';
 import { getLeaderDef } from '@/data/colony/leaders';
 import { enterExpeditionHistory, recordExpeditionEnding } from '@/lib/colony/expeditionTurn';
+import { deductResource, firstMissing } from '@/lib/turn/resourceCost';
 
 interface ExpeditionActions {
   startExpedition: (leaderId: string) => { success: boolean; message: string };
   payExpeditionNode: () => { success: boolean; message: string };
   unlockUltimate: (leaderId: string) => { success: boolean; message: string };
-}
-
-/** 当前持有量（按资源 key） */
-function resourceAmount(s: GameState['ships'][0], colony: Colony, key: string): number {
-  switch (key) {
-    case 'gold': return s.gold;
-    case 'food': return s.food;
-    case 'alloy': return s.alloy;
-    case 'stardust': return s.stardust;
-    case 'researchPoints': return colony.techState?.researchPoints || 0;
-    default: return (s.materials && s.materials[key]) || 0; // silicon/quantum/carbon/dark_matter 等
-  }
-}
-
-/** 扣减（调用方已克隆 s 与 colony，直接改写） */
-function deductResource(s: GameState['ships'][0], colony: Colony, key: string, amount: number): void {
-  switch (key) {
-    case 'gold': s.gold -= amount; break;
-    case 'food': s.food -= amount; break;
-    case 'alloy': s.alloy -= amount; break;
-    case 'stardust': s.stardust -= amount; break;
-    case 'researchPoints':
-      if (colony.techState) colony.techState = { ...colony.techState, researchPoints: colony.techState.researchPoints - amount };
-      break;
-    default:
-      s.materials = { ...s.materials, [key]: ((s.materials && s.materials[key]) || 0) - amount };
-      break;
-  }
 }
 
 export function useColonyExpedition(
@@ -89,12 +61,9 @@ export function useColonyExpedition(
     const cost = node?.cost;
     if (!node || !cost) return { success: false, message: '当前节点无需支付' };
 
-    // 资源校验
-    for (const [key, amount] of Object.entries(cost)) {
-      if (resourceAmount(ship, colony, key) < amount) {
-        return { success: false, message: `资源不足：${RESOURCE_LABELS[key] || key}不足（需要 ${amount}）` };
-      }
-    }
+    // 资源校验（口径唯一真值：lib/turn/resourceCost.ts，与考古共用）
+    const missing = firstMissing(ship, colony, cost);
+    if (missing) return { success: false, message: missing };
 
     let result = { success: false, message: '' };
     dispatch({

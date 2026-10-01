@@ -23,7 +23,13 @@ function App() {
     clearEventDodged,
     takeLoan,
     repayLoan,
-    travelToFaction,
+    travelToNode,
+    startExcavation,
+    continueExcavation,
+    resolveExcavationChoice,
+    steadyExcavation,
+    changeExcavationLeader,
+    abandonExcavation,
     buySpecialty,
     sellSpecialty,
     exploreFaction,
@@ -34,10 +40,7 @@ function App() {
     blackMarketBuy,
     installModule,
     useManualModule,
-    unlockColony,
-    selectPlanet,
-    rescrollPlanets,
-    generateScoutingPool,
+    foundColony,
     buildColonyBuilding,
     recruitPop,
     assignPop,
@@ -121,7 +124,7 @@ function App() {
       onClearEventDodged={clearEventDodged}
       onTakeLoan={takeLoan}
       onRepayLoan={repayLoan}
-      onTravelToFaction={travelToFaction}
+      onTravelToNode={travelToNode}
       onBuySpecialty={buySpecialty}
       onSellSpecialty={sellSpecialty}
       onExploreFaction={exploreFaction}
@@ -130,12 +133,15 @@ function App() {
       onAcceptContract={acceptContract}
       onCompleteContract={completeContract}
       onBlackMarketBuy={blackMarketBuy}
+      onStartExcavation={startExcavation}
+      onContinueExcavation={continueExcavation}
+      onResolveExcavationChoice={resolveExcavationChoice}
+      onSteadyExcavation={steadyExcavation}
+      onChangeExcavationLeader={changeExcavationLeader}
+      onAbandonExcavation={abandonExcavation}
       onInstallModule={installModule}
       onUseManualModule={useManualModule}
-      onUnlockColony={unlockColony}
-      onSelectPlanet={selectPlanet}
-      onRescrollPlanets={rescrollPlanets}
-      generateScoutingPool={generateScoutingPool}
+      onFoundColony={foundColony}
       onBuildColonyBuilding={buildColonyBuilding}
       onRecruitPop={recruitPop}
       onAssignPop={assignPop}

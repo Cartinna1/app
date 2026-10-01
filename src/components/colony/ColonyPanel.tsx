@@ -1,6 +1,6 @@
-import { useState, useMemo, useEffect, useCallback, memo } from 'react';
+import { useState, useMemo, useCallback, memo } from 'react';
 import type { Mothership } from '@/types/game';
-import type { PlanetTypeId, PlanetDef } from '@/types/colony';
+import type { PlanetDef } from '@/types/colony';
 import { getBuildableBuildings, getBuildingDef, getBuildingEffect, BUILDING_QUANTUM_LAB } from '@/data/colony/buildings';
 import { getPlanetById } from '@/data/colony/planets';
 import { getTechById, getAvailableTechs, REPEATABLE_TECHS, getRepeatableCost } from '@/data/colony/techs';
@@ -108,10 +108,6 @@ const CAT_LABELS: Record<string, string> = {
 
 interface ColonyPanelProps {
   ship: Mothership;
-  onUnlockColony: () => { success: boolean; message: string };
-  onSelectPlanet: (planetId: PlanetTypeId, name: string) => { success: boolean; message: string };
-  onRescrollPlanets: () => { success: boolean; message: string };
-  generateScoutingPool: () => PlanetTypeId[];
   onBuild: (defId: string) => { success: boolean; message: string };
   onRecruitPop: (amount: number) => { success: boolean; message: string };
   onAssignPop: (buildingUid: string, count: number) => { success: boolean; message: string };
@@ -135,7 +131,7 @@ interface ColonyPanelProps {
 type ColonyTab = 'overview' | 'buildings' | 'population' | 'research' | 'leaders' | 'wonders' | 'expedition' | 'gallery';
 
 function ColonyPanel(props: ColonyPanelProps) {
-  const { ship, onUnlockColony, onSelectPlanet, onRescrollPlanets, generateScoutingPool, onBuild, onRecruitPop, onAssignPop, onStartResearch, onRecruitLeader, onUpgradeLeader, onRollAndRecruit, onCancelBuilding, onDemolishBuilding, onSelectWonder, onSubmitWonderResources, onCompleteWonder, canStartWonder, onStartExpedition, onPayExpeditionNode, onUnlockUltimate } = props;
+  const { ship, onBuild, onRecruitPop, onAssignPop, onStartResearch, onRecruitLeader, onUpgradeLeader, onRollAndRecruit, onCancelBuilding, onDemolishBuilding, onSelectWonder, onSubmitWonderResources, onCompleteWonder, canStartWonder, onStartExpedition, onPayExpeditionNode, onUnlockUltimate } = props;
   const colony = ship.colony;
   const [tab, setTab] = useState<ColonyTab>('overview');
   const [message, setMessage] = useState('');
@@ -145,27 +141,11 @@ function ColonyPanel(props: ColonyPanelProps) {
   const recruitCostPerPop = useMemo(() => (colony ? getRecruitCostPerPop(colony) : RECRUIT_BASE_COST), [colony]);
   const remainingRecruit = Math.max(0, recruitCap - (colony?.recruitedThisTurn || 0));
   const recruitRollCost = useMemo(() => (colony ? getRecruitRollCost(colony.leaders) : 10), [colony]);
-  const [planetName, setPlanetName] = useState('');
   const [buildCatFilter, setBuildCatFilter] = useState<string>('housing');
   const [popCatFilter, setPopCatFilter] = useState<string>('all');
   const [liveBuildFilter, setLiveBuildFilter] = useState<string>('housing');
   const [expandedLiveGroups, setExpandedLiveGroups] = useState<Record<string, boolean>>({});
   const showMsg = useCallback((m: string, t: 'success' | 'error') => { setMessage(m); setMsgType(t); setTimeout(() => setMessage(''), 4000); }, []);
-
-  // 离开选择星球阶段时清理状态
-  useEffect(() => {
-    if (!colony || colony.phase !== 'selecting') {
-      setPlanetName('');
-    }
-  }, [colony?.phase]);
-
-  // 进入选择星球阶段但星球池为空时，通过 dispatch 正规生成（不可变更新），
-  // 替代原先在渲染期直接 colony.scoutingPool = p 的副作用写法。
-  useEffect(() => {
-    if (colony?.phase === 'selecting' && (!colony.scoutingPool || colony.scoutingPool.length === 0)) {
-      generateScoutingPool();
-    }
-  }, [colony?.phase, colony?.scoutingPool, generateScoutingPool]);
 
   // 科研：稳定随机选项
   const researchOptions = useMemo(() => {
@@ -214,22 +194,17 @@ function ColonyPanel(props: ColonyPanelProps) {
     return map;
   }, [liveBuildings]);
 
-  // ===== 未解锁 =====
+  // ===== 未建立殖民地：入口已统一到星图 =====
   if (!colony || colony.phase === 'inactive') {
     return (
       <div className="space-y-4">
         <h2 className="text-xl font-bold text-white">星际殖民</h2>
         <div className="bg-slate-900/60 border border-slate-700 rounded-xl p-6 text-center">
           <Home size={48} className="mx-auto mb-3 text-slate-600" />
-          <p className="text-slate-300 text-sm mb-2">尚未解锁星际殖民功能</p>
-          <p className="text-slate-500 text-sm mb-4">花费 30,000 金币组建远征军，开拓属于你的殖民星球。</p>
-          <button
-            onClick={() => { const r = onUnlockColony(); showMsg(r.message, r.success ? 'success' : 'error'); }}
-            disabled={ship.gold < 30000}
-            className={`px-6 py-2.5 rounded-lg font-bold text-sm transition-colors ${ship.gold >= 30000 ? 'bg-cyan-600 hover:bg-cyan-500 text-white' : 'bg-slate-700 text-slate-500 cursor-not-allowed'}`}
-          >{ship.gold >= 30000 ? '组建远征军 (30,000金币)' : '金币不足 (30,000)'}</button>
+          <p className="text-slate-300 text-sm mb-2">尚未建立殖民地</p>
+          <p className="text-slate-500 text-sm mb-2">前往「星图」页签，跃迁到可殖民星球并花费 30,000 金币建立殖民地。</p>
+          <p className="text-slate-600 text-xs">星球类型由你选择的那颗星球决定，全局只能殖民一颗。</p>
         </div>
-        <FeedbackMessage message={message} type={msgType} />
       </div>
     );
   }
@@ -248,57 +223,7 @@ function ColonyPanel(props: ColonyPanelProps) {
     );
   }
 
-  // ===== 选择星球 =====
-  if (colony.phase === 'selecting') {
-    const pool = colony.scoutingPool;
-    // 池为空时不在这里生成——由下方 useEffect 通过 dispatch 正规写入，渲染体保持纯净。
-    // 此分支仅在 effect 触发 dispatch、state 更新前短暂出现，返回 null 避免闪烁。
-    if (!pool || pool.length === 0) return null;
-    return (
-      <div className="space-y-4">
-        <h2 className="text-xl font-bold text-white">选择殖民星球</h2>
-        <p className="text-sm text-slate-400">远征军为你找到了3颗候选星球。请为你的殖民地挑选一颗并命名。</p>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-          {pool.map((pid) => {
-            const p = getPlanetById(pid);
-            if (!p) return null;
-            const buffs = getBuffList(p);
-            return (
-              <div key={pid} className="bg-slate-900/60 border border-slate-700 rounded-xl overflow-hidden">
-                <div className="h-28 bg-slate-800 overflow-hidden">
-                  <img src={`/planets/${pid}.png`} alt={p.name} className="w-full h-full object-cover" />
-                </div>
-                <div className="p-4">
-                <h4 className="font-bold text-slate-100 mb-2">{p.name}</h4>
-                <p className="text-sm text-slate-400 mb-3">{p.description}</p>
-                <div className="space-y-1 mb-4">
-                  {buffs.map((bf, i) => (
-                    <p key={i} className="text-sm">
-                      <span className={bf.color + ' font-bold'}>{bf.name}</span>
-                      <span className="text-slate-500 ml-1">{bf.desc}</span>
-                    </p>
-                  ))}
-                </div>
-                <button onClick={() => {
-                  if (!planetName) { showMsg('请先输入星球名称', 'error'); return; }
-                  const r = onSelectPlanet(pid, planetName); showMsg(r.message, r.success ? 'success' : 'error');
-                }} className="w-full py-2 bg-cyan-700 hover:bg-cyan-600 rounded-lg text-sm font-bold text-white">殖民此星球</button>
-                </div>
-              </div>
-            );
-          })}
-        </div>
-        <div className="flex gap-2">
-          <input value={planetName} onChange={(e) => setPlanetName(e.target.value.slice(0, 16))} placeholder="输入星球名称 (3-16字符)"
-            className="flex-1 bg-slate-800 border border-slate-600 rounded-lg px-3 py-2 text-sm text-slate-200" />
-          <button onClick={() => { const r = onRescrollPlanets(); showMsg(r.message, r.success ? 'success' : 'error'); }}
-            disabled={ship.gold < 30000}
-            className="px-4 py-2 bg-slate-700 hover:bg-slate-600 disabled:opacity-50 rounded-lg text-sm text-slate-200">重新探索 (30,000G)</button>
-        </div>
-        <FeedbackMessage message={message} type={msgType} />
-      </div>
-    );
-  }
+  // 旧「3 选 1 选择星球」分支已删除：星球在星图 foundColony 时就已确定（不再有 selecting 阶段）
 
   // ===== 殖民运行中 =====
   const planet = colony.planetType ? getPlanetById(colony.planetType) : null;
@@ -370,7 +295,7 @@ function ColonyPanel(props: ColonyPanelProps) {
           </div>
           {/* 电能状态 */}
           {(() => {
-            const power = computeColonyPower(colony);
+            const power = computeColonyPower(colony, { relics: ship.relics, permaBonuses: ship.galaxy?.permaBonuses || [] });
             const netPwr = (colony.energy ?? 0);
             const hasL22Lv3 = hasBlackoutImmunity(colony);
             return (
@@ -418,7 +343,7 @@ function ColonyPanel(props: ColonyPanelProps) {
           })()}
           {/* 产出汇总（统一走 economy 模块估算） */}
           {(liveBuildings.length > 0 || (colony.leaders?.length || 0) > 0) && (() => {
-            const eco = computeColonyEconomy(colony, { relics: ship.relics });
+            const eco = computeColonyEconomy(colony, { relics: ship.relics, permaBonuses: ship.galaxy?.permaBonuses || [] });
             const MAT_CN: Record<string, string> = MATERIAL_NAME_MAP;
             const OUT_LABEL: Record<string, string> = { food:'食物', alloy:'合金', stardust:'星尘', gold:'金币', research:'科研' };
             const bonusLines: { label: string; value: number; detail: string }[] = [];
@@ -484,9 +409,17 @@ function ColonyPanel(props: ColonyPanelProps) {
                     </span>
                   </div>
                 )}
+                {/* 遗物每回合特效（如考古遗物「未完成的镜」，不来自建筑，单独列出） */}
+                {eco.relicPerTurn.research > 0 && (
+                  <div className="flex flex-wrap items-baseline gap-x-1">
+                    <span className="text-slate-500">遗物特效:</span>
+                    <span className="text-purple-300">科研+{eco.relicPerTurn.research}</span>
+                  </div>
+                )}
                 {Object.keys(agg).length===0 && Object.keys(aggMat).length===0
                   && eco.leaderPerTurn.research === 0 && eco.leaderPerTurn.stardust === 0
                   && Object.keys(eco.leaderPerTurn.materials).length === 0 && eco.leaderPerTurn.randomMats === 0
+                  && eco.relicPerTurn.research === 0
                   && <span className="text-slate-500">暂无产出（建筑无人入驻）</span>}
               </div>
               <div className="text-sm text-red-400 mt-2">
@@ -512,7 +445,7 @@ function ColonyPanel(props: ColonyPanelProps) {
       {/* ===== 建筑 ===== */}
       {tab === 'buildings' && (() => {
         // 每回合产出（统一走 economy 模块估算，金币取区间中值）
-        const liveEco = computeColonyEconomy(colony, { relics: ship.relics });
+        const liveEco = computeColonyEconomy(colony, { relics: ship.relics, permaBonuses: ship.galaxy?.permaBonuses || [] });
         const ecoByUid = new Map(liveEco.buildings.map((e) => [e.uid, e]));
         const OUT_UN: Record<string, string> = { food: '食物', alloy: '合金', stardust: '星尘', gold: '金币', research: '科研' };
         const MAT_UN: Record<string, string> = MATERIAL_NAME_MAP;

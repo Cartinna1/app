@@ -141,9 +141,8 @@ export interface ColonyLeader {
 // ==================== 殖民地 ====================
 
 export type ColonyPhase =
-  | 'inactive'               // 未解锁
-  | 'scouting'               // 探索中（等待2回合）
-  | 'selecting'              // 选择星球
+  | 'inactive'               // 未建立（入口在星图：foundColony）
+  | 'scouting'               // 远征军航行中（2 回合建设期，星球类型已确定）
   | 'active';                // 殖民地运行中
 
 export interface Colony {
@@ -158,7 +157,6 @@ export interface Colony {
   techState?: TechState;           // 科技状态（Phase 2）
   leaders: ColonyLeader[];           // 已招募的领袖
   leaderCap: number;                 // 领袖上限（基础3）
-  scoutingPool?: PlanetTypeId[];     // 可选择的星球池（3个）
   recruitPool?: any[];               // 招募池（领袖选项，暂存）
   wonder?: WonderState;              // 奇观建设状态
   energy: number;                    // 当前净电能（-1以下=停电）

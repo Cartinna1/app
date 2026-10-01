@@ -2,9 +2,10 @@ import { useState, memo } from 'react';
 import type { Mothership, Faction, TradePolicy, PolicyEffect, FactionContract } from '@/types/game';
 import { getDistance, getTravelTurns, getSellPrice, getReputationTier, FACTIONS as FACTIONS_DATA, RELATION_MATRIX } from '@/data/factions';
 import { getContractItemName } from '@/lib/turn/contracts';
+import { getGalaxyNode } from '@/data/galaxy/nodes';
 import { Globe, ShoppingCart, TrendingUp, Compass, Coins, Rocket, BarChart3, Radio, AlertTriangle } from 'lucide-react';
 
-interface TradePanelProps {
+export interface TradePanelProps {
   factions: Faction[];
   ship: Mothership;
   factionPrices: Record<string, number>;
@@ -28,6 +29,8 @@ interface TradePanelProps {
   onAcceptContract: (contractId: string) => { success: boolean; message: string };
   onCompleteContract: (contractId: string) => { success: boolean; message: string };
   onBlackMarketBuy: (factionId: string, itemId: string, qty: number) => { success: boolean; message: string };
+  /** 由星图信息卡内嵌时置 true：隐藏"星际势力分布/跃迁"区（跃迁统一在星图页签操作） */
+  hideTravelSection?: boolean;
 }
 
 type TradeTab = 'overview' | 'buy' | 'sell' | 'explore' | 'buy-invest' | 'intel';
@@ -44,7 +47,7 @@ function TravelLockOverlay({ turnsRemaining, targetName }: { turnsRemaining: num
   );
 }
 
-function TradePanel({ factions, ship, factionPrices, factionSellMultipliers, blackMarketMultiplier, buyStocks, sellDemands, buyBuffs, sellBuffs, factionPolicy, policyRemainingTurns, onTravel, onBuy, onSell, onExplore, onInvest, onGatherIntel, factionReputation, factionContracts, currentTurn, onAcceptContract, onCompleteContract, onBlackMarketBuy }: TradePanelProps) {
+function TradePanel({ factions, ship, factionPrices, factionSellMultipliers, blackMarketMultiplier, buyStocks, sellDemands, buyBuffs, sellBuffs, factionPolicy, policyRemainingTurns, onTravel, onBuy, onSell, onExplore, onInvest, onGatherIntel, factionReputation, factionContracts, currentTurn, onAcceptContract, onCompleteContract, onBlackMarketBuy, hideTravelSection = false }: TradePanelProps) {
   const [activeTab, setActiveTab] = useState<TradeTab>('overview');
   const [selectedTarget, setSelectedTarget] = useState<string>('');
   const [buyQty, setBuyQty] = useState('1');
@@ -56,18 +59,22 @@ function TradePanel({ factions, ship, factionPrices, factionSellMultipliers, bla
   const [msgType, setMsgType] = useState<'success' | 'error'>('success');
 
   const ts = ship.tradeStatus;
-  const currentFaction = factions.find((f) => f.id === ts.currentFactionId);
-  const currentRep = (factionReputation || {})[ts.currentFactionId] || 0;
+  // 位置与跃迁状态的唯一真值是 ship.galaxy（星图）；本面板只负责"停在势力星系时"的交易操作
+  const galaxy = ship.galaxy;
+  const currentNode = getGalaxyNode(galaxy.currentNodeId);
+  const currentFactionId = currentNode?.factionId ?? null;
+  const currentFaction = currentFactionId ? factions.find((f) => f.id === currentFactionId) : undefined;
+  const currentRep = (factionReputation || {})[currentFactionId || ''] || 0;
   const currentRepTier = getReputationTier(currentRep);
 
-  const isTraveling = ts.travelTurnsRemaining > 0;
-  const travelTarget = ts.targetFactionId ? factions.find((f) => f.id === ts.targetFactionId) : null;
+  const isTraveling = galaxy.travelTurnsRemaining > 0;
+  const travelTarget = getGalaxyNode(galaxy.targetNodeId);
 
   const inventoryEntries = Object.entries(ts.inventory).filter(([, count]) => count > 0);
 
   // 当前势力的市场价（带声望折扣 + 涨价buff）
   const marketPrice = currentFaction ? (factionPrices[currentFaction.id] || currentFaction.basePrice) : 0;
-  const curFid = ts.currentFactionId;
+  const curFid = currentFactionId || '';
   const buyBuffMult = currentFaction ? (buyBuffs?.[currentFaction.id] || []).reduce((m, b) => m * b.multiplier, 1) : 1;
   const buyPrice = currentFaction && currentRepTier ? Math.ceil(marketPrice * (1 - currentRepTier.discount) * buyBuffMult) : marketPrice;
   const buyStockLeft = currentFaction ? (buyStocks?.[currentFaction.id] ?? 0) : 0;
@@ -175,7 +182,7 @@ function TradePanel({ factions, ship, factionPrices, factionSellMultipliers, bla
             <div className="text-right">
               <p className="text-xs text-yellow-400">跃迁中</p>
               <p className="text-sm text-slate-300">前往 {travelTarget.name}</p>
-              <p className="text-xs text-slate-500">剩余 {ts.travelTurnsRemaining} 回合</p>
+              <p className="text-xs text-slate-500">剩余 {galaxy.travelTurnsRemaining} 回合</p>
             </div>
           )}
         </div>
@@ -211,7 +218,7 @@ function TradePanel({ factions, ship, factionPrices, factionSellMultipliers, bla
               );
             })()}
         {/* 声望投资快捷按钮 */}
-        {currentFaction && !isTraveling && currentFaction.id === ts.currentFactionId && (
+        {currentFaction && !isTraveling && currentFaction.id === currentFactionId && (
           <button onClick={() => setActiveTab('buy-invest')} className="mt-3 w-full py-1.5 bg-blue-900/40 hover:bg-blue-800/60 border border-blue-700/40 rounded text-xs text-blue-300">💰 投资 {currentFaction.name}</button>
         )}
 
@@ -264,14 +271,14 @@ function TradePanel({ factions, ship, factionPrices, factionSellMultipliers, bla
         ))}
       </div>
 
-      {/* 星际地图 */}
-      {activeTab === 'overview' && (
+      {/* 星际势力分布（跃迁已迁到「星图」页签；内嵌到星图信息卡时用 hideTravelSection 隐藏本区） */}
+      {activeTab === 'overview' && !hideTravelSection && (
         <div className="bg-slate-900/60 border border-slate-700 rounded-xl p-5">
           <h3 className="text-lg font-bold text-slate-200 mb-4 flex items-center gap-2"><Globe size={18} className="text-cyan-400" /> 星际势力分布</h3>
           <div className="space-y-2 max-h-72 overflow-auto">
             {factions.map((f) => {
               const dist = currentFaction ? getDistance(currentFaction.id, f.id) : 0;
-              const isCurrent = f.id === ts.currentFactionId;
+              const isCurrent = f.id === currentFactionId;
               const turns = currentFaction ? getTravelTurns(currentFaction.id, f.id) : 0;
               
               const fPrice = factionPrices[f.id] || f.basePrice;
@@ -327,13 +334,21 @@ function TradePanel({ factions, ship, factionPrices, factionSellMultipliers, bla
               <Rocket size={16} /> {isHostile ? '该势力与你为敌，无法进入' : '确认跃迁'}
             </button>
           )}
-          {isTraveling && <div className="mt-4 text-center text-sm text-yellow-400 bg-yellow-900/20 rounded-lg py-2">跃迁中... 剩余 {ts.travelTurnsRemaining} 回合抵达 {travelTarget?.name}</div>}
+          {isTraveling && <div className="mt-4 text-center text-sm text-yellow-400 bg-yellow-900/20 rounded-lg py-2">跃迁中... 剩余 {galaxy.travelTurnsRemaining} 回合抵达 {travelTarget?.name}</div>}
+        </div>
+      )}
+
+      {/* 内嵌模式：跃迁统一在星图页签操作 */}
+      {activeTab === 'overview' && hideTravelSection && (
+        <div className="bg-slate-900/60 border border-slate-700 rounded-xl p-5 text-center">
+          <Globe size={24} className="text-cyan-400 mx-auto mb-2" />
+          <p className="text-sm text-slate-300">跃迁请在「星图」页签选择目标星系，那里会显示航道与所需的跃迁回合数。</p>
         </div>
       )}
 
       {/* 购买特产 */}
       {activeTab === 'buy' && (
-        isTraveling && travelTarget ? <TravelLockOverlay turnsRemaining={ts.travelTurnsRemaining} targetName={travelTarget.name} /> : (
+        isTraveling && travelTarget ? <TravelLockOverlay turnsRemaining={galaxy.travelTurnsRemaining} targetName={travelTarget.name} /> : (
           <div className="bg-slate-900/60 border border-slate-700 rounded-xl p-5">
             <h3 className="text-lg font-bold text-slate-200 mb-4 flex items-center gap-2"><ShoppingCart size={18} className="text-green-400" /> 购买特产</h3>
             {currentFaction && (
@@ -388,7 +403,7 @@ function TradePanel({ factions, ship, factionPrices, factionSellMultipliers, bla
 
       {/* 声望投资（购买特产内的次级面板） */}
       {activeTab === 'buy-invest' && (
-        isTraveling && travelTarget ? <TravelLockOverlay turnsRemaining={ts.travelTurnsRemaining} targetName={travelTarget.name} /> : (
+        isTraveling && travelTarget ? <TravelLockOverlay turnsRemaining={galaxy.travelTurnsRemaining} targetName={travelTarget.name} /> : (
           <div className="bg-slate-900/60 border border-slate-700 rounded-xl p-5">
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-lg font-bold text-slate-200 flex items-center gap-2"><BarChart3 size={18} className="text-blue-400" /> 投资 {currentFaction?.name}</h3>
@@ -410,7 +425,7 @@ function TradePanel({ factions, ship, factionPrices, factionSellMultipliers, bla
 
       {/* 贩卖特产 */}
       {activeTab === 'sell' && (
-        isTraveling && travelTarget ? <TravelLockOverlay turnsRemaining={ts.travelTurnsRemaining} targetName={travelTarget.name} /> : (
+        isTraveling && travelTarget ? <TravelLockOverlay turnsRemaining={galaxy.travelTurnsRemaining} targetName={travelTarget.name} /> : (
           <div className="bg-slate-900/60 border border-slate-700 rounded-xl p-5">
             <h3 className="text-lg font-bold text-slate-200 mb-4 flex items-center gap-2"><TrendingUp size={18} className="text-yellow-400" /> 贩卖特产</h3>
             {inventoryEntries.length === 0 ? <p className="text-sm text-slate-500 text-center py-8">暂无特产库存</p> : (
@@ -435,7 +450,7 @@ function TradePanel({ factions, ship, factionPrices, factionSellMultipliers, bla
                     if (!f) return null;
                     const sellP = getSellPrice(fid, factionPrices, factionSellMultipliers);
                     const dist = currentFaction ? getDistance(currentFaction.id, fid) : 0;
-                    const isLocal = ts.currentFactionId === fid;
+                    const isLocal = currentFactionId === fid;
                     return (
                       <div key={fid} className={`rounded-lg p-3 ${sellFaction === fid ? 'border border-yellow-500 bg-yellow-900/10' : isLocal ? 'border border-red-700/30 bg-red-950/10' : 'border border-slate-700 bg-slate-800/40'}`}>
                         <div className="flex items-center justify-between gap-3">
@@ -492,7 +507,7 @@ function TradePanel({ factions, ship, factionPrices, factionSellMultipliers, bla
 
       {/* 探索 */}
       {activeTab === 'explore' && (
-        isTraveling && travelTarget ? <TravelLockOverlay turnsRemaining={ts.travelTurnsRemaining} targetName={travelTarget.name} /> : (
+        isTraveling && travelTarget ? <TravelLockOverlay turnsRemaining={galaxy.travelTurnsRemaining} targetName={travelTarget.name} /> : (
           <div className="bg-slate-900/60 border border-slate-700 rounded-xl p-5">
             <h3 className="text-lg font-bold text-slate-200 mb-4 flex items-center gap-2"><Compass size={18} className="text-purple-400" /> 探索 {currentFaction?.name}</h3>
             <p className="text-sm text-slate-400 mb-4">在{currentFaction?.name || '当前势力'}的辖区内探索，可能发现随机原料资源。每回合限一次。</p>
@@ -519,7 +534,7 @@ function TradePanel({ factions, ship, factionPrices, factionSellMultipliers, bla
 
       {/* 打探消息 */}
       {activeTab === 'intel' && (
-        isTraveling && travelTarget ? <TravelLockOverlay turnsRemaining={ts.travelTurnsRemaining} targetName={travelTarget.name} /> : (
+        isTraveling && travelTarget ? <TravelLockOverlay turnsRemaining={galaxy.travelTurnsRemaining} targetName={travelTarget.name} /> : (
           <div className="bg-slate-900/60 border border-slate-700 rounded-xl p-5">
             <h3 className="text-lg font-bold text-slate-200 mb-4 flex items-center gap-2"><Radio size={18} className="text-orange-400" /> 打探消息</h3>
             <p className="text-sm text-slate-400 mb-4">在{currentFaction?.name || '当前势力'}搜集情报。每个势力只能打探一次，跃迁到其他地方后才能再次打探（可以返回之前去过的势力）。</p>
@@ -570,7 +585,7 @@ function TradePanel({ factions, ship, factionPrices, factionSellMultipliers, bla
               );
             })()}
 
-            {ts.intelGatheredInFaction === ts.currentFactionId ? (
+            {ts.intelGatheredInFaction === currentFactionId ? (
               <div className="text-center text-sm text-slate-500 bg-slate-800/40 rounded-lg py-3">已在此势力打探过消息，跃迁到其他势力后才能再次打探</div>
             ) : (
               <button onClick={handleGatherIntel} className="w-full py-2.5 bg-orange-700 hover:bg-orange-600 rounded-lg font-bold text-white transition-colors flex items-center justify-center gap-2"><Radio size={16} /> 打探消息</button>

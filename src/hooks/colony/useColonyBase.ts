@@ -1,149 +1,63 @@
 import { useCallback } from 'react';
 import type { GameState } from '@/types/game';
-import type { PlanetTypeId, BuildingInstance } from '@/types/colony';
 import { ALL_PLANETS } from '@/data/colony/planets';
+import { getGalaxyNode } from '@/data/galaxy/nodes';
 
+/** 殖民解锁费用（唯一常量：殖民地面板已无入口，仅星图 foundColony 使用） */
 const UNLOCK_COST = 30000;
 
-/** 殖民地解锁 / 星球选择 / 探索池（从 useColony 拆出） */
+/**
+ * 殖民地建立（入口已统一到星图）。
+ * 旧流程的 unlockColony / selectPlanet / rescrollPlanets / generateScoutingPool（3 选 1 随机星球池）
+ * 已随《星图更新》方案删除：星球类型由玩家在星图上选择的节点决定。
+ */
 export function useColonyBase(
   gameState: GameState,
   dispatch: React.Dispatch<{ type: 'FUNCTIONAL_UPDATE'; updater: (state: GameState) => GameState }>
 ) {
   const ship = gameState.ships[0];
 
-  /** 解锁殖民功能 */
-  const unlockColony = useCallback((): { success: boolean; message: string } => {
+  /** 星图流程：跃迁到殖民地星球后支付 30,000 建立殖民地（星球类型由节点决定；全局限一颗） */
+  const foundColony = useCallback((nodeId: string, name: string): { success: boolean; message: string } => {
     if (!ship) return { success: false, message: '舰队不存在' };
-    if (ship.colony) return { success: false, message: '殖民地已解锁' };
-    if (ship.gold < UNLOCK_COST) return { success: false, message: `金币不足（需要${UNLOCK_COST.toLocaleString()}金币）` };
-    dispatch({
-      type: 'FUNCTIONAL_UPDATE',
-      updater: (prev) => {
-        const ships = [...prev.ships];
-        const s = { ...ships[0] };
-        s.gold -= UNLOCK_COST;
-        s.goldLog = [{ turn: prev.turn, amount: -UNLOCK_COST, reason: '组建远征军探索殖民', balanceAfter: s.gold }, ...s.goldLog].slice(0, 200);
-        s.colony = { phase: 'scouting', scoutTurnsRemaining: 2, planetType: null, planetName: '', buildings: [], population: { total: 0, available: 0, cap: 5 }, recruitedThisTurn: 0, leaders: [], leaderCap: 3, energy: 0, blackoutGuardTurns: 0, expeditionEndings: {}, expeditionUnlocks: [] };
-        ships[0] = s;
-        return { ...prev, ships };
-      },
-    });
-    return { success: true, message: '远征军已出发！预计2回合后抵达目标星系。' };
-  }, [ship, dispatch]);
-
-  /** 选择星球 */
-  const selectPlanet = useCallback((planetId: PlanetTypeId, name: string): { success: boolean; message: string } => {
-    const planet = ALL_PLANETS.find((p) => p.id === planetId);
-    if (!planet) return { success: false, message: '星球不存在' };
+    const node = getGalaxyNode(nodeId);
+    if (!node || node.type !== 'colony' || !node.planetId) return { success: false, message: '该星系不是可殖民星球' };
+    if (ship.galaxy.currentNodeId !== nodeId) return { success: false, message: '母舰不在该星球，请先在星图跃迁抵达' };
+    if (ship.colony && ship.colony.phase !== 'inactive') return { success: false, message: '你已经建立过殖民地，全局只能殖民一颗星球' };
     if (name.length < 3 || name.length > 16) return { success: false, message: '星球名称需3-16个字符' };
+    if (ship.gold < UNLOCK_COST) return { success: false, message: `金币不足（需要${UNLOCK_COST.toLocaleString()}金币）` };
+    const planetDef = ALL_PLANETS.find((p) => p.id === node.planetId);
     let result = { success: false, message: '' };
     dispatch({
       type: 'FUNCTIONAL_UPDATE',
       updater: (prev) => {
         const ships = [...prev.ships];
         const s = { ...ships[0] };
-        if (!s.colony || s.colony.phase !== 'selecting') {
-          result = { success: false, message: '当前无法选择星球' };
-          return prev;
-        }
-        const planetDef = ALL_PLANETS.find((p) => p.id === planetId);
-        if (!planetDef) {
-          result = { success: false, message: '星球不存在' };
-          return prev;
-        }
-        const initialCap = planetDef.buffs.initialPopCap || 5;
-        const initialPop = planetDef.buffs.initialPop || 0;
-        // 遗落星球赠送 B7/B20/B21
-        const buildings: BuildingInstance[] = [];
-        if (planetId === 'ruin') {
-          buildings.push(
-            { defId: 'B7', uid: 'B7_ruin_1', assignedPop: 0, buildProgress: 3, active: true },
-            { defId: 'B20', uid: 'B20_ruin_1', assignedPop: 0, buildProgress: 3, active: true },
-            { defId: 'B21', uid: 'B21_ruin_1', assignedPop: 0, buildProgress: 4, active: true },
-          );
-        }
+        s.gold -= UNLOCK_COST;
+        s.goldLog = [{ turn: prev.turn, amount: -UNLOCK_COST, reason: `在「${planetDef?.name || node.name}」组建远征军`, balanceAfter: s.gold }, ...s.goldLog].slice(0, 200);
+        s.galaxy = { ...s.galaxy, colonizedNodeId: nodeId };
         s.colony = {
-          ...s.colony,
-          phase: 'active',
-          planetType: planetId,
+          phase: 'scouting',
+          scoutTurnsRemaining: 2,
+          planetType: node.planetId!,
           planetName: name,
-          buildings,
-          population: { total: initialPop, available: initialPop, cap: initialCap },
-          techState: { researched: [], currentResearch: null, currentProgress: 0, researchPoints: 500, researchSeed: 0, repeatableLevels: {} },
+          buildings: [],
+          population: { total: 0, available: 0, cap: 5 },
+          recruitedThisTurn: 0,
           leaders: [],
           leaderCap: 3,
           energy: 0,
           blackoutGuardTurns: 0,
+          expeditionEndings: {},
+          expeditionUnlocks: [],
         };
         ships[0] = s;
-        result = { success: true, message: `成功在「${planetDef.name}」建立殖民地「${name}」！` };
+        result = { success: true, message: `远征军已出发，2 回合后将在「${planetDef?.name || node.name}」建成殖民地` };
         return { ...prev, ships };
       },
     });
     return result;
-  }, [dispatch]);
+  }, [ship, dispatch]);
 
-  /** 生成一个 3 星球随机池（纯函数，不写状态） */
-  const rollScoutingPool = useCallback((): PlanetTypeId[] => {
-    const pool = [...ALL_PLANETS];
-    const result: PlanetTypeId[] = [];
-    for (let i = 0; i < 3; i++) {
-      const idx = Math.floor(Math.random() * pool.length);
-      result.push(pool[idx].id);
-      pool.splice(idx, 1);
-    }
-    return result;
-  }, []);
-
-  /** 重新探索星球 */
-  const rescrollPlanets = useCallback((): { success: boolean; message: string } => {
-    if (!ship) return { success: false, message: '舰队不存在' };
-    if (ship.gold < UNLOCK_COST) return { success: false, message: `金币不足（需要${UNLOCK_COST.toLocaleString()}金币）` };
-    dispatch({
-      type: 'FUNCTIONAL_UPDATE',
-      updater: (prev) => {
-        const ships = [...prev.ships];
-        const s = { ...ships[0] };
-        s.gold -= UNLOCK_COST;
-        if (s.colony && s.colony.phase === 'selecting') {
-          // 重新生成星球池
-          s.colony = { ...s.colony, scoutingPool: rollScoutingPool() };
-        }
-        ships[0] = s;
-        return { ...prev, ships };
-      },
-    });
-    return { success: true, message: '已重新派出远征军探索新星系。' };
-  }, [ship, dispatch, rollScoutingPool]);
-
-  /**
-   * 生成星球池（保持原签名，供 UI 兜底调用）。
-   * 若当前处于 selecting 且池中为空，则通过 dispatch 正规写回 state（不可变更新），
-   * 不再由调用方在渲染期直接 mutate colony.scoutingPool。
-   */
-  const generateScoutingPool = useCallback((): PlanetTypeId[] => {
-    const existing = ship?.colony?.scoutingPool;
-    if (existing && existing.length > 0) return existing;
-    const result = rollScoutingPool();
-    if (ship?.colony?.phase === 'selecting') {
-      dispatch({
-        type: 'FUNCTIONAL_UPDATE',
-        updater: (prev) => {
-          const ships = [...prev.ships];
-          const s = { ...ships[0] };
-          // 并发/重复触发时以先到者为准，避免覆盖
-          if (s.colony && s.colony.phase === 'selecting' && (!s.colony.scoutingPool || s.colony.scoutingPool.length === 0)) {
-            s.colony = { ...s.colony, scoutingPool: result };
-            ships[0] = s;
-            return { ...prev, ships };
-          }
-          return prev;
-        },
-      });
-    }
-    return result;
-  }, [ship, dispatch, rollScoutingPool]);
-
-  return { unlockColony, selectPlanet, rescrollPlanets, generateScoutingPool };
+  return { foundColony };
 }

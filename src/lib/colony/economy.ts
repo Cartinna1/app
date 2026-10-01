@@ -9,7 +9,13 @@ import { getBuildingDef, BUILDING_QUANTUM_LAB, BUILDING_SOLAR_ARRAY } from '@/da
 import { getLeaderDef, getUltimateBonus } from '@/data/colony/leaders';
 import { getPlanetById } from '@/data/colony/planets';
 import { getEffectiveMaxPop } from './costs';
-import { RELIC_ALLOY_MANUAL } from '@/data/relics';
+import { RELIC_ALLOY_MANUAL, RELIC_UNFINISHED_MIRROR, RELIC_DEEP_DRILL, RELIC_BLANK_IDOL } from '@/data/relics';
+import { getPermaBonusValue } from '@/data/galaxy/permaBonuses';
+
+/** 遗物「空白神像」：全部建筑产出 +10%（与领袖全员加成同口径，加算） */
+const BLANK_IDOL_PCT = 10;
+/** 遗物「未完成的镜」：每回合 +2 科研点（计入 relicPerTurn 明细，避免总览漏显） */
+const UNFINISHED_MIRROR_RESEARCH = 2;
 
 /** 单个电力建筑实例的发电明细（供 UI 展示加成来源） */
 export interface PowerBuildingEntry {
@@ -23,6 +29,8 @@ export interface PowerBuildingEntry {
   planetPct: number;
   /** 领袖全员加成（%） */
   allPct: number;
+  /** 考古永久加成「永续光」电力加成（%，可选） */
+  permPct?: number;
   /** 最终发电（floor 后） */
   value: number;
 }
@@ -94,6 +102,8 @@ export interface ColonyEconomy {
   buildings: BuildingEconomyEntry[];
   /** 领袖每回合特效明细（科研/星尘/原料），供总览单列显示（已计入上方总量） */
   leaderPerTurn: LeaderPerTurnEntry;
+  /** 遗物每回合特效明细（如「未完成的镜」科研），供总览单列显示（已计入上方总量） */
+  relicPerTurn: { research: number };
   power: ColonyPowerInfo;
 }
 
@@ -105,6 +115,8 @@ export interface ColonyEconomyOptions {
   /** 母舰遗物（结算与显示共用的遗物加成，如 r_008 合金精炼手册）。
    *  必填：漏传会让遗物加成静默失效（显示与结算分叉），故由 TS 强制所有调用点传值。 */
   relics: { id: string }[];
+  /** 考古永久加成 id（ship.galaxy.permaBonuses）。必填，理由同 relics：漏传会让永久加成静默失效 */
+  permaBonuses: string[];
 }
 
 /** 领袖全员加成（levelBonuses 中 'ALL' 键的合计，% 值） */
@@ -145,10 +157,15 @@ function sumPowerLeaderBonus(colony: Colony): Record<string, number> {
   return map;
 }
 
-/** 电能结算：发电、耗电、净电能 */
-export function computeColonyPower(colony: Colony): ColonyPowerInfo {
+/** 电能结算：发电、耗电、净电能（permaBonuses/relics 必填，理由同 ColonyEconomyOptions） */
+export function computeColonyPower(
+  colony: Colony,
+  opts: { relics: { id: string }[]; permaBonuses: string[] }
+): ColonyPowerInfo {
   const planet = colony.planetType ? getPlanetById(colony.planetType) : undefined;
-  const lAllBonus = sumAllLeaderBonus(colony);
+  const lAllBonus = sumAllLeaderBonus(colony)
+    + (opts.relics.some((r) => r.id === RELIC_BLANK_IDOL) ? BLANK_IDOL_PCT : 0);
+  const permPowerPct = getPermaBonusValue(opts.permaBonuses, 'powerPct');
   const powerLeaderBonus = sumPowerLeaderBonus(colony);
 
   // 发电
@@ -167,9 +184,9 @@ export function computeColonyPower(colony: Colony): ColonyPowerInfo {
     const pwrPct = powerLeaderBonus[def.id] || 0;
     const planetPct = (def.id === BUILDING_SOLAR_ARRAY && powerGenPlanetMult !== 1) ? Math.round((powerGenPlanetMult - 1) * 100) : 0;
     const allPct = lAllBonus;
-    const combinedPct = pwrPct + planetPct + allPct;
+    const combinedPct = pwrPct + planetPct + allPct + permPowerPct;
     const value = Math.floor(combinedPct !== 0 ? baseRaw * (1 + combinedPct / 100) : baseRaw);
-    powerBuildings.push({ uid: inst.uid, defId: def.id, base: baseRaw, leaderPct: pwrPct, planetPct, allPct, value });
+    powerBuildings.push({ uid: inst.uid, defId: def.id, base: baseRaw, leaderPct: pwrPct, planetPct, allPct, permPct: permPowerPct, value });
     gen += value;
   }
 
@@ -218,6 +235,11 @@ export function computeColonyEconomy(colony: Colony, opts: ColonyEconomyOptions)
   const random = opts.random === true;
   const blackout = opts.blackout === true;
   const hasAlloyManual = opts.relics.some((r) => r.id === RELIC_ALLOY_MANUAL);
+  const hasDeepDrill = opts.relics.some((r) => r.id === RELIC_DEEP_DRILL);
+  const hasUnfinishedMirror = opts.relics.some((r) => r.id === RELIC_UNFINISHED_MIRROR);
+  // 考古永久加成（加算口径，与领袖/星球/循环加成一致）
+  const permFoodPct = getPermaBonusValue(opts.permaBonuses, 'foodPct') / 100;
+  const permResearchPct = getPermaBonusValue(opts.permaBonuses, 'researchPct') / 100;
   const planet = colony.planetType ? getPlanetById(colony.planetType) : undefined;
   const buffs = planet?.buffs;
 
@@ -255,6 +277,9 @@ export function computeColonyEconomy(colony: Colony, opts: ColonyEconomyOptions)
   // ===== 循环科技加成 =====
   const rl = colony.techState?.repeatableLevels || {};
 
+  // 考古遗物「空白神像」：全部建筑产出 +10%（与领袖全员加成同口径，加算）
+  if (opts.relics.some((r) => r.id === RELIC_BLANK_IDOL)) lAll += BLANK_IDOL_PCT;
+
   // ===== 量子实验室：科研产出加成 =====
   let b26Bonus = 0;
   if (colony.buildings.some((b) => b.active && b.defId === BUILDING_QUANTUM_LAB)) {
@@ -266,13 +291,15 @@ export function computeColonyEconomy(colony: Colony, opts: ColonyEconomyOptions)
   }
 
   const leaderPerTurn: LeaderPerTurnEntry = { research: 0, stardust: 0, materials: {}, randomMats: 0 };
+  const relicPerTurn = { research: hasUnfinishedMirror ? UNFINISHED_MIRROR_RESEARCH : 0 };
   const result: ColonyEconomy = {
-    food: 0, alloy: 0, stardust: 0, gold: 0, research: 0,
+    food: 0, alloy: 0, stardust: 0, gold: 0, research: relicPerTurn.research,
     materials: {},
     ...computeColonyFoodCost(colony),
     buildings: [],
     leaderPerTurn,
-    power: computeColonyPower(colony),
+    relicPerTurn,
+    power: computeColonyPower(colony, opts),
   };
 
   // ===== 建筑产出 =====
@@ -316,12 +343,14 @@ export function computeColonyEconomy(colony: Colony, opts: ColonyEconomyOptions)
       const pm = matMult ? (matMult - 1) : 0;
       entry.base = base; entry.planetPct = pm; entry.materialId = def.outputMaterialId;
       entry.value = Math.ceil(base * (1 + pm + leaderPct + repeatPct));
+      // 考古遗物「深层钻头」：每座在产原料建筑 +1（口径同合金精炼手册）
+      if (hasDeepDrill) { entry.value += 1; entry.relicBonus = 1; }
       result.materials[def.outputMaterialId] = (result.materials[def.outputMaterialId] || 0) + entry.value;
     } else if (def.outputType === 'research') {
       const base = (def.popFactor || 0) * effPop;
       const pm = buffs?.researchMult ? (buffs.researchMult - 1) : 0;
       entry.base = base; entry.planetPct = pm; entry.b26Pct = b26Bonus;
-      entry.value = Math.ceil(base * (1 + pm + leaderPct + b26Bonus + repeatPct));
+      entry.value = Math.ceil(base * (1 + pm + leaderPct + b26Bonus + repeatPct + permResearchPct));
       result.research += entry.value;
     } else {
       // food / alloy / stardust：baseOutput + popFactor × 人口
@@ -330,8 +359,9 @@ export function computeColonyEconomy(colony: Colony, opts: ColonyEconomyOptions)
         : def.outputType === 'alloy' ? buffs?.alloyMult
         : buffs?.stardustMult;
       const pm = mult ? (mult - 1) : 0;
+      const permPct = def.outputType === 'food' ? permFoodPct : 0;
       entry.base = base; entry.planetPct = pm;
-      entry.value = Math.ceil(base * (1 + pm + leaderPct + repeatPct));
+      entry.value = Math.ceil(base * (1 + pm + leaderPct + repeatPct + permPct));
       // 合金精炼手册 r_008：每座在产合金建筑 +1 合金（结算与显示共用；relicBonus 供 UI 标注来源）
       if (def.outputType === 'alloy' && hasAlloyManual) { entry.value += 1; entry.relicBonus = 1; }
       if (def.outputType === 'food') result.food += entry.value;

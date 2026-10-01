@@ -2,12 +2,14 @@
 // 由 useTurn 在每回合结算时调用；直接改写传入的 ship 草稿（调用方已克隆）。
 
 import type { Mothership } from '@/types/game';
-import type { Colony, PlanetTypeId } from '@/types/colony';
+import type { Colony } from '@/types/colony';
 import { ALL_PLANETS } from '@/data/colony/planets';
 import { getBuildingDef } from '@/data/colony/buildings';
 import { getTechById, REPEATABLE_TECHS } from '@/data/colony/techs';
 import { getLeaderDef, getUltimateBonus } from '@/data/colony/leaders';
 import { computeColonyEconomy, computeColonyPower } from './economy';
+import { applyColonyFounding } from './colonySetup';
+import { getPermaBonusValue } from '@/data/galaxy/permaBonuses';
 import { processWonderTurn } from './wonderTurn';
 import { processExpeditionTurn } from './expeditionTurn';
 
@@ -31,16 +33,15 @@ export function processColonyTurn(ship: Mothership, _turn: number): void {
   if (colony.phase === 'scouting') {
     colony.scoutTurnsRemaining -= 1;
     if (colony.scoutTurnsRemaining <= 0) {
-      colony.phase = 'selecting';
-      // 生成星球池并存入状态，避免切 Tab 丢失
-      const pool = [...ALL_PLANETS];
-      const result: PlanetTypeId[] = [];
-      for (let i = 0; i < 3; i++) {
-        const idx = Math.floor(Math.random() * pool.length);
-        result.push(pool[idx].id);
-        pool.splice(idx, 1);
+      // 星图流程：目标星球在 foundColony 时已确定，建设期结束直接建成（初始化逻辑唯一真值）。
+      // 旧的"3 选 1 随机星球池"分支已随《星图更新》删除。
+      if (colony.planetType) {
+        Object.assign(colony, applyColonyFounding(colony, colony.planetType, colony.planetName));
+      } else {
+        // 兜底（正常不会走到）：建设期未记录星球 → 随机定一颗后正常建成，避免出现无星球的活动殖民地
+        const fallback = ALL_PLANETS[Math.floor(Math.random() * ALL_PLANETS.length)].id;
+        Object.assign(colony, applyColonyFounding(colony, fallback, colony.planetName || '新家园'));
       }
-      colony.scoutingPool = result;
     }
     return;
   }
@@ -71,9 +72,12 @@ export function processColonyTurn(ship: Mothership, _turn: number): void {
 
   // ===== 电能计算（在产出计算之前） =====
   if (colony.energy === undefined) colony.energy = 0;
-  const power = computeColonyPower(colony);
+  const power = computeColonyPower(colony, { relics: ship.relics, permaBonuses: ship.galaxy?.permaBonuses || [] });
   // 停电免疫（数据驱动：levelExtras.blackoutImmune，如 L22 诺娃·永昼 Lv3 余晖脉冲）
-  const hasL22Lv3 = hasBlackoutImmunity(colony);
+  // + 考古永久加成「永续光」的停电保护（没有 L22 也能生效）
+  const permGuardTurns = getPermaBonusValue(ship.galaxy?.permaBonuses, 'blackoutGuardTurns');
+  const guardTurns = BLACKOUT_GUARD_TURNS + permGuardTurns;
+  const hasL22Lv3 = hasBlackoutImmunity(colony) || permGuardTurns > 0;
   // 电能累积（容量上限 50，防止无限堆）
   const prevEnergy = typeof colony.energy === 'number' ? colony.energy : 0;
   const newEnergy = Math.max(-1, Math.min(50, prevEnergy + power.net));
@@ -88,15 +92,15 @@ export function processColonyTurn(ship: Mothership, _turn: number): void {
     if (colony.blackoutGuardTurns > 0) {
       colony.blackoutGuardTurns--;
     } else {
-      colony.blackoutGuardTurns = BLACKOUT_GUARD_TURNS;
+      colony.blackoutGuardTurns = guardTurns;
     }
-    if (colony.blackoutGuardTurns === 0) blackout = true; // 10 回合保护耗尽，仍缺电 → 停电
+    if (colony.blackoutGuardTurns === 0) blackout = true; // 保护耗尽，仍缺电 → 停电
   } else if (!blackoutBase) {
     colony.blackoutGuardTurns = 0; // 供电正常，重置保护计数
   }
 
   // ===== 建筑产出 + 领袖每回合特效（统一走 economy 模块） =====
-  const eco = computeColonyEconomy(colony, { blackout, random: true, relics: ship.relics });
+  const eco = computeColonyEconomy(colony, { blackout, random: true, relics: ship.relics, permaBonuses: ship.galaxy?.permaBonuses || [] });
   const totalRP = eco.research;
 
   for (const [mid, n] of Object.entries(eco.materials)) {

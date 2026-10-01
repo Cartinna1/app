@@ -20,17 +20,20 @@
 ```
 src/
 ├── components/     # UI：13 个面板（全部 memo）+ GameScreen/GameOverScreen/ShipSelection
-│   └── colony/     # ColonyPanel、WonderPanel
+│   ├── colony/     # ColonyPanel、WonderPanel
+│   ├── GalaxyMapPanel.tsx    # 星图（SVG 50 节点 / 迷雾 / 信息卡，势力卡片内嵌 TradePanel）
+│   └── ArchaeologyPanel.tsx  # 考古（独立页签 / 阶段图片位 / 图鉴）
 ├── data/           # 静态数据：gameData / factions / modules / relics / materialNames
-│                   #   / choiceEvents / resourceEvents / colony/
-├── hooks/          # 业务 hook：gameReducer / useGameState / useTurn / useTrade / useSave 等
+│                   #   / choiceEvents / resourceEvents / colony/ / galaxy/（nodes·lanes·archaeology·permaBonuses）
+├── hooks/          # 业务 hook：gameReducer / useGameState / useTurn / useTrade / useGalaxy / useSave 等
 │   └── colony/     # useColony 的 6 个子 hook（Base/Buildings/Pop/Research/Leaders/Expedition）
 ├── lib/            # 纯函数（无副作用、可独立测试）
-│   ├── colony/     # economy.ts（产出结算）、colonyTurn.ts（回合推进）、wonderTurn.ts（奇观推进）
+│   ├── colony/     # economy.ts（产出结算）、colonyTurn.ts（回合推进）、wonderTurn.ts（奇观推进）、colonySetup.ts（建立初始化）
+│   ├── galaxy/     # graph.ts（航道/最短路）、access.ts（通行与封锁）、archaeologyTurn.ts（考古推进）
 │   ├── game/       # assets.ts（总资产）
-│   ├── turn/       # priceFluctuation / shipTurn / factionTurn / contracts
+│   ├── turn/       # priceFluctuation / shipTurn / factionTurn / contracts / resourceCost
 │   └── save.ts     # 存档序列化 / 反序列化 / 迁移
-└── types/          # 全部 TS 类型
+└── types/          # 全部 TS 类型（galaxy.ts = 星图与考古）
 ```
 
 ## 二、代码放哪
@@ -61,6 +64,12 @@ src/
 | 船员食物消耗（阶梯+遗物保鲜减半） | `lib/turn/shipTurn.ts` → `computeCrewFoodCost`（结算与总览显示共用，勿就地重写阶梯） |
 | 价格波动、市场/政策刷新、合同、被动收入 | `lib/turn/priceFluctuation.ts` / `factionTurn.ts` / `contracts.ts` |
 | 合同物品名与持有量（大总览「进行中的合同」与贸易面板共用） | `lib/turn/contracts.ts` → `getContractItemName`（物品名）/ `getContractItemKind`（产品 vs 特产，`useTrade.completeContract` 扣货同用，勿再写 `startsWith('p')`）/ `getContractHeldCount`（采购数 `ship.products` 条目、走私读 `tradeStatus.inventory`）/ `getContractEarliestExpiry`（产品最早过期回合）——UI 勿再各写一份命名逻辑（曾有两份） |
+| 星图距离与跃迁回合数（贸易折价同源） | `lib/galaxy/graph.ts` → `TURN_UNIT=80`（坐标→回合）、`shortestRoute`/`getGalaxyTurns`（Dijkstra，宿敌节点不可途经）、`MAX_ROUTE_TURNS=9`（全程上限，与原距离矩阵量级一致）、`validateGalaxy()`；`data/factions.getDistance` 只是委托，**旧 DISTANCE_MATRIX 已删除**，勿再引回 |
+| 星图通行与"当前势力" | `lib/galaxy/access.ts` → `HOSTILE_REP_THRESHOLD`（宿敌 −91，`useTrade.checkRepBlock` 同源）/ `getBlockedNodeIds` / `getCurrentFactionId(ship)`（停在非势力节点返回 null）/ `canEnterNode` |
+| 资源成本校验与扣减（远征 + 考古共用） | `lib/turn/resourceCost.ts` → `resourceAmount` / `deductResource` / `canAfford` / `firstMissing` / `payCost` / `flattenCost` / `formatCost`——科研点扣殖民地、其余扣母舰，hook 里勿再各写一份 |
+| 考古成功率与阶段推进 | `lib/galaxy/archaeologyTurn.ts` → `excavationSuccessRate`（唯一公式）/ `resolveStage`（阶段成败·危险·保底）/ `processArchaeologyTurn`（由 `useTurn` 每回合调用）/ `grantReward`（遗物·永久加成·称号·资源；无殖民地时科研点按 1:10 折金币） |
+| 殖民地建立初始化 | `lib/colony/colonySetup.ts` → `applyColonyFounding`（星球类型·初始人口·遗落星球赠送 B7/B20/B21）；面板选星球（旧流程）与星图 `foundColony`（新流程）共用 |
+| 考古永久加成取值 | `data/galaxy/permaBonuses.ts` → `getPermaBonusValue(ids, kind)`（foodPct/researchPct/powerPct/blackoutGuardTurns/travelTurnReduce），economy/colonyTurn/graph 勿就地判断 id |
 | **回合结算的调用顺序** | `hooks/useTurn.ts`（编排器，唯一权威） |
 | 存档字段清单与迁移 | `lib/save.ts` |
 | 原料中文名 | `data/materialNames.ts` → `MATERIAL_NAME_MAP` / `getMaterialName`（gold_ore=黄金、quantum=量子簇、silicon=硅片，禁止硬编码译名） |
@@ -76,7 +85,7 @@ src/
 1. `types/game.ts` 加声明；
 2. `lib/save.ts` 的 `buildSaveData` 写入（`SaveData` 是 `Pick<GameState,…>`，漏字段会编译报错——以构建报错为兜底，但别依赖它）；
 3. `lib/save.ts` 的 `stateFromSave` 加读档兜底默认值；
-4. 字段结构变化时在 `migrateSave` 写迁移分支（存档带 `saveVersion`，当前为 1）。
+4. 字段结构变化时在 `migrateSave` 写迁移分支（存档带 `saveVersion`，**当前为 2**：v2 把位置/跃迁从 `tradeStatus` 迁入 `ship.galaxy`，旧档不做星图进度迁移，只补一份全新星图与 `titles`）。
 
 注意：只影响运行时不需持久化的字段（如 `factionRepLog`）不进入存档清单，但也必须在 `stateFromSave` 里给出初始值。
 
@@ -97,7 +106,8 @@ src/
 
 改数值前先出表格化方案（前后对比），确认后再动手，改完 grep 自检锚点。易误伤的锚点：
 
-- `30000` 殖民解锁费用（`hooks/colony/useColonyBase.ts` 的 `UNLOCK_COST`）
+- `30000` 殖民解锁费用（`hooks/colony/useColonyBase.ts` 的 `UNLOCK_COST`；两个入口共用：面板 `unlockColony`（旧：随机会刷 3 星球）与星图 `foundColony`（新：节点决定星球类型，2 回合建设期后由 `applyColonyFounding` 建成），两处必须都读同一常量）
+- 星图与考古数值锚点：`lib/galaxy/graph.ts` 的 `TURN_UNIT=80`（坐标→回合，改它等于同时改跃迁与贸易折价）与 `MAX_ROUTE_TURNS=9`；`lib/galaxy/archaeologyTurn.ts` 的成功率常数（`BASE_SUCCESS_RATE=0.80`、`LEADER_LEVEL_BONUS=0.05`、`DIFFICULTY_PENALTY=0.12`、`SAFE_CHOICE_BONUS=0.10`、`RELIC_SUCCESS_BONUS=0.10`、钳制 0.15~0.95）、`DISCOVERY_CHANCE=0.3`、`FAIL_EXTRA_TURNS=1`、`DANGER_LOSS_RATIO=0.5`、`RESEARCH_TO_GOLD=10`，以及 `data/galaxy/archaeology.ts` 里每处遗迹的 `turns/difficulty/cost/dangerRate`（改动前先出前后对比表）
 - `0.4` / `0.7` 建筑取消/拆除返还（`hooks/colony/useColonyBuildings.ts`）
 - `50` / `100` 领袖升级星尘费（唯一真值：`data/colony/leaders.ts` 的 `LEADER_UPGRADE_COST` / `getLeaderUpgradeCost`；UI 与 hook 均从该处取，勿就地硬编码）
 - 招募领袖星尘费（基础 10，减领袖 `leaderCostReduction`，下限 1；唯一真值：`data/colony/leaders.ts` 的 `getRecruitRollCost`；UI 与 `useColonyLeaders` 均从该处取，勿就地硬编码）
@@ -133,6 +143,7 @@ src/
 | 产出明细漏标遗物加成 | 合金精炼手册 r_008 直接 `value += 1`，明细无来源标注，玩家对不上总数 | `BuildingEconomyEntry.relicBonus` → 总览与建筑 tab 明细显示「遗物+1」 |
 | 领袖槽位文案歧义 | `popCapBonus` 显示为「XX上限+5」，玩家误读成"能多造 5 座" | 文案统一为「XX每座可入驻5人」；数量上限另用「XX可建造+N」（`buildingMaxCountBonus`） |
 | 远征结局"付钱不落地"、结局图看两遍 | 结局记账只在回合结算做（付了 20000 金币却不点结束回合就退出，结局丢失）；D 层与箴言原本分属两个回合，同一张结局图展示两遍 | `recordExpeditionEnding`/`enterExpeditionHistory` 由支付动作与回合结算共用（幂等；history 用重新赋值而非 push，避免 hook 侧 mutate prev）；D 支付后同屏显示结局图+箴言，回合结算即收尾；`stage 6` 分支保留作**旧存档兜底**，删掉会让在途老档永久卡死 |
+| 星图改造时"位置"有两份真值 | 位置/跃迁原本在 `tradeStatus.currentFactionId`，星图又天然带 `galaxy.currentNodeId`，两边同时存在必然分叉 | 位置与跃迁**只**存 `ship.galaxy`（`tradeStatus` 已删这三个字段）；"当前势力"一律走 `lib/galaxy/access.getCurrentFactionId(ship)`（停在非势力节点返回 null，贸易动作先过 `requireFactionHere` 守卫，跃迁中禁止交易） |
 | 事件系统伸手进市场（已彻底拆除） | 事件结果用 `grantTip: 'stock'\|'material'` 发"下回合股价/原料价定向偏移"（`nextTurn*Tip` → `*TipThisTurn` → `priceFluctuation` 里 0.6/0.3 权重的 `intelEffect`），用 `stockFreeze` 冻结股市——冻结三处全是 `if (false)` / `{false && …}` 死代码，玩家侧毫无反馈；`useEvent.isPenaltyEvent` 还把 `stockFreeze` 当作惩罚判据 | 已全删：`ResourceChange` 去掉 `grantTip`/`stockFreeze`，`Mothership` 去掉 4 个提示字段，`priceFluctuation`/`shipTurn`/`EventPanel`/`GameScreen`/`useStock`/`StockMarket` 不再读写任何事件字段，事件数据里 15 处 `grantTip`、9 处 `stockFreeze` 一并清除。**事件玩法与股票玩法双向隔绝（既定规划，勿再接通）**：事件侧不读 `stocks`/股价、不写任何价格字段，股票侧不读事件字段与情报字段；新增市场影响一律走独立的态势/消息面机制（股票因子的唯一接入点在 `priceFluctuation` 的 `totalChange` 处），勿再从事件回接。**事件文案也不得承诺市场影响**：原"获得内幕消息/矿产分布图/赏金名单 → 股价或原料价会怎样"的措辞已统一改为"把情报转手变现"（17 处，见 `choiceEvents.ts`），写新事件时别再写"股价将暴涨""买入后被套牢"这类与机制不符的话 |
 
 ---

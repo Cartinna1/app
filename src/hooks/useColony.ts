@@ -15,7 +15,7 @@ export function useColony(
   gameState: GameState,
   dispatch: React.Dispatch<{ type: 'FUNCTIONAL_UPDATE'; updater: (state: GameState) => GameState }>
 ) {
-  const { unlockColony, selectPlanet, rescrollPlanets, generateScoutingPool } = useColonyBase(gameState, dispatch);
+  const { foundColony } = useColonyBase(gameState, dispatch);
   const { buildColonyBuilding, cancelBuilding, demolishBuilding } = useColonyBuildings(dispatch);
   const { recruitPop, assignPop } = useColonyPop(dispatch);
   const { startResearch } = useColonyResearch(dispatch);
@@ -26,7 +26,7 @@ export function useColony(
   const { startExpedition, payExpeditionNode, unlockUltimate } = useColonyExpedition(gameState, dispatch);
 
   return {
-    unlockColony, selectPlanet, rescrollPlanets, generateScoutingPool,
+    foundColony,
     buildColonyBuilding, recruitPop, assignPop, startResearch,
     recruitLeader, upgradeLeader, rollAndRecruit, clearRecruitPool,
     cancelBuilding, demolishBuilding,

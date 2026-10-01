@@ -4,9 +4,11 @@
 
 import type { GameState, SaveData, Mothership } from '@/types/game';
 import { FACTIONS, POLICY_EFFECTS, refreshFactionPrices } from '@/data/factions';
+import { createGalaxyState } from '@/data/galaxy/nodes';
 
 export const SAVE_KEY = 'aviation_career_save';
-export const SAVE_VERSION = 1;
+/** 2：位置与跃迁迁入 ship.galaxy（星图）；旧档不做星图进度迁移，只补一份全新星图 */
+export const SAVE_VERSION = 2;
 
 /** 存档结构校验（防止损坏/恶意存档导致崩溃） */
 export function validateSaveData(data: unknown): data is Record<string, unknown> {
@@ -70,7 +72,7 @@ export function stateFromSave(d: Record<string, any>): GameState {
     phase: 'playing',
     turn: d.turn || 1,
     currentShipIndex: d.currentShipIndex || 0,
-    ships: d.ships || [],
+    ships: (d.ships || []).map((s: Mothership) => ({ ...s, galaxy: s.galaxy || createGalaxyState() })),
     stocks: d.stocks || [],
     materials: d.materials || [],
     products: d.products || [],
@@ -112,12 +114,22 @@ export function migrateSave(loaded: GameState): GameState {
       bankruptTimer: s.bankruptTimer || 0,
       famineTimer: s.famineTimer || 0,
       isRebellion: s.isRebellion || false,
+      galaxy: s.galaxy || createGalaxyState(), // v2：旧档补一份全新星图（不做进度迁移）
       colony: s.colony ? {
         ...s.colony,
         recruitedThisTurn: s.colony.recruitedThisTurn || 0,
         expeditionEndings: s.colony.expeditionEndings || {},
         expeditionUnlocks: s.colony.expeditionUnlocks || [],
         blackoutGuardTurns: s.colony.blackoutGuardTurns || 0,
+        // v2：殖民地不再有 selecting 阶段（星球在星图上确定）。
+        // 旧档若停在 selecting，退回建设期并在下一回合按随机星球建成。
+        ...((s.colony.phase as string) === 'selecting'
+          ? {
+              phase: 'scouting' as const,
+              scoutTurnsRemaining: 1,
+              planetType: s.colony.planetType || 'terran' as const,
+            }
+          : {}),
       } : s.colony,
     }));
   }

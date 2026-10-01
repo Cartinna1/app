@@ -1,11 +1,15 @@
 import { useCallback } from 'react';
-import type { GameState } from '@/types/game';
-import { FACTIONS, getTravelTurns, getSellPrice, RELATION_MATRIX, getReputationTier } from '@/data/factions';
+import type { GameState, Mothership } from '@/types/game';
+import { FACTIONS, getSellPrice, RELATION_MATRIX, getReputationTier } from '@/data/factions';
 import { RECIPES } from '@/data/gameData';
 import { getContractItemKind } from '@/lib/turn/contracts';
+import { shortestRoute } from '@/lib/galaxy/graph';
+import { getBlockedNodeIds, getCurrentFactionId, HOSTILE_REP_THRESHOLD } from '@/lib/galaxy/access';
+import { getPermaBonusValue } from '@/data/galaxy/permaBonuses';
+import { getGalaxyNode } from '@/data/galaxy/nodes';
 import { MATERIAL_NAME_MAP } from '@/data/materialNames';
 import { MODULE_TRADE_HUB } from '@/data/modules';
-import { RELIC_JUMP_ACCELERATOR, RELIC_ANTI_MONOPOLY, RELIC_DECIPHERER, RELIC_BARGAIN_AI } from '@/data/relics';
+import { RELIC_JUMP_ACCELERATOR, RELIC_ANTI_MONOPOLY, RELIC_DECIPHERER, RELIC_BARGAIN_AI, RELIC_ARBITRAGE_NOTE } from '@/data/relics';
 
 
 export function useTrade(
@@ -57,7 +61,7 @@ export function useTrade(
   function checkRepBlock(prev: GameState, factionId: string, action: string): string | null {
     const rep = (prev.factionReputation || {})[factionId] || 0;
     // 宿敌 -100~-91：拒绝一切操作（含跃迁）
-    if (rep <= -91) return '宿敌势力拒绝与你交易';
+    if (rep <= HOSTILE_REP_THRESHOLD) return '宿敌势力拒绝与你交易';
     // 恶意 -90~-51：可跃迁、可投资，其余拒绝
     if (rep >= -90 && rep <= -51) {
       if (action === 'travel' || action === 'invest') return null;
@@ -72,38 +76,61 @@ export function useTrade(
     return null;
   }
 
-  // 跃迁
-  const travelToFaction = useCallback(
-    (shipIndex: number, targetFactionId: string): { success: boolean; message: string } => {
-      const repBlockT = checkRepBlock(gameState, targetFactionId, 'travel');
-      if (repBlockT) return { success: false, message: repBlockT };
+  // 跃迁（目标可以是任意星系节点；回合数由星图最短路给出）
+  const travelToNode = useCallback(
+    (shipIndex: number, targetNodeId: string): { success: boolean; message: string } => {
+      const targetNode = getGalaxyNode(targetNodeId);
+      if (!targetNode) return { success: false, message: '目标星系不存在' };
+      // 宿敌势力封锁边境：不可进入
+      if (targetNode.factionId) {
+        const repBlockT = checkRepBlock(gameState, targetNode.factionId, 'travel');
+        if (repBlockT) return { success: false, message: repBlockT };
+      }
       let result: { success: boolean; message: string } = { success: false, message: '' };
       dispatch({
         type: 'FUNCTIONAL_UPDATE',
         updater: (prev) => {
           const ships = [...prev.ships]; const s = { ...ships[shipIndex] };
-          const repBlockT2 = checkRepBlock(prev, targetFactionId, 'travel'); if (repBlockT2) { result = { success: false, message: repBlockT2 }; return prev; }
-          s.tradeStatus = { ...s.tradeStatus };
-          if (s.tradeStatus.travelTurnsRemaining > 0) { result = { success: false, message: '正在跃迁中' }; return prev; }
-          if (s.tradeStatus.currentFactionId === targetFactionId) { result = { success: false, message: '已在此势力' }; return prev; }
-          let turns = getTravelTurns(s.tradeStatus.currentFactionId, targetFactionId);
+          if (targetNode.factionId) {
+            const repBlockT2 = checkRepBlock(prev, targetNode.factionId, 'travel');
+            if (repBlockT2) { result = { success: false, message: repBlockT2 }; return prev; }
+          }
+          const g = { ...s.galaxy };
+          if (g.travelTurnsRemaining > 0) { result = { success: false, message: '正在跃迁中' }; return prev; }
+          if (g.currentNodeId === targetNodeId) { result = { success: false, message: '已在此星系' }; return prev; }
+          // 最短路（宿敌节点不可途经；若目标本身被封锁，上面的 checkRepBlock 已拦下）
+          const route = shortestRoute(g.currentNodeId, targetNodeId, getBlockedNodeIds(prev.factionReputation));
+          if (!route) { result = { success: false, message: '无法抵达：航线被封锁的势力割断，可先提升该势力声望' }; return prev; }
+          let turns = route.turns;
           if (s.installedModuleIds.includes('gravity_anchor')) turns = Math.max(1, turns - 1);
           if (s.relics.some((r) => r.id === RELIC_JUMP_ACCELERATOR)) turns = Math.max(1, turns - 1);
-          s.tradeStatus.targetFactionId = targetFactionId;
-          s.tradeStatus.travelTurnsRemaining = turns;
+          const permReduce = getPermaBonusValue(g.permaBonuses, 'travelTurnReduce');
+          if (permReduce > 0) turns = Math.max(1, turns - permReduce);
+          g.targetNodeId = targetNodeId;
+          g.travelTurnsRemaining = turns;
+          s.galaxy = g;
           ships[shipIndex] = s;
-          result = { success: true, message: `开始跃迁，预计${turns}回合后抵达` };
+          result = { success: true, message: `开始跃迁，预计${turns}回合后抵达「${targetNode.name}」` };
           return { ...prev, ships };
         },
       });
       return result;
     }, [gameState, dispatch]);
 
+  /** 贸易操作前置守卫：跃迁中不可操作，且必须停泊在势力星系 */
+  const requireFactionHere = (ship: Mothership | undefined): string | null => {
+    if (!ship) return '舰队不存在';
+    if (ship.galaxy.travelTurnsRemaining > 0) return '跃迁中，抵达后才能进行贸易操作';
+    return getCurrentFactionId(ship) ? null : '此处没有可交易的势力，请先跃迁到势力星系';
+  };
+
   // 购买特产（含声望折扣）
   const buySpecialty = useCallback(
     (shipIndex: number, quantity: number): { success: boolean; message: string } => {
       const ship0 = gameState.ships?.[shipIndex];
-      const curFid0 = ship0?.tradeStatus?.currentFactionId;
+      const hereBlockB = requireFactionHere(ship0);
+      if (hereBlockB) return { success: false, message: hereBlockB };
+      const curFid0 = getCurrentFactionId(ship0);
       if (curFid0) {
         const repBlockB0 = checkRepBlock(gameState, curFid0, 'buy');
         if (repBlockB0) return { success: false, message: repBlockB0 };
@@ -115,7 +142,7 @@ export function useTrade(
           const ships = [...prev.ships]; const s = { ...ships[shipIndex] };
           if (s.gold <= 0) { result = { success: false, message: '金币不足' }; return prev; }
           if (quantity <= 0) { result = { success: false, message: '数量必须大于0' }; return prev; }
-          const faction = prev.factions.find((f) => f.id === s.tradeStatus.currentFactionId);
+          const faction = prev.factions.find((f) => f.id === getCurrentFactionId(s));
           if (!faction) { result = { success: false, message: '找不到势力' }; return prev; }
           const repBlockB = checkRepBlock(prev, faction.id, 'buy'); if (repBlockB) { result = { success: false, message: repBlockB }; return prev; }
           // 库存校验
@@ -161,7 +188,9 @@ export function useTrade(
   const sellSpecialty = useCallback(
     (shipIndex: number, factionId: string, quantity: number): { success: boolean; message: string } => {
       const ship0 = gameState.ships?.[shipIndex];
-      const curFid0 = ship0?.tradeStatus?.currentFactionId;
+      const hereBlockB = requireFactionHere(ship0);
+      if (hereBlockB) return { success: false, message: hereBlockB };
+      const curFid0 = getCurrentFactionId(ship0);
       if (curFid0) {
         const repBlockS0 = checkRepBlock(gameState, curFid0, 'sell');
         if (repBlockS0) return { success: false, message: repBlockS0 };
@@ -172,9 +201,9 @@ export function useTrade(
         updater: (prev) => {
           const ships = [...prev.ships]; const s = { ...ships[shipIndex] };
           if (quantity <= 0) { result = { success: false, message: '数量必须大于0' }; return prev; }
-          const repBlockS = checkRepBlock(prev, s.tradeStatus.currentFactionId, 'sell'); if (repBlockS) { result = { success: false, message: repBlockS }; return prev; }
-          if (s.tradeStatus.currentFactionId === factionId) { result = { success: false, message: '不能在本地势力出售' }; return prev; }
-          const curFid = s.tradeStatus.currentFactionId;
+          const repBlockS = checkRepBlock(prev, getCurrentFactionId(s) || '', 'sell'); if (repBlockS) { result = { success: false, message: repBlockS }; return prev; }
+          if (getCurrentFactionId(s) === factionId) { result = { success: false, message: '不能在本地势力出售' }; return prev; }
+          const curFid = getCurrentFactionId(s) || '';
           // 需求校验（按停靠势力，不分特产种类）
           const remaining = prev.sellDemands?.[curFid] ?? 0;
           if (quantity > remaining) { result = { success: false, message: `本回合需求已满足，仅剩${remaining}个配额` }; return prev; }
@@ -185,8 +214,10 @@ export function useTrade(
           const sellPrice = getSellPrice(factionId, prev.factionPrices, prev.factionSellMultipliers);
           const sellBuffMult = (prev.sellBuffs?.[curFid] || []).reduce((m, b) => m * b.multiplier, 1);
           const relicBonus = s.relics.some((r) => r.id === RELIC_ANTI_MONOPOLY) ? 1.1 : 1;
+          // 考古遗物「套利凭证」：卖出特产额外 +5%
+          const arbitrageBonus = s.relics.some((r) => r.id === RELIC_ARBITRAGE_NOTE) ? 1.05 : 1;
           const tradeHubBonus = s.installedModuleIds.includes(MODULE_TRADE_HUB) ? 1.15 : 1;
-          const totalRevenue = Math.round(sellPrice * quantity * relicBonus * tradeHubBonus * sellBuffMult);
+          const totalRevenue = Math.round(sellPrice * quantity * relicBonus * arbitrageBonus * tradeHubBonus * sellBuffMult);
           s.gold += totalRevenue;
           if (s.bankrupt && s.gold > 0) s.bankrupt = false;
           s.goldLog = [{ turn: prev.turn, amount: totalRevenue, reason: `卖出「${faction.specialtyName}」x${quantity}`, balanceAfter: s.gold }, ...s.goldLog].slice(0, 200);
@@ -216,7 +247,9 @@ export function useTrade(
   const exploreFaction = useCallback(
     (shipIndex: number): { success: boolean; message: string } => {
       const ship0 = gameState.ships?.[shipIndex];
-      const curFid0 = ship0?.tradeStatus?.currentFactionId;
+      const hereBlockB = requireFactionHere(ship0);
+      if (hereBlockB) return { success: false, message: hereBlockB };
+      const curFid0 = getCurrentFactionId(ship0);
       if (curFid0) {
         const repBlockEx0 = checkRepBlock(gameState, curFid0, 'explore');
         if (repBlockEx0) return { success: false, message: repBlockEx0 };
@@ -226,7 +259,7 @@ export function useTrade(
         type: 'FUNCTIONAL_UPDATE',
         updater: (prev) => {
           const ships = [...prev.ships]; const s = { ...ships[shipIndex] };
-          const repBlockEx = checkRepBlock(prev, s.tradeStatus.currentFactionId, 'explore'); if (repBlockEx) { result = { success: false, message: repBlockEx }; return prev; }
+          const repBlockEx = checkRepBlock(prev, getCurrentFactionId(s) || '', 'explore'); if (repBlockEx) { result = { success: false, message: repBlockEx }; return prev; }
           if (s.tradeStatus.exploredThisTurn) { result = { success: false, message: '本回合已探索过' }; return prev; }
           const matIds = ['carbon', 'gold_ore', 'oil', 'dark_matter', 'silicon', 'quantum'];
           const matNames: Record<string, string> = MATERIAL_NAME_MAP;
@@ -252,7 +285,9 @@ export function useTrade(
   const investFaction = useCallback(
     (shipIndex: number, amount: number): { success: boolean; message: string } => {
       const ship0 = gameState.ships?.[shipIndex];
-      const factionId0 = ship0?.tradeStatus?.currentFactionId;
+      const hereBlockInv = requireFactionHere(ship0);
+      if (hereBlockInv) return { success: false, message: hereBlockInv };
+      const factionId0 = getCurrentFactionId(ship0);
       if (factionId0) {
         const repBlockInv0 = checkRepBlock(gameState, factionId0, 'invest');
         if (repBlockInv0) return { success: false, message: repBlockInv0 };
@@ -264,7 +299,7 @@ export function useTrade(
           const ships = [...prev.ships]; const s = { ...ships[shipIndex] };
           if (amount <= 0) { result = { success: false, message: '投资金额必须大于0' }; return prev; }
           if (s.gold < amount) { result = { success: false, message: '金币不足' }; return prev; }
-          const factionId = s.tradeStatus.currentFactionId;
+          const factionId = getCurrentFactionId(s) || '';
           const repBlockInv = checkRepBlock(prev, factionId, 'invest'); if (repBlockInv) { result = { success: false, message: repBlockInv }; return prev; }
           const maxPerTurn = 10;
           const used = (prev.factionRepLog || {})[factionId + '_invest'] || 0;
@@ -300,7 +335,9 @@ export function useTrade(
   const gatherIntel = useCallback(
     (shipIndex: number): { success: boolean; message: string; goldChange: number } => {
       const ship0 = gameState.ships?.[shipIndex];
-      const curFid0 = ship0?.tradeStatus?.currentFactionId;
+      const hereBlockB = requireFactionHere(ship0);
+      if (hereBlockB) return { success: false, message: hereBlockB };
+      const curFid0 = getCurrentFactionId(ship0);
       if (curFid0) {
         const repBlockI0 = checkRepBlock(gameState, curFid0, 'intel');
         if (repBlockI0) return { success: false, message: repBlockI0, goldChange: 0 };
@@ -310,7 +347,7 @@ export function useTrade(
         type: 'FUNCTIONAL_UPDATE',
         updater: (prev) => {
           const ships = [...prev.ships]; const s = { ...ships[shipIndex] };
-          const currentFid = s.tradeStatus.currentFactionId;
+          const currentFid = getCurrentFactionId(s) || '';
           const repBlockI = checkRepBlock(prev, currentFid, 'intel'); if (repBlockI) { result = { success: false, message: repBlockI, goldChange: 0 }; return prev; }
           if (s.tradeStatus.intelGatheredInFaction === currentFid) { result = { success: false, message: '在此势力已打探过消息，跃迁到新势力后可再次打探', goldChange: 0 }; return prev; }
           s.tradeStatus = { ...s.tradeStatus, intelGatheredInFaction: currentFid };
@@ -466,5 +503,5 @@ export function useTrade(
     return result;
   }, [dispatch]);
 
-  return { travelToFaction, buySpecialty, sellSpecialty, exploreFaction, investFaction, gatherIntel, acceptContract, completeContract, blackMarketBuy };
+  return { travelToNode, buySpecialty, sellSpecialty, exploreFaction, investFaction, gatherIntel, acceptContract, completeContract, blackMarketBuy };
 }

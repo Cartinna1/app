@@ -6,6 +6,7 @@ import { useProduction } from './useProduction';
 import { useEvent } from './useEvent';
 import { useLoan } from './useLoan';
 import { useTrade } from './useTrade';
+import { useGalaxy } from './useGalaxy';
 import { useSave } from './useSave';
 import { useTurn } from './useTurn';
 import { getShipTotalAssets } from '@/lib/game/assets';
@@ -57,12 +58,13 @@ export function useGameState() {
   const { buyMaterial, startProduction, sellProduct, sellProductQty } = useProduction(dispatch);
   const { activeEvent, eventDodged, drawEvent, chooseOption: chooseEventOption, applyResources: applyEventResources, clearActiveEvent, clearDodged: clearEventDodged } = useEvent(gameState, dispatch);
   const { takeLoan, repayLoan } = useLoan(gameState, dispatch);
-  const { travelToFaction, buySpecialty, sellSpecialty, exploreFaction, investFaction, gatherIntel, acceptContract, completeContract, blackMarketBuy } = useTrade(gameState, dispatch);
+  const { travelToNode, buySpecialty, sellSpecialty, exploreFaction, investFaction, gatherIntel, acceptContract, completeContract, blackMarketBuy } = useTrade(gameState, dispatch);
   const { autoSave, hasSave, loadSave, exportSave, importSave, resetGame } = useSave(dispatch);
   const { redeemCode } = useRedeem(gameState, dispatch);
   const { installModule, useManualModule } = useModule(dispatch);
-  const { unlockColony, selectPlanet, rescrollPlanets, generateScoutingPool, buildColonyBuilding, recruitPop, assignPop, startResearch, recruitLeader, upgradeLeader, rollAndRecruit, clearRecruitPool, cancelBuilding, demolishBuilding, selectWonder, submitWonderResources, canStartWonder, completeWonder, startExpedition, payExpeditionNode, unlockUltimate } = useColony(gameState, dispatch);
+  const { foundColony, buildColonyBuilding, recruitPop, assignPop, startResearch, recruitLeader, upgradeLeader, rollAndRecruit, clearRecruitPool, cancelBuilding, demolishBuilding, selectWonder, submitWonderResources, canStartWonder, completeWonder, startExpedition, payExpeditionNode, unlockUltimate } = useColony(gameState, dispatch);
   const { nextTurn, fluctuatePrices } = useTurn(gameState, dispatch, autoSave);
+  const { startExcavation, continueExcavation, resolveExcavationChoice, steadyExcavation, changeExcavationLeader, abandonExcavation } = useGalaxy(gameState, dispatch);
 
   // 初始化游戏（选择单舰队）
   const selectShips = useCallback(
@@ -360,7 +362,7 @@ export function useGameState() {
     repayLoan: (...args: Tail<Parameters<typeof repayLoan>>) => repayLoan(0, ...args),
 
     // 贸易
-    travelToFaction: (...args: Tail<Parameters<typeof travelToFaction>>) => travelToFaction(0, ...args),
+    travelToNode: (...args: Tail<Parameters<typeof travelToNode>>) => travelToNode(0, ...args),
     buySpecialty: (...args: Tail<Parameters<typeof buySpecialty>>) => buySpecialty(0, ...args),
     sellSpecialty: (...args: Tail<Parameters<typeof sellSpecialty>>) => sellSpecialty(0, ...args),
     exploreFaction: () => exploreFaction(0),
@@ -369,6 +371,14 @@ export function useGameState() {
     acceptContract,
     completeContract: (...args: Tail<Parameters<typeof completeContract>>) => completeContract(0, ...args),
     blackMarketBuy: (...args: Tail<Parameters<typeof blackMarketBuy>>) => blackMarketBuy(0, ...args),
+
+    // 考古（星图遗迹）
+    startExcavation,
+    continueExcavation,
+    resolveExcavationChoice,
+    steadyExcavation,
+    changeExcavationLeader,
+    abandonExcavation,
 
     // 合金/食物购买
     buyAlloy,
@@ -389,11 +399,8 @@ export function useGameState() {
     installModule: (...args: Tail<Parameters<typeof installModule>>) => installModule(0, ...args),
     useManualModule: (...args: Tail<Parameters<typeof useManualModule>>) => useManualModule(0, ...args),
 
-    // 星际殖民
-    unlockColony,
-    selectPlanet,
-    rescrollPlanets,
-    generateScoutingPool,
+    // 星际殖民（建立入口统一到星图 foundColony；旧的 3 选 1 星球池已删除）
+    foundColony,
     buildColonyBuilding,
     recruitPop,
     assignPop,

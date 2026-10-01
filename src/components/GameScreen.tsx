@@ -1,7 +1,6 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import type { GameState, EventOption, ResourceChange, ChoiceEvent } from '@/types/game';
 import type { DodgeReason } from '@/hooks/useEvent';
-import type { PlanetTypeId } from '@/types/colony';
 import {
   LayoutDashboard,
   TrendingUp,
@@ -25,6 +24,7 @@ import {
   Flame,
   Swords,
   Home,
+  Landmark,
   Volume2,
   VolumeX,
 } from 'lucide-react';
@@ -36,7 +36,8 @@ import EventPanel from './EventPanel';
 import RedeemCode from './RedeemCode';
 import SaveManager from './SaveManager';
 import LoanPanel from './LoanPanel';
-import TradePanel from './TradePanel';
+import GalaxyMapPanel from './GalaxyMapPanel';
+import ArchaeologyPanel from './ArchaeologyPanel';
 import { getInvestmentTier, getBuffDescription } from '@/data/factions';
 import { getContractItemName, getContractItemKind, getContractHeldCount, getContractEarliestExpiry } from '@/lib/turn/contracts';
 import { getSellPriceBreakdown, MODULE_BIO_KITCHEN, MODULE_NANO_FARM, MODULE_SIXTH_FARM, MODULE_DYSON_COLLECTOR } from '@/data/modules';
@@ -68,7 +69,7 @@ interface GameScreenProps {
   onClearEventDodged: () => void;
   onTakeLoan: (principal: number, plan: { turns: number; rate: number }) => { success: boolean; message: string };
   onRepayLoan: (loanId: string) => { success: boolean; message: string };
-  onTravelToFaction: (targetFactionId: string) => { success: boolean; message: string };
+  onTravelToNode: (targetNodeId: string) => { success: boolean; message: string };
   onBuySpecialty: (quantity: number) => { success: boolean; message: string };
   onSellSpecialty: (factionId: string, quantity: number) => { success: boolean; message: string };
   onExploreFaction: () => { success: boolean; message: string };
@@ -77,12 +78,15 @@ interface GameScreenProps {
   onAcceptContract: (contractId: string) => { success: boolean; message: string };
   onCompleteContract: (contractId: string) => { success: boolean; message: string };
   onBlackMarketBuy: (factionId: string, itemId: string, qty: number) => { success: boolean; message: string };
+  onStartExcavation: (siteId: string, leaderId: string) => { success: boolean; message: string };
+  onContinueExcavation: (siteId: string) => { success: boolean; message: string };
+  onResolveExcavationChoice: (siteId: string, kind: 'safe' | 'risky') => { success: boolean; message: string };
+  onSteadyExcavation: (siteId: string) => { success: boolean; message: string };
+  onChangeExcavationLeader: (siteId: string, leaderId: string) => { success: boolean; message: string };
+  onAbandonExcavation: (siteId: string) => { success: boolean; message: string };
   onInstallModule: (moduleId: string) => { success: boolean; message: string };
   onUseManualModule: (moduleId: string) => { success: boolean; message: string };
-  onUnlockColony: () => { success: boolean; message: string };
-  onSelectPlanet: (planetId: PlanetTypeId, name: string) => { success: boolean; message: string };
-  onRescrollPlanets: () => { success: boolean; message: string };
-  generateScoutingPool: () => PlanetTypeId[];
+  onFoundColony: (nodeId: string, name: string) => { success: boolean; message: string };
   onBuildColonyBuilding: (defId: string) => { success: boolean; message: string };
   onRecruitPop: (amount: number) => { success: boolean; message: string };
   onAssignPop: (buildingUid: string, count: number) => { success: boolean; message: string };
@@ -114,9 +118,9 @@ interface GameScreenProps {
   getShipTotalAssets: (ship: GameState['ships'][0]) => number;
 }
 
-type TabId = 'overview' | 'stocks' | 'materials' | 'production' | 'products' | 'events' | 'loan' | 'trade' | 'colony' | 'module' | 'redeem' | 'goldlog' | 'save';
+type TabId = 'overview' | 'stocks' | 'materials' | 'production' | 'products' | 'events' | 'loan' | 'galaxy' | 'archaeology' | 'colony' | 'module' | 'redeem' | 'goldlog' | 'save';
 
-// 空引用常量：避免每次渲染新建 {} / [] 击穿 TradePanel 的 memo
+// 空引用常量：避免每次渲染新建 {} / [] 击穿内嵌面板的 memo
 const EMPTY_REPUTATION: Record<string, number> = {};
 const EMPTY_CONTRACTS: NonNullable<GameState['factionContracts']> = [];
 
@@ -128,7 +132,8 @@ const tabs: { id: TabId; label: string; shortLabel: string; icon: React.ElementT
   { id: 'products', label: '集会', shortLabel: '集会', icon: ShoppingCart },
   { id: 'events', label: '事件', shortLabel: '事件', icon: Sparkles },
   { id: 'loan', label: '贷款', shortLabel: '贷款', icon: Banknote },
-  { id: 'trade', label: '贸易', shortLabel: '贸易', icon: Globe },
+  { id: 'galaxy', label: '星图', shortLabel: '星图', icon: Globe },
+  { id: 'archaeology', label: '考古', shortLabel: '考古', icon: Landmark },
   { id: 'colony', label: '殖民', shortLabel: '殖民', icon: Home },
   { id: 'module', label: '改造', shortLabel: '改造', icon: Wrench },
   { id: 'redeem', label: '兑换', shortLabel: '兑换', icon: Gift },
@@ -153,7 +158,7 @@ export default function GameScreen({
   onClearEventDodged,
   onTakeLoan,
   onRepayLoan,
-  onTravelToFaction,
+  onTravelToNode,
   onBuySpecialty,
   onSellSpecialty,
   onExploreFaction,
@@ -162,12 +167,15 @@ export default function GameScreen({
   onAcceptContract,
   onCompleteContract,
   onBlackMarketBuy,
+  onStartExcavation,
+  onContinueExcavation,
+  onResolveExcavationChoice,
+  onSteadyExcavation,
+  onChangeExcavationLeader,
+  onAbandonExcavation,
   onInstallModule,
   onUseManualModule,
-  onUnlockColony,
-  onSelectPlanet,
-  onRescrollPlanets,
-  generateScoutingPool,
+  onFoundColony,
   onBuildColonyBuilding,
   onRecruitPop,
   onAssignPop,
@@ -257,6 +265,36 @@ export default function GameScreen({
 
   const currentShip = gameState.ships[0];
   const totalAssets = currentShip ? getShipTotalAssets(currentShip) : 0;
+
+  // 星图内嵌的势力信息卡数据：useMemo 保持引用稳定，避免每次渲染击穿 GalaxyMapPanel 的 memo
+  const galaxyTradeProps = useMemo(() => {
+    if (!currentShip) return null;
+    return {
+      factions: gameState.factions,
+      ship: currentShip,
+      factionPrices: gameState.factionPrices,
+      factionSellMultipliers: gameState.factionSellMultipliers,
+      blackMarketMultiplier: gameState.blackMarketMultiplier,
+      buyStocks: gameState.buyStocks,
+      sellDemands: gameState.sellDemands,
+      buyBuffs: gameState.buyBuffs,
+      sellBuffs: gameState.sellBuffs,
+      factionPolicy: gameState.factionPolicy,
+      policyRemainingTurns: gameState.policyRemainingTurns,
+      onTravel: onTravelToNode,
+      onBuy: onBuySpecialty,
+      onSell: onSellSpecialty,
+      onExplore: onExploreFaction,
+      onInvest: onInvestFaction,
+      onGatherIntel: onGatherIntel,
+      factionReputation: gameState.factionReputation || EMPTY_REPUTATION,
+      factionContracts: gameState.factionContracts || EMPTY_CONTRACTS,
+      currentTurn: gameState.turn,
+      onAcceptContract: onAcceptContract,
+      onCompleteContract: onCompleteContract,
+      onBlackMarketBuy: onBlackMarketBuy,
+    };
+  }, [currentShip, gameState, onTravelToNode, onBuySpecialty, onSellSpecialty, onExploreFaction, onInvestFaction, onGatherIntel, onAcceptContract, onCompleteContract, onBlackMarketBuy]);
 
   const confirmNextTurn = () => {
     setShowConfirmNext(false);
@@ -501,32 +539,27 @@ export default function GameScreen({
             />
           </div>
           )}
-          {currentShip && (
-          <div className={activeTab === 'trade' ? '' : 'hidden'}>
-            <TradePanel
-              factions={gameState.factions}
+          {currentShip && galaxyTradeProps && (
+          <div className={activeTab === 'galaxy' ? '' : 'hidden'}>
+            <GalaxyMapPanel
               ship={currentShip}
-              factionPrices={gameState.factionPrices}
-              factionSellMultipliers={gameState.factionSellMultipliers}
-              blackMarketMultiplier={gameState.blackMarketMultiplier}
-              buyStocks={gameState.buyStocks}
-              sellDemands={gameState.sellDemands}
-              buyBuffs={gameState.buyBuffs}
-              sellBuffs={gameState.sellBuffs}
-              factionPolicy={gameState.factionPolicy}
-              policyRemainingTurns={gameState.policyRemainingTurns}
-              onTravel={onTravelToFaction}
-              onBuy={onBuySpecialty}
-              onSell={onSellSpecialty}
-              onExplore={onExploreFaction}
-              onInvest={onInvestFaction}
-              onGatherIntel={onGatherIntel}
               factionReputation={gameState.factionReputation || EMPTY_REPUTATION}
-              factionContracts={gameState.factionContracts || EMPTY_CONTRACTS}
-              currentTurn={gameState.turn}
-              onAcceptContract={onAcceptContract}
-              onCompleteContract={onCompleteContract}
-              onBlackMarketBuy={onBlackMarketBuy}
+              onTravelToNode={onTravelToNode}
+              onFoundColony={onFoundColony}
+              tradeProps={galaxyTradeProps}
+            />
+          </div>
+          )}
+          {currentShip && (
+          <div className={activeTab === 'archaeology' ? '' : 'hidden'}>
+            <ArchaeologyPanel
+              ship={currentShip}
+              onStartExcavation={onStartExcavation}
+              onContinueExcavation={onContinueExcavation}
+              onResolveChoice={onResolveExcavationChoice}
+              onSteadyExcavation={onSteadyExcavation}
+              onChangeLeader={onChangeExcavationLeader}
+              onAbandonExcavation={onAbandonExcavation}
             />
           </div>
           )}
@@ -534,10 +567,6 @@ export default function GameScreen({
           <div className={activeTab === 'colony' ? '' : 'hidden'}>
             <ColonyPanel
               ship={currentShip}
-              onUnlockColony={onUnlockColony}
-              onSelectPlanet={onSelectPlanet}
-              onRescrollPlanets={onRescrollPlanets}
-              generateScoutingPool={generateScoutingPool}
               onBuild={onBuildColonyBuilding}
               onRecruitPop={onRecruitPop}
               onAssignPop={onAssignPop}
@@ -805,7 +834,7 @@ function OverviewTab({
         if (ship.installedModuleIds.includes(MODULE_NANO_FARM)) modFood += 30;
         if (ship.installedModuleIds.includes(MODULE_SIXTH_FARM)) modFood += 60;
         // 殖民地数据（统一走 economy 模块估算，金币/领袖科研取中值）
-        const eco = ship.colony?.phase === 'active' ? computeColonyEconomy(ship.colony, { relics: ship.relics }) : null;
+        const eco = ship.colony?.phase === 'active' ? computeColonyEconomy(ship.colony, { relics: ship.relics, permaBonuses: ship.galaxy?.permaBonuses || [] }) : null;
         const colFood = eco?.food ?? 0, colAlloy = eco?.alloy ?? 0, colStardust = eco?.stardust ?? 0;
         const colGold = eco?.gold ?? 0, colRP = eco?.research ?? 0, colFoodCost = eco?.foodCost ?? 0;
         const colMats: Record<string, number> = eco?.materials ?? {};

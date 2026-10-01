@@ -1,5 +1,5 @@
 import type { Mothership, Stock, RawMaterial, Product, Recipe } from '@/types/game';
-import { FACTIONS } from './factions';
+import { createGalaxyState } from './galaxy/nodes';
 
 // ==================== 母舰数据 ====================
 
@@ -9,7 +9,7 @@ export const MOTHERSHIP_ID_GOLD_GROUP = 2;          // 黄金集团
 export const MOTHERSHIP_ID_GALAXY_HEART = 3;        // 银河之心
 export const MOTHERSHIP_ID_SINGULARITY_SEEKER = 4;  // 奇点探求者
 
-export const MOTHERSHIP_TEMPLATES: Omit<Mothership, 'gold' | 'food' | 'alloy' | 'stardust' | 'modules' | 'installedModuleIds' | 'stockHoldings' | 'stockCosts' | 'stockBuyTurn' | 'sellPriceBonus' | 'productionsThisTurn' | 'maxProductionsPerTurn' | 'materials' | 'products' | 'productionQueue' | 'usedCodes' | 'loans' | 'bankrupt' | 'bankruptTimer' | 'famineTimer' | 'isRebellion' | 'relics' | 'tradeStatus' | 'goldLog'>[] = [
+export const MOTHERSHIP_TEMPLATES: Omit<Mothership, 'gold' | 'food' | 'alloy' | 'stardust' | 'modules' | 'installedModuleIds' | 'stockHoldings' | 'stockCosts' | 'stockBuyTurn' | 'sellPriceBonus' | 'productionsThisTurn' | 'maxProductionsPerTurn' | 'materials' | 'products' | 'productionQueue' | 'usedCodes' | 'loans' | 'bankrupt' | 'bankruptTimer' | 'famineTimer' | 'isRebellion' | 'relics' | 'tradeStatus' | 'galaxy' | 'goldLog'>[] = [
   {
     id: MOTHERSHIP_ID_UNITY,
     name: '万众一心',
@@ -137,16 +137,15 @@ export function createMotherships(): Mothership[] {
     famineTimer: 0,
     isRebellion: false,
     relics: [],
-    // 星际贸易系统：随机停靠一个势力
+    // 星际贸易系统：特产库存与逐势力状态（位置与跃迁已迁到 galaxy）
     tradeStatus: {
-      currentFactionId: FACTIONS[Math.floor(Math.random() * FACTIONS.length)].id,
-      targetFactionId: null,
-      travelTurnsRemaining: 0,
       inventory: {},
       factionStates: {},
       exploredThisTurn: false,
       intelGatheredInFaction: null,
     },
+    // 星图：开局随机停泊在一个势力节点（势力节点 id 与 factionId 同值）
+    galaxy: createGalaxyState(),
     goldLog: [],
   }));
 }

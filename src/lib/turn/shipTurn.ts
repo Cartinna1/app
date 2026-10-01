@@ -8,7 +8,7 @@ import { FACTIONS, getInvestmentTier, getIncomeCap } from '@/data/factions';
 import { getShipTotalAssets } from '@/lib/game/assets';
 import {
   RELIC_CRYSTAL, RELIC_TRANSCRIBER, RELIC_RESONANCE_STONE, RELIC_FOOD_PRESERVER,
-  RELIC_CLONE_DISH, RELIC_LUCKY_CAT,
+  RELIC_CLONE_DISH, RELIC_LUCKY_CAT, RELIC_RESONANCE_FORK,
 } from '@/data/relics';
 import {
   MODULE_BIO_KITCHEN, MODULE_NANO_FARM, MODULE_SIXTH_FARM, MODULE_MINING_ARRAY,
@@ -151,6 +151,11 @@ export function processShipTurn(
     s.goldLog = [{ turn, amount: catBonus, reason: "遗物「招财猫」收益", balanceAfter: s.gold }, ...s.goldLog].slice(0, 200);
   }
 
+  // 考古遗物：共鸣音叉——每回合 +3 星尘
+  if (s.relics.some((r) => r.id === RELIC_RESONANCE_FORK)) {
+    s.stardust += 3;
+  }
+
   // ==================== 破产/饥荒/叛乱倒计时处理 ====================
   // 破产倒计时
   if (s.bankrupt && s.bankruptTimer > 0) {
@@ -189,15 +194,21 @@ export function processShipTurn(
   });
   s.products = s.products.filter((p) => p.expiresAt > turn);
 
-  // 星际贸易：跃迁倒计时
-  s.tradeStatus = { ...s.tradeStatus };
-  if (s.tradeStatus.travelTurnsRemaining > 0) {
-    s.tradeStatus.travelTurnsRemaining -= 1;
-    if (s.tradeStatus.travelTurnsRemaining <= 0 && s.tradeStatus.targetFactionId) {
-      s.tradeStatus.currentFactionId = s.tradeStatus.targetFactionId;
-      s.tradeStatus.targetFactionId = null;
-      s.tradeStatus.intelGatheredInFaction = null;
-      s.tradeStatus.lastIntelResult = undefined;
+  // 星图：跃迁倒计时（位置与目标都在 galaxy，单一真值）
+  s.galaxy = { ...s.galaxy };
+  if (s.galaxy.travelTurnsRemaining > 0) {
+    const left = s.galaxy.travelTurnsRemaining - 1;
+    const arrived = left <= 0 && !!s.galaxy.targetNodeId;
+    const nodeId = arrived ? s.galaxy.targetNodeId! : null;
+    s.galaxy.travelTurnsRemaining = left;
+    if (arrived) {
+      s.galaxy.currentNodeId = nodeId!;
+      s.galaxy.targetNodeId = null;
+      if (!s.galaxy.visitedNodes.includes(nodeId!)) {
+        s.galaxy.visitedNodes = [...s.galaxy.visitedNodes, nodeId!]; // 到达即探明
+      }
+      // 抵达新势力后重置打探状态（浅拷贝 tradeStatus，避免改到 prev 的嵌套对象）
+      s.tradeStatus = { ...s.tradeStatus, intelGatheredInFaction: null, lastIntelResult: undefined };
     }
   }
 

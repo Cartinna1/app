@@ -1,4 +1,5 @@
 import type { Faction, TradePolicy, PolicyEffect } from '@/types/game';
+import { getTradeDistance, FALLBACK_DISTANCE } from '@/lib/galaxy/graph';
 
 // 10个星际势力
 export const FACTIONS: Faction[] = [
@@ -14,25 +15,15 @@ export const FACTIONS: Faction[] = [
   { id: 'f10', name: '超念矩阵', specialtyName: '定制化人格副本', specialtyDescription: '将意识完整备份为数字人格', basePrice: 1100 },
 ];
 
-// 距离矩阵
-export const DISTANCE_MATRIX: number[][] = [
-  [0, 3, 4, 5, 3, 6, 4, 7, 8, 6],
-  [3, 0, 5, 4, 4, 5, 3, 6, 7, 5],
-  [4, 5, 0, 6, 5, 7, 6, 8, 9, 7],
-  [5, 4, 6, 0, 5, 4, 4, 5, 6, 4],
-  [3, 4, 5, 5, 0, 6, 4, 7, 8, 6],
-  [6, 5, 7, 4, 6, 0, 5, 4, 5, 3],
-  [4, 3, 6, 4, 4, 5, 0, 6, 7, 5],
-  [7, 6, 8, 5, 7, 4, 6, 0, 4, 4],
-  [8, 7, 9, 6, 8, 5, 7, 4, 0, 5],
-  [6, 5, 7, 4, 6, 3, 5, 4, 5, 0],
-];
+// 距离与跃迁回合数：唯一真值是星图（lib/galaxy/graph.ts 的最短路，航道长度由节点坐标推导）。
+// ⚠ 旧的 10×10 DISTANCE_MATRIX 已随星图上线删除；势力间距现在由图上的航道决定，
+//   改星图布局（data/galaxy/nodes.ts / lanes.ts）会同时改变跃迁回合与异地卖出折价。
 
 export function getDistance(fromId: string, toId: string): number {
-  const fromIdx = FACTIONS.findIndex((f) => f.id === fromId);
-  const toIdx = FACTIONS.findIndex((f) => f.id === toId);
-  if (fromIdx === -1 || toIdx === -1) return 5;
-  return DISTANCE_MATRIX[fromIdx][toIdx];
+  const from = FACTIONS.some((f) => f.id === fromId);
+  const to = FACTIONS.some((f) => f.id === toId);
+  if (!from || !to) return FALLBACK_DISTANCE;
+  return getTradeDistance(fromId, toId);
 }
 
 export function getTravelTurns(fromId: string, toId: string): number {
