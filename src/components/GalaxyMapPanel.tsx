@@ -11,7 +11,8 @@ import { GALAXY_NODES, getGalaxyNode } from '@/data/galaxy/nodes';
 import { GALAXY_LANES } from '@/data/galaxy/lanes';
 import { shortestRoute } from '@/lib/galaxy/graph';
 import { getBlockedNodeIds, canEnterNode } from '@/lib/galaxy/access';
-import { RELATION_MATRIX, FACTIONS } from '@/data/factions';
+import { getKnownFactionIds, getKnownRelation } from '@/lib/galaxy/knowledge';
+import { FACTIONS } from '@/data/factions';
 import { getArchaeologySite } from '@/data/galaxy/archaeology';
 import { ALL_PLANETS } from '@/data/colony/planets';
 import { Rocket, Lock, HelpCircle, MapPin } from 'lucide-react';
@@ -66,6 +67,8 @@ function GalaxyMapPanel({ ship, factionReputation, onTravelToNode }: GalaxyMapPa
 
   const blocked = useMemo(() => getBlockedNodeIds(factionReputation), [factionReputation]);
   const visited = useMemo(() => new Set(galaxy.visitedNodes), [galaxy.visitedNodes]);
+  /** 已探明势力（迷雾判定唯一真值） */
+  const knownFactionIds = useMemo(() => getKnownFactionIds(ship), [ship]);
 
   // ==================== 视图（缩放 / 平移）====================
   // 手机端整张星图过小：默认放大并居中，支持双指捏合、鼠标滚轮、拖拽平移与按钮缩放。
@@ -315,33 +318,27 @@ function GalaxyMapPanel({ ship, factionReputation, onTravelToNode }: GalaxyMapPa
         })()}
 
         {node.type === 'faction' && (() => {
-          // 关系探明规则：只显示"我已到访过"的相关势力（例：必须去过泰拉钢铁王座，才知道人类联邦与它敌对）
-          const rel = RELATION_MATRIX[node.factionId || ''] || { allies: [], enemies: [] };
-          const visitedFactionIds = new Set(
-            galaxy.visitedNodes.filter((id) => getGalaxyNode(id)?.type === 'faction')
-          );
+          // 关系探明规则唯一真值：lib/galaxy/knowledge.ts（贸易面板的势力分布共用同一口径）
+          const rel = getKnownRelation(node.factionId || '', knownFactionIds);
           const nameOf = (id: string) => FACTIONS.find((f) => f.id === id)?.name || id;
-          const knownAllies = rel.allies.filter((id) => visitedFactionIds.has(id));
-          const knownEnemies = rel.enemies.filter((id) => visitedFactionIds.has(id));
-          const hiddenCount = (rel.allies.length - knownAllies.length) + (rel.enemies.length - knownEnemies.length);
           return (
             <div className="mb-3 flex flex-wrap items-center gap-2">
-              {knownAllies.map((id) => (
+              {rel.allies.map((id) => (
                 <span key={`a-${id}`} className="text-[10px] md:text-xs px-1.5 py-0.5 rounded bg-emerald-900/40 text-emerald-300 border border-emerald-700/50">
                   友：{nameOf(id)}
                 </span>
               ))}
-              {knownEnemies.map((id) => (
+              {rel.enemies.map((id) => (
                 <span key={`e-${id}`} className="text-[10px] md:text-xs px-1.5 py-0.5 rounded bg-red-900/40 text-red-300 border border-red-700/50">
                   敌：{nameOf(id)}
                 </span>
               ))}
-              {hiddenCount > 0 && (
+              {rel.hiddenCount > 0 && (
                 <span className="text-[10px] md:text-xs text-slate-500">
-                  {hiddenCount} 条外交关系未知（需到访相关势力才能探明）
+                  {rel.hiddenCount} 条外交关系未知（需到访相关势力才能探明）
                 </span>
               )}
-              {hiddenCount === 0 && knownAllies.length === 0 && knownEnemies.length === 0 && (
+              {rel.hiddenCount === 0 && rel.allies.length === 0 && rel.enemies.length === 0 && (
                 <span className="text-[10px] md:text-xs text-slate-500">暂无已知的盟友或敌对势力</span>
               )}
             </div>

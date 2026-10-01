@@ -1,8 +1,9 @@
-import { useState, memo } from 'react';
+import { useState, useMemo, memo } from 'react';
 import type { Mothership, Faction, TradePolicy, PolicyEffect, FactionContract } from '@/types/game';
-import { getDistance, getTravelTurns, getSellPrice, getReputationTier, FACTIONS as FACTIONS_DATA, RELATION_MATRIX } from '@/data/factions';
+import { getDistance, getTravelTurns, getSellPrice, getReputationTier, FACTIONS as FACTIONS_DATA } from '@/data/factions';
 import { getContractItemName } from '@/lib/turn/contracts';
 import { getGalaxyNode } from '@/data/galaxy/nodes';
+import { getKnownFactionIds, getKnownRelation } from '@/lib/galaxy/knowledge';
 import { Globe, ShoppingCart, TrendingUp, Compass, Coins, Rocket, BarChart3, Radio, AlertTriangle } from 'lucide-react';
 
 export interface TradePanelProps {
@@ -69,6 +70,8 @@ function TradePanel({ factions, ship, factionPrices, factionSellMultipliers, bla
 
   const isTraveling = galaxy.travelTurnsRemaining > 0;
   const travelTarget = getGalaxyNode(galaxy.targetNodeId);
+  /** 已探明势力（迷雾唯一真值：lib/galaxy/knowledge.ts，与星图信息卡同源） */
+  const knownFactionIds = useMemo(() => getKnownFactionIds(ship), [ship]);
   // 迷雾：跃迁途中不暴露未探测过的目的地名称（否则会泄露星球类型等信息）
   const travelTargetName = travelTarget
     ? ((ship.galaxy.visitedNodes || []).includes(travelTarget.id) ? travelTarget.name : '未探测星系')
@@ -275,20 +278,39 @@ function TradePanel({ factions, ship, factionPrices, factionSellMultipliers, bla
         ))}
       </div>
 
-      {/* 星际势力分布（跃迁入口统一在「星图」页签，本区只保留价格/声望/关系信息） */}
+      {/* 星际势力分布（迷雾：只有到访过的势力才显示名称/特产/价格/外交关系；跃迁入口在「星图」页签） */}
       {activeTab === 'overview' && (
         <div className="bg-slate-900/60 border border-slate-700 rounded-xl p-5">
-          <h3 className="text-lg font-bold text-slate-200 mb-4 flex items-center gap-2"><Globe size={18} className="text-cyan-400" /> 星际势力分布</h3>
+          <h3 className="text-lg font-bold text-slate-200 mb-1 flex items-center gap-2">
+            <Globe size={18} className="text-cyan-400" /> 星际势力分布
+            <span className="text-[10px] md:text-xs font-normal text-slate-500">已探明 {knownFactionIds.size}/{factions.length}</span>
+          </h3>
+          <p className="text-[10px] md:text-xs text-slate-500 mb-4">未探明的势力只显示占位，跃迁抵达后揭晓。</p>
           <div className="space-y-2 max-h-72 overflow-auto">
             {factions.map((f) => {
-              const dist = currentFaction ? getDistance(currentFaction.id, f.id) : 0;
               const isCurrent = f.id === currentFactionId;
+              // ===== 迷雾：未到访过的势力不暴露任何信息 =====
+              if (!knownFactionIds.has(f.id)) {
+                return (
+                  <div key={f.id} className="rounded-lg border border-slate-700/50 bg-slate-800/20 p-3">
+                    <div className="flex items-center gap-3 min-w-0">
+                      <div className="w-[60px] h-[60px] md:w-[100px] md:h-[100px] rounded-lg border border-slate-700/60 bg-slate-800/60 flex items-center justify-center text-slate-600 text-2xl md:text-4xl flex-shrink-0">?</div>
+                      <div className="min-w-0 flex-1">
+                        <p className="text-sm md:text-base font-bold text-slate-500">未探测势力</p>
+                        <p className="text-[10px] md:text-xs text-slate-600 mt-1">在「星图」跃迁抵达该势力星系后，才会显示名称、特产、市场价与外交关系。</p>
+                      </div>
+                    </div>
+                  </div>
+                );
+              }
+              const dist = currentFaction ? getDistance(currentFaction.id, f.id) : 0;
               const turns = currentFaction ? getTravelTurns(currentFaction.id, f.id) : 0;
-              
+
               const fPrice = factionPrices[f.id] || f.basePrice;
               const fRep = (factionReputation || {})[f.id] || 0;
               const fRepTier = getReputationTier(fRep);
-              const fRel = RELATION_MATRIX[f.id] || { allies: [], enemies: [] };
+              // 关系探明规则唯一真值：lib/galaxy/knowledge.ts（与星图信息卡同源）
+              const fRel = getKnownRelation(f.id, knownFactionIds);
               return (
                 <div key={f.id} className={`rounded-lg border p-3 ${isCurrent ? 'border-cyan-500 bg-cyan-900/20' : 'border-slate-700 bg-slate-800/40'}`}>
                   <div className="flex items-start justify-between gap-3">
@@ -313,6 +335,9 @@ function TradePanel({ factions, ship, factionPrices, factionSellMultipliers, bla
                             <span className="text-[10px] md:text-xs px-1.5 py-0.5 rounded bg-red-900/40 text-red-300 border border-red-700/50">
                               敌：{fRel.enemies.map(id => FACTIONS_DATA.find(x => x.id === id)?.name).filter(Boolean).join('、')}
                             </span>
+                          )}
+                          {fRel.hiddenCount > 0 && (
+                            <span className="text-[10px] md:text-xs text-slate-500">{fRel.hiddenCount} 条外交关系未知</span>
                           )}
                         </div>
                         <p className="text-sm text-slate-300 mt-1">{f.specialtyName} | 市场价 <span className="text-yellow-400">{fPrice}</span> <span className="text-slate-600">(基价{f.basePrice})</span></p>
