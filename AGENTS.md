@@ -8,7 +8,8 @@
 ## 〇、工作副本与验证流程（先读这条）
 
 - **协作者不跑构建**：不执行 `npm run build` / `tsc` / `npm install`（本机也没有 Node 环境）。改完后做逻辑级自检——通读改动文件、grep 核对每一处符号引用与 import——构建验证由用户执行。
-- 自检清单里最容易漏的三类（都因此吃过一次构建失败）：**① 新增 hook 导出时同步它的显式返回类型接口**（如 `useEvent` 的 `UseEventReturn`，漏了会报 TS2353/TS2339）；② 删改 JSX 分支后是否留下未读的局部变量与未用的 import（`noUnusedLocals`/`noUnusedParameters` 全开）；③ 新增返回字段时确认消费方的**返回类型是否要求额外字段**（如 `gatherIntel` 要求 `goldChange`）。
+- 自检清单里最容易漏的（都因此吃过构建失败）：**① 新增 hook 导出时同步它的显式返回类型接口**（如 `useEvent` 的 `UseEventReturn`，漏了会报 TS2353/TS2339）；② 删改 JSX 分支后是否留下未读的局部变量与未用的 import（`noUnusedLocals`/`noUnusedParameters` 全开）；③ 新增返回字段时确认消费方的**返回类型是否要求额外字段**（如 `gatherIntel` 要求 `goldChange`）；**④ 数组字面量的元组推断**：`[['星球', 1], ['领袖', 2]].map(([k, v]) => Math.round(v))` 里的 `v` 会被推断成 `string | number` → 报 TS2345，必须先把字面量标注成 `Array<[string, number]>` 再 map（总览产出拆解曾因此报错）；**⑤ 重构后参数失去用途要一并处理**：`getSpecialtySellRevenue(factionId, …)` 里的 `factionId` 不再被读 → TS6133，要么删参数并同步所有调用点，要么前缀 `_`。
+- **grep 类自检查不出类型错误**：涉及"数组 / map / 函数签名 / 新字段接进已有联合类型"的改动，必须人工再过一遍类型判断，别只靠括号与未使用符号扫描。
 - 改动逐条过源码确认，不接受"大概没问题"。
 
 ## 一、技术栈与架构现状

@@ -849,7 +849,9 @@ function OverviewTab({
             : kind === 'stardust' ? eco.leaderPerTurn.stardust : 0;
           const perTurnRelic = kind === 'research' ? eco.relicPerTurn.research : 0;
           const total = list.reduce((a, e) => a + e.value, 0) + perTurnLeader + perTurnRelic;
-          const parts: Array<[string, number]> = [
+          // ⚠ 数组字面量要先标注为元组数组，否则 [[label, v]] 会被推断成 (string|number)[][]，
+          //   后面 .map(([label, v]) => Math.round(v)) 就会因 v: string|number 报 TS2345
+          const rawParts: Array<[string, number]> = [
             ['星球', acc((e) => e.base * e.planetPct)],
             ['领袖', acc((e) => e.base * e.leaderPct)],
             ['循环', acc((e) => e.base * e.repeatPct)],
@@ -857,7 +859,8 @@ function OverviewTab({
             ['遗物', acc((e) => e.base * (e.relicPct || 0)) + perTurnRelic],
             ['遗物每座', acc((e) => e.relicBonus || 0)],
             ['领袖特效', perTurnLeader],
-          ].map(([label, v]) => [label, Math.round(v)]).filter(([, v]) => v !== 0) as Array<[string, number]>;
+          ];
+          const parts = rawParts.map(([label, v]) => [label, Math.round(v)] as [string, number]).filter(([, v]) => v !== 0);
           const base = total - parts.reduce((a, [, v]) => a + v, 0);
           const segments = [
             ...(base !== 0 ? [`建筑${base}`] : []),

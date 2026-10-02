@@ -41,9 +41,9 @@ export function getBlackMarketTotal(
   return Math.ceil(basePrice * buyBuffMult * (blackMarketMultiplier || 3.2) * qty);
 }
 
-/** 特产卖出总收益（收购价 × 数量 × 反垄断 × 套利凭证 × 贸易枢纽 × 售出 buff，**末尾一次 round**） */
+/** 特产卖出总收益（收购价 × 数量 × 反垄断 × 套利凭证 × 贸易枢纽 × 售出 buff，**末尾一次 round**）
+ *  收购单价由调用方用 getSellPrice 先算好传入（本函数只负责加成与取整） */
 export function getSpecialtySellRevenue(
-  factionId: string,
   qty: number,
   unitSellPrice: number,
   sellBuffMult: number,

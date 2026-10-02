@@ -505,7 +505,7 @@ function TradePanel({ factions, ship, factionPrices, factionSellMultipliers, bla
                           </div>
                           <div className="text-right">
                             {!isLocal && <>
-                              <p className="text-sm text-yellow-400 font-bold">{getSpecialtySellRevenue(fid, 1, sellP, sellBuffMult, relicIds, moduleIds).toLocaleString()}/个</p>
+                              <p className="text-sm text-yellow-400 font-bold">{getSpecialtySellRevenue(1, sellP, sellBuffMult, relicIds, moduleIds).toLocaleString()}/个</p>
                             </>}
                             <button
                               onClick={() => { if (!isLocal) { setSellFaction(fid); setSellQty('1'); } }}
@@ -529,7 +529,7 @@ function TradePanel({ factions, ship, factionPrices, factionSellMultipliers, bla
                         className="w-24 bg-slate-800 border border-slate-600 rounded-lg px-3 py-2 text-sm text-slate-200" />
                       <button onClick={() => setSellQty(String(maxSellQty))} className="px-2.5 py-1.5 bg-slate-700 hover:bg-slate-600 rounded-lg text-xs text-slate-300 transition-colors">最大</button>
                       <span className="text-sm text-slate-500">
-                        = {getSpecialtySellRevenue(sellFaction, sellQtyNum, getSellPrice(sellFaction, factionPrices, factionSellMultipliers), sellBuffMult, relicIds, moduleIds).toLocaleString()} 金币
+                        = {getSpecialtySellRevenue(sellQtyNum, getSellPrice(sellFaction, factionPrices, factionSellMultipliers), sellBuffMult, relicIds, moduleIds).toLocaleString()} 金币
                       </span>
                     </div>
                     <button onClick={handleSell} disabled={sellQtyNum <= 0 || sellQtyNum > maxSellQty} className="w-full py-2.5 bg-yellow-700 hover:bg-yellow-600 disabled:bg-slate-700 disabled:text-slate-500 rounded-lg font-bold text-white transition-colors">

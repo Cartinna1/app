@@ -211,7 +211,7 @@ export function useTrade(
           const sellPrice = getSellPrice(factionId, prev.factionPrices, prev.factionSellMultipliers);
           const sellBuffMult = (prev.sellBuffs?.[curFid] || []).reduce((m, b) => m * b.multiplier, 1);
           // 收益加成（反垄断 1.1 / 套利凭证 1.05 / 贸易枢纽 1.15）唯一真值 lib/turn/tradePrice.ts
-          const totalRevenue = getSpecialtySellRevenue(factionId, quantity, sellPrice, sellBuffMult, s.relics.map((r) => r.id), s.installedModuleIds);
+          const totalRevenue = getSpecialtySellRevenue(quantity, sellPrice, sellBuffMult, s.relics.map((r) => r.id), s.installedModuleIds);
           s.gold += totalRevenue;
           if (s.bankrupt && s.gold > 0) s.bankrupt = false;
           s.goldLog = [{ turn: prev.turn, amount: totalRevenue, reason: `卖出「${faction.specialtyName}」x${quantity}`, balanceAfter: s.gold }, ...s.goldLog].slice(0, 200);
