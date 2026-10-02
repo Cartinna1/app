@@ -61,6 +61,11 @@ function ArchaeologyPanel({
   const [galleryOpen, setGalleryOpen] = useState<boolean>(() =>
     Object.values(ship.galaxy.archaeology || {}).some((st) => st.status === 'done')
   );
+  /** 封面加载失败的遗迹（按 siteId 记）。列表缩略图缺图时**整块不渲染**，避免每行留个空洞；
+   *  用 state 而不是改 DOM style：同一 <img> 会被 React 复用，手工隐藏会残留到别的遗迹 */
+  const [failedCovers, setFailedCovers] = useState<Set<string>>(() => new Set());
+  const markCoverFailed = (siteId: string) =>
+    setFailedCovers((prev) => (prev.has(siteId) ? prev : new Set(prev).add(siteId)));
 
   const galaxy = ship.galaxy;
   const archaeology = galaxy.archaeology || {};
@@ -281,23 +286,48 @@ function ArchaeologyPanel({
                 key={site.id}
                 className={`rounded-lg border p-3 ${selectedSiteId === site.id ? 'border-purple-500 bg-purple-900/20' : 'border-slate-700 bg-slate-800/40'}`}
               >
-                <button onClick={() => { setSelectedSiteId(site.id); setLeaderPick(''); }} className="w-full text-left min-h-[40px]">
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <span className="text-sm md:text-base font-bold text-slate-100">{site.name}</span>
-                    <span className="text-[10px] px-1.5 py-0.5 rounded bg-slate-900 text-slate-400 border border-slate-700">{site.civilization}</span>
-                    <span className={`text-[10px] px-1.5 py-0.5 rounded ${status === '已完成' ? 'bg-emerald-900/50 text-emerald-300' : status === '已封闭' ? 'bg-red-900/40 text-red-300 border border-red-800' : status === '进行中' ? 'bg-amber-900/50 text-amber-300' : status === '已中止' ? 'bg-slate-800 text-slate-300 border border-slate-600' : 'bg-slate-800 text-slate-400'}`}>{status}</span>
-                    {isHere && <span className="text-[10px] px-1.5 py-0.5 rounded bg-cyan-600 text-white">母舰在此</span>}
-                    <ChevronRight size={14} className="text-slate-500 ml-auto" />
+                <button onClick={() => { setSelectedSiteId(site.id); setLeaderPick(''); }} className="w-full text-left min-h-[40px] flex items-start gap-2 md:gap-3">
+                  {/* 遗迹封面缩略图（16:9；移动端 64px、桌面 96px 宽）。缺图时整块不渲染，不留空洞 */}
+                  {!failedCovers.has(site.id) && (
+                    <img
+                      src={site.galleryImage}
+                      alt={site.name}
+                      loading="lazy"
+                      onError={() => markCoverFailed(site.id)}
+                      className="w-16 md:w-24 aspect-video object-cover rounded border border-slate-700 flex-shrink-0 bg-slate-800/40"
+                    />
+                  )}
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="text-sm md:text-base font-bold text-slate-100">{site.name}</span>
+                      <span className="text-[10px] px-1.5 py-0.5 rounded bg-slate-900 text-slate-400 border border-slate-700">{site.civilization}</span>
+                      <span className={`text-[10px] px-1.5 py-0.5 rounded ${status === '已完成' ? 'bg-emerald-900/50 text-emerald-300' : status === '已封闭' ? 'bg-red-900/40 text-red-300 border border-red-800' : status === '进行中' ? 'bg-amber-900/50 text-amber-300' : status === '已中止' ? 'bg-slate-800 text-slate-300 border border-slate-600' : 'bg-slate-800 text-slate-400'}`}>{status}</span>
+                      {isHere && <span className="text-[10px] px-1.5 py-0.5 rounded bg-cyan-600 text-white">母舰在此</span>}
+                      <ChevronRight size={14} className="text-slate-500 ml-auto" />
+                    </div>
+                    <p className="text-[10px] md:text-xs text-slate-500 mt-1">
+                      {site.stages.length} 阶段{site.minLeaderLevel > 0 ? ` · 需 Lv${site.minLeaderLevel} 领袖` : ''} ·{' '}
+                      <span className={site.dangerRate >= 0.5 ? 'text-amber-400' : ''}>危险率 {Math.round(site.dangerRate * 100)}%</span>
+                      {' · '}奖励：{describeReward(site)}
+                    </p>
                   </div>
-                  <p className="text-[10px] md:text-xs text-slate-500 mt-1">
-                    {site.stages.length} 阶段{site.minLeaderLevel > 0 ? ` · 需 Lv${site.minLeaderLevel} 领袖` : ''} ·{' '}
-                    <span className={site.dangerRate >= 0.5 ? 'text-amber-400' : ''}>危险率 {Math.round(site.dangerRate * 100)}%</span>
-                    {' · '}奖励：{describeReward(site)}
-                  </p>
                 </button>
 
                 {selectedSiteId === site.id && (
                   <div className="mt-2 pt-2 border-t border-slate-700/60">
+                    {/* 遗迹封面大图（与阶段图/halt 图同一套占位约定：缺图露出占位框） */}
+                    <div className="relative w-full aspect-video max-h-[140px] md:max-h-[220px] rounded-lg border border-purple-900/50 bg-slate-800/40 overflow-hidden mb-2">
+                      <div className="absolute inset-0 flex items-center justify-center text-[10px] md:text-xs text-slate-600">
+                        遗迹封面（{site.id}/cover）
+                      </div>
+                      <img
+                        key={site.galleryImage}
+                        src={site.galleryImage}
+                        alt={site.name}
+                        onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+                        className="relative w-full h-full object-cover"
+                      />
+                    </div>
                     <p className="text-xs text-slate-400 mb-2">{site.intro}</p>
                     {status === '已封闭' ? (
                       <div className="space-y-2">

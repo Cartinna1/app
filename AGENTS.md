@@ -136,6 +136,7 @@ src/
 - 原料译名一律走 `getMaterialName()`（事件/建筑的 flavor 文学描述除外）。
 - **领袖显示一律用名字**：`getLeaderDef(leaderInstance.id)?.name`（如「诺娃·永昼」）。`LeaderInstance.id` 是内部编号（L1…L22），任何时候都不要直接渲染给玩家（考古驻守下拉与驻守状态曾显示成 "L14 Lv3"）。
 - **星图节点配图**（唯一真值：`lib/galaxy/nodeImage.ts` → `getNodeLandscapeImage`）：可殖民星球 `/planet-landscape/<星球类型id>.png`（10 个类型：desert/ocean/polar/arid/terran/alpine/savannah/tropical/tundra/ruin，已有 1424×800）；遗迹**复用图鉴封面** `/archaeology/<遗迹id>/cover.webp`（不另做一套图，避免分叉）；势力 `/faction-landscape/<势力id>.png`（f01~f10，**图片待补**，缺图由 `onError` 自动隐藏）；未开发（empty）节点无图；**未探测节点一律不返回图片**（迷雾，避免泄露）。信息卡里图片限高：移动端 150px、桌面 260px。
+- **遗迹封面（cover.webp）的三处出口**：① 考古页签·遗迹列表行左缩略图（移动端 64px / 桌面 96px 宽，16:9，缺图**整块不渲染**，用 `failedCovers` 按 siteId 记失败）；② 考古页签·选中遗迹的详情大图（`max-h-[140px] md:max-h-[220px]`，缺图按本面板约定露出占位框）；③ 考古图鉴卡片（**仅收录已全部完成**的遗迹，图鉴默认收起）。**加新图时先确认它在玩法里真的有出口**——cover 曾经只有图鉴一处，发掘全程看不到（星图信息卡是后补的第二处）。
 - 代码用 ASCII 直引号；游戏文案用中文标点、正常中文句式，非必要不用破折号。
 - **科技描述只保留引号台词**（`data/colony/techs.ts`）：格式为 `'"台词。"'`，台词后的技术说明段一律不写（原为"台词 + 一段说明"，平均 89 字，已精简为平均 22 字；循环科技的效果描述照常）。其余数据（建筑/领袖/星球）描述保持 30~60 字的单段说明。
 
