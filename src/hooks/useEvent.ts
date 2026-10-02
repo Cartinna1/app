@@ -26,6 +26,8 @@ interface UseEventReturn {
   drawEvent: (shipIndex: number) => ChoiceEvent | null;
   chooseOption: (shipIndex: number, option: EventOption, accumulator: ResourceChange) => ChooseResult | null;
   applyResources: (shipIndex: number, res: ResourceChange, reason: string) => void;
+  /** 写事件日志（展示位置唯一：事件面板底部的「事件记录」） */
+  logEvent: (event: string, detail: string) => void;
   clearActiveEvent: () => void;
   clearDodged: () => void;
 }

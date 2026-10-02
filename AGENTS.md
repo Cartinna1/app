@@ -8,6 +8,7 @@
 ## 〇、工作副本与验证流程（先读这条）
 
 - **协作者不跑构建**：不执行 `npm run build` / `tsc` / `npm install`（本机也没有 Node 环境）。改完后做逻辑级自检——通读改动文件、grep 核对每一处符号引用与 import——构建验证由用户执行。
+- 自检清单里最容易漏的三类（都因此吃过一次构建失败）：**① 新增 hook 导出时同步它的显式返回类型接口**（如 `useEvent` 的 `UseEventReturn`，漏了会报 TS2353/TS2339）；② 删改 JSX 分支后是否留下未读的局部变量与未用的 import（`noUnusedLocals`/`noUnusedParameters` 全开）；③ 新增返回字段时确认消费方的**返回类型是否要求额外字段**（如 `gatherIntel` 要求 `goldChange`）。
 - 改动逐条过源码确认，不接受"大概没问题"。
 
 ## 一、技术栈与架构现状
