@@ -81,7 +81,15 @@ function ArchaeologyPanel({
   /** 领袖显示名（LeaderInstance.id 是内部编号如 L14，UI 一律显示 data/colony/leaders.ts 里的名字） */
   const leaderNameOf = (id: string) => getLeaderDef(id)?.name || id;
 
+  /** 母舰是否停在"当前进行中的那处遗迹"（继续投入需要在场） */
+  const activeIsHere = !!activeSite && currentSiteId === activeSite.id;
+
+  /** 可更换的领袖：排除当前驻守者（换成本人无意义，动作层也会拦下） */
+  const replaceableLeaders = (currentLeaderId: string | undefined) => leaders.filter((l) => l.id !== currentLeaderId);
+
   const completed = ARCHAEOLOGY_SITES.filter((s) => archaeology[s.id]?.status === 'done');
+  /** 发掘被迫中止（自然失败按 HALT_CHANCE 触发）的遗迹：永久无法继续，列表显示中止剧情与配图 */
+  const collapsed = ARCHAEOLOGY_SITES.filter((s) => archaeology[s.id]?.status === 'collapsed');
 
   // 发现机制：只有"到访过该遗迹星系"（或已有发掘进度）的遗迹才会出现在列表与图鉴里
   const discoveredSiteIds = new Set(
@@ -151,13 +159,18 @@ function ArchaeologyPanel({
             <h4 className="font-bold text-slate-100 mb-1">{stage.title}</h4>
             <p className="text-sm text-slate-300 leading-relaxed whitespace-pre-line mb-3">{stage.text}</p>
 
-            <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-[11px] md:text-xs text-slate-400 mb-3">
+            <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-[11px] md:text-xs text-slate-400 mb-1">
               <span className="flex items-center gap-1"><Clock size={12} /> 剩余 {activeState.turnsLeft} 回合</span>
               <span>成功率 {renderRate(activeSite, activeState.stageIndex, activeState.leaderId)}</span>
+              <span className={activeSite.dangerRate >= 0.5 ? 'text-amber-400' : ''}>危险率 {Math.round(activeSite.dangerRate * 100)}%</span>
               <span>阶段投入 {formatCost(cost)}</span>
               <span className="flex items-center gap-1"><Users size={12} /> 驻守：{stationedLeader ? `${leaderNameOf(stationedLeader.id)} Lv${stationedLeader.level}` : '未知'}</span>
               {activeState.fails > 0 && <span className="text-red-400">连续失败 {activeState.fails} 次</span>}
             </div>
+            {/* 危险规则说明：失败后按危险率判定「意外」，再扣一份与投入相同的资源（一半） */}
+            <p className="text-[10px] md:text-xs text-slate-500 mb-3">
+              阶段失败时按危险率判定意外：触发则额外损失本阶段投入的 <span className="text-amber-400/90">一半</span>（与投入相同的资源组合）；冒险抉择失败必定触发。
+            </p>
 
             {/* 进度条 */}
             <div className="w-full h-2 bg-slate-800 rounded-full overflow-hidden mb-3">
@@ -181,6 +194,9 @@ function ArchaeologyPanel({
                       <span className={`text-[10px] ml-2 ${opt.kind === 'risky' ? 'text-amber-400' : 'text-cyan-400'}`}>
                         {opt.kind === 'risky' ? '冒险' : '稳妥'}
                       </span>
+                      <p className={`text-[10px] mt-0.5 ${opt.kind === 'risky' ? 'text-amber-300/90' : 'text-cyan-300/90'}`}>
+                        {opt.kind === 'risky' ? '阶段小奖励翻倍 · 失败必触发意外' : '成功率 +10% · 阶段小奖励减半'}
+                      </p>
                       <p className="text-[10px] md:text-xs text-slate-400 mt-0.5">{opt.description}</p>
                     </button>
                   ))}
@@ -190,13 +206,18 @@ function ArchaeologyPanel({
 
             {/* 操作 */}
             <div className="flex flex-wrap gap-2">
-              {activeState.status === 'idle' && (
+              {/* 继续投入需要母舰在场（与动作层 useGalaxy.continueExcavation 的守卫一致）；
+                  已开工的阶段（digging）会自行推进，因此稳妥推进/中止/换领袖不要求在场 */}
+              {activeState.status === 'idle' && activeIsHere && (
                 <button
                   onClick={() => showMsg(onContinueExcavation(activeSite.id))}
                   className="px-4 py-2 bg-purple-600 hover:bg-purple-500 rounded-lg font-bold text-white text-sm min-h-[40px]"
                 >
                   继续发掘（投入 {formatCost(cost)}）
                 </button>
+              )}
+              {activeState.status === 'idle' && !activeIsHere && (
+                <p className="text-xs text-slate-400 self-center">母舰不在该遗迹星系，请先在「星图」跃迁抵达后继续投入。</p>
               )}
               {activeState.status === 'digging' && activeState.fails >= 2 && !activeState.pendingChoice && (
                 <button
@@ -214,7 +235,7 @@ function ArchaeologyPanel({
                   中止（进度保留）
                 </button>
               )}
-              {leaders.length > 1 && activeState.status !== 'done' && (
+              {replaceableLeaders(activeState.leaderId).length > 0 && activeState.status !== 'done' && (
                 <div className="flex items-center gap-2">
                   <select
                     value=""
@@ -222,7 +243,7 @@ function ArchaeologyPanel({
                     className="bg-slate-800 border border-slate-600 rounded-lg px-2 py-2 text-xs text-slate-200 min-h-[40px]"
                   >
                     <option value="">更换驻守领袖…</option>
-                    {leaders.map((l) => (
+                    {replaceableLeaders(activeState.leaderId).map((l) => (
                       <option key={l.id} value={l.id}>{leaderNameOf(l.id)} Lv{l.level}</option>
                     ))}
                   </select>
@@ -237,6 +258,7 @@ function ArchaeologyPanel({
       <div className="mb-4">
         <h3 className="text-xs text-purple-400 font-bold mb-2">
           已发现遗迹（{discoveredSites.length}/{ARCHAEOLOGY_SITE_COUNT}）· 已完成 {completed.length}
+          {collapsed.length > 0 && <span className="text-red-400"> · 已封闭 {collapsed.length}</span>}
         </h3>
         {discoveredSites.length === 0 ? (
           <div className="bg-slate-900/50 border border-slate-700/60 rounded-lg p-4 text-center text-xs text-slate-500">
@@ -246,8 +268,11 @@ function ArchaeologyPanel({
         <div className="space-y-2">
           {discoveredSites.map((site) => {
             const st = archaeology[site.id];
-            // 三态要分开：中止（idle）≠ 进行中（digging），否则玩家看不到"继续发掘"的入口
-            const status = st?.status === 'done' ? '已完成' : st?.status === 'digging' ? '进行中' : st ? '已中止' : '未发掘';
+            // 四态分开：已封闭（collapsed，永久无法继续）≠ 已完成 ≠ 进行中（digging）≠ 已中止（idle）
+            const status = st?.status === 'done' ? '已完成'
+              : st?.status === 'collapsed' ? '已封闭'
+              : st?.status === 'digging' ? '进行中'
+              : st ? '已中止' : '未发掘';
             const isHere = currentSiteId === site.id;
             const currentStage = st ? site.stages[st.stageIndex] : site.stages[0];
             return (
@@ -259,19 +284,40 @@ function ArchaeologyPanel({
                   <div className="flex items-center gap-2 flex-wrap">
                     <span className="text-sm md:text-base font-bold text-slate-100">{site.name}</span>
                     <span className="text-[10px] px-1.5 py-0.5 rounded bg-slate-900 text-slate-400 border border-slate-700">{site.civilization}</span>
-                    <span className={`text-[10px] px-1.5 py-0.5 rounded ${status === '已完成' ? 'bg-emerald-900/50 text-emerald-300' : status === '进行中' ? 'bg-amber-900/50 text-amber-300' : status === '已中止' ? 'bg-slate-800 text-slate-300 border border-slate-600' : 'bg-slate-800 text-slate-400'}`}>{status}</span>
+                    <span className={`text-[10px] px-1.5 py-0.5 rounded ${status === '已完成' ? 'bg-emerald-900/50 text-emerald-300' : status === '已封闭' ? 'bg-red-900/40 text-red-300 border border-red-800' : status === '进行中' ? 'bg-amber-900/50 text-amber-300' : status === '已中止' ? 'bg-slate-800 text-slate-300 border border-slate-600' : 'bg-slate-800 text-slate-400'}`}>{status}</span>
                     {isHere && <span className="text-[10px] px-1.5 py-0.5 rounded bg-cyan-600 text-white">母舰在此</span>}
                     <ChevronRight size={14} className="text-slate-500 ml-auto" />
                   </div>
                   <p className="text-[10px] md:text-xs text-slate-500 mt-1">
-                    {site.stages.length} 阶段{site.minLeaderLevel > 0 ? ` · 需 Lv${site.minLeaderLevel} 领袖` : ''} · 奖励：{describeReward(site)}
+                    {site.stages.length} 阶段{site.minLeaderLevel > 0 ? ` · 需 Lv${site.minLeaderLevel} 领袖` : ''} ·{' '}
+                    <span className={site.dangerRate >= 0.5 ? 'text-amber-400' : ''}>危险率 {Math.round(site.dangerRate * 100)}%</span>
+                    {' · '}奖励：{describeReward(site)}
                   </p>
                 </button>
 
                 {selectedSiteId === site.id && (
                   <div className="mt-2 pt-2 border-t border-slate-700/60">
                     <p className="text-xs text-slate-400 mb-2">{site.intro}</p>
-                    {status === '已完成' ? (
+                    {status === '已封闭' ? (
+                      <div className="space-y-2">
+                        {/* 中止剧情配图（缺图时占位框，onError 隐藏） */}
+                        <div className="relative w-full aspect-video rounded-lg border border-red-900/50 bg-slate-800/40 overflow-hidden">
+                          <div className="absolute inset-0 flex items-center justify-center text-[10px] md:text-xs text-slate-600">
+                            中止剧情配图（{site.id}/halt）
+                          </div>
+                          <img
+                            src={site.haltImage}
+                            alt={`${site.name} 发掘中止`}
+                            onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+                            className="relative w-full h-full object-cover"
+                          />
+                        </div>
+                        <p className="text-xs md:text-sm text-red-200 leading-relaxed">{site.haltText}</p>
+                        <p className="text-[10px] md:text-xs text-slate-500">
+                          此处遗迹已封闭，发掘无法继续（已完成的阶段奖励与已获资源保留）。
+                        </p>
+                      </div>
+                    ) : status === '已完成' ? (
                       <p className="text-xs text-emerald-400">已完成发掘，奖励见考古图鉴。</p>
                     ) : status === '进行中' ? (
                       <p className="text-xs text-amber-300">正在发掘中，进度见上方面板。</p>
@@ -290,7 +336,7 @@ function ArchaeologyPanel({
                           >
                             继续发掘（投入 {formatCost(flattenCost(currentStage.cost))}）
                           </button>
-                          {leaders.length > 1 && (
+                          {replaceableLeaders(st!.leaderId).length > 0 && (
                             <div className="flex items-center gap-2">
                               <select
                                 value=""
@@ -298,7 +344,7 @@ function ArchaeologyPanel({
                                 className="bg-slate-800 border border-slate-600 rounded-lg px-2 py-2 text-xs text-slate-200 min-h-[40px]"
                               >
                                 <option value="">更换驻守领袖…</option>
-                                {leaders.map((l) => (
+                                {replaceableLeaders(st!.leaderId).map((l) => (
                                   <option key={l.id} value={l.id} disabled={site.minLeaderLevel > 0 && l.level < site.minLeaderLevel}>
                                     {leaderNameOf(l.id)} Lv{l.level}{site.minLeaderLevel > 0 && l.level < site.minLeaderLevel ? `（需 Lv${site.minLeaderLevel}）` : ''}
                                   </option>

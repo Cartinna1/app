@@ -12,6 +12,7 @@ import { GALAXY_LANES } from '@/data/galaxy/lanes';
 import { shortestRoute } from '@/lib/galaxy/graph';
 import { getBlockedNodeIds, canEnterNode } from '@/lib/galaxy/access';
 import { getKnownFactionIds, getKnownRelation } from '@/lib/galaxy/knowledge';
+import { getNodeLandscapeImage } from '@/lib/galaxy/nodeImage';
 import { FACTIONS } from '@/data/factions';
 import { getArchaeologySite } from '@/data/galaxy/archaeology';
 import { ALL_PLANETS } from '@/data/colony/planets';
@@ -409,6 +410,24 @@ function GalaxyMapPanel({ ship, factionReputation, onTravelToNode }: GalaxyMapPa
         {node.type === 'empty' && (
           <p className="text-xs text-slate-400">此地暂未发现任何内容，后续更新。</p>
         )}
+
+        {/* 节点配图：可殖民星球用星球地貌图、遗迹用其图鉴封面、势力用势力景观图（待补，缺图自动隐藏）。
+            移动端限高，避免占满屏幕；未开发节点与未探测节点不显示图片。 */}
+        {(() => {
+          const img = getNodeLandscapeImage(node);
+          if (!img) return null;
+          return (
+            <div className="mt-3">
+              <img
+                src={img}
+                alt={node.name}
+                loading="lazy"
+                onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+                className="w-full max-h-[150px] md:max-h-[260px] object-cover rounded-lg border border-slate-700 bg-slate-800/40"
+              />
+            </div>
+          );
+        })()}
 
         {/* 跃迁操作区：已探测节点同样必须有（去已去过的地方是最常见的操作） */}
         <div className="mt-3 pt-3 border-t border-slate-700/60">

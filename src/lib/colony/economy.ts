@@ -343,6 +343,7 @@ export function computeColonyEconomy(colony: Colony, opts: ColonyEconomyOptions)
         ? Math.floor(Math.random() * (max - min + 1)) + min
         : Math.floor((min + max) / 2);
       const tm = buffs?.tradeMult ? (buffs.tradeMult - 1) : 0;
+      entry.base = roll; // 记录基础值：供 UI 把金币产出按来源（星球/领袖/遗物%）拆分，与其它资源口径一致
       entry.planetPct = tm;
       entry.value = Math.ceil(roll * (1 + leaderPct + repeatPct + tm + relicPct));
       result.gold += entry.value;

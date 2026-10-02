@@ -72,7 +72,11 @@ export function stateFromSave(d: Record<string, any>): GameState {
     phase: 'playing',
     turn: d.turn || 1,
     currentShipIndex: d.currentShipIndex || 0,
-    ships: (d.ships || []).map((s: Mothership) => ({ ...s, galaxy: s.galaxy || createGalaxyState() })),
+    ships: (d.ships || []).map((s: Mothership) => ({
+      ...s,
+      // galaxy 缺省补一份全新星图；同时保证 archaeology 一定存在（旧档/手工改档可能没有这个键）
+      galaxy: { ...(s.galaxy || createGalaxyState()), archaeology: s.galaxy?.archaeology || {} },
+    })),
     stocks: d.stocks || [],
     materials: d.materials || [],
     products: d.products || [],

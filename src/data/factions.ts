@@ -72,13 +72,8 @@ export function refreshFactionPrices(): Record<string, number> {
   return prices;
 }
 
-// 计算特产的购买价格（含投资优惠，使用当前浮动价格）
-export function getBuyPrice(factionId: string, invested: number, factionPrices: Record<string, number>): number {
-  const marketPrice = factionPrices[factionId] || 800;
-  const tier = getInvestmentTier(invested);
-  const discount = getDiscountRate(tier);
-  return Math.round(marketPrice * (1 - discount));
-}
+// 特产买入价的**唯一真值**在 lib/turn/tradePrice.ts → getSpecialtyBuyUnitPrice（含声望折扣/加价、
+// 涨价 buff、讨价还价 AI），结算与贸易面板共用。此处不再提供第二套公式（旧 getBuyPrice 已删除）。
 
 /**
  * 距离折价系数：`1 + DIST_SLOPE×距离 + DIST_QUADRATIC×距离²`。

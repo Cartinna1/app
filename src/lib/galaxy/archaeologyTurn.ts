@@ -4,24 +4,34 @@
 // 本模块只负责：倒计时、成功率判定、阶段推进、危险结算、奖励发放。
 //
 // 状态语义（ArchaeologyState.status）：
-//   idle    等待玩家支付并开始/继续某一阶段（含"上一阶段刚完成、下一阶段待投入"）
-//   digging 该阶段正在倒计时（pendingChoice 非空时暂停，等玩家抉择）
-//   done    全部阶段完成
+//   idle      等待玩家支付并开始/继续某一阶段（含"上一阶段刚完成、下一阶段待投入"）
+//   digging   该阶段正在倒计时（pendingChoice 非空时暂停，等玩家抉择）
+//   done      全部阶段完成
+//   collapsed 发掘被迫中止：每次失败有 HALT_CHANCE 概率触发，触发后该遗迹**永久无法继续**
+//             （已完成的阶段奖励保留；剧情走数据里的 site.haltText + halt.webp，不得写成"失败，无法挖掘"）
 
 import type { Mothership } from '@/types/game';
 import type { ArchaeologyReward, ArchaeologySite, ArchaeologyStage } from '@/types/galaxy';
 import { getArchaeologySite } from '@/data/galaxy/archaeology';
 import { getRelicById, RELIC_SEVENTH_LAYER } from '@/data/relics';
-import { flattenCost, deductResource } from '@/lib/turn/resourceCost';
+import { flattenCost, deductResource, resourceAmount } from '@/lib/turn/resourceCost';
+import { RESOURCE_LABELS } from '@/data/colony/expeditions';
 
 /** 基础成功率 / 每级领袖加成 / 每点难度惩罚 / 稳妥抉择加成 / 遗物加成 */
-export const BASE_SUCCESS_RATE = 0.80;
+export const BASE_SUCCESS_RATE = 0.75;
 export const LEADER_LEVEL_BONUS = 0.05;
-export const DIFFICULTY_PENALTY = 0.12;
+export const DIFFICULTY_PENALTY = 0.18;
 export const SAFE_CHOICE_BONUS = 0.10;
 export const RELIC_SUCCESS_BONUS = 0.10;
 export const MIN_SUCCESS_RATE = 0.15;
-export const MAX_SUCCESS_RATE = 0.95;
+export const MAX_SUCCESS_RATE = 0.90;
+/** 每次失败时「发掘被迫中止」的概率（触发即该遗迹永久无法继续，剧情见 site.haltText）。
+ *  只对**自然失败**生效：`opts.forced`（稳妥推进保底）走的是成功分支，不会掷这一项。
+ *  实测（42 阶段 / 门槛等级）：2% 时平均约 9% 的遗迹会在挖完前永久封闭，单处最高约 15%。 */
+export const HALT_CHANCE = 0.02;
+/** 阶段小奖励的折扣：稳妥抉择 ×0.5、冒险抉择 ×2（只作用于阶段小奖励，最终奖励永不折扣） */
+export const SAFE_BONUS_MULT = 0.5;
+export const RISKY_BONUS_MULT = 2;
 /** 阶段成功时掷出「发现」小奖励的概率 */
 export const DISCOVERY_CHANCE = 0.3;
 /** 失败时额外耗时（回合） */
@@ -30,6 +40,12 @@ export const FAIL_EXTRA_TURNS = 1;
 export const DANGER_LOSS_RATIO = 0.5;
 /** 科研点奖励在无殖民地时的折算率（1 科研点 = 10 金币），避免奖励凭空消失 */
 export const RESEARCH_TO_GOLD = 10;
+
+/** 更换驻守领袖后的剩余回合：+1，但**不超过该阶段基础耗时 + FAIL_EXTRA_TURNS**
+ *  （与失败惩罚同一上限）。没有这个上限时反复更换会无限叠加剩余回合，把阶段拖成几十回合。 */
+export function leaderChangeTurns(turnsLeft: number, stageTurns: number): number {
+  return Math.min(turnsLeft + FAIL_EXTRA_TURNS, stageTurns + FAIL_EXTRA_TURNS);
+}
 
 /** 当前阶段成功率（唯一公式） */
 export function excavationSuccessRate(
@@ -104,14 +120,23 @@ export function grantReward(
   ship.galaxy = g;
 }
 
-/** 危险结算：额外损失该阶段投入的一半（返回提示文案） */
+/** 危险结算：额外损失该阶段投入的一半（上限=当前持有量，避免把资源扣成负数；返回提示文案） */
 function applyDanger(ship: Mothership, site: ArchaeologySite, stage: ArchaeologyStage): string {
   const cost = flattenCost(stage.cost);
   ship.materials = { ...ship.materials };
+  const lost: string[] = [];
+  const CN = RESOURCE_LABELS;
   for (const [key, amount] of Object.entries(cost)) {
-    deductResource(ship, ship.colony, key, Math.round(amount * DANGER_LOSS_RATIO));
+    const want = Math.round(amount * DANGER_LOSS_RATIO);
+    // 金币允许扣成负数（由破产/饥荒机制接管），其余资源以当前持有量为上限
+    const take = key === 'gold' ? want : Math.min(want, Math.max(0, resourceAmount(ship, ship.colony, key)));
+    if (take <= 0) continue;
+    deductResource(ship, ship.colony, key, take);
+    lost.push(`${CN[key] || key}×${take}`);
   }
-  return `${site.name}·${stage.title} 发生意外，额外损失资源`;
+  return lost.length
+    ? `${site.name}·${stage.title} 发生意外，额外损失 ${lost.join(' + ')}`
+    : `${site.name}·${stage.title} 发生意外（已无可损失资源）`;
 }
 
 /**
@@ -137,29 +162,40 @@ export function resolveStage(
   const ok = opts.forced || Math.random() < rate;
 
   if (!ok) {
+    // 先掷「被迫中止」：一旦触发，本次失败不再走"再花 N 回合 + 危险结算"，
+    // 而是让遗迹永久封闭（进度与已得阶段奖励保留，剧情与配图取数据里的 haltText / haltImage）
+    if (Math.random() < HALT_CHANCE) {
+      archaeology[site.id] = { ...st, status: 'collapsed', fails: 0, turnsLeft: 0, pendingChoice: null, choiceKind: null };
+      ship.galaxy = { ...ship.galaxy, archaeology };
+      logs.push(site.haltText);
+      return { success: false, siteDone: false, logs };
+    }
     archaeology[site.id] = { ...st, fails: st.fails + 1, turnsLeft: stage.turns + FAIL_EXTRA_TURNS };
-    ship.galaxy = { ...g, archaeology };
+    ship.galaxy = { ...ship.galaxy, archaeology };
     logs.push(`${site.name}·${stage.title} 发掘受挫，需再花 ${stage.turns + FAIL_EXTRA_TURNS} 回合`);
     const dangerHit = st.choiceKind === 'risky' ? true : Math.random() < site.dangerRate;
     if (dangerHit) logs.push(applyDanger(ship, site, stage));
     return { success: false, siteDone: false, logs };
   }
 
-  // 成功：先掷「发现」小奖励（稳妥推进减半）
-  const bonusMult = opts.bonusMult ?? 1;
+  // 成功：先掷「发现」小奖励。折扣系数 = 抉择取向（稳妥 ×0.5 / 冒险 ×2）× 稳妥推进（×0.5）
+  const choiceMult = st.choiceKind === 'safe' ? SAFE_BONUS_MULT : st.choiceKind === 'risky' ? RISKY_BONUS_MULT : 1;
+  const bonusMult = choiceMult * (opts.bonusMult ?? 1);
   if (stage.bonus && Math.random() < DISCOVERY_CHANCE) {
     grantReward(ship, stage.bonus, bonusMult, logs);
   }
   const next = stageIndex + 1;
   if (next >= site.stages.length) {
     archaeology[site.id] = { ...st, status: 'done', stageIndex: next, turnsLeft: 0, pendingChoice: null, choiceKind: null };
-    ship.galaxy = { ...g, archaeology };
+    // ⚠ 必须基于"当前" ship.galaxy 展开：grantReward 可能刚写过 ship.galaxy（遗物/永久加成/称号），
+    //   用函数开头缓存的 g 会把这些写入覆盖掉。archaeology 由本函数计算，覆盖它才是本意。
+    ship.galaxy = { ...ship.galaxy, archaeology };
     logs.push(`${site.name} 全部阶段完成`);
     grantReward(ship, site.reward, 1, logs);
     return { success: true, siteDone: true, logs };
   }
   archaeology[site.id] = { ...st, status: 'idle', stageIndex: next, turnsLeft: site.stages[next].turns, fails: 0, pendingChoice: null, choiceKind: null };
-  ship.galaxy = { ...g, archaeology };
+  ship.galaxy = { ...ship.galaxy, archaeology };
   logs.push(`${site.name} 第 ${next} 阶段就绪，投入资源后可继续发掘`);
   return { success: true, siteDone: false, logs };
 }
@@ -170,7 +206,7 @@ export function processArchaeologyTurn(ship: Mothership): string[] {
   if (!ship.galaxy) return logs;
   const g = { ...ship.galaxy };
 
-  for (const [siteId, state] of Object.entries(g.archaeology)) {
+  for (const [siteId, state] of Object.entries(g.archaeology || {})) {
     if (state.status !== 'digging' || state.pendingChoice) continue;
     const site = getArchaeologySite(siteId);
     if (!site) continue;
@@ -191,6 +227,8 @@ export function canOpenExcavation(ship: Mothership, siteId: string): string | nu
   if (!site) return '遗迹数据缺失';
   const st = ship.galaxy?.archaeology?.[siteId];
   if (st?.status === 'done') return '此处遗迹已完成发掘';
+  if (st?.status === 'collapsed') return `「${site.name}」的发掘已经中止，遗迹封闭，无法再进入`;
+  // 稳妥推进/继续发掘的直接入口也要走同一道守卫（见 useGalaxy 的对应动作）
   const active = Object.entries(ship.galaxy?.archaeology || {}).find(([id, s]) => id !== siteId && s.status === 'digging');
   if (active) return '同一时间只能发掘一处遗迹，请先完成或中止当前发掘';
   return null;

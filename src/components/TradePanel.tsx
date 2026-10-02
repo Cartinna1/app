@@ -1,6 +1,7 @@
 import { useState, useMemo, memo } from 'react';
 import type { Mothership, Faction, TradePolicy, PolicyEffect, FactionContract } from '@/types/game';
 import { getDistance, getTravelTurns, getSellPrice, getReputationTier, FACTIONS as FACTIONS_DATA } from '@/data/factions';
+import { getSpecialtyBuyUnitPrice, getSpecialtySellRevenue, getBlackMarketTotal } from '@/lib/turn/tradePrice';
 import { getContractItemName } from '@/lib/turn/contracts';
 import { getGalaxyNode } from '@/data/galaxy/nodes';
 import { getKnownFactionIds, getKnownRelation } from '@/lib/galaxy/knowledge';
@@ -84,11 +85,17 @@ function TradePanel({ factions, ship, factionPrices, factionSellMultipliers, bla
 
   const inventoryEntries = Object.entries(ts.inventory).filter(([, count]) => count > 0);
 
-  // 当前势力的市场价（带声望折扣 + 涨价buff）
+  // 价格公式的加成来源（唯一真值 lib/turn/tradePrice.ts：讨价还价 AI / 反垄断 / 套利凭证 / 贸易枢纽）
+  const relicIds = ship.relics.map((r) => r.id);
+  const moduleIds = ship.installedModuleIds;
+
+  // 当前势力的市场价（带声望折扣 + 涨价buff + 讨价还价AI；与结算同源）
   const marketPrice = currentFaction ? (factionPrices[currentFaction.id] || currentFaction.basePrice) : 0;
   const curFid = currentFactionId || '';
   const buyBuffMult = currentFaction ? (buyBuffs?.[currentFaction.id] || []).reduce((m, b) => m * b.multiplier, 1) : 1;
-  const buyPrice = currentFaction && currentRepTier ? Math.ceil(marketPrice * (1 - currentRepTier.discount) * buyBuffMult) : marketPrice;
+  const buyPrice = currentFaction
+    ? getSpecialtyBuyUnitPrice(currentFaction.id, factionPrices, currentRep, buyBuffMult, relicIds)
+    : marketPrice;
   const buyStockLeft = currentFaction ? (buyStocks?.[currentFaction.id] ?? 0) : 0;
   const sellDemandLeft = sellDemands?.[curFid] ?? 0;
   const sellBuffMult = (sellBuffs?.[curFid] || []).reduce((m, b) => m * b.multiplier, 1);
@@ -103,13 +110,13 @@ function TradePanel({ factions, ship, factionPrices, factionSellMultipliers, bla
   const maxBuyQty = buyPrice > 0 ? Math.min(Math.floor(ship.gold / buyPrice), buyStockLeft) : 0;
   const maxSellQty = Math.min(ts.inventory[sellFaction] || 0, sellDemandLeft);
 
-  // 黑市采购：选中势力、单价、总价（涨价buff 也影响黑市价，不含声望折扣）
+  // 黑市采购：选中势力、单价、总价（唯一真值 lib/turn/tradePrice.ts：末尾一次 ceil，涨价 buff 也继承）
   const blackFactionData = blackFaction ? factions.find((f) => f.id === blackFaction) : null;
   const blackBasePrice = blackFactionData ? (factionPrices[blackFaction] || blackFactionData.basePrice) : 0;
   const blackBuffMult = blackFaction ? (buyBuffs?.[blackFaction] || []).reduce((m, b) => m * b.multiplier, 1) : 1;
-  const blackPrice = Math.ceil(blackBasePrice * blackBuffMult * (blackMarketMultiplier || 3.2));
+  const blackPrice = blackFaction ? getBlackMarketTotal(blackFaction, factionPrices, blackBuffMult, blackMarketMultiplier || 3.2, 1) : 0;
   const blackQtyNum = parseInt(blackQty, 10) || 0;
-  const blackTotal = blackPrice * blackQtyNum;
+  const blackTotal = blackFaction ? getBlackMarketTotal(blackFaction, factionPrices, blackBuffMult, blackMarketMultiplier || 3.2, blackQtyNum) : 0;
   const canBlackBuy = !!(blackFactionData && blackQtyNum > 0 && ship.gold >= blackTotal);
   const maxBlackQty = blackPrice > 0 ? Math.floor(ship.gold / blackPrice) : 0;
 
@@ -498,7 +505,7 @@ function TradePanel({ factions, ship, factionPrices, factionSellMultipliers, bla
                           </div>
                           <div className="text-right">
                             {!isLocal && <>
-                              <p className="text-sm text-yellow-400 font-bold">{Math.round(sellP * sellBuffMult).toLocaleString()}/个</p>
+                              <p className="text-sm text-yellow-400 font-bold">{getSpecialtySellRevenue(fid, 1, sellP, sellBuffMult, relicIds, moduleIds).toLocaleString()}/个</p>
                             </>}
                             <button
                               onClick={() => { if (!isLocal) { setSellFaction(fid); setSellQty('1'); } }}
@@ -522,7 +529,7 @@ function TradePanel({ factions, ship, factionPrices, factionSellMultipliers, bla
                         className="w-24 bg-slate-800 border border-slate-600 rounded-lg px-3 py-2 text-sm text-slate-200" />
                       <button onClick={() => setSellQty(String(maxSellQty))} className="px-2.5 py-1.5 bg-slate-700 hover:bg-slate-600 rounded-lg text-xs text-slate-300 transition-colors">最大</button>
                       <span className="text-sm text-slate-500">
-                        = {(() => { const f = factions.find((fa) => fa.id === sellFaction); if (!f) return 0; return Math.round(getSellPrice(sellFaction, factionPrices, factionSellMultipliers) * sellQtyNum * sellBuffMult).toLocaleString(); })()} 金币
+                        = {getSpecialtySellRevenue(sellFaction, sellQtyNum, getSellPrice(sellFaction, factionPrices, factionSellMultipliers), sellBuffMult, relicIds, moduleIds).toLocaleString()} 金币
                       </span>
                     </div>
                     <button onClick={handleSell} disabled={sellQtyNum <= 0 || sellQtyNum > maxSellQty} className="w-full py-2.5 bg-yellow-700 hover:bg-yellow-600 disabled:bg-slate-700 disabled:text-slate-500 rounded-lg font-bold text-white transition-colors">

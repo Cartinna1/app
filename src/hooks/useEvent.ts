@@ -3,6 +3,7 @@ import type { GameState, GameAction, ChoiceEvent, EventOption, EventOutcome, Res
 import { ALL_EVENTS } from '@/data/choiceEvents';
 import { RESOURCE_EVENTS } from '@/data/resourceEvents';
 import { RELIC_DICE, RELIC_VOID_SAFE } from '@/data/relics';
+import { famineHalveGold } from '@/lib/turn/shipTurn';
 
 export interface EventResult {
   description: string;
@@ -65,15 +66,11 @@ export function useEvent(
       const s = { ...ships[shipIndex] };
 
       const actualGoldChange = res.goldChange || 0;
-      const famineHalve = (amt: number): number => {
-        if (amt <= 0) return amt;
-        if (s.food < 0) return Math.floor(amt * 0.5);
-        return amt;
-      };
       const checkBk = () => { if (s.gold < 0 && !s.bankrupt) { s.bankrupt = true; s.bankruptTimer = 10; } };
 
       if (actualGoldChange) {
-        const halved = famineHalve(actualGoldChange);
+        // 饥荒减半的唯一真值在 lib/turn/shipTurn.ts（勿就地再写一份）
+        const halved = famineHalveGold(s.food, actualGoldChange);
         s.gold += halved;
         checkBk();
         if (s.gold >= 0 && s.bankrupt) { s.bankrupt = false; s.bankruptTimer = 0; }

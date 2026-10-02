@@ -1,6 +1,7 @@
 import { useState, memo } from 'react';
 import type { ChoiceEvent, EventOption, ResourceChange, EventSubChoice, EventLogEntry } from '@/types/game';
 import type { ChooseResult, EventResult, DodgeReason } from '@/hooks/useEvent';
+import { famineHalveGold } from '@/lib/turn/shipTurn';
 import {
   Swords, Star, AlertTriangle, Users, HelpCircle,
   Briefcase, ChevronRight, Lock, Clock, Sparkles,
@@ -14,6 +15,8 @@ interface EventPanelProps {
   eventProcessedThisTurn: boolean;
   eventLog: EventLogEntry[];
   currentTurn: number;
+  /** 母舰当前食物（用于按唯一真值 famineHalveGold 显示饥荒减半后的实收金币） */
+  shipFood: number;
   eventTriggeredThisTurn: boolean;
   onDrawEvent: (shipIndex: number) => ChoiceEvent | null;
   onChooseOption: (shipIndex: number, option: EventOption, accumulator: ResourceChange) => ChooseResult | null;
@@ -34,7 +37,7 @@ const categoryConfig = {
 };
 
 function EventPanel({
-  activeEvent, eventDodged, eventProcessedThisTurn, eventLog, currentTurn,
+  activeEvent, eventDodged, eventProcessedThisTurn, eventLog, currentTurn, shipFood,
   eventTriggeredThisTurn, onDrawEvent, onChooseOption, onApplyResources, onLogEvent, onClearActiveEvent, onClearDodged,
 }: EventPanelProps) {
   // 最终结果展示
@@ -76,16 +79,21 @@ function EventPanel({
     } else {
       // 最终结果：应用累积资源，显示结果
       onApplyResources(0, res.accumulator, '事件处理');
+      // 饥荒时金币收益减半（唯一真值 lib/turn/shipTurn.famineHalveGold）——展示与日志都用**实收**值，
+      // 否则会出现"卡片写 +5000、实际到账 2500"的分叉
+      const appliedGold = famineHalveGold(shipFood, res.result.goldChange);
+      const goldHalved = appliedGold !== res.result.goldChange;
+      const shownResult = { ...res.result, goldChange: appliedGold };
       // 写事件日志（大总览与事件面板共用同一条记录；多级选择按 A → B 记录路径）
       const path = [...choicePath, option.label].join(' → ');
       const delta = [
-        res.result.goldChange ? `金币${res.result.goldChange > 0 ? '+' : ''}${res.result.goldChange}` : '',
+        appliedGold ? `金币${appliedGold > 0 ? '+' : ''}${appliedGold}${goldHalved ? '(饥荒减半)' : ''}` : '',
         res.result.foodChange ? `食物${res.result.foodChange > 0 ? '+' : ''}${res.result.foodChange}` : '',
         res.result.alloyChange ? `合金${res.result.alloyChange > 0 ? '+' : ''}${res.result.alloyChange}` : '',
         res.result.stardustChange ? `星尘${res.result.stardustChange > 0 ? '+' : ''}${res.result.stardustChange}` : '',
       ].filter(Boolean).join(' ');
       onLogEvent(current.title || '事件', `选择：${path}｜${res.result.message}${delta ? `（${delta}）` : ''}`);
-      setResult(res.result);
+      setResult(shownResult);
       setChoiceStack([]);
       setPendingResources({});
     }

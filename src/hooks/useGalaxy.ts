@@ -7,7 +7,7 @@ import type { GameState } from '@/types/game';
 import { getArchaeologySite } from '@/data/galaxy/archaeology';
 import { getGalaxyNode } from '@/data/galaxy/nodes';
 import { firstMissing, flattenCost, payCost } from '@/lib/turn/resourceCost';
-import { resolveStage, canOpenExcavation } from '@/lib/galaxy/archaeologyTurn';
+import { resolveStage, canOpenExcavation, leaderChangeTurns } from '@/lib/galaxy/archaeologyTurn';
 
 interface GalaxyActions {
   startExcavation: (siteId: string, leaderId: string) => { success: boolean; message: string };
@@ -93,7 +93,12 @@ export function useGalaxy(
     const st = ship0.galaxy.archaeology?.[siteId];
     if (!st) return { success: false, message: '尚未开始发掘' };
     if (st.status === 'done') return { success: false, message: '此处遗迹已完成' };
+    if (st.status === 'collapsed') return { success: false, message: `「${site.name}」的发掘已经中止，遗迹封闭，无法再进入` };
     if (st.status === 'digging') return { success: false, message: '该阶段正在发掘中' };
+    // 续投需要母舰在场（与开始发掘同一口径；已开工的倒计时不受位置影响，故只拦"投入"这一步）
+    if (getGalaxyNode(ship0.galaxy.currentNodeId)?.siteId !== siteId) {
+      return { success: false, message: '母舰不在该遗迹星系，请先跃迁抵达' };
+    }
     const stage = site.stages[st.stageIndex];
     if (!stage) return { success: false, message: '没有可继续的阶段' };
     const cost = flattenCost(stage.cost);
@@ -124,7 +129,8 @@ export function useGalaxy(
     return result;
   }, [gameState, dispatch]);
 
-  /** 阶段抉择（safe：成功率 +10%、小奖励减半；risky：小奖励翻倍、失败必触发危险） */
+  /** 阶段抉择（safe：成功率 +10%、阶段小奖励 ×0.5；risky：阶段小奖励 ×2、失败必触发危险）
+   *  折扣系数唯一实现在 lib/galaxy/archaeologyTurn.ts 的 resolveStage（SAFE/RISKY_BONUS_MULT） */
   const resolveExcavationChoice = useCallback((siteId: string, kind: 'safe' | 'risky'): { success: boolean; message: string } => {
     const ship0 = gameState.ships[0];
     const st = ship0?.galaxy.archaeology?.[siteId];
@@ -153,6 +159,7 @@ export function useGalaxy(
     const site = getArchaeologySite(siteId);
     if (!ship0 || !site) return { success: false, message: '遗迹数据缺失' };
     const st = ship0.galaxy.archaeology?.[siteId];
+    if (st?.status === 'collapsed') return { success: false, message: `「${site.name}」的发掘已经中止，遗迹封闭，无法再进入` };
     if (!st || st.status !== 'digging') return { success: false, message: '当前没有进行中的发掘' };
     if (st.pendingChoice) return { success: false, message: '请先完成本阶段的抉择' };
     if (st.fails < 2) return { success: false, message: '连续失败 2 次后才能稳妥推进' };
@@ -172,13 +179,20 @@ export function useGalaxy(
     return result;
   }, [gameState, dispatch]);
 
-  /** 更换驻守领袖（当前阶段耗时 +1，进度保留） */
+  /** 更换驻守领袖（当前阶段耗时 +1，进度保留；换成同一人无意义直接拦下，且耗时不会超过「基础耗时+1」） */
   const changeExcavationLeader = useCallback((siteId: string, leaderId: string): { success: boolean; message: string } => {
     const ctxError = checkDigContext(siteId, leaderId);
     if (ctxError) return { success: false, message: ctxError };
     const ship0 = gameState.ships[0];
     const st = ship0.galaxy.archaeology?.[siteId];
     if (!st) return { success: false, message: '尚未开始发掘' };
+    if (st.status === 'done') return { success: false, message: '此处遗迹已完成' };
+    if (st.status === 'collapsed') return { success: false, message: '此处遗迹的发掘已经中止，遗迹封闭' };
+    if (st.leaderId === leaderId) return { success: false, message: '该领袖已在驻守此处遗迹' };
+    const site = getArchaeologySite(siteId);
+    const stageTurns = site?.stages[st.stageIndex]?.turns ?? 0;
+    const nextTurns = leaderChangeTurns(st.turnsLeft, stageTurns);
+    const grew = nextTurns > st.turnsLeft;
     let result = { success: false, message: '' };
     dispatch({
       type: 'FUNCTIONAL_UPDATE',
@@ -186,10 +200,10 @@ export function useGalaxy(
         const ships = [...prev.ships];
         const s = { ...ships[0] };
         const g = { ...s.galaxy, archaeology: { ...s.galaxy.archaeology } };
-        g.archaeology[siteId] = { ...st, leaderId, turnsLeft: st.turnsLeft + 1 };
+        g.archaeology[siteId] = { ...st, leaderId, turnsLeft: nextTurns };
         s.galaxy = g;
         ships[0] = s;
-        result = { success: true, message: '已更换驻守领袖（当前阶段耗时 +1）' };
+        result = { success: true, message: grew ? '已更换驻守领袖（当前阶段耗时 +1）' : '已更换驻守领袖（本阶段耗时已达上限，不再增加）' };
         return { ...prev, ships };
       },
     });
@@ -202,6 +216,7 @@ export function useGalaxy(
     const st = ship0?.galaxy.archaeology?.[siteId];
     if (!st) return { success: false, message: '尚未开始发掘' };
     if (st.status === 'done') return { success: false, message: '此处遗迹已完成' };
+    if (st.status === 'collapsed') return { success: false, message: '此处遗迹的发掘已经中止，遗迹封闭' };
     let result = { success: false, message: '' };
     dispatch({
       type: 'FUNCTIONAL_UPDATE',

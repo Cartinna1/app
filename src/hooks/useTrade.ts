@@ -1,6 +1,6 @@
 import { useCallback } from 'react';
 import type { GameState, Mothership } from '@/types/game';
-import { FACTIONS, getSellPrice, RELATION_MATRIX, getReputationTier } from '@/data/factions';
+import { FACTIONS, getSellPrice, RELATION_MATRIX } from '@/data/factions';
 import { RECIPES } from '@/data/gameData';
 import { getContractItemKind } from '@/lib/turn/contracts';
 import { shortestRoute } from '@/lib/galaxy/graph';
@@ -8,8 +8,9 @@ import { getBlockedNodeIds, getCurrentFactionId, HOSTILE_REP_THRESHOLD } from '@
 import { getPermaBonusValue } from '@/data/galaxy/permaBonuses';
 import { getGalaxyNode } from '@/data/galaxy/nodes';
 import { MATERIAL_NAME_MAP } from '@/data/materialNames';
-import { MODULE_TRADE_HUB } from '@/data/modules';
-import { RELIC_JUMP_ACCELERATOR, RELIC_ANTI_MONOPOLY, RELIC_DECIPHERER, RELIC_BARGAIN_AI, RELIC_ARBITRAGE_NOTE } from '@/data/relics';
+import { RELIC_JUMP_ACCELERATOR, RELIC_DECIPHERER } from '@/data/relics';
+import { famineHalveGold } from '@/lib/turn/shipTurn';
+import { getSpecialtyBuyUnitPrice, getSpecialtySellRevenue, getBlackMarketTotal } from '@/lib/turn/tradePrice';
 
 
 export function useTrade(
@@ -150,16 +151,10 @@ export function useTrade(
           // 库存校验
           const available = prev.buyStocks?.[faction.id] ?? 0;
           if (quantity > available) { result = { success: false, message: `库存不足，本回合仅剩${available}个` }; return prev; }
-          // 价格：市场价 × 声望折扣 × 涨价buff
+          // 价格：市场价 × 声望折扣 × 涨价buff × 讨价还价AI（唯一真值 lib/turn/tradePrice.ts，贸易面板显示同源）
           const rep = prev.factionReputation?.[faction.id] || 0;
-          const tier = getReputationTier(rep);
-          let price = prev.factionPrices[faction.id] || faction.basePrice;
-          if (rep < -20) price = Math.ceil(price * (1 - tier.discount)); // 负声望涨价
-          else if (tier.discount > 0) price = Math.ceil(price * (1 - tier.discount)); // 正声望打折
           const buyBuffMult = (prev.buyBuffs?.[faction.id] || []).reduce((m, b) => m * b.multiplier, 1);
-          price = Math.ceil(price * buyBuffMult);
-          // 讨价还价AI机器人 r_015：买特产价格打9折
-          if (s.relics.some((r) => r.id === RELIC_BARGAIN_AI)) price = Math.ceil(price * 0.9);
+          const price = getSpecialtyBuyUnitPrice(faction.id, prev.factionPrices, rep, buyBuffMult, s.relics.map((r) => r.id));
           const totalCost = price * quantity;
           if (s.gold < totalCost) { result = { success: false, message: `金币不足，需${totalCost}` }; return prev; }
           s.gold -= totalCost;
@@ -215,11 +210,8 @@ export function useTrade(
           if (!faction) { result = { success: false, message: '找不到势力' }; return prev; }
           const sellPrice = getSellPrice(factionId, prev.factionPrices, prev.factionSellMultipliers);
           const sellBuffMult = (prev.sellBuffs?.[curFid] || []).reduce((m, b) => m * b.multiplier, 1);
-          const relicBonus = s.relics.some((r) => r.id === RELIC_ANTI_MONOPOLY) ? 1.1 : 1;
-          // 考古遗物「套利凭证」：卖出特产额外 +5%
-          const arbitrageBonus = s.relics.some((r) => r.id === RELIC_ARBITRAGE_NOTE) ? 1.05 : 1;
-          const tradeHubBonus = s.installedModuleIds.includes(MODULE_TRADE_HUB) ? 1.15 : 1;
-          const totalRevenue = Math.round(sellPrice * quantity * relicBonus * arbitrageBonus * tradeHubBonus * sellBuffMult);
+          // 收益加成（反垄断 1.1 / 套利凭证 1.05 / 贸易枢纽 1.15）唯一真值 lib/turn/tradePrice.ts
+          const totalRevenue = getSpecialtySellRevenue(factionId, quantity, sellPrice, sellBuffMult, s.relics.map((r) => r.id), s.installedModuleIds);
           s.gold += totalRevenue;
           if (s.bankrupt && s.gold > 0) s.bankrupt = false;
           s.goldLog = [{ turn: prev.turn, amount: totalRevenue, reason: `卖出「${faction.specialtyName}」x${quantity}`, balanceAfter: s.gold }, ...s.goldLog].slice(0, 200);
@@ -365,9 +357,9 @@ export function useTrade(
           else if (roll < 90) { goldChange = -Math.round((Math.floor(Math.random() * 301) + 300) * turnMultiplier); story = pick(intelStories.s6); }
           else if (roll < 98) { goldChange = -Math.round((Math.floor(Math.random() * 401) + 600) * turnMultiplier); story = pick(intelStories.s7); }
           else { goldChange = -Math.round((Math.floor(Math.random() * 501) + 1000) * turnMultiplier); story = pick(intelStories.s8); }
-          const famineHalve = (amt: number): number => { if (amt <= 0) return amt; if (s.food < 0) return Math.floor(amt * 0.5); return amt; };
+          // 饥荒减半的唯一真值在 lib/turn/shipTurn.ts（勿就地再写一份）
           const checkBankrupt = () => { if (s.gold < 0 && !s.bankrupt) { s.bankrupt = true; s.bankruptTimer = 10; } };
-          const finalGold = famineHalve(goldChange);
+          const finalGold = famineHalveGold(s.food, goldChange);
           if (finalGold !== 0) { s.gold += finalGold; checkBankrupt(); if (s.gold >= 0 && s.bankrupt) { s.bankrupt = false; s.bankruptTimer = 0; } s.goldLog = [{ turn: prev.turn, amount: finalGold, reason: '打探消息', balanceAfter: s.gold }, ...s.goldLog].slice(0, 200); }
           let alloyText = '';
           if (Math.random() < 0.7) { const alloyGain = Math.floor(Math.random() * 3) + 3; s.alloy += alloyGain; alloyText = `回收了${alloyGain}个合金。`; }
@@ -487,10 +479,9 @@ export function useTrade(
         const ships = [...prev.ships]; const s = { ...ships[shipIndex] };
         const faction = prev.factions.find((f) => f.id === factionId);
         if (!faction) { result = { success: false, message: '势力不存在' }; return prev; }
-        const basePrice = prev.factionPrices[factionId] || faction.basePrice;
         const buyBuffMult = (prev.buyBuffs?.[factionId] || []).reduce((m, b) => m * b.multiplier, 1); // 涨价buff（黑市也继承）
-        const mult = prev.blackMarketMultiplier || 3.2; // 黑市倍率（每回合随机 3.2~4.5）
-        const cost = Math.ceil(basePrice * buyBuffMult * mult * qty);
+        // 黑市总价唯一真值 lib/turn/tradePrice.ts（末尾一次 ceil，显示侧同源）
+        const cost = getBlackMarketTotal(factionId, prev.factionPrices, buyBuffMult, prev.blackMarketMultiplier || 3.2, qty);
         if (s.gold < cost) { result = { success: false, message: `金币不足，需${cost}` }; return prev; }
         s.gold -= cost;
         s.goldLog = [{ turn: prev.turn, amount: -cost, reason: `黑市采购「${faction.specialtyName}」x${qty}`, balanceAfter: s.gold }, ...s.goldLog].slice(0, 200);

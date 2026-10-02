@@ -5,7 +5,8 @@
 //   阶段抉择 choice 只影响该阶段奖励与成功率，不影响能否推进；阶段小奖励写在 bonus（成功时的「发现」同走此字段）。
 //   全部阶段完成后的最终奖励写在 reward（遗物 / 永久加成 / 称号 + 附带资源）。
 //   危险率 dangerRate 默认 0.35（碳壳巢为 0.5）。
-// 图片约定：阶段图 /archaeology/<siteId>/<stageId>.webp，图鉴大图 /archaeology/<siteId>/cover.webp。
+// 图片约定：阶段图 /archaeology/<siteId>/<stageId>.webp，图鉴大图 /archaeology/<siteId>/cover.webp，
+//   发掘中止剧情图 /archaeology/<siteId>/halt.webp（每处遗迹一张，自然失败按 HALT_CHANCE 触发永久中止时显示）。
 // ⚠ 数值为既定平衡（阶段数合计 42），改动前先出前后对比表；本文件是阶段与奖励的唯一来源，逻辑层与 UI 勿另行硬编码。
 
 import type { ArchaeologySite } from '@/types/galaxy';
@@ -21,6 +22,9 @@ export const ARCHAEOLOGY_SITES: ArchaeologySite[] = [
     intro:
       '聆弦者立起的一座环状声学塔。塔心悬着一口从未被敲响的钟，整颗星球静得没有回声。他们后来不再听了，塔还留着，来人想弄清它究竟想听见什么。',
     galleryImage: '/archaeology/bell_tower/cover.webp',
+    haltText:
+      '钟腔里那口钟自己响了。不是被敲响的，是八根细弦同时崩断，钟身沉下来，把塔心的竖井整段压塌。井下的人只来得及退回塔外。塔身随后向内收拢，接缝重新合上，像是终于听完了它要听的东西，不再留出入口。',
+    haltImage: '/archaeology/bell_tower/halt.webp',
     stages: [
       {
         id: 'S1',
@@ -66,6 +70,9 @@ export const ARCHAEOLOGY_SITES: ArchaeologySite[] = [
     intro:
       '磨镜者把整颗行星的表面磨成了一面镜子。如今镜面碎成千万片，仍在天光下互相对照。来的人大多冲着镜面本身，少数人是来读镜面里压着的字。',
     galleryImage: '/archaeology/mirror_graveyard/cover.webp',
+    haltText:
+      '我们脚下那片镜面在取样时沿着纹路裂成两半。裂缝没有声音，两半镜面各向一侧倾斜，把压在玻璃层下的纹路全部对进了对方里面。要再读，得先有第二颗行星的镜面来对照。磨镜者留下的字，从此只照着自己。',
+    haltImage: '/archaeology/mirror_graveyard/halt.webp',
     stages: [
       {
         id: 'S1',
@@ -126,6 +133,9 @@ export const ARCHAEOLOGY_SITES: ArchaeologySite[] = [
     intro:
       '深掘者在地壳深处筑起的一座巨型巢体，层层碳纤维叠成壳。巢还带着余温，靠近时仪器会自己跳数。来的人想要壳里的原料，也想弄明白它养过什么。',
     galleryImage: '/archaeology/carbon_nest/cover.webp',
+    haltText:
+      '深处的碳壁承受不住通道加固的应力，成片地脱开。脱落的碳层像活物一样逐段合拢，把通道一层层封回去，合到入口时连钢架一起包了进去。仪器上的温度还在上升。巢体回到了它自己的密度里，这里不能再进了。',
+    haltImage: '/archaeology/carbon_nest/halt.webp',
     stages: [
       {
         id: 'S1',
@@ -181,6 +191,9 @@ export const ARCHAEOLOGY_SITES: ArchaeologySite[] = [
     intro:
       '园丁留下的方舟遗址。他们自称种过每一颗有土的行星，把各地的种质装进这座摇篮，它却在中途停了。种子还封在里面，来的人多半为了那批还没醒的种。',
     galleryImage: '/archaeology/cradle/cover.webp',
+    haltText:
+      '保温格的内膜在我们搬动那粒种子之后开始收缩。收缩从走廊尽头往外来，格盖一格格合上，最后整条走廊的内膜贴到了外壳上，中间再没有留出空隙。种子留在了它自己的位置上，我们只带走了记录下来的数据。',
+    haltImage: '/archaeology/cradle/halt.webp',
     stages: [
       {
         id: 'S1',
@@ -251,6 +264,9 @@ export const ARCHAEOLOGY_SITES: ArchaeologySite[] = [
     intro:
       '汇兑者的空间中转站。他们把三个星系之间的货流折进同一条走廊，走廊至今还能用，只是出口的坐标漂了。往来的人想知道他们当年换的是什么。',
     galleryImage: '/archaeology/corridor/cover.webp',
+    haltText:
+      '回廊在中段又折了一次。这一次折角不再是一度以内，测距仪上的距离与脚下的步数同时失去了意义，圆厅的坐标从中转站的记录里滑了出去。我们从原路退出来时，身后的入口已经不是入口了。汇兑者折过的路，只肯折那么几次。',
+    haltImage: '/archaeology/corridor/halt.webp',
     stages: [
       {
         id: 'S1',
@@ -306,6 +322,9 @@ export const ARCHAEOLOGY_SITES: ArchaeologySite[] = [
     intro:
       '两仪者的九座熔炉残址。九炉串成一圈，炉膛内壁留着被烧过的层层痕迹。他们相信物可以反复提纯九次，来的人想看看第九次之后留下了什么。',
     galleryImage: '/archaeology/crucible/cover.webp',
+    haltText:
+      '引火室里那只空心的环接受了暗物质之后没有停。热度沿着九条管道一路回灌，把九座炉的内壁重新烧成流动的一层。渣、灰、结晶全部熔回炉膛，圆心的地面塌下去半尺。第九次提纯之后留下的东西，我们终究没有看到。',
+    haltImage: '/archaeology/crucible/halt.webp',
     stages: [
       {
         id: 'S1',
@@ -361,6 +380,9 @@ export const ARCHAEOLOGY_SITES: ArchaeologySite[] = [
     intro:
       '轨道师留下的一台倒转的星象仪。星轨朝内翻，天体都绕着台心转，台心却空着。设备须由 Lv2 以上的领袖操作，来的人多是为了那套导航算法。',
     galleryImage: '/archaeology/orrery/cover.webp',
+    haltText:
+      '我们在量子点上改动的那一簇状态没能锁回去。星轨开始反向自转，硅晶薄片一片片脱开，绕着台心排成新的轨道。齿轮咬到最后一格时，台基整体沉了半米，镜室的门被压死在下面。它转起来了，只是不再朝着任何一颗星。',
+    haltImage: '/archaeology/orrery/halt.webp',
     stages: [
       {
         id: 'S1',
@@ -426,6 +448,9 @@ export const ARCHAEOLOGY_SITES: ArchaeologySite[] = [
     intro:
       '倏忽人留下的七层碑林。七层台阶层层向里收，每层立满石碑，碑上的字被风磨得很浅。来的人想抄一两块碑走，抄到第五层就会明白抄不完。',
     galleryImage: '/archaeology/steles/cover.webp',
+    haltText:
+      '第五层的合金匣在撬开时释放了匣内的气压，压力推动第六层与第七层的石碑向内倾倒。碑没有碎，只是一层层叠着躺下，把第七层那块空白的碑压在最下面。碑文都还在，抄，是抄不到了。',
+    haltImage: '/archaeology/steles/halt.webp',
     stages: [
       {
         id: 'S1',
@@ -566,6 +591,9 @@ export const ARCHAEOLOGY_SITES: ArchaeologySite[] = [
     intro:
       '掌灯者的行星光信号站。基座上原本立着几公里高的水晶透镜塔，塔身早已不在，地心的光却还在往外走。来的人先看见那束光，再顺着它找到这里。',
     galleryImage: '/archaeology/lighthouse/cover.webp',
+    haltText:
+      '补给环收下星尘之后，基座的七个基准面同时亮了一次，随后整块水晶自内向外冻住。光轴锁死在一个不再变化的方位上，光脉冲被拉成一条平直的线。它还在亮，只是不再回应任何校正。掌灯者把灯交出去了，也把钥匙一起收了回去。',
+    haltImage: '/archaeology/lighthouse/halt.webp',
     stages: [
       {
         id: 'S1',
@@ -631,6 +659,9 @@ export const ARCHAEOLOGY_SITES: ArchaeologySite[] = [
     intro:
       '华胥留下的神像厅。厅里的石像全都立着，却没有一张脸，也没有一处刻名。造像的人把名字留给了来读的人，只有对遗迹足够熟的人才接得住这段对话。',
     galleryImage: '/archaeology/idols/cover.webp',
+    haltText:
+      '空台那层薄膜在晶体被取出的一瞬失去了支撑，整厅二百余尊石像同时转向空台。转向之后，七列朝向与殿内排布全部错开，原有的读法再也对不上任何一尊。信我们读完了，厅随后自己合上了门。',
+    haltImage: '/archaeology/idols/halt.webp',
     stages: [
       {
         id: 'S1',

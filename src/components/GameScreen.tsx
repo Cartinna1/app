@@ -41,12 +41,15 @@ import GalaxyMapPanel from './GalaxyMapPanel';
 import ArchaeologyPanel from './ArchaeologyPanel';
 import { getInvestmentTier, getBuffDescription } from '@/data/factions';
 import { getContractItemName, getContractItemKind, getContractHeldCount, getContractEarliestExpiry } from '@/lib/turn/contracts';
-import { getSellPriceBreakdown, MODULE_BIO_KITCHEN, MODULE_NANO_FARM, MODULE_SIXTH_FARM, MODULE_DYSON_COLLECTOR } from '@/data/modules';
+import { getSellPriceBreakdown, MODULE_MINING_ARRAY } from '@/data/modules';
+import { RELIC_TRANSCRIBER, RELIC_CRYSTAL } from '@/data/relics';
+import { MOTHERSHIP_ID_UNITY, MOTHERSHIP_ID_SINGULARITY_SEEKER } from '@/data/gameData';
 import GoldLogViewer from './GoldLogViewer';
 import ModulePanel from './ModulePanel';
 import ColonyPanel from './colony/ColonyPanel';
 import { computeColonyEconomy } from '@/lib/colony/economy';
 import { computeCrewFoodCost } from '@/lib/turn/shipTurn';
+import { getShipPerTurnIncome, sumShipIncome } from '@/lib/turn/shipIncome';
 import { MATERIAL_NAME_MAP } from '@/data/materialNames';
 
 // 背景音乐曲目列表（放 public/ 目录下，按顺序自动循环播放）
@@ -306,7 +309,7 @@ export default function GameScreen({
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-slate-950 via-indigo-950 to-slate-950 text-slate-100 pb-24 md:pb-0">
+    <div className="min-h-screen bg-gradient-to-b from-slate-950 via-indigo-950 to-slate-950 text-slate-100 pb-[116px] md:pb-0">
       {/* ==================== 顶部状态栏 ==================== */}
       <header className="bg-slate-900/80 border-b border-slate-700/50 px-3 py-2 md:px-4 md:py-3">
         <div className="max-w-7xl mx-auto flex items-center justify-between">
@@ -524,6 +527,7 @@ export default function GameScreen({
               eventDodged={eventDodged}
               eventProcessedThisTurn={currentShip?.eventProcessedThisTurn || false}
               eventLog={gameState.eventLog}
+              shipFood={currentShip?.food ?? 0}
               currentTurn={gameState.turn}
               eventTriggeredThisTurn={currentShip?.eventTriggeredThisTurn || false}
               onDrawEvent={onDrawEvent}
@@ -629,12 +633,14 @@ export default function GameScreen({
         </main>
       </div>
 
-      {/* ==================== 移动端底部 Tab 栏 ==================== */}
-      <nav className="fixed bottom-0 left-0 right-0 bg-slate-900/95 border-t border-slate-700/50 z-40 md:hidden flex items-center overflow-x-auto scrollbar-hide px-1 py-1 h-[60px]">
+      {/* ==================== 移动端底部 Tab 栏 ====================
+          全部页签都要渲染（曾用 tabs.slice(0, 11) 导致"改造/兑换"根本不出现）；
+          两行换行排布而不是横向滚动，保证一眼能看全，配合根容器的 pb-[116px] 留位。 */}
+      <nav className="fixed bottom-0 left-0 right-0 bg-slate-900/95 border-t border-slate-700/50 z-40 md:hidden flex flex-wrap items-center px-1 py-1">
         {/* 结束回合按钮 */}
         <button
           onClick={() => setShowConfirmNext(true)}
-          className="flex-shrink-0 flex flex-col items-center gap-0.5 px-2 py-1 rounded-md text-red-400 min-w-[48px] min-h-[48px] justify-center"
+          className="flex flex-col items-center gap-0.5 px-1 py-1 rounded-md text-red-400 min-w-[44px] min-h-[44px] justify-center"
         >
           <Zap size={18} />
           <span className="text-[10px] font-bold whitespace-nowrap">结束</span>
@@ -642,23 +648,23 @@ export default function GameScreen({
         {/* 移动端背景音乐开关 */}
         <button
           onClick={toggleMute}
-          className={`flex-shrink-0 flex flex-col items-center gap-0.5 px-2 py-1 rounded-md transition-all min-w-[48px] min-h-[48px] justify-center ${
+          className={`flex flex-col items-center gap-0.5 px-1 py-1 rounded-md transition-all min-w-[44px] min-h-[44px] justify-center ${
             bgmMuted ? 'text-slate-500' : 'text-cyan-400'
           }`}
         >
           {bgmMuted ? <VolumeX size={18} /> : <Volume2 size={18} />}
           <span className="text-[10px] font-bold whitespace-nowrap">{bgmMuted ? '静音' : '音乐'}</span>
         </button>
-        {tabs.slice(0, 11).map((tab) => {
+        {tabs.map((tab) => {
           const Icon = tab.icon;
           const isActive = activeTab === tab.id;
           return (
             <button
               key={tab.id}
               onClick={() => setActiveTab(tab.id)}
-              className={`flex-shrink-0 flex flex-col items-center gap-0.5 px-2 py-1 rounded-md transition-all min-w-[48px] min-h-[48px] justify-center ${
+              className={`flex flex-col items-center gap-0.5 px-1 py-1 rounded-md transition-all min-w-[44px] min-h-[44px] justify-center ${
                 isActive
-                  ? 'text-cyan-400'
+                  ? 'text-cyan-400 bg-cyan-600/15'
                   : 'text-slate-400'
               }`}
             >
@@ -667,26 +673,6 @@ export default function GameScreen({
             </button>
           );
         })}
-        {/* 日志 */}
-        <button
-          onClick={() => setActiveTab('goldlog')}
-          className={`flex-shrink-0 flex flex-col items-center gap-0.5 px-2 py-1 rounded-md transition-all min-w-[48px] min-h-[48px] justify-center ${
-            activeTab === 'goldlog' ? 'text-cyan-400' : 'text-slate-400'
-          }`}
-        >
-          <Receipt size={18} />
-          <span className="text-[10px] font-bold whitespace-nowrap">日志</span>
-        </button>
-        {/* 存档 */}
-        <button
-          onClick={() => setActiveTab('save')}
-          className={`flex-shrink-0 flex flex-col items-center gap-0.5 px-2 py-1 rounded-md transition-all min-w-[48px] min-h-[48px] justify-center ${
-            activeTab === 'save' ? 'text-cyan-400' : 'text-slate-400'
-          }`}
-        >
-          <Save size={18} />
-          <span className="text-[10px] font-bold whitespace-nowrap">存档</span>
-        </button>
       </nav>
 
       {/* ==================== 确认结束回合弹窗 ==================== */}
@@ -837,39 +823,84 @@ function OverviewTab({
       {/* 资源收支明细 */}
       {(() => {
         const actualCrewCost = computeCrewFoodCost(gameState.turn, ship);
-        // 母舰模块食物产出
-        let modFood = 0;
-        if (ship.installedModuleIds.includes(MODULE_BIO_KITCHEN)) modFood += 15;
-        if (ship.installedModuleIds.includes(MODULE_NANO_FARM)) modFood += 30;
-        if (ship.installedModuleIds.includes(MODULE_SIXTH_FARM)) modFood += 60;
+        // 母舰每回合固定被动收益（唯一真值 lib/turn/shipIncome.ts，与结算 processShipTurn 同源）
+        const shipIncome = getShipPerTurnIncome(ship);
+        const shipFood = sumShipIncome(ship, 'food');
+        const shipStardust = sumShipIncome(ship, 'stardust');
+        const shipGold = sumShipIncome(ship, 'gold');
         // 殖民地数据（统一走 economy 模块估算，金币/领袖科研取中值）
         const eco = ship.colony?.phase === 'active' ? computeColonyEconomy(ship.colony, { relics: ship.relics, permaBonuses: ship.galaxy?.permaBonuses || [] }) : null;
         const colFood = eco?.food ?? 0, colAlloy = eco?.alloy ?? 0, colStardust = eco?.stardust ?? 0;
         const colGold = eco?.gold ?? 0, colRP = eco?.research ?? 0, colFoodCost = eco?.foodCost ?? 0;
         const colMats: Record<string, number> = eco?.materials ?? {};
-        // 产出来源分解（与殖民地面板同源：economy 的 relicBonus / leaderPerTurn 明细）
-        const relicTotal = (eco?.buildings || []).reduce((s, b) => s + (b.relicBonus || 0), 0);
-        const leaderRP = eco?.leaderPerTurn.research ?? 0;
-        const leaderSD = eco?.leaderPerTurn.stardust ?? 0;
-        const leaderMats: Record<string, number> = eco?.leaderPerTurn.materials ?? {};
-        // 生成"（殖民地 建筑X+<标签>Y）"标注；无附加来源时退回"（殖民地）"
-        const srcText = (total: number, label: string, value: number): string => {
-          const base = total - value;
-          return ` (殖民地 ${base > 0 ? `建筑${base}+` : ''}${label}${value})`;
+        // 产出来源拆解（与殖民地面板同源：直接读 economy 明细字段，不重算任何规则）
+        type EcoKind = 'food' | 'alloy' | 'stardust' | 'gold' | 'research' | 'material';
+        /**
+         * 把某类产出的来源逐项列出：非建筑项按"基础值 × 加成率"算绝对贡献并四舍五入，
+         * 「建筑」项取残差（合计 − 其它项之和），保证各项之和恒等于合计。
+         * 母舰侧（装置/遗物）来自 shipIncome，与结算同源。
+         */
+        const colonyParts = (kind: EcoKind, materialId?: string): { total: number; text: string } => {
+          if (!eco) return { total: 0, text: '' };
+          const list = eco.buildings.filter((e) => e.outputType === kind && (kind !== 'material' || e.materialId === materialId));
+          const acc = (f: (e: (typeof list)[number]) => number) => list.reduce((a, e) => a + f(e), 0);
+          const perTurnLeader = kind === 'research' ? eco.leaderPerTurn.research
+            : kind === 'material' ? (eco.leaderPerTurn.materials[materialId || ''] || 0)
+            : kind === 'stardust' ? eco.leaderPerTurn.stardust : 0;
+          const perTurnRelic = kind === 'research' ? eco.relicPerTurn.research : 0;
+          const total = list.reduce((a, e) => a + e.value, 0) + perTurnLeader + perTurnRelic;
+          const parts: Array<[string, number]> = [
+            ['星球', acc((e) => e.base * e.planetPct)],
+            ['领袖', acc((e) => e.base * e.leaderPct)],
+            ['循环', acc((e) => e.base * e.repeatPct)],
+            ['量子实验室', acc((e) => e.base * e.b26Pct)],
+            ['遗物', acc((e) => e.base * (e.relicPct || 0)) + perTurnRelic],
+            ['遗物每座', acc((e) => e.relicBonus || 0)],
+            ['领袖特效', perTurnLeader],
+          ].map(([label, v]) => [label, Math.round(v)]).filter(([, v]) => v !== 0) as Array<[string, number]>;
+          const base = total - parts.reduce((a, [, v]) => a + v, 0);
+          const segments = [
+            ...(base !== 0 ? [`建筑${base}`] : []),
+            ...parts.map(([label, v]) => `${label}${v > 0 ? '+' : ''}${v}`),
+          ];
+          const shipLines = shipIncome.filter((l) => l.kind === kind);
+          const out = [
+            segments.length ? `殖民地(${segments.join('+')})` : '',
+            shipLines.length ? `母舰 ${shipLines.map((l) => `${l.label}${l.value}`).join('+')}` : '',
+          ].filter(Boolean);
+          return { total, text: out.length ? ` (${out.join(' + ')})` : '' };
         };
+        const foodParts = colonyParts('food');
+        const alloyParts = colonyParts('alloy');
+        const stardustParts = colonyParts('stardust');
+        const goldParts = colonyParts('gold');
+        const rpParts = colonyParts('research');
+        // 动态/随机来源（无法计入固定数字，只能文字说明）
+        const dynamicNotes: string[] = [];
+        const assetPct = Math.max(0, Math.floor(assets * 0.01));
+        if (ship.relics.some((r) => r.id === RELIC_TRANSCRIBER)) dynamicNotes.push(`誊录仪 +总资产1%（约 ${assetPct.toLocaleString()} 金币）`);
+        if (ship.id === MOTHERSHIP_ID_UNITY) dynamicNotes.push(`万众一心股息 +总资产1%（约 ${assetPct.toLocaleString()} 金币）`);
+        if (ship.relics.some((r) => r.id === RELIC_CRYSTAL)) dynamicNotes.push('奥得律斯基亚水晶 +3 随机原料');
+        if (ship.installedModuleIds.includes(MODULE_MINING_ARRAY)) dynamicNotes.push('深空采矿阵列 +10 随机基础原料');
+        if (ship.id === MOTHERSHIP_ID_SINGULARITY_SEEKER) dynamicNotes.push('奇点探求者 +2~4 随机原料');
         return (
           <div className="mb-4 bg-slate-900/60 border border-slate-700 rounded-xl p-3 md:p-4">
             <h3 className="text-xs text-amber-400 font-bold mb-3">资源收支</h3>
             <div className="grid grid-cols-2 gap-2 text-[10px] md:text-xs">
-              <div><span className="text-slate-500">食物总产出:</span> <span className="text-green-400 font-bold">+{colFood+modFood}{modFood>0&&colFood>0?` (模块${modFood}+殖民${colFood})`:modFood>0?` (模块${modFood})`:colFood>0?` (殖民地${colFood})`:''}</span></div>
+              <div><span className="text-slate-500">食物总产出:</span> <span className="text-green-400 font-bold">+{colFood+shipFood}</span><span className="text-slate-500">{foodParts.text}</span></div>
               <div><span className="text-slate-500">食物总消耗:</span> <span className="text-red-400 font-bold">-{actualCrewCost+colFoodCost}{colFoodCost>0?` (船员${actualCrewCost}+殖民${colFoodCost})`:` (船员)`}</span></div>
-              <div><span className="text-slate-500">食物净增减:</span> <span className={(colFood+modFood - actualCrewCost - colFoodCost) >= 0 ? 'text-green-400 font-bold' : 'text-red-400 font-bold'}>{colFood+modFood - actualCrewCost - colFoodCost >= 0 ? '+' : ''}{colFood+modFood - actualCrewCost - colFoodCost}</span></div>
+              <div><span className="text-slate-500">食物净增减:</span> <span className={(colFood+shipFood - actualCrewCost - colFoodCost) >= 0 ? 'text-green-400 font-bold' : 'text-red-400 font-bold'}>{colFood+shipFood - actualCrewCost - colFoodCost >= 0 ? '+' : ''}{colFood+shipFood - actualCrewCost - colFoodCost}</span></div>
               <div><span className="text-slate-500">当前食物:</span> <span className={ship.food >= 0 ? 'text-green-400 font-bold' : 'text-red-400 font-bold'}>{ship.food}</span></div>
-              {colAlloy > 0 && <div><span className="text-slate-500">合金产出:</span> <span className="text-slate-300 font-bold">+{colAlloy}</span><span className="text-slate-500">{relicTotal > 0 ? srcText(colAlloy, '遗物', relicTotal) : ' (殖民地)'}</span></div>}
-              {colStardust > 0 && <div><span className="text-slate-500">星尘产出:</span> <span className="text-purple-400 font-bold">+{colStardust}{ship.modules?.some(m => m.active && m.id === MODULE_DYSON_COLLECTOR) ? ' + 3(母舰)' : ''}</span><span className="text-slate-500">{leaderSD > 0 ? srcText(colStardust, '领袖', leaderSD) : ' (殖民地)'}</span></div>}
-              {colGold > 0 && <div><span className="text-slate-500">金币产出:</span> <span className="text-yellow-400 font-bold">+{colGold} (殖民地)</span></div>}
-              {colRP > 0 && <div><span className="text-slate-500">科研产出:</span> <span className="text-cyan-400 font-bold">+{colRP}</span><span className="text-slate-500">{leaderRP > 0 ? srcText(colRP, '领袖', leaderRP) : ' (殖民地)'}</span></div>}
-              {(() => { const mc: Record<string,string> = MATERIAL_NAME_MAP; return Object.entries(colMats).map(([k,v]) => v>0 && <div key={k}><span className="text-slate-500">{mc[k]||k}:</span> <span className="text-amber-400 font-bold">+{v}</span><span className="text-slate-500">{leaderMats[k] > 0 ? srcText(v, '领袖', leaderMats[k]) : ' (殖民地)'}</span></div>); })()}
+              {colAlloy > 0 && <div><span className="text-slate-500">合金产出:</span> <span className="text-slate-300 font-bold">+{colAlloy}</span><span className="text-slate-500">{alloyParts.text}</span></div>}
+              {colStardust + shipStardust > 0 && <div><span className="text-slate-500">星尘产出:</span> <span className="text-purple-400 font-bold">+{colStardust + shipStardust}</span><span className="text-slate-500">{stardustParts.text}</span></div>}
+              {colGold + shipGold > 0 && <div><span className="text-slate-500">金币产出:</span> <span className="text-yellow-400 font-bold">+{colGold + shipGold}</span><span className="text-slate-500">{goldParts.text}</span></div>}
+              {colRP > 0 && <div><span className="text-slate-500">科研产出:</span> <span className="text-cyan-400 font-bold">+{colRP}</span><span className="text-slate-500">{rpParts.text}</span></div>}
+              {(() => { const mc: Record<string,string> = MATERIAL_NAME_MAP; return Object.entries(colMats).map(([k,v]) => v>0 && <div key={k}><span className="text-slate-500">{mc[k]||k}:</span> <span className="text-amber-400 font-bold">+{v}</span><span className="text-slate-500">{colonyParts('material', k).text}</span></div>); })()}
+              {dynamicNotes.length > 0 && (
+                <div className="col-span-2 mt-1 pt-1 border-t border-slate-700/50 text-slate-500">
+                  其它动态收益（不计入上方固定合计）：{dynamicNotes.join('；')}
+                </div>
+              )}
             </div>
           </div>
         );

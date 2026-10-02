@@ -103,6 +103,10 @@ export interface ArchaeologySite {
   intro: string;
   /** 图鉴大图：/archaeology/<siteId>/cover.webp */
   galleryImage: string;
+  /** 发掘被迫中止的剧情文案（每次自然失败按 `HALT_CHANCE` 掷一次，触发后该遗迹永久无法继续；由 resolveStage 写入事件日志与面板） */
+  haltText: string;
+  /** 中止剧情配图：/archaeology/<siteId>/halt.webp */
+  haltImage: string;
   stages: ArchaeologyStage[];
   /** 全部阶段完成后的最终奖励 */
   reward: ArchaeologyReward;
@@ -120,7 +124,7 @@ export interface ArchaeologyState {
   turnsLeft: number;
   /** 当前阶段连续失败次数（≥2 可「稳妥推进」） */
   fails: number;
-  status: 'idle' | 'digging' | 'done';
+  status: 'idle' | 'digging' | 'done' | 'collapsed';
   /** 待抉择的阶段 id（非空时 UI 必须先选，推进暂停） */
   pendingChoice: string | null;
   /** 该阶段的抉择取向：safe=成功率+10%、阶段小奖励减半；risky=成功率不变、阶段小奖励翻倍且失败必触发危险 */
