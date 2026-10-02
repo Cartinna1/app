@@ -309,7 +309,7 @@ export default function GameScreen({
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-slate-950 via-indigo-950 to-slate-950 text-slate-100 pb-[116px] md:pb-0">
+    <div className="min-h-screen bg-gradient-to-b from-slate-950 via-indigo-950 to-slate-950 text-slate-100 pb-[104px] md:pb-0">
       {/* ==================== 顶部状态栏 ==================== */}
       <header className="bg-slate-900/80 border-b border-slate-700/50 px-3 py-2 md:px-4 md:py-3">
         <div className="max-w-7xl mx-auto flex items-center justify-between">
@@ -635,12 +635,14 @@ export default function GameScreen({
 
       {/* ==================== 移动端底部 Tab 栏 ====================
           全部页签都要渲染（曾用 tabs.slice(0, 11) 导致"改造/兑换"根本不出现）；
-          两行换行排布而不是横向滚动，保证一眼能看全，配合根容器的 pb-[116px] 留位。 */}
-      <nav className="fixed bottom-0 left-0 right-0 bg-slate-900/95 border-t border-slate-700/50 z-40 md:hidden flex flex-wrap items-center px-1 py-1">
+          用 grid-cols-9 固定两行（17 项 = 结束 + 音乐 + 15 页签 → 9+8），栏高恒定 ≈96px，
+          不随机型宽度在两行/三行之间跳，配合根容器 pb-[104px] 留位。
+          ⚠ 别改回 flex-wrap + min-w：375/390px 机型会排成三行（140px）压住内容。 */}
+      <nav className="fixed bottom-0 left-0 right-0 bg-slate-900/95 border-t border-slate-700/50 z-40 md:hidden grid grid-cols-9 px-1 py-1">
         {/* 结束回合按钮 */}
         <button
           onClick={() => setShowConfirmNext(true)}
-          className="flex flex-col items-center gap-0.5 px-1 py-1 rounded-md text-red-400 min-w-[44px] min-h-[44px] justify-center"
+          className="flex flex-col items-center justify-center gap-0.5 py-1 rounded-md text-red-400 min-h-[44px]"
         >
           <Zap size={18} />
           <span className="text-[10px] font-bold whitespace-nowrap">结束</span>
@@ -648,7 +650,7 @@ export default function GameScreen({
         {/* 移动端背景音乐开关 */}
         <button
           onClick={toggleMute}
-          className={`flex flex-col items-center gap-0.5 px-1 py-1 rounded-md transition-all min-w-[44px] min-h-[44px] justify-center ${
+          className={`flex flex-col items-center justify-center gap-0.5 py-1 rounded-md transition-all min-h-[44px] ${
             bgmMuted ? 'text-slate-500' : 'text-cyan-400'
           }`}
         >
@@ -662,7 +664,7 @@ export default function GameScreen({
             <button
               key={tab.id}
               onClick={() => setActiveTab(tab.id)}
-              className={`flex flex-col items-center gap-0.5 px-1 py-1 rounded-md transition-all min-w-[44px] min-h-[44px] justify-center ${
+              className={`flex flex-col items-center justify-center gap-0.5 py-1 rounded-md transition-all min-h-[44px] ${
                 isActive
                   ? 'text-cyan-400 bg-cyan-600/15'
                   : 'text-slate-400'
