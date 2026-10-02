@@ -19,6 +19,7 @@ function App() {
     drawEvent,
     chooseEventOption,
     applyEventResources,
+    logEventEntry,
     clearActiveEvent,
     clearEventDodged,
     takeLoan,
@@ -120,6 +121,7 @@ function App() {
       onDrawEvent={drawEvent}
       onChooseEventOption={chooseEventOption}
       onApplyEventResources={applyEventResources}
+      onLogEvent={logEventEntry}
       onClearActiveEvent={clearActiveEvent}
       onClearEventDodged={clearEventDodged}
       onTakeLoan={takeLoan}

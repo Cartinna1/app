@@ -203,6 +203,15 @@ export function useEvent(
     );
   };
 
+  /**
+   * 写一条事件日志（展示位置唯一：事件面板底部的「事件记录」，显示最近 30 条）。
+   * ⚠ 此前只有 useTurn 的「游戏结束 / 考古」在写，普通选择事件全程没有接线——
+   *   ADD_EVENT_LOG action 与 reducer 分支早就存在但全库无人 dispatch。事件结算时务必调用本函数。
+   */
+  const logEvent = useCallback((event: string, detail: string) => {
+    dispatch({ type: 'ADD_EVENT_LOG', entry: { turn: gameState.turn, event, detail } });
+  }, [gameState.turn, dispatch]);
+
   // 抽取事件（先抽事件，确认是惩罚事件后再判定闪避）
   const drawEvent = useCallback(
     (shipIndex: number): ChoiceEvent | null => {
@@ -228,6 +237,7 @@ export function useEvent(
         // 跃迁者闪避（30%概率）
         if ((ship.eventDodgeChance || 0) > 0 && Math.random() < ship.eventDodgeChance) {
           dispatch({ type: 'FUNCTIONAL_UPDATE', updater: (prev) => { const ships = [...prev.ships]; ships[0] = { ...ships[0], eventTriggeredThisTurn: true }; return { ...prev, ships }; } });
+          logEvent('事件躲避', `成功避开「${event.name}」（母舰闪避技能）`);
           setEventDodged('jumper');
           drawingRef.current = false;
           return null;
@@ -244,7 +254,7 @@ export function useEvent(
       drawingRef.current = false;
       return event;
     },
-    [gameState, dispatch, setActiveEvent, setEventDodged]
+    [gameState, dispatch, setActiveEvent, setEventDodged, logEvent]
   );
 
   // 选择选项（支持多级嵌套）
@@ -319,6 +329,7 @@ export function useEvent(
     eventDodged,
     drawEvent,
     chooseOption,
+    logEvent,
     applyResources: (shipIndex: number, res: ResourceChange, reason: string) => {
       dispatch({
         type: 'FUNCTIONAL_UPDATE',

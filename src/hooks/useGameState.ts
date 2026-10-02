@@ -56,7 +56,7 @@ export function useGameState() {
   // 子 Hook（dispatch 引用稳定，不会导致函数重建）
   const { buyStock, sellStock } = useStock(dispatch);
   const { buyMaterial, startProduction, sellProduct, sellProductQty } = useProduction(dispatch);
-  const { activeEvent, eventDodged, drawEvent, chooseOption: chooseEventOption, applyResources: applyEventResources, clearActiveEvent, clearDodged: clearEventDodged } = useEvent(gameState, dispatch);
+  const { activeEvent, eventDodged, drawEvent, chooseOption: chooseEventOption, applyResources: applyEventResources, logEvent: logEventEntry, clearActiveEvent, clearDodged: clearEventDodged } = useEvent(gameState, dispatch);
   const { takeLoan, repayLoan } = useLoan(gameState, dispatch);
   const { travelToNode, buySpecialty, sellSpecialty, exploreFaction, investFaction, gatherIntel, acceptContract, completeContract, blackMarketBuy } = useTrade(gameState, dispatch);
   const { autoSave, hasSave, loadSave, exportSave, importSave, resetGame } = useSave(dispatch);
@@ -354,6 +354,7 @@ export function useGameState() {
     drawEvent,
     chooseEventOption,
     applyEventResources,
+    logEventEntry,
     clearActiveEvent,
     clearEventDodged,
 

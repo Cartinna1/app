@@ -18,6 +18,8 @@ interface EventPanelProps {
   onDrawEvent: (shipIndex: number) => ChoiceEvent | null;
   onChooseOption: (shipIndex: number, option: EventOption, accumulator: ResourceChange) => ChooseResult | null;
   onApplyResources: (shipIndex: number, res: ResourceChange, reason: string) => void;
+  /** 写事件日志（唯一展示位置是本面板底部的「事件记录」；大总览不再重复展示） */
+  onLogEvent: (event: string, detail: string) => void;
   onClearActiveEvent: () => void;
   onClearDodged: () => void;
 }
@@ -33,7 +35,7 @@ const categoryConfig = {
 
 function EventPanel({
   activeEvent, eventDodged, eventProcessedThisTurn, eventLog, currentTurn,
-  eventTriggeredThisTurn, onDrawEvent, onChooseOption, onApplyResources, onClearActiveEvent, onClearDodged,
+  eventTriggeredThisTurn, onDrawEvent, onChooseOption, onApplyResources, onLogEvent, onClearActiveEvent, onClearDodged,
 }: EventPanelProps) {
   // 最终结果展示
   const [result, setResult] = useState<EventResult | null>(null);
@@ -74,6 +76,15 @@ function EventPanel({
     } else {
       // 最终结果：应用累积资源，显示结果
       onApplyResources(0, res.accumulator, '事件处理');
+      // 写事件日志（大总览与事件面板共用同一条记录；多级选择按 A → B 记录路径）
+      const path = [...choicePath, option.label].join(' → ');
+      const delta = [
+        res.result.goldChange ? `金币${res.result.goldChange > 0 ? '+' : ''}${res.result.goldChange}` : '',
+        res.result.foodChange ? `食物${res.result.foodChange > 0 ? '+' : ''}${res.result.foodChange}` : '',
+        res.result.alloyChange ? `合金${res.result.alloyChange > 0 ? '+' : ''}${res.result.alloyChange}` : '',
+        res.result.stardustChange ? `星尘${res.result.stardustChange > 0 ? '+' : ''}${res.result.stardustChange}` : '',
+      ].filter(Boolean).join(' ');
+      onLogEvent(current.title || '事件', `选择：${path}｜${res.result.message}${delta ? `（${delta}）` : ''}`);
       setResult(res.result);
       setChoiceStack([]);
       setPendingResources({});

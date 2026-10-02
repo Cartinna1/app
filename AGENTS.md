@@ -128,6 +128,7 @@ src/
 
 - 真值函数命名 `getXxx` / `computeXxx`；避免 `import { x as y }` 别名（现存一例 `useGameState.ts` 的 `getShipTotalAssets as computeShipTotalAssets`，待清理，勿新增）。
 - 原料译名一律走 `getMaterialName()`（事件/建筑的 flavor 文学描述除外）。
+- **领袖显示一律用名字**：`getLeaderDef(leaderInstance.id)?.name`（如「诺娃·永昼」）。`LeaderInstance.id` 是内部编号（L1…L22），任何时候都不要直接渲染给玩家（考古驻守下拉与驻守状态曾显示成 "L14 Lv3"）。
 - 代码用 ASCII 直引号；游戏文案用中文标点、正常中文句式，非必要不用破折号。
 - **科技描述只保留引号台词**（`data/colony/techs.ts`）：格式为 `'"台词。"'`，台词后的技术说明段一律不写（原为"台词 + 一段说明"，平均 89 字，已精简为平均 22 字；循环科技的效果描述照常）。其余数据（建筑/领袖/星球）描述保持 30~60 字的单段说明。
 
@@ -148,11 +149,13 @@ src/
 | 远征文本 ASCII 引号致语法错误 | 故事文档里 `'xxx'`（如「叫'回头青'」）是 ASCII 单引号，逐字搬进单引号字符串会截断（TS1005） | 远征数据文本一律用模板字符串（反引号）或转义 `\'`；录入新路线后 grep `[\u4e00-\u9fff]'[\u4e00-\u9fff]` 自检（该模式只在文本内部引号时命中） |
 | 总览漏显"领袖每回合特效"产出 | 领袖特效（科研/星尘/暗物质/量子/随机原料）直接累加总量、不进 `buildings` 明细，而总览只遍历明细 | `ColonyEconomy.leaderPerTurn` 明细 + 总览「领袖特效」单列（估算模式下随机原料标注"结算时掷骰"） |
 | 产出明细漏标遗物加成 | 合金精炼手册 r_008 直接 `value += 1`，明细无来源标注，玩家对不上总数 | `BuildingEconomyEntry.relicBonus` → 总览与建筑 tab 明细显示「遗物+1」 |
+| 遗物的百分比加成被并进"领袖加成" | 空白神像 r_021（全建筑 +10%）实现时直接 `lAll += 10`，而 `lAll` 在明细里渲染成「领袖+X%」→ 面板显示"领袖+10%"，来源错标（玩家质疑"我没这个领袖"） | 百分比类遗物加成单列字段：`BuildingEconomyEntry.relicPct` / `PowerBuildingEntry.relicPct`（小数），参与 `value` 计算但**不并入 `leaderPct` / `lAll` / `lAllBonus`**；明细显示「遗物+10%」。以后加"全局建筑加成"类遗物照此办理 |
 | 领袖槽位文案歧义 | `popCapBonus` 显示为「XX上限+5」，玩家误读成"能多造 5 座" | 文案统一为「XX每座可入驻5人」；数量上限另用「XX可建造+N」（`buildingMaxCountBonus`） |
 | 远征结局"付钱不落地"、结局图看两遍 | 结局记账只在回合结算做（付了 20000 金币却不点结束回合就退出，结局丢失）；D 层与箴言原本分属两个回合，同一张结局图展示两遍 | `recordExpeditionEnding`/`enterExpeditionHistory` 由支付动作与回合结算共用（幂等；history 用重新赋值而非 push，避免 hook 侧 mutate prev）；D 支付后同屏显示结局图+箴言，回合结算即收尾；`stage 6` 分支保留作**旧存档兜底**，删掉会让在途老档永久卡死 |
 | 星图改造时"位置"有两份真值 | 位置/跃迁原本在 `tradeStatus.currentFactionId`，星图又天然带 `galaxy.currentNodeId`，两边同时存在必然分叉 | 位置与跃迁**只**存 `ship.galaxy`（`tradeStatus` 已删这三个字段）；"当前势力"一律走 `lib/galaxy/access.getCurrentFactionId(ship)`（停在非势力节点返回 null，贸易动作先过 `requireFactionHere` 守卫，跃迁中禁止交易） |
 | 势力信息"贸易面板全露" | 星图有迷雾（未探明节点显示"未探测星系"），而贸易面板的「星际势力分布」遍历全部 10 个势力并列出名称/特产/市场价/距离/外交关系，两套规则分叉；关系过滤还只在星图里内联写了一份 | 迷雾判定收敛到 `lib/galaxy/knowledge.ts`，两处 UI 共用一个口径；未探明势力在贸易列表显示为**占位行**（灰问号 + "跃迁抵达后揭晓"，不露名称/特产/价格/距离/关系），已探明势力的关系仍按"只显示到访过的相关势力"过滤并给出"N 条关系未知" |
-| 拆分卡片分支时操作入口漏在一个分支 | 星图信息卡拆成"迷雾 / 已探测"两个 return 分支时，跃迁按钮只写在迷雾分支里 → 已探明的节点点开只有信息、没有跃迁按钮（去了就回不来，玩家报"致命 BUG"） | 跨分支共用的操作一律抽成**一个函数**由两处调用（`GalaxyMapPanel.renderTravelAction`），并在注释里写明"两类卡片共用"；同类风险点：任何 `if (未探测) return …` 之后的操作入口 |
+| 拆分卡片分支时操作入口漏在一个分支 | 星图信息卡拆成"迷雾 / 已探测"两个 return 分支时，跃迁按钮只写在迷雾分支里 → 已探明的节点点开只有信息、没有跃迁按钮（去了就回不来，玩家报"致命 BUG"）；同类：考古列表把状态派生写成"有 state 就是进行中"，于是 `idle`（已中止）既不在顶部进度卡里、也没有"继续发掘"按钮 → 中止后永远无法重启 | 跨分支共用的操作一律抽成**一个函数**由两处调用（`GalaxyMapPanel.renderTravelAction`）；**状态派生要把每个状态分开**（`digging` / `idle` / `done` / 无 state 四态），每个状态都必须能走到"下一步动作"的入口 |
+| reducer action 定义了但无人 dispatch（半截功能） | `ADD_EVENT_LOG` 的 action 类型与 reducer 分支早就写好（含稳定 id 注入），但全库 **0 处 dispatch**（我加考古日志时只走了 `useTurn` 直接拼 eventLog 的路子，没接事件侧）→ 玩家在「大总览/事件」看到"事件记录"却永远只有考古与游戏结束两条 | 事件日志统一走 `useEvent.logEvent(event, detail)`（内部 dispatch `ADD_EVENT_LOG`）：选择事件在 `EventPanel.handleChoose` 的最终分支写（多级选择记 `A → B` 路径 + 结果文案 + 资源变动），躲避在 `drawEvent` 里写。**新增 action 后要 grep 确认真的有人 dispatch，别留死 action**（`eventLog` 上限 100 条由 reducer 控制；**只在事件面板展示最近 30 条**，大总览曾重复展示过一块已按"不要重复功能"删除，勿再加回） |
 | 事件系统伸手进市场（已彻底拆除） | 事件结果用 `grantTip: 'stock'\|'material'` 发"下回合股价/原料价定向偏移"（`nextTurn*Tip` → `*TipThisTurn` → `priceFluctuation` 里 0.6/0.3 权重的 `intelEffect`），用 `stockFreeze` 冻结股市——冻结三处全是 `if (false)` / `{false && …}` 死代码，玩家侧毫无反馈；`useEvent.isPenaltyEvent` 还把 `stockFreeze` 当作惩罚判据 | 已全删：`ResourceChange` 去掉 `grantTip`/`stockFreeze`，`Mothership` 去掉 4 个提示字段，`priceFluctuation`/`shipTurn`/`EventPanel`/`GameScreen`/`useStock`/`StockMarket` 不再读写任何事件字段，事件数据里 15 处 `grantTip`、9 处 `stockFreeze` 一并清除。**事件玩法与股票玩法双向隔绝（既定规划，勿再接通）**：事件侧不读 `stocks`/股价、不写任何价格字段，股票侧不读事件字段与情报字段；新增市场影响一律走独立的态势/消息面机制（股票因子的唯一接入点在 `priceFluctuation` 的 `totalChange` 处），勿再从事件回接。**事件文案也不得承诺市场影响**：原"获得内幕消息/矿产分布图/赏金名单 → 股价或原料价会怎样"的措辞已统一改为"把情报转手变现"（17 处，见 `choiceEvents.ts`），写新事件时别再写"股价将暴涨""买入后被套牢"这类与机制不符的话 |
 
 ---

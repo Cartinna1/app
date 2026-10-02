@@ -31,6 +31,8 @@ export interface PowerBuildingEntry {
   allPct: number;
   /** 考古永久加成「永续光」电力加成（%，可选） */
   permPct?: number;
+  /** 遗物「空白神像」电力加成（%，可选；单独标注，勿并入领袖全员加成） */
+  relicPct?: number;
   /** 最终发电（floor 后） */
   value: number;
 }
@@ -74,6 +76,9 @@ export interface BuildingEconomyEntry {
   materialId?: string;
   /** 遗物直接加成的产出量（如 r_008 合金精炼手册每座 +1 合金），计入 value 但需单独标注来源 */
   relicBonus?: number;
+  /** 遗物「空白神像」的全建筑产出加成（小数，如 0.1 表示 +10%）。计入 value，但**不能并进 leaderPct**，
+   *  否则总览会把遗物加成标成"领袖+10%"（已修过的显示分叉）。 */
+  relicPct?: number;
 }
 
 /** 领袖每回合特效产出的明细（不来自建筑，供总览单列显示） */
@@ -163,8 +168,9 @@ export function computeColonyPower(
   opts: { relics: { id: string }[]; permaBonuses: string[] }
 ): ColonyPowerInfo {
   const planet = colony.planetType ? getPlanetById(colony.planetType) : undefined;
-  const lAllBonus = sumAllLeaderBonus(colony)
-    + (opts.relics.some((r) => r.id === RELIC_BLANK_IDOL) ? BLANK_IDOL_PCT : 0);
+  const lAllBonus = sumAllLeaderBonus(colony);
+  /** 遗物「空白神像」的全建筑 +10%：单独一项（并入 lAllBonus 会让 UI 标成"领袖+10%"） */
+  const relicAllPct = opts.relics.some((r) => r.id === RELIC_BLANK_IDOL) ? BLANK_IDOL_PCT : 0;
   const permPowerPct = getPermaBonusValue(opts.permaBonuses, 'powerPct');
   const powerLeaderBonus = sumPowerLeaderBonus(colony);
 
@@ -180,13 +186,13 @@ export function computeColonyPower(
     const baseRaw = (def.baseOutput || 0) + (def.popFactor || 0) * inst.assignedPop;
     // 加成加算合并（与其他资源口径一致：1 + 各加成%之和）：
     // 领袖电力建筑加成（levelBonuses 电力键，如 L22 余晖脉冲；含终极技能「永昼」叠加）
-    // + 星球修正（仅太阳能阵列，如热带 −30%）+ 领袖全员加成
+    // + 星球修正（仅太阳能阵列，如热带 −30%）+ 领袖全员加成 + 永久加成 + 遗物「空白神像」
     const pwrPct = powerLeaderBonus[def.id] || 0;
     const planetPct = (def.id === BUILDING_SOLAR_ARRAY && powerGenPlanetMult !== 1) ? Math.round((powerGenPlanetMult - 1) * 100) : 0;
     const allPct = lAllBonus;
-    const combinedPct = pwrPct + planetPct + allPct + permPowerPct;
+    const combinedPct = pwrPct + planetPct + allPct + permPowerPct + relicAllPct;
     const value = Math.floor(combinedPct !== 0 ? baseRaw * (1 + combinedPct / 100) : baseRaw);
-    powerBuildings.push({ uid: inst.uid, defId: def.id, base: baseRaw, leaderPct: pwrPct, planetPct, allPct, permPct: permPowerPct, value });
+    powerBuildings.push({ uid: inst.uid, defId: def.id, base: baseRaw, leaderPct: pwrPct, planetPct, allPct, permPct: permPowerPct, relicPct: relicAllPct, value });
     gen += value;
   }
 
@@ -277,8 +283,9 @@ export function computeColonyEconomy(colony: Colony, opts: ColonyEconomyOptions)
   // ===== 循环科技加成 =====
   const rl = colony.techState?.repeatableLevels || {};
 
-  // 考古遗物「空白神像」：全部建筑产出 +10%（与领袖全员加成同口径，加算）
-  if (opts.relics.some((r) => r.id === RELIC_BLANK_IDOL)) lAll += BLANK_IDOL_PCT;
+  // 考古遗物「空白神像」：全部建筑产出 +10%。单独一项，**不并入 lAll**——
+  // 并进去会让总览/建筑明细把它标成"领袖+10%"（显示来源分叉，已修）。
+  const relicAllPct = opts.relics.some((r) => r.id === RELIC_BLANK_IDOL) ? BLANK_IDOL_PCT : 0;
 
   // ===== 量子实验室：科研产出加成 =====
   let b26Bonus = 0;
@@ -315,6 +322,8 @@ export function computeColonyEconomy(colony: Colony, opts: ColonyEconomyOptions)
     const effPop = Math.min(inst.assignedPop, effMaxPop);
 
     const leaderPct = ((leaderBonusMap[inst.defId] || 0) + lAll + (def.category === 'material' ? lMat : 0)) / 100;
+    /** 遗物「空白神像」加成（小数），与领袖加成分开记录，供 UI 标注真实来源 */
+    const relicPct = relicAllPct / 100;
     let repeatPct = 0;
     if (def.outputType === 'food') repeatPct = (rl.RP_FOOD || 0) * 0.05;
     else if (def.outputType === 'alloy') repeatPct = (rl.RP_ALLOY || 0) * 0.05;
@@ -325,7 +334,7 @@ export function computeColonyEconomy(colony: Colony, opts: ColonyEconomyOptions)
 
     const entry: BuildingEconomyEntry = {
       uid: inst.uid, defId: inst.defId, outputType: def.outputType,
-      effPop, base: 0, planetPct: 0, leaderPct, repeatPct, b26Pct: 0, value: 0,
+      effPop, base: 0, planetPct: 0, leaderPct, repeatPct, b26Pct: 0, relicPct, value: 0,
     };
 
     if (def.outputType === 'gold') {
@@ -335,14 +344,14 @@ export function computeColonyEconomy(colony: Colony, opts: ColonyEconomyOptions)
         : Math.floor((min + max) / 2);
       const tm = buffs?.tradeMult ? (buffs.tradeMult - 1) : 0;
       entry.planetPct = tm;
-      entry.value = Math.ceil(roll * (1 + leaderPct + repeatPct + tm));
+      entry.value = Math.ceil(roll * (1 + leaderPct + repeatPct + tm + relicPct));
       result.gold += entry.value;
     } else if (def.outputType === 'material' && def.outputMaterialId) {
       const base = (def.popFactor || 0) * effPop;
       const matMult = buffs?.materialMults?.[def.outputMaterialId];
       const pm = matMult ? (matMult - 1) : 0;
       entry.base = base; entry.planetPct = pm; entry.materialId = def.outputMaterialId;
-      entry.value = Math.ceil(base * (1 + pm + leaderPct + repeatPct));
+      entry.value = Math.ceil(base * (1 + pm + leaderPct + repeatPct + relicPct));
       // 考古遗物「深层钻头」：每座在产原料建筑 +1（口径同合金精炼手册）
       if (hasDeepDrill) { entry.value += 1; entry.relicBonus = 1; }
       result.materials[def.outputMaterialId] = (result.materials[def.outputMaterialId] || 0) + entry.value;
@@ -350,7 +359,7 @@ export function computeColonyEconomy(colony: Colony, opts: ColonyEconomyOptions)
       const base = (def.popFactor || 0) * effPop;
       const pm = buffs?.researchMult ? (buffs.researchMult - 1) : 0;
       entry.base = base; entry.planetPct = pm; entry.b26Pct = b26Bonus;
-      entry.value = Math.ceil(base * (1 + pm + leaderPct + b26Bonus + repeatPct + permResearchPct));
+      entry.value = Math.ceil(base * (1 + pm + leaderPct + b26Bonus + repeatPct + permResearchPct + relicPct));
       result.research += entry.value;
     } else {
       // food / alloy / stardust：baseOutput + popFactor × 人口
@@ -361,7 +370,7 @@ export function computeColonyEconomy(colony: Colony, opts: ColonyEconomyOptions)
       const pm = mult ? (mult - 1) : 0;
       const permPct = def.outputType === 'food' ? permFoodPct : 0;
       entry.base = base; entry.planetPct = pm;
-      entry.value = Math.ceil(base * (1 + pm + leaderPct + repeatPct + permPct));
+      entry.value = Math.ceil(base * (1 + pm + leaderPct + repeatPct + permPct + relicPct));
       // 合金精炼手册 r_008：每座在产合金建筑 +1 合金（结算与显示共用；relicBonus 供 UI 标注来源）
       if (def.outputType === 'alloy' && hasAlloyManual) { entry.value += 1; entry.relicBonus = 1; }
       if (def.outputType === 'food') result.food += entry.value;

@@ -66,6 +66,7 @@ interface GameScreenProps {
   onDrawEvent: (shipIndex: number) => ChoiceEvent | null;
   onChooseEventOption: (shipIndex: number, option: EventOption, accumulator: ResourceChange) => import('@/hooks/useEvent').ChooseResult | null;
   onApplyEventResources: (shipIndex: number, res: ResourceChange, reason: string) => void;
+  onLogEvent: (event: string, detail: string) => void;
   onClearActiveEvent: () => void;
   onClearEventDodged: () => void;
   onTakeLoan: (principal: number, plan: { turns: number; rate: number }) => { success: boolean; message: string };
@@ -156,6 +157,7 @@ export default function GameScreen({
   onDrawEvent,
   onChooseEventOption,
   onApplyEventResources,
+  onLogEvent,
   onClearActiveEvent,
   onClearEventDodged,
   onTakeLoan,
@@ -527,6 +529,7 @@ export default function GameScreen({
               onDrawEvent={onDrawEvent}
               onChooseOption={onChooseEventOption}
               onApplyResources={onApplyEventResources}
+              onLogEvent={onLogEvent}
               onClearActiveEvent={onClearActiveEvent}
               onClearDodged={onClearEventDodged}
             />
@@ -949,22 +952,6 @@ function OverviewTab({
           </div>
         </div>
       </div>
-
-      {/* 最近事件 */}
-      {gameState.eventLog.length > 0 && (
-        <div>
-          <h3 className="text-base md:text-lg font-bold text-slate-200 mb-2 md:mb-3">事件记录</h3>
-          <div className="bg-slate-900/60 border border-slate-700 rounded-xl p-3 md:p-4 max-h-60 overflow-auto">
-            {gameState.eventLog.slice(0, 20).map((log, idx) => (
-              <div key={log.id ?? `legacy-${log.turn}-${idx}`} className="text-xs md:text-sm border-b border-slate-800 pb-2 mb-2 last:border-0 last:pb-0 last:mb-0">
-                <span className="text-slate-500">第{log.turn}回合</span>
-                <span className="text-purple-400 mx-1 md:mx-2">{log.event}</span>
-                <span className="text-slate-400">{log.detail}</span>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
     </div>
   );
 }

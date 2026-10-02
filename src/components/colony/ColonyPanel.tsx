@@ -356,6 +356,8 @@ function ColonyPanel(props: ColonyPanelProps) {
                       if (b.planetPct !== 0) parts.push(`星球${b.planetPct > 0 ? '+' : ''}${b.planetPct}%`);
                       if (b.leaderPct > 0) parts.push(`领袖+${b.leaderPct}%`);
                       if (b.allPct > 0) parts.push(`全员+${b.allPct}%`);
+                      if (b.permPct && b.permPct > 0) parts.push(`永久加成+${b.permPct}%`);
+                      if (b.relicPct && b.relicPct > 0) parts.push(`遗物+${b.relicPct}%`);
                       return (
                         <p key={b.uid} className="text-xs text-slate-500 flex flex-wrap items-baseline gap-x-1">
                           <span>{bd?.name || b.defId}:</span>
@@ -384,6 +386,7 @@ function ColonyPanel(props: ColonyPanelProps) {
               if (e.leaderPct > 0) parts.push(`领袖+${Math.round(e.leaderPct*100)}%`);
               if (e.repeatPct > 0) parts.push(`循环+${Math.round(e.repeatPct*100)}%`);
               if (e.b26Pct > 0) parts.push(`量子实验室+${Math.round(e.b26Pct*100)}%`);
+              if (e.relicPct) parts.push(`遗物+${Math.round(e.relicPct*100)}%`);
               if (e.relicBonus) parts.push(`遗物+${e.relicBonus}`);
               if (e.outputType === 'material' && e.materialId) {
                 matLines.push({ k: e.materialId, v: e.value, detail: parts.join(' ') });
@@ -489,6 +492,7 @@ function ColonyPanel(props: ColonyPanelProps) {
           if (e.leaderPct > 0) detail += `领袖+${Math.round(e.leaderPct * 100)}%`;
           if (e.repeatPct > 0) detail += `循环+${Math.round(e.repeatPct * 100)}%`;
           if (e.b26Pct > 0) detail += `量子实验室+${Math.round(e.b26Pct * 100)}%`;
+          if (e.relicPct) detail += `遗物+${Math.round(e.relicPct * 100)}%`;
           if (e.relicBonus) detail += `遗物+${e.relicBonus}`;
           return { v: e.value, un, detail };
         };
