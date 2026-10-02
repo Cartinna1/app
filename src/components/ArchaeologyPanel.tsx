@@ -149,6 +149,7 @@ function ArchaeologyPanel({
                 阶段图片位（{stage.id}）
               </div>
               <img
+                key={stage.image}
                 src={stage.image}
                 alt={stage.title}
                 onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
@@ -306,6 +307,7 @@ function ArchaeologyPanel({
                             中止剧情配图（{site.id}/halt）
                           </div>
                           <img
+                            key={site.haltImage}
                             src={site.haltImage}
                             alt={`${site.name} 发掘中止`}
                             onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}

@@ -90,6 +90,7 @@ function ExpeditionPanel({ colony, onStartExpedition, onPayExpeditionNode, onUnl
           {ex.stage === 1 && (
             <div>
               <img
+                key={imgPath(ex.leaderId, 'planet.webp')}
                 src={imgPath(ex.leaderId, 'planet.webp')}
                 alt={route.planetName}
                 onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
@@ -118,6 +119,7 @@ function ExpeditionPanel({ colony, onStartExpedition, onPayExpeditionNode, onUnl
                   {/* D 层结局节点：支付后同屏显示结局图 + 箴言（本回合即终局，结束回合后返回选领袖界面） */}
                   {ex.stage === 5 && node.isEnding && (
                     <img
+                      key={imgPath(ex.leaderId, `${node.id}.webp`)}
                       src={imgPath(ex.leaderId, `${node.id}.webp`)}
                       alt={node.title}
                       onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
@@ -144,6 +146,7 @@ function ExpeditionPanel({ colony, onStartExpedition, onPayExpeditionNode, onUnl
           {ex.stage === 6 && node && node.isEnding && (
             <div>
               <img
+                key={imgPath(ex.leaderId, `${node.id}.webp`)}
                 src={imgPath(ex.leaderId, `${node.id}.webp`)}
                 alt={node.title}
                 onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}

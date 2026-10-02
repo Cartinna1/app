@@ -33,6 +33,7 @@ function GalleryPanel({ colony }: GalleryPanelProps) {
       return (
         <div className="bg-slate-900/60 border border-cyan-700/40 rounded-xl p-4 mb-4">
           <img
+            key={imgPath(selected.leaderId, 'planet.webp')}
             src={imgPath(selected.leaderId, 'planet.webp')}
             alt={route.planetName}
             onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
@@ -53,6 +54,7 @@ function GalleryPanel({ colony }: GalleryPanelProps) {
       return (
         <div className="bg-slate-900/60 border border-amber-700/40 rounded-xl p-4 mb-4">
           <img
+            key={imgPath(selected.leaderId, `${img.id}.webp`)}
             src={imgPath(selected.leaderId, `${img.id}.webp`)}
             alt={imgLabel}
             onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
@@ -67,6 +69,7 @@ function GalleryPanel({ colony }: GalleryPanelProps) {
     return (
       <div className="bg-slate-900/60 border border-purple-700/40 rounded-xl p-4 mb-4">
         <img
+          key={imgPath(selected.leaderId, `${selected.nodeId}.webp`)}
           src={imgPath(selected.leaderId, `${selected.nodeId}.webp`)}
           alt={node.title}
           onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}

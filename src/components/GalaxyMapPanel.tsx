@@ -85,6 +85,9 @@ function GalaxyMapPanel({ ship, factionReputation, onTravelToNode }: GalaxyMapPa
   const dragRef = useRef<{ x: number; y: number; moved: boolean; panning: boolean } | null>(null);
   /** 信息卡容器：选中节点后滚进视野（手机端卡片在星图下方，点完不看会以为没反应） */
   const cardRef = useRef<HTMLDivElement | null>(null);
+  /** 加载失败的配图地址（按 URL 记录：缺图时整块收掉，且切换到有图的节点能正常显示。
+   *  不用 DOM style 是因为同一 <img> 会被 React 复用，手工隐藏会残留到下一个节点） */
+  const [failedImg, setFailedImg] = useState<string | null>(null);
 
   const clampView = (v: ViewState): ViewState => ({
     scale: Math.max(MIN_SCALE, Math.min(MAX_SCALE, v.scale)),
@@ -319,6 +322,7 @@ function GalaxyMapPanel({ ship, factionReputation, onTravelToNode }: GalaxyMapPa
           return (
             <div className="flex items-center gap-3 mb-3">
               <img
+                key={node.factionId}
                 src={`/factions/${node.factionId}.png`}
                 alt={node.name}
                 onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
@@ -412,17 +416,18 @@ function GalaxyMapPanel({ ship, factionReputation, onTravelToNode }: GalaxyMapPa
         )}
 
         {/* 节点配图：可殖民星球用星球地貌图、遗迹用其图鉴封面、势力用势力景观图（待补，缺图自动隐藏）。
-            移动端限高，避免占满屏幕；未开发节点与未探测节点不显示图片。 */}
+            移动端限高，避免占满屏幕；未开发节点与未探测节点不显示图片。
+            ⚠ 图片按 URL 记失败：缺图时整块（含外边距）收起，不留空白带；切到有图的节点正常显示。 */}
         {(() => {
           const img = getNodeLandscapeImage(node);
-          if (!img) return null;
+          if (!img || failedImg === img) return null;
           return (
             <div className="mt-3">
               <img
                 src={img}
                 alt={node.name}
                 loading="lazy"
-                onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+                onError={() => setFailedImg(img)}
                 className="w-full max-h-[150px] md:max-h-[260px] object-cover rounded-lg border border-slate-700 bg-slate-800/40"
               />
             </div>
