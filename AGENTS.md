@@ -132,6 +132,7 @@ src/
 
 ## 八、命名与文案
 
+- **考古阶段文字的收束规则**（`data/galaxy/archaeology.ts`）：**最后一阶段必须是结论，不是钩子**——它要正面回答该遗迹 `intro` 提出的那个问题，并把玩家带走的东西（遗物/永久加成）写成答案本身（"奖励即答案"，如七层碑林的「第七层手稿」= 倏忽人留下的读法、折叠回廊的「套利凭证」= 折角本身记下的航程）。禁止在最后一阶段再抛新疑问或留白（曾 10 处里 8 处收在悬念上，玩家反馈"谜底没揭、故事没讲完"）。`haltText` 是另一条分支（永久封闭）也要收住，两条线别互相串味。阶段文字约 100~160 字、单行单引号字符串、**不得出现 ASCII 引号**（会截断字符串）。
 - 真值函数命名 `getXxx` / `computeXxx`；避免 `import { x as y }` 别名（现存一例 `useGameState.ts` 的 `getShipTotalAssets as computeShipTotalAssets`，待清理，勿新增）。
 - 原料译名一律走 `getMaterialName()`（事件/建筑的 flavor 文学描述除外）。
 - **领袖显示一律用名字**：`getLeaderDef(leaderInstance.id)?.name`（如「诺娃·永昼」）。`LeaderInstance.id` 是内部编号（L1…L22），任何时候都不要直接渲染给玩家（考古驻守下拉与驻守状态曾显示成 "L14 Lv3"）。
