@@ -17,8 +17,10 @@ const EXPEDITION_UNLOCK_COUNT = 12;
 
 function GalleryPanel({ colony }: GalleryPanelProps) {
   const [selected, setSelected] = useState<{ leaderId: string; nodeId: string; kind: 'planet' | 'ending' | 'hidden' | 'stage' } | null>(null);
-  // 每个领袖卡片默认收起，点击标题栏展开格子网格
-  const [expanded, setExpanded] = useState<Record<string, boolean>>({});
+  // 领袖卡片：**手风琴**——同一时刻只展开一位（默认全收起）。
+  // 为什么不用 Record<string, boolean>：每位展开后最多 46 张图（1 降落 + 12 结局 + ≤12 CG + 21 阶段），
+  // 多位同时展开会让 DOM 里挂上几百个 <img>，解码内存与流量都会飙升；手风琴把最坏情况压回 ~46 张。
+  const [expandedId, setExpandedId] = useState<string | null>(null);
   // 隐藏收藏区（集齐 12 结局后开放）展开状态
   const [hiddenOpen, setHiddenOpen] = useState<Record<string, boolean>>({});
   // 阶段图集（远征路线上的 A/B/C 节点图，按节点编号）展开状态
@@ -132,17 +134,17 @@ function GalleryPanel({ colony }: GalleryPanelProps) {
         return (
           <div key={l.id} className="bg-slate-800/60 border border-slate-700 rounded-xl p-4 mb-4">
             <button
-              onClick={() => setExpanded((prev) => ({ ...prev, [l.id]: !prev[l.id] }))}
+              onClick={() => setExpandedId((prev) => (prev === l.id ? null : l.id))}
               className="w-full flex items-center gap-1.5 mb-3 text-left group"
             >
               <Crown size={14} className="text-amber-400" />
               <span className="text-sm font-bold text-slate-200 group-hover:text-white">{l.name}</span>
               <span className="text-xs text-slate-500 font-normal">· {ld?.abilityName || ''} · 已收集 {list.length}/12</span>
               <span className="ml-auto text-slate-500 group-hover:text-slate-300">
-                {expanded[l.id] ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
+                {expandedId === l.id ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
               </span>
             </button>
-            {expanded[l.id] && (
+            {expandedId === l.id && (
             <div className="grid grid-cols-3 md:grid-cols-4 gap-2">
               {cells.map((c) => (
                 <button
@@ -215,7 +217,7 @@ function GalleryPanel({ colony }: GalleryPanelProps) {
                 </div>
               </div>
             )}
-            {/* 阶段图集展开区（只列出走过的节点：A*/B*/C*，跨远征累计） */}
+            {/* 阶段图集展开区（只列出走过的节点：A、B、C 三类，跨远征累计） */}
             {stageOpen[l.id] && stageCollected.length > 0 && (
               <div className="mt-3 pt-3 border-t border-slate-700/60">
                 <p className="text-base font-bold text-cyan-300 mb-2 flex items-center gap-1.5">
