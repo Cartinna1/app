@@ -10,6 +10,7 @@ import { computeColonyEconomy, computeColonyPower } from '@/lib/colony/economy';
 import { getRecruitCapPerTurn, hasBlackoutImmunity } from '@/lib/colony/colonyTurn';
 import { getEffectiveMaxCount, getEffectiveMaxPop, getBuildingCostProfile, getRecruitCostPerPop, RECRUIT_BASE_COST } from '@/lib/colony/costs';
 import { MATERIAL_NAME_MAP } from '@/data/materialNames';
+import { canAfford, firstMissing, formatCost } from '@/lib/turn/resourceCost';
 import { Home, Users, Wrench, Play, UserPlus, FlaskConical, Crown, Trophy, Rocket, Images } from 'lucide-react';
 import WonderPanel from './WonderPanel';
 import ExpeditionPanel from './ExpeditionPanel';
@@ -997,16 +998,21 @@ function ColonyPanel(props: ColonyPanelProps) {
                           )}
                           <span className="text-sm text-slate-600 ml-2">- {skillText}{parts.length>0?' | '+parts.join(' | '):''}{ultimateUnlocked && ld.ultimateSkill ? ` | ${ld.ultimateSkill.description}` : ''}</span>
                         </div>
-                        {l.level < 3 && (
-                          <button onClick={() => {
-                            const cost = getLeaderUpgradeCost(l.level) ?? 0;
-                            if (ship.stardust<cost) { showMsg('星尘不足', 'error'); return; }
-                            const r=onUpgradeLeader(i); showMsg(r.message,r.success?'success':'error');
-                          }} disabled={ship.stardust<(getLeaderUpgradeCost(l.level) ?? 0)}
-                            className="px-3 py-1.5 bg-yellow-700 hover:bg-yellow-600 disabled:bg-slate-700 rounded text-sm font-bold ml-2 flex-shrink-0">
-                            升级({getLeaderUpgradeCost(l.level) ?? 0}星尘)
-                          </button>
-                        )}
+                        {l.level < 3 && (() => {
+                          // 升级费用与扣减口径：data/colony/leaders.getLeaderUpgradeCost + lib/turn/resourceCost
+                          const cost = getLeaderUpgradeCost(l.level);
+                          if (!cost) return null;
+                          const affordable = canAfford(ship, colony, cost);
+                          return (
+                            <button onClick={() => {
+                              if (!affordable) { showMsg(firstMissing(ship, colony, cost) || '资源不足', 'error'); return; }
+                              const r = onUpgradeLeader(i); showMsg(r.message, r.success ? 'success' : 'error');
+                            }} disabled={!affordable}
+                              className="px-3 py-1.5 bg-yellow-700 hover:bg-yellow-600 disabled:bg-slate-700 rounded text-sm font-bold ml-2 flex-shrink-0">
+                              升级({formatCost(cost)})
+                            </button>
+                          );
+                        })()}
                       </div>
                       <p className="text-sm text-slate-400">{ld.description}</p>
                       </div>

@@ -164,6 +164,9 @@ export interface Colony {
   blackoutGuardTurns?: number;
   expedition?: ExpeditionState;                 // 远征状态（领袖剧情树）
   expeditionEndings?: Record<string, string[]>; // 领袖 → 已触发结局 id（去重，12/12 解锁终极技能）
+  /** 领袖 → 已抵达过的远征节点 id（跨远征累计去重，供图鉴「阶段图集」只收录走过的节点；
+   *  写入点唯一：lib/colony/expeditionTurn.enterExpeditionHistory，故意与每轮重置的 expedition.history 分开存） */
+  expeditionVisited?: Record<string, string[]>;
   expeditionUnlocks?: string[];                 // 已解锁终极技能的领袖 id
 }
 

@@ -193,12 +193,16 @@ export const ALL_LEADERS: LeaderDef[] = [
 ];
 
 // ==================== 领袖升级星尘费用（唯一真值） ====================
-// Lv1→Lv2 = 50，Lv2→Lv3 = 100。UI 显示与 useColonyLeaders 扣费统一从这里取，
-// 历史上 UI(50/100) 与 hook(20/45) 分叉已收敛至此，勿再就地硬编码。
-export const LEADER_UPGRADE_COST = { 1: 50, 2: 100 } as const;
+// 领袖升级费用（**资源成本对象**）：Lv1→2 = 50,000 金币，Lv2→3 = 150 合金。
+// UI 显示与 useColonyLeaders 扣费统一从这里取；校验/扣减走 lib/turn/resourceCost.ts 的 canAfford/firstMissing/payCost，
+// 历史上「UI 写 50/100 星尘、hook 写 20/45」的分叉已收敛至此，勿再就地硬编码。
+export const LEADER_UPGRADE_COST: Record<1 | 2, Record<string, number>> = {
+  1: { gold: 50000 },
+  2: { alloy: 150 },
+};
 
-/** 取某级升到下一级所需星尘；level 已达 3（满级）时返回 null。 */
-export function getLeaderUpgradeCost(level: number): number | null {
+/** 取某级升到下一级所需资源（cost 对象）；level 已达 3（满级）时返回 null。 */
+export function getLeaderUpgradeCost(level: number): Record<string, number> | null {
   if (level >= 3) return null;
   return LEADER_UPGRADE_COST[level as 1 | 2] ?? null;
 }

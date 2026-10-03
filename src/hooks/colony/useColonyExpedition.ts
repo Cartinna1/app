@@ -7,7 +7,7 @@ import type { GameState } from '@/types/game';
 import { EXPEDITION_COST, getLeaderExpedition } from '@/data/colony/expeditions';
 import { getLeaderDef } from '@/data/colony/leaders';
 import { enterExpeditionHistory, recordExpeditionEnding } from '@/lib/colony/expeditionTurn';
-import { deductResource, firstMissing } from '@/lib/turn/resourceCost';
+import { deductResource, firstMissing, payCost } from '@/lib/turn/resourceCost';
 
 interface ExpeditionActions {
   startExpedition: (leaderId: string) => { success: boolean; message: string };
@@ -19,7 +19,7 @@ export function useColonyExpedition(
   gameState: GameState,
   dispatch: React.Dispatch<{ type: 'FUNCTIONAL_UPDATE'; updater: (state: GameState) => GameState }>
 ): ExpeditionActions {
-  // 开始远征（30 星尘；未开发领袖提示等待；可重复远征同一领袖收集 12 结局）
+  // 开始远征（20,000 金币 + 50 合金，唯一真值 EXPEDITION_COST；未开发领袖提示等待；可重复远征同一领袖收集 12 结局）
   const startExpedition = useCallback((leaderId: string): { success: boolean; message: string } => {
     const ship = gameState.ships[0];
     const colony = ship?.colony;
@@ -27,7 +27,8 @@ export function useColonyExpedition(
     if (colony.expedition) return { success: false, message: '已有远征进行中，请先完成当前远征' };
     if (!colony.leaders.some((l) => l.id === leaderId)) return { success: false, message: '该领袖尚未招募' };
     if (!getLeaderExpedition(leaderId)) return { success: false, message: '该领袖的远征故事尚未开启，敬请期待！' };
-    if (ship.stardust < EXPEDITION_COST) return { success: false, message: `星尘不足（需要 ${EXPEDITION_COST} 星尘）` };
+    const missing = firstMissing(ship, colony, EXPEDITION_COST);
+    if (missing) return { success: false, message: missing };
 
     let result = { success: false, message: '' };
     dispatch({
@@ -35,7 +36,12 @@ export function useColonyExpedition(
       updater: (prev) => {
         const ships = [...prev.ships];
         const s = { ...ships[0], colony: { ...ships[0].colony! } };
-        s.stardust -= EXPEDITION_COST;
+        payCost(s, s.colony, EXPEDITION_COST);
+        // 金币支付记入金币日志（与其它扣款口径一致）
+        if (EXPEDITION_COST.gold) {
+          const ld = getLeaderDef(leaderId);
+          s.goldLog = [{ turn: prev.turn, amount: -EXPEDITION_COST.gold, reason: `开启远征「${ld?.name || leaderId}」`, balanceAfter: s.gold }, ...s.goldLog].slice(0, 200);
+        }
         s.colony = {
           ...s.colony,
           expedition: { leaderId, stage: 0, currentNodeId: null, paidThisTurn: false, startedTurn: prev.turn, endingId: null, history: [] },

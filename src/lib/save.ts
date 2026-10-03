@@ -123,6 +123,12 @@ export function migrateSave(loaded: GameState): GameState {
         ...s.colony,
         recruitedThisTurn: s.colony.recruitedThisTurn || 0,
         expeditionEndings: s.colony.expeditionEndings || {},
+        // 图鉴的阶段图集与降落图格只收录走过的；旧档没有该字段时，用**进行中那一轮**的 history 回填
+        // （history 非空说明已降落过，故补一个 'planet'；已收尾的旧轮次没有 history，只能从本次更新后重新累计）
+        expeditionVisited: s.colony.expeditionVisited
+          || (s.colony.expedition
+            ? { [s.colony.expedition.leaderId]: [...((s.colony.expedition.history || []).length ? ['planet'] : []), ...(s.colony.expedition.history || [])] }
+            : {}),
         expeditionUnlocks: s.colony.expeditionUnlocks || [],
         blackoutGuardTurns: s.colony.blackoutGuardTurns || 0,
         // v2：殖民地不再有 selecting 阶段（星球在星图上确定）。

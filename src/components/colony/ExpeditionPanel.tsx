@@ -7,6 +7,7 @@ import type { Colony, ExpeditionNodeDef } from '@/types/colony';
 import { EXPEDITION_COST, RESOURCE_LABELS, getLeaderExpedition } from '@/data/colony/expeditions';
 import { getLeaderDef } from '@/data/colony/leaders';
 import { Rocket, Sparkles, Crown, Lock } from 'lucide-react';
+import { formatCost } from '@/lib/turn/resourceCost';
 import FeedbackMessage from '../FeedbackMessage';
 
 interface ExpeditionPanelProps {
@@ -105,6 +106,16 @@ function ExpeditionPanel({ colony, onStartExpedition, onPayExpeditionNode, onUnl
           {ex.stage === 2 && node && (
             <div>
               <p className="text-[10px] text-slate-500 mb-1">节点 {node.id}</p>
+              {/* 阶段节点图（按节点编号命名：/expeditions/<领袖id>/<节点id>.webp）；结局节点的图在下方分支单独展示 */}
+              {!node.isEnding && (
+                <img
+                  key={imgPath(ex.leaderId, `${node.id}.webp`)}
+                  src={imgPath(ex.leaderId, `${node.id}.webp`)}
+                  alt={node.title}
+                  onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+                  className="w-full aspect-video object-cover rounded-lg border border-slate-700 mb-3"
+                />
+              )}
               <h4 className="font-bold text-slate-100 mb-2">{node.title}</h4>
               <p className="text-sm text-slate-300 leading-relaxed whitespace-pre-line">{node.text}</p>
             </div>
@@ -113,6 +124,15 @@ function ExpeditionPanel({ colony, onStartExpedition, onPayExpeditionNode, onUnl
           {(ex.stage === 3 || ex.stage === 4 || ex.stage === 5) && node && (
             <div>
               <p className="text-[10px] text-slate-500 mb-1">节点 {node.id}</p>
+              {!node.isEnding && (
+                <img
+                  key={imgPath(ex.leaderId, `${node.id}.webp`)}
+                  src={imgPath(ex.leaderId, `${node.id}.webp`)}
+                  alt={node.title}
+                  onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+                  className="w-full aspect-video object-cover rounded-lg border border-slate-700 mb-3"
+                />
+              )}
               <h4 className="font-bold text-slate-100 mb-2">{node.title}</h4>
               {ex.paidThisTurn ? (
                 <div>
@@ -226,7 +246,7 @@ function ExpeditionPanel({ colony, onStartExpedition, onPayExpeditionNode, onUnl
                     disabled={!!ex}
                     className={`px-3 py-1.5 rounded-lg text-sm font-bold transition-colors ${hasRoute ? 'bg-cyan-600 hover:bg-cyan-500 text-white' : 'bg-slate-700 text-slate-400'} ${ex ? 'opacity-50 cursor-not-allowed' : ''}`}
                   >
-                    远征（{EXPEDITION_COST}星尘）
+                    远征（{formatCost(EXPEDITION_COST)}）
                   </button>
                 </div>
               </div>

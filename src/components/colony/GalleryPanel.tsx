@@ -6,7 +6,7 @@ import { useState, memo } from 'react';
 import type { Colony } from '@/types/colony';
 import { getLeaderExpedition } from '@/data/colony/expeditions';
 import { getLeaderDef } from '@/data/colony/leaders';
-import { Crown, Lock, ChevronDown, ChevronRight, Sparkles, ChevronUp } from 'lucide-react';
+import { Crown, Lock, ChevronDown, ChevronRight, Sparkles, ChevronUp, Camera } from 'lucide-react';
 
 interface GalleryPanelProps {
   colony: Colony;
@@ -16,11 +16,13 @@ interface GalleryPanelProps {
 const EXPEDITION_UNLOCK_COUNT = 12;
 
 function GalleryPanel({ colony }: GalleryPanelProps) {
-  const [selected, setSelected] = useState<{ leaderId: string; nodeId: string; kind: 'planet' | 'ending' | 'hidden' } | null>(null);
+  const [selected, setSelected] = useState<{ leaderId: string; nodeId: string; kind: 'planet' | 'ending' | 'hidden' | 'stage' } | null>(null);
   // 每个领袖卡片默认收起，点击标题栏展开格子网格
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
   // 隐藏收藏区（集齐 12 结局后开放）展开状态
   const [hiddenOpen, setHiddenOpen] = useState<Record<string, boolean>>({});
+  // 阶段图集（远征路线上的 A/B/C 节点图，按节点编号）展开状态
+  const [stageOpen, setStageOpen] = useState<Record<string, boolean>>({});
   const imgPath = (leaderId: string, name: string) => `/expeditions/${leaderId}/${name}`;
   const leadersWithRoute = colony.leaders.filter((l) => getLeaderExpedition(l.id));
 
@@ -41,6 +43,24 @@ function GalleryPanel({ colony }: GalleryPanelProps) {
           />
           <h4 className="font-bold text-slate-100 mt-2 mb-1">{route.planetName}</h4>
           <p className="text-xs text-slate-400 leading-relaxed whitespace-pre-line">{route.planetIntro}</p>
+        </div>
+      );
+    }
+    // 阶段图大图（远征路线上的节点图，按节点编号命名）
+    if (selected.kind === 'stage') {
+      const node = route.nodes[selected.nodeId];
+      if (!node) return null;
+      return (
+        <div className="bg-slate-900/60 border border-cyan-800/40 rounded-xl p-4 mb-4">
+          <img
+            key={imgPath(selected.leaderId, `${selected.nodeId}.webp`)}
+            src={imgPath(selected.leaderId, `${selected.nodeId}.webp`)}
+            alt={node.title}
+            onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+            className="w-full aspect-video object-cover rounded-lg border border-cyan-800/40"
+          />
+          <h4 className="font-bold text-cyan-200 mt-2 mb-1">{selected.nodeId} · {node.title}</h4>
+          <p className="text-xs text-slate-400 leading-relaxed whitespace-pre-line">{node.text}</p>
         </div>
       );
     }
@@ -96,14 +116,19 @@ function GalleryPanel({ colony }: GalleryPanelProps) {
         const route = getLeaderExpedition(l.id)!;
         const ld = getLeaderDef(l.id);
         const list = colony.expeditionEndings?.[l.id] || [];
+        // 走过的记录（跨远征累计）：降落图格与「阶段图集」共用；没跑过该领袖的远征则两者都未点亮
+        const visitedSet = new Set(colony.expeditionVisited?.[l.id] || []);
         const cells: { id: string; title: string; collected: boolean }[] = [
-          { id: 'planet', title: route.planetName, collected: true },
+          { id: 'planet', title: route.planetName, collected: visitedSet.has('planet') },
           ...Array.from({ length: 12 }, (_, i) => {
             const did = `D${i + 1}`;
             return { id: did, title: route.nodes[did]?.title || did, collected: list.includes(did) };
           }),
         ];
         const unlocked = list.length >= EXPEDITION_UNLOCK_COUNT;
+        // 阶段图集：只收录**已经走过的**节点（colony.expeditionVisited，写入点唯一在 expeditionTurn.markExpeditionVisited）
+        const stageIds = Object.keys(route.nodes || {}).filter((id) => !route.nodes[id].isEnding);
+        const stageCollected = stageIds.filter((id) => visitedSet.has(id));
         return (
           <div key={l.id} className="bg-slate-800/60 border border-slate-700 rounded-xl p-4 mb-4">
             <button
@@ -154,6 +179,15 @@ function GalleryPanel({ colony }: GalleryPanelProps) {
                 <span className="text-sm">{unlocked ? `CG图集 ${route.hiddenImages?.length || 0} 张` : 'CG图集'}</span>
                 {!unlocked && <span className="text-xs text-slate-600">集齐12结局解锁</span>}
               </button>
+              {/* 阶段图集入口（只收录走过的节点，随时可回顾；未走过的显示为进度 x/21） */}
+              <button
+                onClick={() => { if (stageCollected.length > 0) setStageOpen((prev) => ({ ...prev, [l.id]: !prev[l.id] })); }}
+                className={`rounded-lg border overflow-hidden aspect-video flex flex-col items-center justify-center gap-0.5 text-center ${stageCollected.length > 0 ? 'cursor-pointer border-cyan-700/60 bg-cyan-900/20 text-cyan-300 hover:border-cyan-400' : 'cursor-default border-slate-800 bg-slate-900/40 text-slate-600'}`}
+              >
+                {stageCollected.length > 0 ? (stageOpen[l.id] ? <ChevronUp size={18} /> : <Camera size={18} />) : <Lock size={18} />}
+                <span className="text-sm">阶段图集 {stageCollected.length}/{stageIds.length}</span>
+                {stageCollected.length === 0 && <span className="text-xs text-slate-600">远征中走过的节点会收录</span>}
+              </button>
             </div>
             )}
             {/* CG 图集展开区（集齐 12 结局后开放） */}
@@ -176,6 +210,32 @@ function GalleryPanel({ colony }: GalleryPanelProps) {
                         className="w-full aspect-video object-cover"
                       />
                       <p className="text-xs md:text-sm text-amber-200/90 px-1.5 py-1 truncate">{h.title || `CG${i + 1}`}</p>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+            {/* 阶段图集展开区（只列出走过的节点：A*/B*/C*，跨远征累计） */}
+            {stageOpen[l.id] && stageCollected.length > 0 && (
+              <div className="mt-3 pt-3 border-t border-slate-700/60">
+                <p className="text-base font-bold text-cyan-300 mb-2 flex items-center gap-1.5">
+                  <Camera size={14} />阶段图集（已收录 {stageCollected.length}/{stageIds.length}）
+                </p>
+                <div className="grid grid-cols-3 md:grid-cols-4 gap-2">
+                  {stageCollected.map((id) => (
+                    <button
+                      key={id}
+                      onClick={() => setSelected({ leaderId: l.id, nodeId: id, kind: 'stage' })}
+                      className="rounded-lg overflow-hidden border border-slate-700 cursor-pointer hover:border-cyan-500 text-left"
+                    >
+                      <img
+                        key={imgPath(l.id, `${id}.webp`)}
+                        src={imgPath(l.id, `${id}.webp`)}
+                        alt={route.nodes[id].title}
+                        onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+                        className="w-full aspect-video object-cover"
+                      />
+                      <p className="text-xs md:text-sm text-slate-300 px-1.5 py-1 truncate">{id} · {route.nodes[id].title}</p>
                     </button>
                   ))}
                 </div>

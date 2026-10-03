@@ -1,6 +1,7 @@
 import { useCallback } from 'react';
 import type { GameState } from '@/types/game';
 import { getLeaderDef, rollLeaders, getLeaderUpgradeCost, getRecruitRollCost } from '@/data/colony/leaders';
+import { firstMissing, payCost } from '@/lib/turn/resourceCost';
 
 /** 殖民地领袖招募 / 升级 / 招募池（从 useColony 拆出） */
 export function useColonyLeaders(
@@ -28,21 +29,27 @@ export function useColonyLeaders(
     });
   }, [dispatch]);
 
-  /** 领袖升级 */
+  /** 领袖升级（费用唯一真值 data/colony/leaders.getLeaderUpgradeCost；校验与扣减走 lib/turn/resourceCost） */
   const upgradeLeader = useCallback((leaderIndex: number): { success: boolean; message: string } => {
-    const col = gameState.ships[0].colony;
+    const ship = gameState.ships[0];
+    const col = ship?.colony;
     if (!col || col.phase !== 'active') return { success: false, message: '殖民地未激活' };
     const li = col.leaders[leaderIndex];
     if (!li) return { success: false, message: '领袖不存在' };
-    if (li.level >= 3) return { success: false, message: '已达最高等级' };
-    // 升级费用唯一真值在 data/colony/leaders.ts（Lv1→2=50，Lv2→3=100）
-    const cost = getLeaderUpgradeCost(li.level) ?? 0;
-    if (gameState.ships[0].stardust < cost) return { success: false, message: `星尘不足(需要${cost})` };
+    const cost = getLeaderUpgradeCost(li.level);
+    if (!cost) return { success: false, message: '已达最高等级' };
+    const missing = firstMissing(ship, col, cost);
+    if (missing) return { success: false, message: missing };
     dispatch({
       type: 'FUNCTIONAL_UPDATE',
       updater: (prev) => {
-        const ships = [...prev.ships]; const s = { ...ships[0] };
-        s.stardust -= cost;
+        const ships = [...prev.ships];
+        const s = { ...ships[0], colony: { ...ships[0].colony! } };
+        payCost(s, s.colony, cost);
+        // 金币支付记入金币日志（与其它扣款口径一致）
+        if (cost.gold) {
+          s.goldLog = [{ turn: prev.turn, amount: -cost.gold, reason: `领袖「${li.name}」升级至 Lv${li.level + 1}`, balanceAfter: s.gold }, ...s.goldLog].slice(0, 200);
+        }
         s.colony!.leaders = s.colony!.leaders.map((l, i) => i === leaderIndex ? { ...l, level: l.level + 1 } : l);
         ships[0] = s; return { ...prev, ships };
       },

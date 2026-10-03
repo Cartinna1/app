@@ -7,11 +7,24 @@
 import type { Colony } from '@/types/colony';
 import { getLeaderExpedition } from '@/data/colony/expeditions';
 
+/** 累计「走过的节点」到 colony.expeditionVisited（跨远征去重）：图鉴的阶段图集与降落图格只收录走过的。
+ *  ⚠ 不要为了记 'planet' 去走 enterExpeditionHistory：那条路会把它写进每轮重置的 history，
+ *    而「回顾剧情」是按 history 去 route.nodes 里找节点的，planet 不是节点。 */
+export function markExpeditionVisited(colony: Colony, leaderId: string, nodeId: string): void {
+  if (!leaderId || !nodeId) return;
+  const visited = colony.expeditionVisited?.[leaderId] || [];
+  if (visited.includes(nodeId)) return;
+  colony.expeditionVisited = { ...(colony.expeditionVisited || {}), [leaderId]: [...visited, nodeId] };
+}
+
 /** 记入剧情历史（供「回顾剧情」）：A 免费进入即记，B/C/D 支付后才记。
- *  支付动作（useColonyExpedition）复用本函数，勿另写一份；history 用重新赋值而非 push，便于 hook 侧保持不可变。 */
+ *  支付动作（useColonyExpedition）复用本函数，勿另写一份；history 用重新赋值而非 push，便于 hook 侧保持不可变。
+ *  同一处顺带累计「跨远征走过的节点」（markExpeditionVisited），图鉴的「阶段图集」只收录这些节点。
+ *  注意要在 history 的提前 return **之前**写 visited，否则重复节点会漏记。 */
 export function enterExpeditionHistory(colony: Colony, nodeId: string | null): void {
   const ex = colony.expedition;
   if (!ex || !nodeId) return;
+  markExpeditionVisited(colony, ex.leaderId, nodeId);
   if (ex.history?.includes(nodeId)) return;
   ex.history = [...(ex.history || []), nodeId];
 }
@@ -84,6 +97,8 @@ export function processExpeditionTurn(colony: Colony): void {
   switch (ex.stage) {
     case 0: // 准备 → 降落
       ex.stage = 1;
+      // 降落即算"到访过这颗星球"：图鉴里降落图格与阶段节点用同一套 visited 判定（没跑过的领袖则保持未点亮）
+      markExpeditionVisited(colony, ex.leaderId, 'planet');
       break;
     case 1: {
       // 降落 → 随机 A 节点（收集导向：优先未收集结局的 A）

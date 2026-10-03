@@ -30,8 +30,9 @@ import { expeditionL20 } from './expeditions/L20';
 import { expeditionL21 } from './expeditions/L21';
 import { expeditionL22 } from './expeditions/L22';
 
-/** 远征启动星尘费（唯一数字锚点） */
-export const EXPEDITION_COST = 30;
+/** 开启远征的资源消耗（**cost 对象**：20,000 金币 + 50 合金）。
+ *  校验与扣减走 lib/turn/resourceCost.ts 的 firstMissing/payCost，勿在 hook 里就地写。 */
+export const EXPEDITION_COST: Record<string, number> = { gold: 20000, alloy: 50 };
 
 /** 节点消耗资源 → 中文显示名（hook 报错与 UI 消耗明细共用） */
 export const RESOURCE_LABELS: Record<string, string> = {

@@ -53,6 +53,7 @@ export function useColonyBase(
           energy: 0,
           blackoutGuardTurns: 0,
           expeditionEndings: {},
+          expeditionVisited: {},
           expeditionUnlocks: [],
         };
         s.colony = applyColonyFounding(base, planetId, name);
