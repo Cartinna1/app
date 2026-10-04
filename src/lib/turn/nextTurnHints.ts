@@ -4,7 +4,8 @@
 // 铁律：本文件**只读状态、不写状态、不加存档字段**；凡与回合结算重复的算式一律复用结算侧的函数——
 //   computeCrewFoodCost（船员食物）、computeColonyPower + projectColonyEnergy（电力/停电）、
 //   getContractEarliestExpiry（合同备货过期）、getBuildingCostProfile（建筑工期）、
-//   getResearchTargetTurns（研究目标回合）、getRecruitCapPerTurn / getRecruitRollCost（招募上限与费用）。
+//   getResearchTargetTurns（研究目标回合）、getRecruitRollCost（领袖招募费）；
+//   注意 getRecruitCapPerTurn 是**人口**招募口径（人口区用），领袖容量是 colony.leaderCap，两者勿混。
 //   绝不在这里重写一遍，否则会出现"提示说断电、实际没断"这种显示与结算分叉。
 //
 // 不做预测的东西：股价/原料价波动、随机事件的抽取 —— 都无法预知，硬报等于撒谎。
@@ -15,7 +16,7 @@ import { getShipPerTurnIncome } from '@/lib/turn/shipIncome';
 import { computeColonyPower } from '@/lib/colony/economy';
 import { getRecruitCapPerTurn, hasBlackoutImmunity, projectColonyEnergy, getResearchTargetTurns } from '@/lib/colony/colonyTurn';
 import { getContractEarliestExpiry, getContractHeldCount, getContractItemName, getContractRequiredTotals } from '@/lib/turn/contracts';
-import { getBuildingCostProfile } from '@/lib/colony/costs';
+import { getBuildingCostProfile, getRecruitCostPerPop } from '@/lib/colony/costs';
 import { checkRepBlock, getCurrentFactionId } from '@/lib/galaxy/access';
 import { getBuildingDef } from '@/data/colony/buildings';
 import { getLeaderDef, getRecruitRollCost } from '@/data/colony/leaders';
@@ -272,11 +273,33 @@ export function getNextTurnHints(state: GameState): NextTurnHint[] {
       }
     }
 
-    // C6 本回合还能招募（上限与费用同源）
-    const cap = getRecruitCapPerTurn(colony);
-    const left = cap - (colony.recruitedThisTurn || 0);
-    if (left > 0 && ship.stardust >= getRecruitRollCost(colony.leaders)) {
-      out.push({ id: 'recruit_left', severity: 'info', text: `本回合还能招募 ${left} 位领袖（星尘 ${getRecruitRollCost(colony.leaders)}/次）` });
+    // C6 本回合还能招募领袖——条件与动作层同源（useColonyLeaders.rollAndRecruit：容量未满 + 星尘够），
+    //    ⚠ 别用 getRecruitCapPerTurn / recruitedThisTurn：那是**人口**招募的口径（useColonyPop + 殖民地面板人口区），
+    //    与领袖容量（colony.leaderCap）无关；曾据此误报"还能招募 5 位领袖"（实际 3/3 已满）。
+    const rollCost = getRecruitRollCost(colony.leaders);
+    if (colony.leaders.length < colony.leaderCap && ship.stardust >= rollCost) {
+      out.push({
+        id: 'recruit_left',
+        severity: 'info',
+        text: `还能招募领袖（容量 ${colony.leaders.length}/${colony.leaderCap}，星尘 ${rollCost}/次）`,
+      });
+    }
+
+    // C7 本回合还能招募多少人口——与 useColonyPop.recruitPop 的四道校验同源，三个限制**取最小**：
+    //    ① 每回合上限 getRecruitCapPerTurn − recruitedThisTurn
+    //    ② 人口上限剩余位（colony.population.cap − total，动作层也读这个字段）
+    //    ③ 金币够招几个人（getRecruitCostPerPop，含星球修正 + 领袖减免）
+    const costPerPop = getRecruitCostPerPop(colony);
+    const capLeft = getRecruitCapPerTurn(colony) - (colony.recruitedThisTurn || 0);
+    const popLeft = colony.population.cap - colony.population.total;
+    const goldLeft = costPerPop > 0 ? Math.floor(ship.gold / costPerPop) : 0;
+    const canRecruitPop = Math.max(0, Math.min(capLeft, popLeft, goldLeft));
+    if (canRecruitPop > 0) {
+      out.push({
+        id: 'pop_recruit_left',
+        severity: 'info',
+        text: `本回合还能招募 ${canRecruitPop} 人口（${costPerPop.toLocaleString()} 金币/人，人口 ${colony.population.total}/${colony.population.cap}）`,
+      });
     }
   }
 
