@@ -10,7 +10,11 @@ import type { GalaxyNode } from '@/types/galaxy';
 import { GALAXY_NODES, getGalaxyNode } from '@/data/galaxy/nodes';
 import { GALAXY_LANES } from '@/data/galaxy/lanes';
 import { getShipTravel } from '@/lib/galaxy/travel';
-import { getBlockedNodeIds, canEnterNode } from '@/lib/galaxy/access';
+import type { ShipTravelPlan } from '@/lib/galaxy/travel';
+
+/** 无选中节点时的空方案（模块级常量，避免每次渲染新建对象击穿 memo） */
+const EMPTY_TRAVEL: ShipTravelPlan = { route: null, turns: 0, tollRoute: null, tollTurns: 0, hostileVia: [], tollGold: 0 };
+import { getBlockedNodeIds, canEnterNode, HOSTILE_TOLL_GOLD } from '@/lib/galaxy/access';
 import { getKnownFactionIds, getKnownRelation, getNodeDisplayName } from '@/lib/galaxy/knowledge';
 import { getNodeLandscapeImage } from '@/lib/galaxy/nodeImage';
 import { FACTIONS } from '@/data/factions';
@@ -219,13 +223,15 @@ function GalaxyMapPanel({ ship, factionReputation, onTravelToNode }: GalaxyMapPa
    *  贸易面板与「下一回合预告」同源，勿在此另写判断） */
   const displayNameOf = (id: string | null | undefined): string => getNodeDisplayName(ship, id);
 
-  // 选中节点的路线 + **实际**回合数（含引力锚定器/跃迁加速器/永久加成减免）。
+  // 选中节点的跃迁方案（实际回合数 + 无免费路线时的宿敌过路费）。
   // 唯一真值 lib/galaxy/travel.getShipTravel —— 与实际跃迁（useTrade）同源，避免"显示 5 回合、实走 4 回合"。
-  const travel = useMemo(() => {
-    if (!selectedId || selectedId === galaxy.currentNodeId) return { route: null, turns: 0 };
-    return getShipTravel(ship, selectedId, blocked);
-  }, [ship, selectedId, galaxy.currentNodeId, blocked]);
-  const route = travel.route;
+  const travel = useMemo(
+    () => (selectedId ? getShipTravel(ship, selectedId, blocked) : EMPTY_TRAVEL),
+    [ship, selectedId, blocked]
+  );
+  /** 当前生效的路线：免费优先，否则付费途经宿敌的那条（路线高亮与"途经"行都用它） */
+  const route = travel.route ?? travel.tollRoute;
+  const isTollRoute = !travel.route && !!travel.tollRoute;
 
   const routeLaneKeys = useMemo(() => {
     const keys = new Set<string>();
@@ -270,10 +276,18 @@ function GalaxyMapPanel({ ship, factionReputation, onTravelToNode }: GalaxyMapPa
       <div>
         <button
           onClick={() => handleTravel(node.id)}
-          className="px-4 py-2 bg-cyan-600 hover:bg-cyan-500 rounded-lg font-bold text-white text-sm transition-colors flex items-center gap-2 min-h-[40px]"
+          className={`px-4 py-2 rounded-lg font-bold text-white text-sm transition-colors flex items-center gap-2 min-h-[40px] ${isTollRoute ? 'bg-amber-600 hover:bg-amber-500' : 'bg-cyan-600 hover:bg-cyan-500'}`}
         >
-          <Rocket size={14} /> 跃迁（{travel.turns} 回合）
+          <Rocket size={14} /> {isTollRoute
+            ? `付费途经（${travel.tollTurns} 回合 · 过路费 ${travel.tollGold.toLocaleString()} 金币）`
+            : `跃迁（${travel.turns} 回合）`}
         </button>
+        {/* 付费途经：说清"付什么、路过谁、进不去" */}
+        {isTollRoute && (
+          <p className="text-[10px] md:text-xs text-amber-400/90 mt-2">
+            免费航线被宿敌割断，可付过路费途经 {travel.hostileVia.map((id) => displayNameOf(id)).join('、')}（每处 {HOSTILE_TOLL_GOLD.toLocaleString()} 金币）；宿敌星系本身仍不可进入、不可交易，付费会使其声望 +1。
+          </p>
+        )}
         {route.path.length > 2 && (
           <p className="text-[10px] text-slate-500 mt-2">
             途经：{route.path.slice(1, -1).map((id) => displayNameOf(id)).join(' → ')}

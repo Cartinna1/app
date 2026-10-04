@@ -9,6 +9,13 @@ import { getGalaxyNode } from '@/data/galaxy/nodes';
 /** 宿敌声望阈值：达到此值及以下的势力封锁边境，不可进入、不可途经（与 checkRepBlock 同源） */
 export const HOSTILE_REP_THRESHOLD = -91;
 
+/** 宿敌「过路费」：**仅当不存在免费路线时**才提供，每途经一处宿敌节点收 20,000 金币。
+ *  付费同时给该势力 +1 声望——这是**宿敌状态下唯一的自救通道**（宿敌拒绝买/投/合同；若不回声望，
+ *  声望掉到 −91 后就永久无法回升，其后方节点会永久不可达）。宿敌节点**仍不能作为目的地**。
+ *  唯一真值：实扣（useTrade.travelToNode）与星图跃迁按钮显示共用本常量。 */
+export const HOSTILE_TOLL_GOLD = 20000;
+export const HOSTILE_TOLL_REP = 1;
+
 /** 当前不可通行的节点 id（宿敌势力节点；势力节点 id 与 factionId 同值） */
 export function getBlockedNodeIds(reputation: Record<string, number> | undefined): string[] {
   if (!reputation) return [];

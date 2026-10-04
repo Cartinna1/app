@@ -9,6 +9,7 @@
 
 import type { Mothership } from '@/types/game';
 import { shortestRoute, type GalaxyRoute } from '@/lib/galaxy/graph';
+import { HOSTILE_TOLL_GOLD } from '@/lib/galaxy/access';
 import { RELIC_JUMP_ACCELERATOR } from '@/data/relics';
 import { MODULE_GRAVITY_ANCHOR } from '@/data/modules';
 import { getPermaBonusValue } from '@/data/galaxy/permaBonuses';
@@ -24,16 +25,46 @@ export function getTravelReduction(ship: Mothership): number {
   return reduce;
 }
 
-/** 跃迁到 targetNodeId 的路线与**实际**回合数；不可达时 route 为 null、turns 为 0。
+/** 跃迁方案（唯一真值）：**免费路线优先**；只有完全没有免费路线时，才给"付费途经宿敌"方案。
+ *  ⚠ 宿敌节点**永远不能作为目的地**（由 caller 的 checkRepBlock 拦住），本函数只解决"途经"。 */
+export interface ShipTravelPlan {
+  route: GalaxyRoute | null;
+  turns: number;
+  tollRoute: GalaxyRoute | null;
+  tollTurns: number;
+  /** 途经的宿敌节点 id（按路径顺序，路径不重复节点，故天然去重） */
+  hostileVia: string[];
+  /** 过路费总额 = 途经宿敌数 × HOSTILE_TOLL_GOLD */
+  tollGold: number;
+}
+
+/** 跃迁到 targetNodeId 的方案（路线 + **实际**回合数 + 是否需要过路费）。
  *  blocked 传入被封禁的节点（宿敌势力），与星图高亮、实扣同一口径。 */
 export function getShipTravel(
   ship: Mothership,
   targetNodeId: string,
   blocked?: Iterable<string>
-): { route: GalaxyRoute | null; turns: number } {
-  const route = shortestRoute(ship.galaxy.currentNodeId, targetNodeId, blocked);
-  if (!route) return { route: null, turns: 0 };
-  return { route, turns: applyTravelReduction(ship, route.turns) };
+): ShipTravelPlan {
+  const blockedSet = new Set(blocked ? Array.from(blocked) : []);
+  const none: ShipTravelPlan = { route: null, turns: 0, tollRoute: null, tollTurns: 0, hostileVia: [], tollGold: 0 };
+  if (ship.galaxy.currentNodeId === targetNodeId) return none;
+
+  const free = shortestRoute(ship.galaxy.currentNodeId, targetNodeId, blockedSet);
+  if (free) return { route: free, turns: applyTravelReduction(ship, free.turns), tollRoute: null, tollTurns: 0, hostileVia: [], tollGold: 0 };
+
+  // 免费路线不可达 → 允许途经宿敌（付费）；目的地本身仍不能是宿敌（caller 已拦）
+  const open = shortestRoute(ship.galaxy.currentNodeId, targetNodeId);
+  if (!open) return none;
+  const hostileVia = open.path.filter((id) => blockedSet.has(id));
+  if (hostileVia.length === 0) return none; // 理论上不会发生：无宿敌途经就该有免费路线
+  return {
+    route: null,
+    turns: 0,
+    tollRoute: open,
+    tollTurns: applyTravelReduction(ship, open.turns),
+    hostileVia,
+    tollGold: hostileVia.length * HOSTILE_TOLL_GOLD,
+  };
 }
 
 /** 把减免应用到原始回合数上（各自钳到下限 1；口径 = max(1, 基础 − 减免合计)，勿在别处重写这段） */

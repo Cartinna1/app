@@ -71,7 +71,8 @@ src/
 | 价格波动、市场/政策刷新、合同、被动收入 | `lib/turn/priceFluctuation.ts` / `factionTurn.ts` / `contracts.ts` |
 | 合同物品名与持有量（大总览「进行中的合同」与贸易面板共用） | `lib/turn/contracts.ts` → `getContractItemName`（物品名）/ `getContractItemKind`（产品 vs 特产，`useTrade.completeContract` 扣货同用，勿再写 `startsWith('p')`）/ `getContractHeldCount`（采购数 `ship.products` 条目、走私读 `tradeStatus.inventory`）/ `getContractEarliestExpiry`（产品最早过期回合）——UI 勿再各写一份命名逻辑（曾有两份） |
 | 星图距离与跃迁回合数（贸易折价同源） | `lib/galaxy/graph.ts` → `TURN_UNIT=80`（坐标→回合）、`shortestRoute`/`getGalaxyTurns`（Dijkstra，宿敌节点不可途经）、`MAX_ROUTE_TURNS=9`（全程上限，与原距离矩阵量级一致）、`validateGalaxy()`；`data/factions.getDistance` 只是委托，**旧 DISTANCE_MATRIX 已删除**，勿再引回 |
-| 跃迁**实际**回合数（减免后） | `lib/galaxy/travel.ts` → `getShipTravel(ship, targetNodeId, blocked)` / `applyTravelReduction` / `getTravelReduction`——口径：最短路 → 引力锚定器 −1 → 跃迁加速器（r_010）−1 → 永久加成 `travelTurnReduce` −N，各自钳到下限 1。**实扣（`useTrade.travelToNode`）与显示（星图跃迁按钮）必须共用**：历史上只有实扣算了减免、UI 显示原始回合数 → 装了装置后界面多报 1~3 回合（玩家反馈"引力锚定器显示有分叉"）。贸易面板**不再显示**距离与回合（要看回合去星图） |
+| 跃迁**实际**回合数（减免后）+ 宿敌过路费方案 | `lib/galaxy/travel.ts` → `getShipTravel(ship, targetNodeId, blocked)` 返回 `ShipTravelPlan`（`route/turns` 免费方案；**没有免费路线时**才给 `tollRoute/tollTurns/hostileVia/tollGold` 付费方案）/ `applyTravelReduction` / `getTravelReduction`——口径：最短路 → 引力锚定器 −1 → 跃迁加速器（r_010）−1 → 永久加成 `travelTurnReduce` −N，各自钳到下限 1。**实扣（`useTrade.travelToNode`）与显示（星图跃迁按钮）必须共用**：历史上只有实扣算了减免、UI 显示原始回合数 → 装了装置后界面多报 1~3 回合（玩家反馈"引力锚定器显示有分叉"）。贸易面板**不再显示**距离与回合（要看回合去星图） |
+| 宿敌过路费（星图连通性兜底） | `lib/galaxy/access.ts` → `HOSTILE_TOLL_GOLD=20000`（每途经一处宿敌节点）/ `HOSTILE_TOLL_REP=1`（付费给该势力 +1 声望）。**规则**：仅当**不存在免费路线**时提供（星图按钮变琥珀色「付费途经（N 回合 · 过路费 X 金币）」）；**宿敌节点永远不能作为目的地**（`useTrade` 里目标节点的 `checkRepBlock` 仍然拦），付费只买到**途经**；每势力每回合声望上限 `applyRepChange` 的 `caps.toll=1`。**为什么必须有**：5/10 势力是星图割点（f01 封锁会切掉无声钟楼+空白神像厅两处遗迹），而宿敌拒绝买/投/合同 → 声望无任何回升通道 → 那部分星图与遗物**永久不可达**；过路费是唯一自救通道 |
 | 买卖 buff 剩余回合 | `lib/turn/factionTurn.ts` → `getBuffRemainingTurns(buff, turn)`（= `expiresTurn − 当前回合`，与结算"保留 `expiresTurn >= 下一回合`"同口径）/ `summarizeBuffs(list, turn)`（连乘倍率 + 最晚到期剩余回合）/ `isBuffExpiringSoon(turnsLeft)`（≤3 回合高亮）——贸易面板「势力列表」徽章与特产区逐条显示共用，勿再写 `expiresTurn - currentTurn` |
 | 星图通行与"当前势力" | `lib/galaxy/access.ts` → `HOSTILE_REP_THRESHOLD`（宿敌 −91，`useTrade.checkRepBlock` 同源）/ `getBlockedNodeIds` / `getCurrentFactionId(ship)`（停在非势力节点返回 null）/ `canEnterNode` |
 | 势力信息可见性（迷雾） | `lib/galaxy/knowledge.ts` → `getKnownFactionIds(ship)`（已探明势力 = `visitedNodes` 里的势力节点）/ `isFactionKnown` / `getKnownRelation(factionId, knownIds)`（只保留已到访的相关势力 + `hiddenCount`）/ **`getNodeDisplayName(ship, nodeId)`**（未到访 → 「未探测星系」；星图信息卡与"途经/跃迁中"提示、贸易面板目的地、**下一回合预告**共用——提示曾直接读节点真名，提前泄露了目标星系的类型）——星图信息卡与贸易面板「**势力列表**」共用，**勿再各写内联过滤**（曾出现星图过滤 / 贸易面板全露的分叉） |
@@ -226,14 +227,13 @@ src/
 | 总资产百分比收益 / 随机原料数量 / 动态收益清单 | `lib/turn/shipIncome.ts` → `ASSET_INCOME_PCT` / `getAssetPercentIncome` / `DYNAMIC_INCOME_AMOUNTS` / `getDynamicIncomeLines(ship, assets)`（总览文案与结算同源；金币类显示前套 `famineHalveGold`） |
 | 读档字段归一化（`galaxy` 子字段兜底） | `lib/save.ts` → `stateFromSave`（**唯一**归一化点：先铺完整 `createGalaxyState(...)` 再覆盖存档字段，末尾单独兜 `archaeology`）。两个 LOAD_SAVE 入口（`useSave.loadSave` / `importSave`）都经过它，**所以只需一处**；`migrateSave` 只做结构/语义改写（`selecting→scouting`、`expeditionVisited` 回填），**勿再加第二处字段级兜底**（那是死代码——判空永不成立） |
 
-### 10.1 本轮修掉的四条坑（对应第九节坑表的补充）
+### 10.1 本轮修掉的三条坑（对应第九节坑表的补充）
 
 | 坑 | 根因 | 防线 |
 |---|---|---|
 | 极地星球科研回合数"说 3 回合、实际 2 回合" | 动作层提示与面板进度分母读 `tech.researchTurns` 原值，而结算与预告走 `getResearchTargetTurns`（极地 −1）→ 三处口径二对一 | 全部改读 `colonyTurn.getResearchTargetTurns`（`useColonyResearch` + `ColonyPanel` 三处）。**任何"还剩几回合"的显示，先问结算那边算的是哪个函数** |
 | 停电预告撒谎（保护计数耗尽那一回合） | 预告只判"有没有保护"，不读保护**计数**；结算在计数递减到 0 的那回合会真的停电 | 判定抽成 `colonyTurn.resolveBlackout`，结算与预告共用。**"有没有保护"和"还剩几次"是两件事** |
-| 加 import 时重复 import 同一符号（TS2300 构建失败） | 给 `GameScreen.tsx` 的 `shipIncome` import 追加符号时，文件下方原本已有一行等价 import（不在替换块内） | **给文件加 import 前先 grep 该文件是否已有同一模块的 import**；改完用脚本遍历 import 绑定、检出同一文件的重复绑定（本轮全库 0 处） |
-| 同一文件里的同名变量被当成了"在作用域内"（TS2304 构建失败） | 给 `StockMarket.tsx` 移动端面板加 `getStockCooldownHint(..., currentTurn)` 时，**没有给它加 `currentTurn` prop**：文件名里确实有 `currentTurn`（桌面面板的 prop），但两个组件是两个作用域 | **grep 只能证明"这个文件里有这个符号"，证明不了"这行代码在它的作用域里"**。跨组件复制一行调用时，逐个核对它引用的每个标识符是否在该组件的 props / 局部变量里；同一文件有多个组件时尤其危险（桌面/移动双份面板是重灾区） |
+| 加 import 时重复 import 同一符号（TS2300 构建失败） | 给 `GameScreen.tsx` 的 `shipIncome` import 追加符号时，文件下方原本已有一行等价 import（不在替换块内） | **给文件加 import 前先 grep 该文件是否已有同一模块的 import**；改完用脚本遍历 import 绑定、检出同一文件的重复绑定（本轮全库 0 处）。同理：同一文件里同名变量≠同一作用域，跨组件复制调用行要逐个核对标识符来源 |
 
 ### 10.2 口径补充
 
@@ -255,4 +255,4 @@ src/
 ---
 
 *2026-08-22 建立。依据：五轮重构的实操记录 + 逐条源码核实。*
-*2026-08 全代码自检后补充第十节（新增真值清单、四条新坑、迷雾与饥荒口径、单点魔法数登记）。*
+*2026-08 全代码自检后补充第十节（新增真值清单、三条新坑、迷雾与饥荒口径、单点魔法数登记）。*

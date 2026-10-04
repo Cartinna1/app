@@ -6,7 +6,8 @@ import { getContractItemKind, SMUGGLING_SUCCESS_RATE } from '@/lib/turn/contract
 import { getBuffMultiplier } from '@/lib/turn/factionTurn';
 import { INVEST_GOLD_PER_REP, INVEST_MAX_PER_TURN, BLACK_MARKET_DEFAULT } from '@/data/exchangeRates';
 import { getShipTravel } from '@/lib/galaxy/travel';
-import { checkRepBlock, getBlockedNodeIds, getCurrentFactionId } from '@/lib/galaxy/access';
+import { checkRepBlock, getBlockedNodeIds, getCurrentFactionId, HOSTILE_TOLL_REP } from '@/lib/galaxy/access';
+import { firstMissing, payCost } from '@/lib/turn/resourceCost';
 import { getGalaxyNode } from '@/data/galaxy/nodes';
 import { MATERIAL_NAME_MAP, ALL_MATERIAL_IDS } from '@/data/materialNames';
 import { RELIC_DECIPHERER } from '@/data/relics';
@@ -25,11 +26,12 @@ export function useTrade(
     factionRepLog: Record<string, number> | undefined,
     factionId: string,
     delta: number,
-    capKey: 'buy' | 'invest' | 'contract' = 'buy'
+    capKey: 'buy' | 'invest' | 'contract' | 'toll' = 'buy'
   ): { factionReputation: Record<string, number>; factionRepLog: Record<string, number> } | null {
     const rep = { ...(factionReputation || {}) };
     const log = { ...(factionRepLog || {}) };
-    const caps: Record<string, number> = { buy: 2, invest: 10, contract: 99 };
+    // toll：宿敌过路费给的 +1 声望，每势力每回合最多 +1（付费本身受 20,000 金币/次 限制）
+    const caps: Record<string, number> = { buy: 2, invest: 10, contract: 99, toll: 1 };
     const cap = caps[capKey] || 99;
     const logKey = `${factionId}_${capKey}`; // 区分动作类型的独立上限
     const cur = log[logKey] || 0;
@@ -86,17 +88,39 @@ export function useTrade(
           const g = { ...s.galaxy };
           if (g.travelTurnsRemaining > 0) { result = { success: false, message: '正在跃迁中' }; return prev; }
           if (g.currentNodeId === targetNodeId) { result = { success: false, message: '已在此星系' }; return prev; }
-          // 最短路 + 减免（引力锚定器 / 跃迁加速器 / 永久加成）——唯一真值 lib/galaxy/travel.ts（星图按钮同源）
-          const { route, turns } = getShipTravel(s, targetNodeId, getBlockedNodeIds(prev.factionReputation));
-          if (!route) { result = { success: false, message: '无法抵达：航线被封锁的势力割断，可先提升该势力声望' }; return prev; }
+          // 最短路 + 减免 +（无免费路线时的）宿敌过路费——唯一真值 lib/galaxy/travel.ts（星图按钮同源）
+          const plan = getShipTravel(s, targetNodeId, getBlockedNodeIds(prev.factionReputation));
+          if (!plan.route && !plan.tollRoute) { result = { success: false, message: '无法抵达：航线被封锁的势力割断，可先提升该势力声望' }; return prev; }
+          const useToll = !plan.route;
+          const turns = useToll ? plan.tollTurns : plan.turns;
+          // 付费途经宿敌：一次性扣过路费（每处 20,000 金币），并给该势力 +1 声望（宿敌下唯一的自救通道）
+          let repPatched: { factionReputation: Record<string, number>; factionRepLog: Record<string, number> } | null = null;
+          if (useToll) {
+            const tollCost: Record<string, number> = { gold: plan.tollGold };
+            const missing = firstMissing(s, s.colony, tollCost);
+            if (missing) { result = { success: false, message: `过路费不足：${missing}` }; return prev; }
+            payCost(s, s.colony, tollCost);
+            pushGoldLog(s, prev.turn, -plan.tollGold, `宿敌过路费（途经 ${plan.hostileVia.length} 处）`);
+            let repCur = prev.factionReputation;
+            let logCur = prev.factionRepLog;
+            for (const fid of plan.hostileVia) {
+              const repRes = applyRepChange(repCur, logCur, fid, HOSTILE_TOLL_REP, 'toll');
+              if (!repRes) continue;
+              repCur = repRes.factionReputation; logCur = repRes.factionRepLog; repPatched = repRes;
+            }
+          }
           g.targetNodeId = targetNodeId;
           g.travelTurnsRemaining = turns;
           s.galaxy = g;
           ships[shipIndex] = s;
           // 迷雾：未探测过的目的地不暴露名称（抵达后才揭晓）
           const targetKnown = (s.galaxy.visitedNodes || []).includes(targetNodeId);
-          result = { success: true, message: targetKnown ? `开始跃迁，预计${turns}回合后抵达「${targetNode.name}」` : `开始跃迁，预计${turns}回合后抵达目标星系` };
-          return { ...prev, ships };
+          const tollNote = useToll ? `（途经宿敌 ${plan.hostileVia.length} 处，过路费 ${plan.tollGold.toLocaleString()} 金币）` : '';
+          result = {
+            success: true,
+            message: (targetKnown ? `开始跃迁，预计${turns}回合后抵达「${targetNode.name}」` : `开始跃迁，预计${turns}回合后抵达目标星系`) + tollNote,
+          };
+          return { ...prev, ships, ...(repPatched || {}) };
         },
       });
       return result;
