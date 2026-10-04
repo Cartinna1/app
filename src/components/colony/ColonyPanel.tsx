@@ -1,7 +1,7 @@
 import { useState, useMemo, useCallback, memo } from 'react';
 import type { Mothership } from '@/types/game';
 import type { PlanetDef } from '@/types/colony';
-import { getBuildableBuildings, getBuildingDef, getBuildingEffect, BUILDING_QUANTUM_LAB } from '@/data/colony/buildings';
+import { getBuildableBuildings, getBuildingDef, getBuildingEffect } from '@/data/colony/buildings';
 import { getPlanetById } from '@/data/colony/planets';
 import { getGalaxyNode } from '@/data/galaxy/nodes';
 import { getArchaeologySite } from '@/data/galaxy/archaeology';
@@ -85,20 +85,9 @@ function getBuffList(planet: PlanetDef): { name: string; desc: string; color: st
   return list;
 }
 
-function getOutputDesc(def: ReturnType<typeof getBuildingDef>): string {
-  if (!def) return '';
-  if (def.outputType === 'food') return `产食物: ${def.baseOutput}+入驻×${def.popFactor}/回合`;
-  if (def.outputType === 'alloy') return `产合金: ${def.baseOutput}+入驻×${def.popFactor}/回合`;
-  if (def.outputType === 'gold') return `产金币: ${def.goldOutputMin}-${def.goldOutputMax}/回合`;
-  if (def.outputType === 'stardust') return `产星尘: ${def.baseOutput}/回合`;
-  if (def.outputType === 'material') return `产${matLabel(def.outputMaterialId || '')}: 入驻×${def.popFactor}/回合`;
-  if (def.outputType === 'research') return `产科研点: ${def.popFactor}×入驻/回合`;
-  if (def.category === 'housing') return `人口上限+${def.id === 'B2' ? '20' : '5'}`;
-  if (def.id === 'B27') return '解锁招募领袖';
-  if (def.id === BUILDING_QUANTUM_LAB) return '研究实验室产出×1.5';
-  if (def.id === 'B28') return '每2回合+1人口';
-  return '';
-}
+// 建筑效果/产出描述的唯一真值在 data/colony/buildings.ts 的 getBuildingEffect
+// （历史上本文件另有一份 getOutputDesc，与它给出的人口上限/量子实验室文案互相矛盾；
+//  现已合并——数值全部读 BuildingDef，科技解锁提示与建筑卡片显示同一份文本）。
 
 const CAT_COLORS: Record<string, string> = {
   housing: 'bg-blue-900/30 text-blue-400', food: 'bg-green-900/30 text-green-400',
@@ -529,7 +518,7 @@ function ColonyPanel(props: ColonyPanelProps) {
                 {!liveOut && def.minPop > 0 && inst.assignedPop > 0 && inst.assignedPop < def.minPop && (
                   <span className="text-sm text-red-400 ml-2">⚠ 人口不足（需≥{def.minPop}人）</span>
                 )}
-                {!liveOut && !(def.minPop > 0 && inst.assignedPop > 0 && inst.assignedPop < def.minPop) && <span className="text-sm text-slate-600 ml-2">{getOutputDesc(def)}</span>}
+                {!liveOut && !(def.minPop > 0 && inst.assignedPop > 0 && inst.assignedPop < def.minPop) && <span className="text-sm text-slate-600 ml-2">{getBuildingEffect(def)}</span>}
                 {def.powerConsumption !== undefined && def.powerConsumption > 0 && (
                   <span className="text-sm text-amber-500 ml-2">⚡ {def.powerConsumption}</span>
                 )}
@@ -569,7 +558,7 @@ function ColonyPanel(props: ColonyPanelProps) {
                       <div>
                         <span className={`text-sm ${CAT_COLORS[def.category] || 'text-slate-500'} px-1.5 py-0.5 rounded mr-1`}>{CAT_LABELS[def.category] || def.category}</span>
                         <span className="text-sm text-slate-200 font-bold">{def.name}</span>
-                        <span className="text-sm text-cyan-400 ml-2">{getOutputDesc(def)}</span>
+                        <span className="text-sm text-cyan-400 ml-2">{getBuildingEffect(def)}</span>
                       </div>
                       <button onClick={() => { const r = onBuild(def.id); showMsg(r.message, r.success ? 'success' : 'error'); }}
                         disabled={limited}

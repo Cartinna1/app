@@ -1,6 +1,19 @@
 import { useCallback } from 'react';
 import type { GameState } from '@/types/game';
-import { GOLD_LOG_LIMIT, getStockFeeMult, getStockSellFeeMult } from '@/data/gameData';
+import { getStockFeeMult, getStockSellFeeMult } from '@/data/gameData';
+import { pushGoldLog } from '@/lib/turn/goldLog';
+
+/** 股票 T+1 冷却判定（**唯一真值**）：买入当回合不能卖，`买入回合 + 1` 起可卖。
+ *  结算（sellStock）、桌面表格与移动面板的"冷却"标记共用，勿再各写 `currentTurn <= buyTurn`。 */
+export function isStockCooling(buyTurn: number | undefined, turn: number): boolean {
+  return buyTurn !== undefined && turn <= buyTurn;
+}
+
+/** 冷却提示文案（**唯一真值**：两处面板文案与结算报错共用，勿再各自拼"第 N 回合"） */
+export function getStockCooldownHint(buyTurn: number, currentTurn: number): string {
+  const turnsLeft = buyTurn + 1 - currentTurn;
+  return turnsLeft > 1 ? `第${buyTurn + 1}回合后可卖出（还需 ${turnsLeft - 1} 回合）` : `第${buyTurn + 1}回合后可卖出`;
+}
 
 export function useStock(
   dispatch: React.Dispatch<{ type: 'FUNCTIONAL_UPDATE'; updater: (state: GameState) => GameState }>
@@ -25,7 +38,7 @@ export function useStock(
           if (ship.gold < cost) { result = { error: '金币不足' }; return prev; }
 
           ship.gold -= cost;
-          ship.goldLog = [{ turn: prev.turn, amount: -cost, reason: `买入股票「${stock.name}」x${quantity}`, balanceAfter: ship.gold }, ...ship.goldLog].slice(0, GOLD_LOG_LIMIT);
+          pushGoldLog(ship, prev.turn, -cost, `买入股票「${stock.name}」x${quantity}`);
           ship.stockHoldings = { ...ship.stockHoldings };
           ship.stockHoldings[stockId] = (ship.stockHoldings[stockId] || 0) + quantity;
           ship.stockBuyTurn = { ...ship.stockBuyTurn, [stockId]: prev.turn };
@@ -54,7 +67,7 @@ export function useStock(
           const ships = [...prev.ships];
           const ship = { ...ships[shipIndex] };
           const bt = ship.stockBuyTurn[stockId];
-          if (bt !== undefined && prev.turn <= bt) { result = { error: `第${bt}回合买入，需第${bt + 1}回合后卖出` }; return prev; }
+          if (bt !== undefined && isStockCooling(bt, prev.turn)) { result = { error: `买入后需等待：${getStockCooldownHint(bt, prev.turn)}` }; return prev; }
           const stock = prev.stocks.find((s) => s.id === stockId);
           if (!stock) { result = { error: '股票不存在' }; return prev; }
           const hold = ship.stockHoldings[stockId] || 0;
@@ -71,7 +84,7 @@ export function useStock(
 
           ship.gold += revenue;
           if (ship.bankrupt && ship.gold > 0) ship.bankrupt = false;
-          ship.goldLog = [{ turn: prev.turn, amount: revenue, reason: `卖出股票「${stock.name}」x${quantity}`, balanceAfter: ship.gold }, ...ship.goldLog].slice(0, GOLD_LOG_LIMIT);
+          pushGoldLog(ship, prev.turn, revenue, `卖出股票「${stock.name}」x${quantity}`);
           ship.stockHoldings = { ...ship.stockHoldings };
           ship.stockHoldings[stockId] = hold - quantity;
           ship.stockCosts = { ...ship.stockCosts };

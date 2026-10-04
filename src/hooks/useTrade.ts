@@ -1,7 +1,7 @@
 import { useCallback } from 'react';
 import type { GameState, Mothership } from '@/types/game';
 import { FACTIONS, getSellPrice, RELATION_MATRIX } from '@/data/factions';
-import { RECIPES, GOLD_LOG_LIMIT } from '@/data/gameData';
+import { RECIPES } from '@/data/gameData';
 import { getContractItemKind, SMUGGLING_SUCCESS_RATE } from '@/lib/turn/contracts';
 import { getBuffMultiplier } from '@/lib/turn/factionTurn';
 import { INVEST_GOLD_PER_REP, INVEST_MAX_PER_TURN, BLACK_MARKET_DEFAULT } from '@/data/exchangeRates';
@@ -12,6 +12,7 @@ import { MATERIAL_NAME_MAP, ALL_MATERIAL_IDS } from '@/data/materialNames';
 import { RELIC_DECIPHERER } from '@/data/relics';
 import { famineHalveGold, BANKRUPT_TURNS } from '@/lib/turn/shipTurn';
 import { getSpecialtyBuyUnitPrice, getSpecialtySellRevenue, getBlackMarketTotal } from '@/lib/turn/tradePrice';
+import { pushGoldLog } from '@/lib/turn/goldLog';
 
 
 export function useTrade(
@@ -139,7 +140,7 @@ export function useTrade(
           const totalCost = price * quantity;
           if (s.gold < totalCost) { result = { success: false, message: `金币不足，需${totalCost}` }; return prev; }
           s.gold -= totalCost;
-          s.goldLog = [{ turn: prev.turn, amount: -totalCost, reason: `购买「${faction.specialtyName}」x${quantity}`, balanceAfter: s.gold }, ...s.goldLog].slice(0, GOLD_LOG_LIMIT);
+          pushGoldLog(s, prev.turn, -totalCost, `购买「${faction.specialtyName}」x${quantity}`);
           s.tradeStatus = { ...s.tradeStatus };
           s.tradeStatus.inventory = { ...s.tradeStatus.inventory };
           s.tradeStatus.inventory[faction.id] = (s.tradeStatus.inventory[faction.id] || 0) + quantity;
@@ -195,7 +196,7 @@ export function useTrade(
           const totalRevenue = getSpecialtySellRevenue(quantity, sellPrice, sellBuffMult, s.relics.map((r) => r.id), s.installedModuleIds);
           s.gold += totalRevenue;
           if (s.bankrupt && s.gold > 0) s.bankrupt = false;
-          s.goldLog = [{ turn: prev.turn, amount: totalRevenue, reason: `卖出「${faction.specialtyName}」x${quantity}`, balanceAfter: s.gold }, ...s.goldLog].slice(0, GOLD_LOG_LIMIT);
+          pushGoldLog(s, prev.turn, totalRevenue, `卖出「${faction.specialtyName}」x${quantity}`);
           s.tradeStatus = { ...s.tradeStatus };
           s.tradeStatus.inventory = { ...s.tradeStatus.inventory };
           s.tradeStatus.inventory[factionId] = invCount - quantity;
@@ -284,7 +285,7 @@ export function useTrade(
           const actualAmount = INVEST_GOLD_PER_REP;
           s.gold -= actualAmount;
           const factionName = FACTIONS.find((f) => f.id === factionId)?.name || factionId;
-          s.goldLog = [{ turn: prev.turn, amount: -actualAmount, reason: `投资「${factionName}」`, balanceAfter: s.gold }, ...s.goldLog].slice(0, GOLD_LOG_LIMIT);
+          pushGoldLog(s, prev.turn, -actualAmount, `投资「${factionName}」`);
           const repResult = applyRepChange(prev.factionReputation, prev.factionRepLog, factionId, repGain, 'invest');
           ships[shipIndex] = s;
           const repNow = (repResult?.factionReputation ?? prev.factionReputation ?? {})[factionId] || 0;
@@ -341,7 +342,7 @@ export function useTrade(
           // 饥荒减半的唯一真值在 lib/turn/shipTurn.ts（勿就地再写一份）
           const checkBankrupt = () => { if (s.gold < 0 && !s.bankrupt) { s.bankrupt = true; s.bankruptTimer = BANKRUPT_TURNS; } };
           const finalGold = famineHalveGold(s.food, goldChange);
-          if (finalGold !== 0) { s.gold += finalGold; checkBankrupt(); if (s.gold >= 0 && s.bankrupt) { s.bankrupt = false; s.bankruptTimer = 0; } s.goldLog = [{ turn: prev.turn, amount: finalGold, reason: '打探消息', balanceAfter: s.gold }, ...s.goldLog].slice(0, GOLD_LOG_LIMIT); }
+          if (finalGold !== 0) { s.gold += finalGold; checkBankrupt(); if (s.gold >= 0 && s.bankrupt) { s.bankrupt = false; s.bankruptTimer = 0; } pushGoldLog(s, prev.turn, finalGold, '打探消息'); }
           let alloyText = '';
           if (Math.random() < 0.7) { const alloyGain = Math.floor(Math.random() * 3) + 3; s.alloy += alloyGain; alloyText = `回收了${alloyGain}个合金。`; }
           const message = `${story}${alloyText?' '+alloyText:''} ${finalGold>0?'获得+'+finalGold+'金币':finalGold<0?'损失'+finalGold+'金币':''}`.trim();
@@ -440,7 +441,7 @@ export function useTrade(
 
         // 发放奖励
         s.gold += contract.rewardGold;
-        s.goldLog = [{ turn: prev.turn, amount: contract.rewardGold, reason: '合同奖励', balanceAfter: s.gold }, ...s.goldLog].slice(0, GOLD_LOG_LIMIT);
+        pushGoldLog(s, prev.turn, contract.rewardGold, '合同奖励');
         const repResult = applyRepChange(prev.factionReputation, prev.factionRepLog, contract.factionId, contract.rewardRep, 'contract');
         contracts.splice(idx, 1);
         ships[shipIndex] = s;
@@ -465,7 +466,7 @@ export function useTrade(
         const cost = getBlackMarketTotal(factionId, prev.factionPrices, buyBuffMult, prev.blackMarketMultiplier || BLACK_MARKET_DEFAULT, qty);
         if (s.gold < cost) { result = { success: false, message: `金币不足，需${cost}` }; return prev; }
         s.gold -= cost;
-        s.goldLog = [{ turn: prev.turn, amount: -cost, reason: `黑市采购「${faction.specialtyName}」x${qty}`, balanceAfter: s.gold }, ...s.goldLog].slice(0, GOLD_LOG_LIMIT);
+        pushGoldLog(s, prev.turn, -cost, `黑市采购「${faction.specialtyName}」x${qty}`);
         s.tradeStatus = { ...s.tradeStatus };
         s.tradeStatus.inventory = { ...s.tradeStatus.inventory };
         s.tradeStatus.inventory[factionId] = (s.tradeStatus.inventory[factionId] || 0) + qty;

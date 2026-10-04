@@ -88,7 +88,7 @@ src/
 | 原料中文名 | `data/materialNames.ts` → `MATERIAL_NAME_MAP` / `getMaterialName`（gold_ore=黄金、quantum=量子簇、silicon=硅片，禁止硬编码译名） |
 | 配方生产回合数 | `data/gameData.ts` 的 `RECIPES`（`INITIAL_PRODUCTS` 不重复维护，由 `createProducts()` 派生） |
 | 生产上限加成 | `data/modules.ts` → `getProductionLimitBonus` |
-| 殖民地建筑「实际成本与上限」 | `lib/colony/costs.ts` → `getEffectiveMaxCount`（数量上限 = 基础 `maxCount` + 领袖 `levelExtras.buildingMaxCountBonus[建筑id]`，全数据驱动无硬编码）/ `getEffectiveMaxPop`（建筑人口上限，含 popCapBonus 覆盖）/ `getBuildingCostProfile`（金币·合金·原料·工期，含星球倍率+领袖减免）/ `getRecruitCostPerPop`（招募单价，含星球修正+领袖减免）/ `RECRUIT_BASE_COST`（2000 基础价锚点）——hook 结算与 UI 显示必须同源，勿就地重算（历史上面板只算星球倍率导致显示与实扣分叉） |
+| 殖民地建筑「实际成本与上限」 | `lib/colony/costs.ts` → `getEffectiveMaxCount`（数量上限 = 基础 `maxCount` + 领袖 `levelExtras.buildingMaxCountBonus[建筑id]`，全数据驱动无硬编码）/ `getEffectiveMaxPop`（建筑人口上限，含 popCapBonus 覆盖）/ `getBuildingCostProfile`（金币·合金·原料·工期，含星球倍率+领袖减免）/ `getRecruitCostPerPop`（招募单价，含星球修正+领袖减免）/ `RECRUIT_BASE_COST`（2000 基础价锚点）/ `getBuildingRefundProfile`（取消/拆除返还 = 实付 ×0.4 金币、×0.7 合金与原料）；人口上限的唯一真值是 `BuildingDef.popCapBonus`（B1=5 / B2=20）+ `planets.buffs.housingCapDelta`（遗落星球 B1 +3）——hook 结算与 UI 显示必须同源，勿就地重算（历史上面板只算星球倍率导致显示与实扣分叉；B2 文案曾写 10 而实给 20） |
 | 产品卖出价加成 | `data/modules.ts` → `getSellPriceBreakdown`（母舰技能+事件套装+联盟，逻辑层与显示层共用；含 multiplier/eventPercent/skillPercent/alliancePercent） |
 
 ## 四、改 GameState 字段：存档三处同步
@@ -123,7 +123,7 @@ src/
 - 星图与考古数值锚点：`lib/galaxy/graph.ts` 的 `TURN_UNIT=80`（坐标→回合，改它等于同时改跃迁与贸易折价）与 `MAX_ROUTE_TURNS=9`；`lib/galaxy/archaeologyTurn.ts` 的成功率常数（`BASE_SUCCESS_RATE=0.75`、`LEADER_LEVEL_BONUS=0.05`、`DIFFICULTY_PENALTY=0.18`、`SAFE_CHOICE_BONUS=0.10`、`RELIC_SUCCESS_BONUS=0.10`、钳制 0.15~0.90）、`HALT_CHANCE=0.02`（**每次自然失败**独立掷一次、恒 2%：命中则该遗迹永久封闭，走数据里的 `site.haltText` + `halt.webp` 剧情——不是"失败无法挖掘"的粗暴提示；触发时不再叠加本次危险结算；**「稳妥推进」保底走成功分支、不掷这一项**。注意区分"单次恒定 2%"与"整处遗迹封闭率"＝至少中一次，后者随失败次数上升）、`SAFE_BONUS_MULT=0.5` / `RISKY_BONUS_MULT=2`（抉择对**阶段小奖励**的折扣；与稳妥推进的 0.5 相乘，最终奖励不折扣）、`DISCOVERY_CHANCE=0.3`、`FAIL_EXTRA_TURNS=1`、`DANGER_LOSS_RATIO=0.5`、`RESEARCH_TO_GOLD=10`，以及 `data/galaxy/archaeology.ts` 里每处遗迹的 `turns/difficulty/cost/dangerRate/haltText`（改动前先出前后对比表）
   - 成功率口径（2026 下调后）：难度0 80~90%、难度1 62~72%、难度2 44~54%、难度3 26~36%（低→高领袖等级）；42 阶段平均 51%（按各遗迹门槛等级）/ 59%（Lv3）。**改这几个常数必须重跑"逐难度成功率 + 每处遗迹被封闭的概率"**。⚠ `HALT_CHANCE` 是**单次独立**判定（每次自然失败恒 2%，不随次数变大）；但"一处遗迹最终被封闭"是"至少中一次"，随失败次数按 `1−(1−p)^失败次数` 上升——蒙特卡洛实测（2 万次/遗迹）：用保底平均 **6.1%**（门槛等级）/ 3.9%（Lv3+手稿），不用保底平均 9.5%，单处最高 9.4%~16.6%。别把"单次恒定"和"整处概率"混为一谈
 - **特产卖出乘数**（`data/factions.ts`）：`DIST_SLOPE=0.05` + `DIST_QUADRATIC=0.015`（距离折价 `1+0.05d+0.015d²`）+ `MAX_SELL_MULTIPLIER=4.0`（距离×政策×波动的上限）。**为什么带二次项**：距离同时是"要跑的回合数"和加价乘数，纯线性会让"每回合利润"随距离单调下降（实测 dist9 只有近程的 19%，远程变成坏选择）；改这两个系数前必须重跑"按距离分桶的每回合利润对比表"（样本 = 90 个势力对 × 10 档政策）。改动**下个回合生效**（乘数每回合算好存入 `factionSellMultipliers`），旧档自愈，无需存档迁移
-- `0.4` / `0.7` 建筑取消/拆除返还（`hooks/colony/useColonyBuildings.ts`）
+- `0.4` / `0.7` 建筑取消/拆除返还：**按实付成本算**（唯一真值 `lib/colony/costs.ts` → `getBuildingRefundProfile`：金币 ×0.4、合金与原料 ×0.7；实扣走 `getBuildingCostProfile`），调用点在 `hooks/colony/useColonyBuildings.ts`。**勿按基础价算**——低造价倍率配置下曾可"建了立刻取消"无限套利（实测每循环净赚 3000 金币 + 15 硅片），且高倍率星球上玩家只能拿回实付的 33%
 - **星图节点坐标**（`data/galaxy/nodes.ts`）：坐标同时决定跃迁回合数与贸易距离折价，属数值锚点。当前势力间最短路 **2~9 回合、均值 ≈5.87**（`validateGalaxy()` 的断言上限是 `MAX_ROUTE_TURNS=9`）。改任何坐标前先出"候选位置对比表"，候选必须核四项：与目标节点的新回合数、到最近邻居的距离、势力对 min/max/均值、**该节点其它航道回合数是否被连带改变**（只改目标航道的候选优先）；改完重跑 `validateGalaxy()` + 势力对区间 + 全图最小间距。注意四舍五入边界会骗人：`f03–f04` 曾因距离 119.97 → 119.97/80 = 1.4996 被判成 **1 回合**（表格里显示成 120 时看不出来）
 - **领袖升级费用**（唯一真值：`data/colony/leaders.ts` 的 `LEADER_UPGRADE_COST` / `getLeaderUpgradeCost`，是 **cost 对象**：**Lv1→2 = 50,000 金币，Lv2→3 = 150 合金**；UI 与 hook 均从该处取，校验/扣减走 `lib/turn/resourceCost` 的 `firstMissing`/`canAfford`/`payCost`，勿就地硬编码数字或另写一套扣费）
 - **开启远征费用**（`data/colony/expeditions.ts` 的 `EXPEDITION_COST`，cost 对象：**20,000 金币 + 50 合金**；同样走 `firstMissing`/`payCost`；`startExpedition` **没有领袖等级门槛**，Lv3 只跟终极技能解锁有关）
@@ -187,4 +187,68 @@ src/
 
 ---
 
+## 十、2026-08 全代码自检：新增/变更的唯一真值
+
+> 本轮做了两批收敛（清单与证据见 `自检报告-唯一真值·硬编码·数值分叉.md`）：第一批为零数值替换，第二批含经确认的数值决策（E10 市场区间统一、B2 人口上限改文案、股票卖出费率、返还改实付口径、旧投资系统退役）。
+> 下面这些**新的唯一真值**，改相关逻辑时必须从它们取值，别在 hook/UI 里再写一份。
+
+| 逻辑 | 唯一位置 |
+|---|---|
+| 资源兑换价（合金 1200 / 食物 800 / 1 星尘→5 合金 / 1 合金→2 食物 / 1 星尘→20 食物） | `data/exchangeRates.ts` |
+| 星尘集市价格与效果（随机原料 4、兑换金币 2、刷新政策 15、售价加成 8/15 与 5 回合） | `data/exchangeRates.ts` → `STARDUST_SHOP`（UI 条目表只留图标/配色，数值从这里读） |
+| 投资与黑市倍率（固定 8000 金币→+1 声望、每回合 10 次；黑市默认 3.2、浮动 1.3） | `data/exchangeRates.ts` → `INVEST_GOLD_PER_REP` / `INVEST_MAX_PER_TURN` / `BLACK_MARKET_DEFAULT` / `BLACK_MARKET_SPREAD` |
+| 股票买卖手续费 | `data/gameData.ts` → `getStockFeeMult`（买入）/ `getStockSellFeeMult`（卖出），费率由同一个 `STOCK_FEE_RATE=0.03` 派生（黄金集团 0、万众一心减半 = 0.985）。**显示侧禁止再用 `2 − 买入费率` 反推卖出倍率**（会得到 1.015，与实收差 4.6%） |
+| 股票 T+1 冷却 | `hooks/useStock.ts` → `isStockCooling(buyTurn, turn)` / `getStockCooldownHint`（结算 + 桌面/移动面板共用） |
+| 金币流水写入与上限 | `lib/turn/goldLog.ts` → `pushGoldLog(ship, turn, amount, reason)`（内部裁到 `GOLD_LOG_LIMIT=200`）。**调用前必须已经改完金币**（函数读当前金币作为 balanceAfter），34 个调用点已逐处核对 |
+| 事件日志上限 | `data/gameData.ts` → `EVENT_LOG_LIMIT=100`（reducer 与 useTurn 的回合日志都按它裁剪） |
+| 破产/饥荒倒计时 | `lib/turn/shipTurn.ts` → `BANKRUPT_TURNS` / `FAMINE_TURNS`（=10） |
+| 领袖容量基数与科技加成 | `data/colony/leaders.ts` → `LEADER_CAP_BASE=3`；科技加成读 `techs.ts` 的 `leaderCapBonus` 字段（**勿再按 T23/T24 硬编码**） |
+| 停电保护与停电判定 | `lib/colony/colonyTurn.ts` → `resolveBlackout(colony, projectedEnergy, hasProtection, span)`（结算写回计数，`nextTurnHints` 用同一次调用做预告） |
+| 建筑返还（取消/拆除） | `lib/colony/costs.ts` → `getBuildingRefundProfile(def, colony)`：按**实付成本**×0.4 金币 / ×0.7 合金与原料 |
+| 建筑人口上限 / 克隆中心间隔 | `BuildingDef.popCapBonus`（B1=5 / B2=20）+ `planets.buffs.housingCapDelta`（遗落 B1 +3）/ `BuildingDef.cloneInterval`（B28=2） |
+| 建筑效果描述 | `data/colony/buildings.ts` → `getBuildingEffect`（科技解锁提示与建筑卡片共用；`ColonyPanel` 里那份 `getOutputDesc` 已删除） |
+| 手动装置的消耗/产出 | `ModuleDefinition.manualCost` / `manualGain`（结算走 `resourceCost` 的 `firstMissing`/`payCost`，面板置灰读同一字段） |
+| 原料购买成本 | `data/modules.ts` → `getMaterialBuyCost`（末尾一次 round；实扣与面板显示/置灰共用） |
+| 产品卖出单价 | `data/modules.ts` → `getProductSellUnitPrice` |
+| 产品保质期与过期回合 | `data/modules.ts` → `PRODUCT_SHELF_LIFE` / `RESERVE_BAY_EXPIRY_BONUS` / `getProductExpiry(turn, installedModuleIds)`（立即完成与队列完成两条路径共用） |
+| 产品原料成本快照 | `data/modules.ts` → `computeProductMaterialCost(recipe, materials)`（入库记账与面板展示共用） |
+| 「还剩几回合」 | `lib/turn/expiry.ts` → `getTurnsUntil(turn, expiresAt)`；合同用 `lib/turn/contracts.ts` → `getContractRemainingTurns(contract, turn)` |
+| buff 连乘倍率 | `lib/turn/factionTurn.ts` → `getBuffMultiplier(list)` |
+| 市场库存/需求区间 | `lib/turn/factionTurn.ts` → `rollMarketBuyStock()`（500~800）/ `rollMarketSellDemand()`（500~700）——**开局（SELECT_SHIP）与每回合刷新共用同一套**（历史上是 800~1200 / 900~1500 与另一套并存，已确认为遗留） |
+| 奇观阶段投入 | `data/colony/wonders.ts` → `toStageCost(stage)`（11 个扁平字段 → cost 对象），校验/扣减走 `resourceCost`，面板显示同源 |
+| 免费人口 | `lib/colony/colonyTurn.ts` → `getFreePopGains(colony, turn)`（结算与「下一回合预告」共用，含人口上限钳制） |
+| 远征付费层 | `lib/colony/expeditionTurn.ts` → `isPaidStage(stage)`（B/C/D = 3~5） |
+| 走私成功率 | `lib/turn/contracts.ts` → `SMUGGLING_SUCCESS_RATE=0.65`（贸易面板给出口） |
+| 原料 id 全集 | `data/materialNames.ts` → `ALL_MATERIAL_IDS` / `BASIC_MATERIAL_IDS` |
+| 唯一 id 生成 | `lib/id.ts` → `createUid(prefix)`（建筑/生产/贷款/事件日志/考古日志）。**有意保留的例外**：合同 id `c_回合_势力_序号`（自解释、可定位）与遗落星球赠品 `B7_ruin_1` 等初始化字面量 |
+| 总资产百分比收益 / 随机原料数量 / 动态收益清单 | `lib/turn/shipIncome.ts` → `ASSET_INCOME_PCT` / `getAssetPercentIncome` / `DYNAMIC_INCOME_AMOUNTS` / `getDynamicIncomeLines(ship, assets)`（总览文案与结算同源；金币类显示前套 `famineHalveGold`） |
+
+### 10.1 本轮修掉的三条坑（对应第九节坑表的补充）
+
+| 坑 | 根因 | 防线 |
+|---|---|---|
+| 极地星球科研回合数"说 3 回合、实际 2 回合" | 动作层提示与面板进度分母读 `tech.researchTurns` 原值，而结算与预告走 `getResearchTargetTurns`（极地 −1）→ 三处口径二对一 | 全部改读 `colonyTurn.getResearchTargetTurns`（`useColonyResearch` + `ColonyPanel` 三处）。**任何"还剩几回合"的显示，先问结算那边算的是哪个函数** |
+| 停电预告撒谎（保护计数耗尽那一回合） | 预告只判"有没有保护"，不读保护**计数**；结算在计数递减到 0 的那回合会真的停电 | 判定抽成 `colonyTurn.resolveBlackout`，结算与预告共用。**"有没有保护"和"还剩几次"是两件事** |
+| 加 import 时重复 import 同一符号（TS2300 构建失败） | 给 `GameScreen.tsx` 的 `shipIncome` import 追加符号时，文件下方原本已有一行等价 import（不在替换块内） | **给文件加 import 前先 grep 该文件是否已有同一模块的 import**；改完用脚本遍历 import 绑定、检出同一文件的重复绑定（本轮全库 0 处） |
+
+### 10.2 口径补充
+
+- **黑市受迷雾约束**（`TradePanel` 黑市势力选择器）：未探明势力只显示 `?` 锁定占位，不露名称/特产/市场价——与「势力列表」同口径（`lib/galaxy/knowledge.getKnownFactionIds`）。这是第三节迷雾条目的适用面，不是例外。
+- **饥荒减半（`famineHalveGold`）消费点补齐**：除原有股息/誊录仪/招财猫/投资收益/打探/事件外，新增**声望被动收入**（`factionTurn.applyPassiveIncome`）与**量子生物反应器转化**（`useModule`，文案标注"（饥荒减半）"）。**新增任何金币收益都要问一句"饥荒时该不该减半"**。
+- **旧投资系统已退役**：`invested` 不再有写入点（读档时一次性折成声望后清零），`shipTurn` 的"投资收益/档位6补给"分支与总览的投资区块已删除；投资回报统一走 `REPUTATION_TIERS` 被动收入与买价折扣。
+
+### 10.3 本轮登记的单点魔法数（改前先出前后对比表）
+
+政策时长 3~5 回合（`factionTurn`）、合同档位表 `[16, 26, 30000, 40000]`（`contracts.ts`）、声望阈值表（`factions.REPUTATION_TIERS`）、`RECRUIT_BASE_COST=2000`、`BLACKOUT_GUARD_TURNS=10`、`PRODUCT_SHELF_LIFE=3`、市场区间 500~800 / 500~700、股票费率 3%（万众一心 1.5%、黄金集团 0）、`EXPEDITION_UNLOCK_COUNT=12`、`GOLD_LOG_LIMIT=200` / `EVENT_LOG_LIMIT=100`、考古成功率常数（第七节）。
+
+### 10.4 已知未做项（有意留待）
+
+- `hasSave()` 仍每次渲染读一次 localStorage（性能细节；改动会影响"导入存档后按钮是否立刻刷新"的交互）。
+- 星球特性文案（`ColonyPanel.getBuffList`）仍是手写 14 组，与 `planets.buffs` 逐条核对一致但未数据化——**改星球数值时要同步改文案**。
+- `TradePanel` 逐条 buff 行未用 `isBuffExpiringSoon` 高亮（只有势力列表徽章有）。
+- `permaBonuses.getPermaBonusDef` 暂无调用方（留给将来的"永久加成图鉴"）。
+
+---
+
 *2026-08-22 建立。依据：五轮重构的实操记录 + 逐条源码核实。*
+*2026-08 全代码自检后补充第十节（新增真值清单、三条新坑、迷雾与饥荒口径、单点魔法数登记）。*

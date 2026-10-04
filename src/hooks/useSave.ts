@@ -1,8 +1,10 @@
 import { useCallback } from 'react';
-import type { GameState, Mothership } from '@/types/game';
+import type { GameState } from '@/types/game';
 import { SAVE_KEY, validateSaveData, buildSaveData, stateFromSave } from '@/lib/save';
 
 export function useSave(
+  /** 当前状态：仅 exportSave 需要——导出的是**此刻**的状态，而不是 localStorage 里上一次自动存档 */
+  gameState: GameState,
   dispatch: React.Dispatch<
     | { type: 'LOAD_SAVE'; state: GameState }
     | { type: 'RESET_GAME' }
@@ -41,17 +43,18 @@ export function useSave(
    * 导出存档文件下载
    * 命名规则：YYYYMMDDHHMM + 舰队名称 + 回合数 + .json
    * 例：202607151633黄金舰队44.json
+   * ⚠ 序列化的是**当前状态**（buildSaveData(gameState)），不是 localStorage 里上一次自动存档：
+   *   自动存档只在回合末写入，若直接下载 localStorage，回合中途导出会拿到"上一回合末"的旧档，
+   *   而文件名却写当前回合（内容与文件名不符、丢掉最近一回合的操作）。
    */
-  const exportSave = useCallback((ships: Mothership[], turn: number): boolean => {
-    const data = localStorage.getItem(SAVE_KEY);
-    if (!data) return false;
-
+  const exportSave = useCallback((): boolean => {
     try {
       const now = new Date();
       const timeStr = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}${String(now.getDate()).padStart(2, '0')}${String(now.getHours()).padStart(2, '0')}${String(now.getMinutes()).padStart(2, '0')}`;
-      const shipName = ships[0]?.name || '舰队';
-      const filename = `${timeStr}${shipName}${turn}.json`;
+      const shipName = gameState.ships[0]?.name || '舰队';
+      const filename = `${timeStr}${shipName}${gameState.turn}.json`;
 
+      const data = JSON.stringify(buildSaveData(gameState));
       const blob = new Blob([data], { type: 'application/json' });
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
@@ -63,7 +66,7 @@ export function useSave(
       URL.revokeObjectURL(url);
       return true;
     } catch { return false; }
-  }, []);
+  }, [gameState]);
 
   /**
    * 从文件导入存档

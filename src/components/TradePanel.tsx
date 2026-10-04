@@ -3,7 +3,7 @@ import type { Mothership, Faction, TradePolicy, PolicyEffect, FactionContract } 
 import { getSellPrice, getReputationTier } from '@/data/factions';
 import { summarizeBuffs, isBuffExpiringSoon, getBuffRemainingTurns, getBuffMultiplier } from '@/lib/turn/factionTurn';
 import { getSpecialtyBuyUnitPrice, getSpecialtySellRevenue, getBlackMarketTotal, getBlackMarketMaxQty } from '@/lib/turn/tradePrice';
-import { getContractItemName, SMUGGLING_SUCCESS_RATE } from '@/lib/turn/contracts';
+import { getContractItemName, getContractRemainingTurns, SMUGGLING_SUCCESS_RATE } from '@/lib/turn/contracts';
 import { RELIC_DECIPHERER } from '@/data/relics';
 import { BLACK_MARKET_DEFAULT, INVEST_GOLD_PER_REP, INVEST_MAX_PER_TURN } from '@/data/exchangeRates';
 import { getGalaxyNode } from '@/data/galaxy/nodes';
@@ -633,7 +633,7 @@ function TradePanel({ factions, ship, factionPrices, factionSellMultipliers, bla
                         <span className="text-slate-100 font-bold ml-1">{getContractItemName(c, factions)}</span>
                         <span className="text-slate-300 ml-1">x{c.targetQty}</span>
                         <span className="text-slate-500 ml-1">| +{c.rewardGold}金 +{c.rewardRep}声望</span>
-                        <span className="text-slate-600 ml-1">| 剩余 {Math.max(0, c.expiresTurn - currentTurn)} 回合可接取</span>
+                        <span className="text-slate-600 ml-1">| 剩余 {getContractRemainingTurns(c, currentTurn)} 回合可接取</span>
                         {/* 走私风险参数给出 UI 出口（唯一真值 SMUGGLING_SUCCESS_RATE；持破译器必定成功） */}
                         {c.type === 'smuggling' && (
                           <span className="text-red-400 ml-1">| 成功率 {relicIds.includes(RELIC_DECIPHERER) ? '100%（情报破译器）' : `${Math.round(SMUGGLING_SUCCESS_RATE * 100)}%（失败 −5 声望）`}</span>
@@ -644,7 +644,7 @@ function TradePanel({ factions, ship, factionPrices, factionSellMultipliers, bla
                   ))}
                   {activeContracts.map((c) => (
                     <div key={c.id} className="flex items-center justify-between bg-green-900/30 rounded p-2 mb-1 text-xs">
-                      <span className="text-green-400">{c.type==='smuggling'?'走私':'采购'} <span className="font-bold">{getContractItemName(c, factions)}</span> x{c.targetQty} | +{c.rewardGold}金 +{c.rewardRep}声望 | 剩余 {Math.max(0, c.expiresTurn - currentTurn)} 回合完成</span>
+                      <span className="text-green-400">{c.type==='smuggling'?'走私':'采购'} <span className="font-bold">{getContractItemName(c, factions)}</span> x{c.targetQty} | +{c.rewardGold}金 +{c.rewardRep}声望 | 剩余 {getContractRemainingTurns(c, currentTurn)} 回合完成</span>
                       <button onClick={() => { const r = onCompleteContract(c.id); setMessage(r.message); setMsgType(r.success ? 'success' : 'error'); }} className="px-2 py-1 bg-green-700 hover:bg-green-600 rounded text-xs">提交</button>
                     </div>
                   ))}

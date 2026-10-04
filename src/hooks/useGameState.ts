@@ -17,7 +17,7 @@ import { useModule } from './useModule';
 import { useColony } from './useColony';
 import { getRelicById } from '@/data/relics';
 import { rollPolicy, POLICY_EFFECTS } from '@/data/factions';
-import { GOLD_LOG_LIMIT } from '@/data/gameData';
+import { pushGoldLog } from '@/lib/turn/goldLog';
 
 /**
  * 游戏主 Hook —— 整合所有子 Hook，对外保持接口兼容
@@ -61,7 +61,7 @@ export function useGameState() {
   const { activeEvent, eventDodged, drawEvent, chooseOption: chooseEventOption, applyResources: applyEventResources, logEvent: logEventEntry, clearActiveEvent, clearDodged: clearEventDodged } = useEvent(gameState, dispatch);
   const { takeLoan, repayLoan } = useLoan(gameState, dispatch);
   const { travelToNode, buySpecialty, sellSpecialty, exploreFaction, investFaction, gatherIntel, acceptContract, completeContract, blackMarketBuy } = useTrade(gameState, dispatch);
-  const { autoSave, hasSave, loadSave, exportSave, importSave, resetGame } = useSave(dispatch);
+  const { autoSave, hasSave, loadSave, exportSave, importSave, resetGame } = useSave(gameState, dispatch);
   const { redeemCode } = useRedeem(gameState, dispatch);
   const { installModule, useManualModule } = useModule(dispatch);
   const { foundColony, buildColonyBuilding, recruitPop, assignPop, startResearch, recruitLeader, upgradeLeader, rollAndRecruit, clearRecruitPool, cancelBuilding, demolishBuilding, selectWonder, submitWonderResources, canStartWonder, completeWonder, startExpedition, payExpeditionNode, unlockUltimate } = useColony(gameState, dispatch);
@@ -92,7 +92,7 @@ export function useGameState() {
             const s = { ...ships[0] };
             s.gold -= cost;
             s.alloy += qty;
-            s.goldLog = [{ turn: prev.turn, amount: -cost, reason: `购买合金x${qty}`, balanceAfter: s.gold }, ...s.goldLog].slice(0, GOLD_LOG_LIMIT);
+            pushGoldLog(s, prev.turn, -cost, `购买合金x${qty}`);
             ships[0] = s;
             return { ...prev, ships };
           },
@@ -131,7 +131,7 @@ export function useGameState() {
             const s = { ...ships[0] };
             s.gold -= cost;
             s.food += qty;
-            s.goldLog = [{ turn: prev.turn, amount: -cost, reason: `购买食物x${qty}`, balanceAfter: s.gold }, ...s.goldLog].slice(0, GOLD_LOG_LIMIT);
+            pushGoldLog(s, prev.turn, -cost, `购买食物x${qty}`);
             ships[0] = s;
             return { ...prev, ships };
           },
@@ -259,7 +259,7 @@ export function useGameState() {
           s.stardust -= cost;
           s.gold += goldGain || 0;
           if (s.bankrupt && s.gold > 0) s.bankrupt = false;
-          s.goldLog = [{ turn: prev.turn, amount: goldGain || 0, reason: '星尘集市兑换金币', balanceAfter: s.gold }, ...s.goldLog].slice(0, GOLD_LOG_LIMIT);
+          pushGoldLog(s, prev.turn, goldGain || 0, '星尘集市兑换金币');
           result = { success: true, message: `兑换成功，获得${goldGain}金币！` };
           ships[0] = s;
           return { ...prev, ships };
@@ -423,7 +423,7 @@ export function useGameState() {
     autoSave,
     hasSave,
     loadSave,
-    exportSave: () => exportSave(gameState.ships, gameState.turn),
+    exportSave,
     importSave,
     resetGame,
 

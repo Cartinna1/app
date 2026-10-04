@@ -2,8 +2,8 @@ import { useCallback } from 'react';
 import type { GameState } from '@/types/game';
 import { getBuildingDef } from '@/data/colony/buildings';
 import { getEffectiveMaxCount, getBuildingCostProfile, getBuildingRefundProfile } from '@/lib/colony/costs';
-import { GOLD_LOG_LIMIT } from '@/data/gameData';
 import { createUid } from '@/lib/id';
+import { pushGoldLog } from '@/lib/turn/goldLog';
 
 /** 殖民地建筑建造 / 取消 / 拆除（从 useColony 拆出） */
 export function useColonyBuildings(
@@ -55,7 +55,7 @@ export function useColonyBuildings(
           }
         }
         s.gold -= actualGoldCost;
-        s.goldLog = [{ turn: prev.turn, amount: -actualGoldCost, reason: `建造「${def.name}」`, balanceAfter: s.gold }, ...s.goldLog].slice(0, GOLD_LOG_LIMIT);
+        pushGoldLog(s, prev.turn, -actualGoldCost, `建造「${def.name}」`);
         if (def.costAlloy) s.alloy -= costProfile.alloy;
         if (def.costMaterials) {
           s.materials = { ...s.materials };
@@ -91,7 +91,7 @@ export function useColonyBuildings(
           if (def) {
             const refund = getBuildingRefundProfile(def, s.colony);
             s.gold += refund.gold;
-            s.goldLog = [{ turn: prev.turn, amount: refund.gold, reason: '取消建造返还', balanceAfter: s.gold }, ...s.goldLog].slice(0, GOLD_LOG_LIMIT);
+            pushGoldLog(s, prev.turn, refund.gold, '取消建造返还');
             s.alloy += refund.alloy;
             s.materials = { ...s.materials };
             for (const [matId, amt] of Object.entries(refund.materials)) {
@@ -126,7 +126,7 @@ export function useColonyBuildings(
         if (def) {
           const refund = getBuildingRefundProfile(def, s.colony);
           s.gold += refund.gold;
-          s.goldLog = [{ turn: prev.turn, amount: refund.gold, reason: '拆除建筑返还', balanceAfter: s.gold }, ...s.goldLog].slice(0, GOLD_LOG_LIMIT);
+          pushGoldLog(s, prev.turn, refund.gold, '拆除建筑返还');
           s.alloy += refund.alloy;
           s.materials = { ...s.materials };
           for (const [matId, amt] of Object.entries(refund.materials)) {

@@ -1,6 +1,7 @@
 import { useCallback } from 'react';
 import type { GameState } from '@/types/game';
-import { REDEEM_CODES, GOLD_LOG_LIMIT } from '@/data/gameData';
+import { REDEEM_CODES } from '@/data/gameData';
+import { pushGoldLog } from '@/lib/turn/goldLog';
 
 export function useRedeem(
   gameState: GameState,
@@ -23,7 +24,7 @@ export function useRedeem(
           const ships = [...prev.ships];
           const s = { ...ships[shipIndex] };
           s.gold += goldReward;
-          s.goldLog = [{ turn: prev.turn, amount: goldReward, reason: `兑换码兑换`, balanceAfter: s.gold }, ...s.goldLog].slice(0, GOLD_LOG_LIMIT);
+          pushGoldLog(s, prev.turn, goldReward, `兑换码兑换`);
           if (s.bankrupt && s.gold > 0) s.bankrupt = false;
           ships[shipIndex] = s;
           return { ...prev, ships, redeemedCodes: [...prev.redeemedCodes, code] };

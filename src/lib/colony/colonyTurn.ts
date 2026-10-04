@@ -10,9 +10,9 @@ import { getLeaderDef, getUltimateBonus, LEADER_CAP_BASE } from '@/data/colony/l
 import { computeColonyEconomy, computeColonyPower } from './economy';
 import { applyColonyFounding } from './colonySetup';
 import { getPermaBonusValue } from '@/data/galaxy/permaBonuses';
-import { GOLD_LOG_LIMIT } from '@/data/gameData';
 import { processWonderTurn } from './wonderTurn';
 import { processExpeditionTurn } from './expeditionTurn';
+import { pushGoldLog } from '@/lib/turn/goldLog';
 
 /** 是否有领袖提供停电免疫（levelExtras.blackoutImmune，如 L22 诺娃·永昼 Lv3 余晖脉冲）——回合判定与 UI 显示共用 */
 export function hasBlackoutImmunity(colony: Colony): boolean {
@@ -135,7 +135,7 @@ export function processColonyTurn(ship: Mothership, _turn: number): void {
   ship.stardust += eco.stardust;
   if (eco.gold > 0) {
     ship.gold += eco.gold;
-    ship.goldLog = [{ turn: _turn, amount: eco.gold, reason: `殖民地「${colony.planetName}」贸易收入`, balanceAfter: ship.gold }, ...(ship.goldLog || [])].slice(0, GOLD_LOG_LIMIT);
+    pushGoldLog(ship, _turn, eco.gold, `殖民地「${colony.planetName}」贸易收入`);
   }
 
   // B28 克隆中心：基础每2回合免费1人口；L13 克隆·艾琳的克隆体强化（触发间隔缩至1回合、每回合人口取最高值），终极「克隆潮」再叠加

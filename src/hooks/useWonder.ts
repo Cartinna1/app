@@ -3,7 +3,7 @@ import { getWonderDef, toStageCost } from '@/data/colony/wonders';
 import { firstMissing, payCost } from '@/lib/turn/resourceCost';
 import type { GameState } from '@/types/game';
 import type { WonderState } from '@/types/colony';
-import { GOLD_LOG_LIMIT } from '@/data/gameData';
+import { pushGoldLog } from '@/lib/turn/goldLog';
 
 interface WonderActions {
   selectWonder: (wonderId: string) => { success: boolean; message: string };
@@ -83,7 +83,7 @@ export function useWonder(
 
         payCost(s, s.colony, cost);
         if (cost.gold > 0) {
-          s.goldLog = [{ turn: prev.turn, amount: -cost.gold, reason: `奇观「${wonder.name}」${stage.name}`, balanceAfter: s.gold }, ...(s.goldLog || [])].slice(0, GOLD_LOG_LIMIT);
+          pushGoldLog(s, prev.turn, -cost.gold, `奇观「${wonder.name}」${stage.name}`);
         }
 
         s.colony = { ...s.colony, wonder: { ...ws, submittedThisTurn: true } };

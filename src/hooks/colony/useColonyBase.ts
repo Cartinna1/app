@@ -5,7 +5,7 @@ import { ALL_PLANETS } from '@/data/colony/planets';
 import { getGalaxyNode } from '@/data/galaxy/nodes';
 import { applyColonyFounding } from '@/lib/colony/colonySetup';
 import { LEADER_CAP_BASE } from '@/data/colony/leaders';
-import { GOLD_LOG_LIMIT } from '@/data/gameData';
+import { pushGoldLog } from '@/lib/turn/goldLog';
 
 /** 建立殖民地费用（唯一常量；唯一入口是殖民面板的「建立殖民地」按钮，UI 显示也读它） */
 export const UNLOCK_COST = 30000;
@@ -39,7 +39,7 @@ export function useColonyBase(
         const ships = [...prev.ships];
         const s = { ...ships[0] };
         s.gold -= UNLOCK_COST;
-        s.goldLog = [{ turn: prev.turn, amount: -UNLOCK_COST, reason: `在「${planetDef?.name || node.name}」建立殖民地`, balanceAfter: s.gold }, ...s.goldLog].slice(0, GOLD_LOG_LIMIT);
+        pushGoldLog(s, prev.turn, -UNLOCK_COST, `在「${planetDef?.name || node.name}」建立殖民地`);
         s.galaxy = { ...s.galaxy, colonizedNodeId: nodeId };
         // 立刻建成：初始化唯一真值 lib/colony/colonySetup.ts（含遗落星球赠送的 B7/B20/B21）
         const base: Colony = {

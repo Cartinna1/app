@@ -8,9 +8,9 @@ import { EXPEDITION_COST, EXPEDITION_UNLOCK_COUNT, getLeaderExpedition } from '@
 import { getLeaderDef } from '@/data/colony/leaders';
 import { getArchaeologySite } from '@/data/galaxy/archaeology';
 import { enterExpeditionHistory, recordExpeditionEnding } from '@/lib/colony/expeditionTurn';
-import { GOLD_LOG_LIMIT } from '@/data/gameData';
 import { findStationedSite } from '@/lib/galaxy/archaeologyTurn';
 import { deductResource, firstMissing, payCost } from '@/lib/turn/resourceCost';
+import { pushGoldLog } from '@/lib/turn/goldLog';
 
 interface ExpeditionActions {
   startExpedition: (leaderId: string) => { success: boolean; message: string };
@@ -50,7 +50,7 @@ export function useColonyExpedition(
         // 金币支付记入金币日志（与其它扣款口径一致）
         if (EXPEDITION_COST.gold) {
           const ld = getLeaderDef(leaderId);
-          s.goldLog = [{ turn: prev.turn, amount: -EXPEDITION_COST.gold, reason: `开启远征「${ld?.name || leaderId}」`, balanceAfter: s.gold }, ...s.goldLog].slice(0, GOLD_LOG_LIMIT);
+          pushGoldLog(s, prev.turn, -EXPEDITION_COST.gold, `开启远征「${ld?.name || leaderId}」`);
         }
         s.colony = {
           ...s.colony,
@@ -93,7 +93,7 @@ export function useColonyExpedition(
         }
         // 金币支付记入金币日志（与其他扣款口径一致）
         if (cost.gold) {
-          s.goldLog = [{ turn: prev.turn, amount: -cost.gold, reason: `远征「${node.title}」支付`, balanceAfter: s.gold }, ...s.goldLog].slice(0, GOLD_LOG_LIMIT);
+          pushGoldLog(s, prev.turn, -cost.gold, `远征「${node.title}」支付`);
         }
         c.expedition = { ...c.expedition, paidThisTurn: true };
         // 结局节点：支付即记账（写入 expeditionEndings + 记入剧情回顾），回合结算收尾时再幂等兜底一次；

@@ -1,7 +1,7 @@
 import { useCallback } from 'react';
 import type { GameState, Loan } from '@/types/game';
-import { GOLD_LOG_LIMIT } from '@/data/gameData';
 import { createUid } from '@/lib/id';
+import { pushGoldLog } from '@/lib/turn/goldLog';
 
 // 贷款利率表（唯一真值：面板 LoanPanel 也 import 本表，勿再在组件里另写一份）
 // 总利率口径：takeLoan 里 totalInterest = principal × rate
@@ -99,7 +99,7 @@ export function useLoan(
           s.loans = [...s.loans, loan];
           s.gold += principal;
           if (s.bankrupt && s.gold > 0) s.bankrupt = false;
-          s.goldLog = [{ turn: prev.turn, amount: principal, reason: `星际银行贷款${principal}金币`, balanceAfter: s.gold }, ...s.goldLog].slice(0, GOLD_LOG_LIMIT);
+          pushGoldLog(s, prev.turn, principal, `星际银行贷款${principal}金币`);
           ships[shipIndex] = s;
           return { ...prev, ships };
         },
@@ -123,7 +123,7 @@ export function useLoan(
           const remaining = loan.totalRepay - loan.repaid;
           if (s.gold < remaining) { result = { success: false, message: `金币不足，还需${remaining}金币` }; return prev; }
           s.gold -= remaining;
-          s.goldLog = [{ turn: prev.turn, amount: -remaining, reason: `提前还清贷款`, balanceAfter: s.gold }, ...s.goldLog].slice(0, GOLD_LOG_LIMIT);
+          pushGoldLog(s, prev.turn, -remaining, `提前还清贷款`);
           s.loans = s.loans.filter((_, i) => i !== loanIdx);
           result = { success: true, message: `提前还清贷款！支付${remaining}金币` };
           ships[shipIndex] = s;

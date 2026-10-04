@@ -3,7 +3,7 @@
 // 跃迁、投资收益、贷款还款等所有"每艘母舰"级别的回合结算。
 
 import type { Mothership, Stock, RawMaterial, Product } from '@/types/game';
-import { RECIPES, MOTHERSHIP_ID_UNITY, MOTHERSHIP_ID_SINGULARITY_SEEKER, GOLD_LOG_LIMIT } from '@/data/gameData';
+import { RECIPES, MOTHERSHIP_ID_UNITY, MOTHERSHIP_ID_SINGULARITY_SEEKER } from '@/data/gameData';
 import { getShipTotalAssets } from '@/lib/game/assets';
 import { ALL_MATERIAL_IDS, BASIC_MATERIAL_IDS } from '@/data/materialNames';
 import {
@@ -13,6 +13,7 @@ import {
   MODULE_MINING_ARRAY, getProductExpiry, computeProductMaterialCost,
 } from '@/data/modules';
 import { getShipPerTurnIncome, getAssetPercentIncome, DYNAMIC_INCOME_AMOUNTS } from '@/lib/turn/shipIncome';
+import { pushGoldLog } from '@/lib/turn/goldLog';
 
 /** 破产倒计时（回合数）：金币 < 0 时触发并从该值倒数，归零仍未回正则舰队解散。
  *  唯一真值：shipTurn / useTrade / useEvent 的破产判定共用，勿再写裸 10。 */
@@ -98,7 +99,7 @@ export function processShipTurn(
     if (div > 0) {
       s.gold += div;
       checkBankrupt();
-      s.goldLog = [{ turn, amount: div, reason: "万众一心股息", balanceAfter: s.gold }, ...s.goldLog].slice(0, GOLD_LOG_LIMIT);
+      pushGoldLog(s, turn, div, "万众一心股息");
     }
   }
 
@@ -128,7 +129,7 @@ export function processShipTurn(
     if (bonus > 0) {
       s.gold += bonus;
       checkBankrupt();
-      s.goldLog = [{ turn, amount: bonus, reason: "遗物「誊录仪」收益", balanceAfter: s.gold }, ...s.goldLog].slice(0, GOLD_LOG_LIMIT);
+      pushGoldLog(s, turn, bonus, "遗物「誊录仪」收益");
     }
   }
 
@@ -148,7 +149,7 @@ export function processShipTurn(
       if (bonus > 0) {
         s.gold += bonus;
         checkBankrupt();
-        s.goldLog = [{ turn, amount: bonus, reason: `遗物「${line.label}」收益`, balanceAfter: s.gold }, ...s.goldLog].slice(0, GOLD_LOG_LIMIT);
+        pushGoldLog(s, turn, bonus, `遗物「${line.label}」收益`);
       }
     }
   }
@@ -224,7 +225,7 @@ export function processShipTurn(
     if (dueLoans.length > 0) {
       const totalDue = dueLoans.reduce((sum, l) => sum + l.totalRepay, 0);
       s.gold -= totalDue;
-      s.goldLog = [{ turn, amount: -totalDue, reason: "贷款到期扣款", balanceAfter: s.gold }, ...s.goldLog].slice(0, GOLD_LOG_LIMIT);
+      pushGoldLog(s, turn, -totalDue, "贷款到期扣款");
       s.loans = s.loans.filter((l) => l.remainingTurns > 0);
       if (s.gold < 0 && !s.bankrupt) { s.bankrupt = true; s.bankruptTimer = BANKRUPT_TURNS; }
     }

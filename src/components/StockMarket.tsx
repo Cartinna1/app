@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect, useCallback, useMemo, memo } from 'react';
 import type { Stock, Mothership } from '@/types/game';
 import { getStockFeeMult, getStockSellFeeMult } from '@/data/gameData';
+import { isStockCooling, getStockCooldownHint } from '@/hooks/useStock';
 import { TrendingUp, TrendingDown, Search, Clock, ArrowLeft } from 'lucide-react';
 
 interface StockMarketProps {
@@ -157,10 +158,7 @@ function StockMarket({ stocks, ship, shipIndex, currentTurn, onBuy, onSell }: St
 
   const getCooldownStatus = (stockId: string): { cooling: boolean; buyTurn?: number } => {
     const bt = buyTurns[stockId];
-    if (bt !== undefined && currentTurn <= bt) {
-      return { cooling: true, buyTurn: bt };
-    }
-    return { cooling: false };
+    return isStockCooling(bt, currentTurn) ? { cooling: true, buyTurn: bt } : { cooling: false };
   };
 
   // 移动端选中某支股票后显示交易面板
@@ -390,7 +388,7 @@ function MobileTradePanel({
   const holdings = ship?.stockHoldings || {};
   const costs = ship?.stockCosts || {};
   const buyTurns = ship?.stockBuyTurn || {};
-  const cd = buyTurns[stock.id] !== undefined && currentTurn <= buyTurns[stock.id];
+  const cd = isStockCooling(buyTurns[stock.id], currentTurn);
   const feeMult = getStockFeeMult(ship);
   const sellFeeMult = getStockSellFeeMult(ship);
 
@@ -452,7 +450,7 @@ function MobileTradePanel({
             </div>
             {cd && (
               <div className="text-orange-400 text-xs flex items-center gap-1">
-                <Clock size={12} /> 第{(buyTurns[stock.id] || 0) + 1}回合后可卖出
+                <Clock size={12} /> {getStockCooldownHint(buyTurns[stock.id] || 0, currentTurn)}
               </div>
             )}
           </>
@@ -578,7 +576,7 @@ function TradeDetailPanel({
             {cd.cooling && (
               <div className="flex justify-between text-orange-400">
                 <span className="flex items-center gap-1"><Clock size={12} />冷却中</span>
-                <span>第{(buyTurns[stock.id] || 0) + 1}回合后可卖</span>
+                <span>{getStockCooldownHint(buyTurns[stock.id] || 0, currentTurn)}</span>
               </div>
             )}
           </>

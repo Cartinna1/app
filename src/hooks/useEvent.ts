@@ -4,7 +4,8 @@ import { ALL_EVENTS } from '@/data/choiceEvents';
 import { RESOURCE_EVENTS } from '@/data/resourceEvents';
 import { RELIC_DICE, RELIC_VOID_SAFE } from '@/data/relics';
 import { famineHalveGold, BANKRUPT_TURNS } from '@/lib/turn/shipTurn';
-import { GOLD_LOG_LIMIT, MOTHERSHIP_ID_HOLY_GLORY } from '@/data/gameData';
+import { MOTHERSHIP_ID_HOLY_GLORY } from '@/data/gameData';
+import { pushGoldLog } from '@/lib/turn/goldLog';
 
 export interface EventResult {
   description: string;
@@ -75,7 +76,7 @@ export function useEvent(
         s.gold += halved;
         checkBk();
         if (s.gold >= 0 && s.bankrupt) { s.bankrupt = false; s.bankruptTimer = 0; }
-        s.goldLog = [{ turn, amount: halved, reason, balanceAfter: s.gold }, ...s.goldLog].slice(0, GOLD_LOG_LIMIT);
+        pushGoldLog(s, turn, halved, reason);
       }
       if (res.foodChange) s.food += res.foodChange;
       if (res.alloyChange) s.alloy = Math.max(0, s.alloy + res.alloyChange);

@@ -6,9 +6,9 @@
 import type { GameState, Mothership } from '@/types/game';
 import { FACTIONS, rollPolicy, POLICY_EFFECTS, refreshFactionPrices, calculateSellMultipliers, getReputationTier } from '@/data/factions';
 import { rollRelic } from '@/data/relics';
-import { GOLD_LOG_LIMIT } from '@/data/gameData';
 import { BLACK_MARKET_DEFAULT, BLACK_MARKET_SPREAD } from '@/data/exchangeRates';
 import { famineHalveGold } from './shipTurn';
+import { pushGoldLog } from '@/lib/turn/goldLog';
 
 export interface FactionTurnResult {
   factionPolicy: GameState['factionPolicy'];
@@ -147,7 +147,7 @@ export function applyPassiveIncome(prev: GameState, ships: Mothership[]): void {
       const income = famineHalveGold(ships[0].food, raw);
       if (income <= 0) continue;
       const factionName = FACTIONS.find((f) => f.id === fid)?.name || fid;
-      ships[0].gold += income; ships[0].goldLog = [{ turn: prev.turn, amount: income, reason: `「${factionName}」声望被动收入`, balanceAfter: ships[0].gold }, ...ships[0].goldLog].slice(0, GOLD_LOG_LIMIT);
+      ships[0].gold += income; pushGoldLog(ships[0], prev.turn, income, `「${factionName}」声望被动收入`);
     }
   }
 }

@@ -3,6 +3,12 @@
 import type { GameState, FactionContract, Faction, Mothership } from '@/types/game';
 import { RECIPES } from '@/data/gameData';
 import { RELATION_MATRIX } from '@/data/factions';
+import { getTurnsUntil } from './expiry';
+
+/** 合同剩余回合（**唯一真值**：贸易面板与总览的"剩余 N 回合"共用；与过期判定同口径，剩 0 回合仍可交付） */
+export function getContractRemainingTurns(contract: { expiresTurn: number }, turn: number): number {
+  return getTurnsUntil(turn, contract.expiresTurn);
+}
 
 /** 走私合同成功率（唯一真值：结算判定与贸易面板的风险提示共用）。
  *  判定在 useTrade.completeContract：`Math.random() > SMUGGLING_SUCCESS_RATE` 即失败；

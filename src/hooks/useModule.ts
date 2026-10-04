@@ -1,9 +1,9 @@
 import { useCallback } from 'react';
 import type { GameState } from '@/types/game';
 import { getModuleDef, isModuleInstalled, canAffordModule, MODULE_STARDUST_POOL, MODULE_QUANTUM_REACTOR, MODULE_VOID_REPLICATOR } from '@/data/modules';
-import { GOLD_LOG_LIMIT } from '@/data/gameData';
 import { firstMissing, payCost } from '@/lib/turn/resourceCost';
 import { famineHalveGold } from '@/lib/turn/shipTurn';
+import { pushGoldLog } from '@/lib/turn/goldLog';
 
 export function useModule(
   dispatch: React.Dispatch<{ type: 'FUNCTIONAL_UPDATE'; updater: (state: GameState) => GameState }>
@@ -92,7 +92,7 @@ export function useModule(
               const gain = famineHalveGold(s.food, raw);
               s.gold += gain;
               if (s.bankrupt && s.gold > 0) s.bankrupt = false;
-              s.goldLog = [{ turn: prev.turn, amount: gain, reason: '量子生物反应器转化', balanceAfter: s.gold }, ...s.goldLog].slice(0, GOLD_LOG_LIMIT);
+              pushGoldLog(s, prev.turn, gain, '量子生物反应器转化');
               mod.cooldown = def.cooldown;
               result = { success: true, message: gain < raw ? `消耗 ${manualCost.food} 食物，转化为 ${gain} 金币（饥荒减半）` : `消耗 ${manualCost.food} 食物，转化为 ${gain} 金币！` };
               break;

@@ -66,7 +66,8 @@ export function getBuildableBuildings(researchedIds: string[]): BuildingDef[] {
   return FULL_BUILDINGS.filter((b) => !b.requiresTech || researchedIds.includes(b.requiresTech));
 }
 
-/** 获取建筑产出效果描述（用于科技解锁提示） */
+/** 获取建筑产出效果描述（**唯一真值**：科技解锁提示与殖民地建筑卡片共用，勿再另写一份）。
+ *  数值一律读 BuildingDef（popCapBonus / cloneInterval / 产出公式），不要在本函数里写死数字。 */
 export function getBuildingEffect(bd: BuildingDef): string {
   const min = bd.minPop, max = bd.maxPop;
   // 居住类：人口上限一律读 BuildingDef.popCapBonus（唯一真值，与 calcPopCap 同源；

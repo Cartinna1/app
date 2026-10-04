@@ -1,12 +1,13 @@
 import { useCallback } from 'react';
 import type { GameState } from '@/types/game';
-import { RECIPES, GOLD_LOG_LIMIT } from '@/data/gameData';
+import { RECIPES } from '@/data/gameData';
 import {
   getProductionLimitBonus, getProductionTurns, getProductSellUnitPrice,
   getProductExpiry, computeProductMaterialCost, getMaterialBuyCost,
 } from '@/data/modules';
 import { getMaterialName } from '@/data/materialNames';
 import { createUid } from '@/lib/id';
+import { pushGoldLog } from '@/lib/turn/goldLog';
 
 export function useProduction(
   gameState: GameState,
@@ -38,7 +39,7 @@ export function useProduction(
           if (s.gold < actualCost) return prev;
 
           s.gold -= actualCost;
-          s.goldLog = [{ turn: prev.turn, amount: -actualCost, reason: `购买原料「${m.name}」x${quantity}`, balanceAfter: s.gold }, ...s.goldLog].slice(0, GOLD_LOG_LIMIT);
+          pushGoldLog(s, prev.turn, -actualCost, `购买原料「${m.name}」x${quantity}`);
           s.materials = { ...s.materials, [materialId]: (s.materials[materialId] || 0) + quantity };
           ships[shipIndex] = s;
           return { ...prev, ships };
@@ -122,7 +123,7 @@ export function useProduction(
           const price = getProductSellUnitPrice(product.currentSellPrice, ship);
           ship.gold += price;
           if (ship.bankrupt && ship.gold > 0) ship.bankrupt = false;
-          ship.goldLog = [{ turn: prev.turn, amount: price, reason: `出售产品「${product.name}」`, balanceAfter: ship.gold }, ...ship.goldLog].slice(0, GOLD_LOG_LIMIT);
+          pushGoldLog(ship, prev.turn, price, `出售产品「${product.name}」`);
           ship.products = [...ship.products];
           ship.products.splice(productIndex, 1);
           ships[shipIndex] = ship;
@@ -158,7 +159,7 @@ export function useProduction(
           ship.gold += unitPrice * sellCount;
           if (ship.bankrupt && ship.gold > 0) ship.bankrupt = false;
           const prodName = prev.products.find((p) => p.id === productId)?.name || productId;
-          ship.goldLog = [{ turn: prev.turn, amount: unitPrice * sellCount, reason: `出售产品「${prodName}」x${sellCount}`, balanceAfter: ship.gold }, ...ship.goldLog].slice(0, GOLD_LOG_LIMIT);
+          pushGoldLog(ship, prev.turn, unitPrice * sellCount, `出售产品「${prodName}」x${sellCount}`);
           ship.products = ship.products.filter((_, idx) => !toSellIndices.has(idx));
           result = { totalRevenue: unitPrice * sellCount, count: sellCount, avgMatCost: sellCount > 0 ? totalMatCost / sellCount : 0, unitPrice };
           ships[shipIndex] = ship;

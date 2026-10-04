@@ -39,7 +39,7 @@ import LoanPanel from './LoanPanel';
 import TradePanel from './TradePanel';
 import GalaxyMapPanel from './GalaxyMapPanel';
 import ArchaeologyPanel from './ArchaeologyPanel';
-import { getContractItemName, getContractItemKind, getContractHeldCount, getContractEarliestExpiry, getContractRequiredTotals } from '@/lib/turn/contracts';
+import { getContractItemName, getContractItemKind, getContractHeldCount, getContractEarliestExpiry, getContractRequiredTotals, getContractRemainingTurns } from '@/lib/turn/contracts';
 import { getSellPriceBreakdown } from '@/data/modules';
 import { getShipPerTurnIncome, sumShipIncome, getDynamicIncomeLines } from '@/lib/turn/shipIncome';
 import { BGM_MUTED_KEY } from '@/lib/save';
@@ -48,7 +48,6 @@ import ModulePanel from './ModulePanel';
 import ColonyPanel from './colony/ColonyPanel';
 import { computeColonyEconomy, getBuildingSourceBreakdown } from '@/lib/colony/economy';
 import { computeCrewFoodCost, famineHalveGold } from '@/lib/turn/shipTurn';
-import { getShipPerTurnIncome, sumShipIncome } from '@/lib/turn/shipIncome';
 import { getNextTurnHints } from '@/lib/turn/nextTurnHints';
 import { MATERIAL_NAME_MAP } from '@/data/materialNames';
 
@@ -834,7 +833,7 @@ function OverviewTab({
                 const sharedCount = contractsByItem[c.targetItemId] ?? 1;
                 const expiry = getContractEarliestExpiry(ship, c);
                 const heldEnough = held >= needTotal;
-                const remain = Math.max(0, c.expiresTurn - gameState.turn);
+                const remain = getContractRemainingTurns(c, gameState.turn);
                 return (
                   <div key={c.id} className="flex items-center gap-2 bg-slate-800/60 rounded-lg px-3 py-2">
                     <span className={`text-[10px] px-1.5 py-0.5 rounded font-bold flex-shrink-0 ${c.type === 'smuggling' ? 'bg-red-900/50 text-red-300' : 'bg-cyan-900/50 text-cyan-300'}`}>{c.type === 'smuggling' ? '走私' : '采购'}</span>

@@ -3,7 +3,8 @@ import type { ElementType } from 'react';
 import type { Mothership, Product, StardustMarket } from '@/types/game';
 import { INITIAL_PRODUCTS, RECIPES } from '@/data/gameData';
 import { getRelicById } from '@/data/relics';
-import { getSellPriceBreakdown, getProductSellUnitPrice, PRODUCT_SHELF_LIFE } from '@/data/modules';
+import { getSellPriceBreakdown, getProductSellUnitPrice, PRODUCT_SHELF_LIFE, computeProductMaterialCost } from '@/data/modules';
+import { getTurnsUntil } from '@/lib/turn/expiry';
 import { ALLOY_GOLD_PRICE, ALLOY_PER_STARDUST, FOOD_GOLD_PRICE, FOOD_PER_ALLOY, FOOD_PER_STARDUST, STARDUST_SHOP } from '@/data/exchangeRates';
 import FeedbackMessage from './FeedbackMessage';
 import { TURN_COLORS } from './turnColors';
@@ -136,14 +137,12 @@ function ProductMarket({ ship, shipIndex, products, materials, stardustMarket, c
     return Math.min(quantities[productId] || 1, g?.count || 1);
   };
 
-  // 计算产品按当前原料市场价的成本（机会成本）
+  // 计算产品按当前原料市场价的成本（机会成本）——算式唯一真值 computeProductMaterialCost
+  // （与入库记账 useProduction / shipTurn 同源；只是传入"当前"市价而非入库时的快照）
   const getCurrentMatCost = (productId: string, allMaterials: { id: string; currentPrice: number }[]): number => {
     const recipe = RECIPES.find((r) => r.id === productId);
     if (!recipe) return 0;
-    return recipe.inputs.reduce((sum, inp) => {
-      const mat = allMaterials.find((m) => m.id === inp.materialId);
-      return sum + (mat ? mat.currentPrice * inp.amount : 0);
-    }, 0);
+    return computeProductMaterialCost(recipe, allMaterials);
   };
 
   // 出售产品（qty 由调用方决定：单卖用输入数量，全部用 group.count）
@@ -326,7 +325,7 @@ function ProductMarket({ ship, shipIndex, products, materials, stardustMarket, c
               const currentMatCost = getCurrentMatCost(group.productId, materials);
               const matProfitPerUnit = unitSellPrice - group.avgMatCost;
               const baseProfitPerUnit = unitSellPrice - baseRef;
-              const isUrgent = group.earliestExpire - currentTurn <= 2;
+              const isUrgent = getTurnsUntil(currentTurn, group.earliestExpire) <= 2;
               const msg = messages[group.productId] || '';
 
               return (
@@ -349,7 +348,7 @@ function ProductMarket({ ship, shipIndex, products, materials, stardustMarket, c
                         </div>
                         <div className="flex items-center gap-2 md:gap-3 mt-1 text-[10px] md:text-xs">
                           <span className={isUrgent ? 'text-red-400 font-bold' : 'text-yellow-400'}>
-                            {isUrgent ? '\u26a0 ' : ''}剩余 {Math.max(0, group.earliestExpire - currentTurn)} 回合过期
+                            {isUrgent ? '\u26a0 ' : ''}剩余 {getTurnsUntil(currentTurn, group.earliestExpire)} 回合过期
                           </span>
                           {sellBd.multiplier > 1 && (
                             <span className="text-purple-400">
