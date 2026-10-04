@@ -346,6 +346,7 @@ function StockMarket({ stocks, ship, shipIndex, currentTurn, onBuy, onSell }: St
               holdings={holdings}
               costs={costs}
               buyTurns={buyTurns}
+              currentTurn={currentTurn}
               getCooldownStatus={getCooldownStatus}
               setTradeMode={setTradeMode}
               setTradeQty={setTradeQty}
@@ -511,6 +512,7 @@ function TradeDetailPanel({
   holdings,
   costs,
   buyTurns,
+  currentTurn,
   getCooldownStatus,
   setTradeMode,
   setTradeQty,
@@ -527,6 +529,7 @@ function TradeDetailPanel({
   holdings: Record<string, number>;
   costs: Record<string, number>;
   buyTurns: Record<string, number>;
+  currentTurn: number;
   getCooldownStatus: (stockId: string) => { cooling: boolean; buyTurn?: number };
   setTradeMode: (mode: 'buy' | 'sell') => void;
   setTradeQty: (qty: number) => void;
