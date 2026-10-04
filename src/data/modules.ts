@@ -70,7 +70,7 @@ export const MODULE_DEFINITIONS: ModuleDefinition[] = [
   {
     id: 'gravity_anchor',
     name: '引力锚定器',
-    description: '星际跃迁所需回合数 -1（最少1回合）',
+    description: '稳定舰队周围的引力场以压缩跃迁路径：跃迁回合 -1（最少1回合）',
     costFood: 0,
     costAlloy: 160,
     costStardust: 0,

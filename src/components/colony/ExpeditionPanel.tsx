@@ -130,7 +130,9 @@ function ExpeditionPanel({ colony, archaeology, onStartExpedition, onPayExpediti
           {(ex.stage === 3 || ex.stage === 4 || ex.stage === 5) && node && (
             <div>
               <p className="text-[10px] text-slate-500 mb-1">节点 {node.id}</p>
-              {!node.isEnding && (
+              {/* 阶段配图：**支付本层资源之后**才显示（未支付时只给节点编号与支付按钮，
+                  避免"钱还没付先看到下一层的画"）。节点文字与支付按钮照常显示，供玩家决策。 */}
+              {!node.isEnding && ex.paidThisTurn && (
                 <img
                   key={imgPath(ex.leaderId, `${node.id}.webp`)}
                   src={imgPath(ex.leaderId, `${node.id}.webp`)}

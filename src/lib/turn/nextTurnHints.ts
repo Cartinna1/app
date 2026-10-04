@@ -18,11 +18,11 @@ import { getRecruitCapPerTurn, hasBlackoutImmunity, projectColonyEnergy, getRese
 import { getContractEarliestExpiry, getContractHeldCount, getContractItemName, getContractRequiredTotals } from '@/lib/turn/contracts';
 import { getBuildingCostProfile, getRecruitCostPerPop } from '@/lib/colony/costs';
 import { checkRepBlock, getCurrentFactionId } from '@/lib/galaxy/access';
+import { getNodeDisplayName } from '@/lib/galaxy/knowledge';
 import { getBuildingDef } from '@/data/colony/buildings';
 import { getLeaderDef, getRecruitRollCost } from '@/data/colony/leaders';
 import { getWonderDef } from '@/data/colony/wonders';
 import { getArchaeologySite } from '@/data/galaxy/archaeology';
-import { getGalaxyNode } from '@/data/galaxy/nodes';
 import { getPermaBonusValue } from '@/data/galaxy/permaBonuses';
 import { FACTIONS } from '@/data/factions';
 
@@ -316,8 +316,9 @@ export function getNextTurnHints(state: GameState): NextTurnHint[] {
 
   // C8 跃迁下回合抵达
   if (ship.galaxy.travelTurnsRemaining === 1) {
-    const target = getGalaxyNode(ship.galaxy.targetNodeId || '');
-    out.push({ id: 'travel_arrival', severity: 'info', text: `下回合抵达「${target?.name || '目的地'}」` });
+    // 迷雾：未到访的目的地只说「未探测星系」，别泄露星系名（也就泄露了类型）
+    // 唯一真值 lib/galaxy/knowledge.getNodeDisplayName（星图与贸易面板同源）
+    out.push({ id: 'travel_arrival', severity: 'info', text: `下回合抵达「${getNodeDisplayName(ship, ship.galaxy.targetNodeId)}」` });
   }
 
   // 兜底：没有任何需要注意的事时，保留原来那句总述

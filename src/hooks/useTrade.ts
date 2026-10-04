@@ -3,12 +3,11 @@ import type { GameState, Mothership } from '@/types/game';
 import { FACTIONS, getSellPrice, RELATION_MATRIX } from '@/data/factions';
 import { RECIPES } from '@/data/gameData';
 import { getContractItemKind } from '@/lib/turn/contracts';
-import { shortestRoute } from '@/lib/galaxy/graph';
+import { getShipTravel } from '@/lib/galaxy/travel';
 import { checkRepBlock, getBlockedNodeIds, getCurrentFactionId } from '@/lib/galaxy/access';
-import { getPermaBonusValue } from '@/data/galaxy/permaBonuses';
 import { getGalaxyNode } from '@/data/galaxy/nodes';
 import { MATERIAL_NAME_MAP } from '@/data/materialNames';
-import { RELIC_JUMP_ACCELERATOR, RELIC_DECIPHERER } from '@/data/relics';
+import { RELIC_DECIPHERER } from '@/data/relics';
 import { famineHalveGold } from '@/lib/turn/shipTurn';
 import { getSpecialtyBuyUnitPrice, getSpecialtySellRevenue, getBlackMarketTotal } from '@/lib/turn/tradePrice';
 
@@ -84,14 +83,9 @@ export function useTrade(
           const g = { ...s.galaxy };
           if (g.travelTurnsRemaining > 0) { result = { success: false, message: '正在跃迁中' }; return prev; }
           if (g.currentNodeId === targetNodeId) { result = { success: false, message: '已在此星系' }; return prev; }
-          // 最短路（宿敌节点不可途经；若目标本身被封锁，上面的 checkRepBlock 已拦下）
-          const route = shortestRoute(g.currentNodeId, targetNodeId, getBlockedNodeIds(prev.factionReputation));
+          // 最短路 + 减免（引力锚定器 / 跃迁加速器 / 永久加成）——唯一真值 lib/galaxy/travel.ts（星图按钮同源）
+          const { route, turns } = getShipTravel(s, targetNodeId, getBlockedNodeIds(prev.factionReputation));
           if (!route) { result = { success: false, message: '无法抵达：航线被封锁的势力割断，可先提升该势力声望' }; return prev; }
-          let turns = route.turns;
-          if (s.installedModuleIds.includes('gravity_anchor')) turns = Math.max(1, turns - 1);
-          if (s.relics.some((r) => r.id === RELIC_JUMP_ACCELERATOR)) turns = Math.max(1, turns - 1);
-          const permReduce = getPermaBonusValue(g.permaBonuses, 'travelTurnReduce');
-          if (permReduce > 0) turns = Math.max(1, turns - permReduce);
           g.targetNodeId = targetNodeId;
           g.travelTurnsRemaining = turns;
           s.galaxy = g;

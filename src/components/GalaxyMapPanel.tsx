@@ -9,9 +9,9 @@ import type { Mothership } from '@/types/game';
 import type { GalaxyNode } from '@/types/galaxy';
 import { GALAXY_NODES, getGalaxyNode } from '@/data/galaxy/nodes';
 import { GALAXY_LANES } from '@/data/galaxy/lanes';
-import { shortestRoute } from '@/lib/galaxy/graph';
+import { getShipTravel } from '@/lib/galaxy/travel';
 import { getBlockedNodeIds, canEnterNode } from '@/lib/galaxy/access';
-import { getKnownFactionIds, getKnownRelation } from '@/lib/galaxy/knowledge';
+import { getKnownFactionIds, getKnownRelation, getNodeDisplayName } from '@/lib/galaxy/knowledge';
 import { getNodeLandscapeImage } from '@/lib/galaxy/nodeImage';
 import { FACTIONS } from '@/data/factions';
 import { getArchaeologySite } from '@/data/galaxy/archaeology';
@@ -215,18 +215,17 @@ function GalaxyMapPanel({ ship, factionReputation, onTravelToNode }: GalaxyMapPa
     }
   }, [selectedId]);
 
-  /** 迷雾下的显示名：未探测过的星系不暴露名称（跃迁途中也不泄露目的地内容） */
-  const displayNameOf = (id: string | null | undefined): string => {
-    const node = getGalaxyNode(id);
-    if (!node) return '未知星系';
-    return visited.has(node.id) ? node.name : '未探测星系';
-  };
+  /** 迷雾下的显示名：未探测过的星系不暴露名称（唯一真值 lib/galaxy/knowledge.getNodeDisplayName，
+   *  贸易面板与「下一回合预告」同源，勿在此另写判断） */
+  const displayNameOf = (id: string | null | undefined): string => getNodeDisplayName(ship, id);
 
-  // 选中节点的最短路（用于回合数、途经提示与路线高亮）
-  const route = useMemo(() => {
-    if (!selectedId || selectedId === galaxy.currentNodeId) return null;
-    return shortestRoute(galaxy.currentNodeId, selectedId, blocked);
-  }, [selectedId, galaxy.currentNodeId, blocked]);
+  // 选中节点的路线 + **实际**回合数（含引力锚定器/跃迁加速器/永久加成减免）。
+  // 唯一真值 lib/galaxy/travel.getShipTravel —— 与实际跃迁（useTrade）同源，避免"显示 5 回合、实走 4 回合"。
+  const travel = useMemo(() => {
+    if (!selectedId || selectedId === galaxy.currentNodeId) return { route: null, turns: 0 };
+    return getShipTravel(ship, selectedId, blocked);
+  }, [ship, selectedId, galaxy.currentNodeId, blocked]);
+  const route = travel.route;
 
   const routeLaneKeys = useMemo(() => {
     const keys = new Set<string>();
@@ -273,11 +272,11 @@ function GalaxyMapPanel({ ship, factionReputation, onTravelToNode }: GalaxyMapPa
           onClick={() => handleTravel(node.id)}
           className="px-4 py-2 bg-cyan-600 hover:bg-cyan-500 rounded-lg font-bold text-white text-sm transition-colors flex items-center gap-2 min-h-[40px]"
         >
-          <Rocket size={14} /> 跃迁（{route.turns} 回合）
+          <Rocket size={14} /> 跃迁（{travel.turns} 回合）
         </button>
         {route.path.length > 2 && (
           <p className="text-[10px] text-slate-500 mt-2">
-            途经：{route.path.slice(1, -1).map((id) => (visited.has(id) ? getGalaxyNode(id)?.name : '未探测星系')).join(' → ')}
+            途经：{route.path.slice(1, -1).map((id) => displayNameOf(id)).join(' → ')}
           </p>
         )}
       </div>
@@ -364,11 +363,17 @@ function GalaxyMapPanel({ ship, factionReputation, onTravelToNode }: GalaxyMapPa
           );
         })()}
 
-        {node.type === 'faction' && (
-          <p className="text-[11px] md:text-xs text-slate-500 mt-1">
-            交易、合同、黑市、打探、投资等操作都在「贸易」页签中进行（需母舰停泊在此势力）。
-          </p>
-        )}
+        {node.type === 'faction' && (() => {
+          // 势力简介：读静态表（data/factions 的 intro），不读存档快照——存档里的 factions 是旧快照，
+          // 新增静态字段在里面不存在；价格等运行时数据本来就在 factionPrices/factionSellMultipliers。
+          const intro = FACTIONS.find((f) => f.id === node.factionId)?.intro;
+          if (!intro) return null;
+          return (
+            <p className="text-[11px] md:text-xs text-slate-400 mt-2 leading-relaxed">
+              {intro}
+            </p>
+          );
+        })()}
 
         {node.type === 'colony' && (() => {
           const planet = ALL_PLANETS.find((p) => p.id === node.planetId);

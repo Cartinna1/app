@@ -8,6 +8,8 @@ export interface Faction {
   specialtyName: string;
   specialtyDescription: string;
   basePrice: number; // 特产基础购买价
+  /** 势力简介（星图信息卡展示）。静态数据：UI 一律读 data/factions 的静态表，不读存档快照 */
+  intro: string;
 }
 
 export interface FactionState {

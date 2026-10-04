@@ -1,6 +1,7 @@
 import { useState, useMemo, memo } from 'react';
 import type { Mothership, Faction, TradePolicy, PolicyEffect, FactionContract } from '@/types/game';
-import { getDistance, getTravelTurns, getSellPrice, getReputationTier, FACTIONS as FACTIONS_DATA } from '@/data/factions';
+import { getSellPrice, getReputationTier, FACTIONS as FACTIONS_DATA } from '@/data/factions';
+import { summarizeBuffs, isBuffExpiringSoon, getBuffRemainingTurns } from '@/lib/turn/factionTurn';
 import { getSpecialtyBuyUnitPrice, getSpecialtySellRevenue, getBlackMarketTotal } from '@/lib/turn/tradePrice';
 import { getContractItemName } from '@/lib/turn/contracts';
 import { getGalaxyNode } from '@/data/galaxy/nodes';
@@ -31,7 +32,7 @@ export interface TradePanelProps {
   onAcceptContract: (contractId: string) => { success: boolean; message: string };
   onCompleteContract: (contractId: string) => { success: boolean; message: string };
   onBlackMarketBuy: (factionId: string, itemId: string, qty: number) => { success: boolean; message: string };
-  /** 由星图页签取代跃迁入口：置 true 时"星际势力分布"里不再显示跃迁按钮（只保留价格/声望/关系等信息） */
+  /** 由星图页签取代跃迁入口：置 true 时「势力列表」里不再显示跃迁按钮（只保留价格/声望/关系等信息） */
   hideTravelActions?: boolean;
 }
 
@@ -172,7 +173,7 @@ function TradePanel({ factions, ship, factionPrices, factionSellMultipliers, bla
   };
 
   const tabs: { id: TradeTab; label: string; icon: React.ElementType }[] = [
-    { id: 'overview', label: '星际地图', icon: Globe },
+    { id: 'overview', label: '势力列表', icon: Globe },
     { id: 'buy', label: '购买特产', icon: ShoppingCart },
     { id: 'sell', label: '贩卖特产', icon: TrendingUp },
     { id: 'explore', label: '探索', icon: Compass },
@@ -315,9 +316,6 @@ function TradePanel({ factions, ship, factionPrices, factionSellMultipliers, bla
                   </div>
                 );
               }
-              const dist = currentFaction ? getDistance(currentFaction.id, f.id) : 0;
-              const turns = currentFaction ? getTravelTurns(currentFaction.id, f.id) : 0;
-
               const fPrice = factionPrices[f.id] || f.basePrice;
               const fRep = (factionReputation || {})[f.id] || 0;
               const fRepTier = getReputationTier(fRep);
@@ -355,7 +353,27 @@ function TradePanel({ factions, ship, factionPrices, factionSellMultipliers, bla
                         <p className="text-sm text-slate-300 mt-1">{f.specialtyName} | 市场价 <span className="text-yellow-400">{fPrice}</span> <span className="text-slate-600">(基价{f.basePrice})</span></p>
                       </div>
                     </div>
-                    {!isCurrent && <span className="text-xs text-slate-500 flex-shrink-0">距离 {dist} | {turns}回合</span>}
+                    {/* 买卖 buff 剩余回合（唯一真值 lib/turn/factionTurn.summarizeBuffs；快到期用琥珀色）
+                        距离与跃迁回合数一律不在这里显示——看回合去「星图」 */}
+                    {(() => {
+                      const buyB = summarizeBuffs(buyBuffs?.[f.id], currentTurn);
+                      const sellB = summarizeBuffs(sellBuffs?.[f.id], currentTurn);
+                      if (!buyB && !sellB) return null;
+                      return (
+                        <div className="flex flex-col items-end gap-1 flex-shrink-0">
+                          {buyB && (
+                            <span className={`text-[10px] md:text-xs px-1.5 py-0.5 rounded border whitespace-nowrap ${isBuffExpiringSoon(buyB.turnsLeft) ? 'bg-amber-900/40 text-amber-300 border-amber-700/50' : 'bg-orange-900/30 text-orange-300 border-orange-800/50'}`}>
+                              买价 ×{buyB.multiplier.toFixed(2)}（剩 {buyB.turnsLeft} 回合）
+                            </span>
+                          )}
+                          {sellB && (
+                            <span className={`text-[10px] md:text-xs px-1.5 py-0.5 rounded border whitespace-nowrap ${isBuffExpiringSoon(sellB.turnsLeft) ? 'bg-amber-900/40 text-amber-300 border-amber-700/50' : 'bg-cyan-900/30 text-cyan-300 border-cyan-800/50'}`}>
+                              卖价 ×{sellB.multiplier.toFixed(2)}（剩 {sellB.turnsLeft} 回合）
+                            </span>
+                          )}
+                        </div>
+                      );
+                    })()}
                   </div>
                   {!isCurrent && !isTraveling && !hideTravelActions && (
                     <button onClick={() => setSelectedTarget(f.id)} className={`mt-2 text-sm px-4 py-2 rounded-lg font-bold transition-colors ${selectedTarget === f.id ? 'bg-cyan-600 text-white' : 'bg-slate-700 text-slate-300 hover:bg-slate-600'}`}>
@@ -417,7 +435,7 @@ function TradePanel({ factions, ship, factionPrices, factionSellMultipliers, bla
                     <div>
                       <p className="text-xs text-orange-400">涨价中 ×{buyBuffMult.toFixed(2)}</p>
                       {(buyBuffs?.[currentFaction.id] || []).map((b, i) => (
-                        <p key={i} className="text-[10px] text-orange-400/80 whitespace-nowrap">×{b.multiplier.toFixed(2)} 剩 {Math.max(0, b.expiresTurn - currentTurn)} 回合</p>
+                        <p key={i} className="text-[10px] text-orange-400/80 whitespace-nowrap">×{b.multiplier.toFixed(2)} 剩 {getBuffRemainingTurns(b, currentTurn)} 回合</p>
                       ))}
                     </div>
                   )}
@@ -487,7 +505,6 @@ function TradePanel({ factions, ship, factionPrices, factionSellMultipliers, bla
                     const f = factions.find((fa) => fa.id === fid);
                     if (!f) return null;
                     const sellP = getSellPrice(fid, factionPrices, factionSellMultipliers);
-                    const dist = currentFaction ? getDistance(currentFaction.id, fid) : 0;
                     const isLocal = currentFactionId === fid;
                     return (
                       <div key={fid} className={`rounded-lg p-3 ${sellFaction === fid ? 'border border-yellow-500 bg-yellow-900/10' : isLocal ? 'border border-red-700/30 bg-red-950/10' : 'border border-slate-700 bg-slate-800/40'}`}>
@@ -500,7 +517,7 @@ function TradePanel({ factions, ship, factionPrices, factionSellMultipliers, bla
                           />
                           <div className="flex-1 min-w-0">
                             <p className="text-sm font-bold text-slate-200">{f.specialtyName}</p>
-                            <p className="text-xs text-slate-500">来自 {f.name} | 库存 {count} | 距离 {dist}</p>
+                            <p className="text-xs text-slate-500">来自 {f.name} | 库存 {count}</p>
                             {isLocal && <p className="text-xs text-red-400 mt-0.5">本地特产不可在本地出售，请跃迁到其他势力</p>}
                           </div>
                           <div className="text-right">

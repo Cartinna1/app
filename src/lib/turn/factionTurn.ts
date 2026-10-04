@@ -22,6 +22,29 @@ export interface FactionTurnResult {
   stardustMarket: GameState['stardustMarket'];
 }
 
+/** 单条买卖 buff 的剩余回合（与结算口径一致：结算保留 `expiresTurn >= 下一回合` 的 buff，
+ *  故剩余回合 = expiresTurn − 当前回合）。唯一真值：贸易面板各处显示与"快到期"高亮共用。 */
+export function getBuffRemainingTurns(buff: { expiresTurn: number }, turn: number): number {
+  return Math.max(0, buff.expiresTurn - turn);
+}
+
+/** 汇总某势力的买卖 buff：合并倍率（连乘）与整体剩余回合（取最晚到期的那条）；
+ *  没有 buff 返回 null。用于势力列表里的「买价 ×2.50（剩 12 回合）」徽章。 */
+export function summarizeBuffs(
+  list: { multiplier: number; expiresTurn: number }[] | undefined,
+  turn: number
+): { multiplier: number; turnsLeft: number } | null {
+  if (!list || list.length === 0) return null;
+  const multiplier = list.reduce((m, b) => m * b.multiplier, 1);
+  const turnsLeft = Math.max(...list.map((b) => getBuffRemainingTurns(b, turn)));
+  return { multiplier, turnsLeft };
+}
+
+/** 剩余回合 ≤3 → 即将到期（UI 用琥珀色高亮） */
+export function isBuffExpiringSoon(turnsLeft: number): boolean {
+  return turnsLeft <= 3;
+}
+
 /** 势力/市场层面的每回合刷新；currentFid 取结算后 ships[0] 的所在势力 */
 export function computeFactionTurn(prev: GameState, currentFid: string): FactionTurnResult {
   // 更新贸易政策

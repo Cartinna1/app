@@ -1,18 +1,18 @@
 import type { Faction, TradePolicy, PolicyEffect } from '@/types/game';
 import { getTradeDistance, FALLBACK_DISTANCE } from '@/lib/galaxy/graph';
 
-// 10个星际势力
+// 10个星际势力（intro 为星图信息卡展示的简介，来自设定文档）
 export const FACTIONS: Faction[] = [
-  { id: 'f01', name: '银河人类联邦', specialtyName: '凝滞时光导航图', specialtyDescription: '能冻结局部时空的远古星图', basePrice: 800 },
-  { id: 'f02', name: '齐戈尔统一集群', specialtyName: '活体塑材', specialtyDescription: '自我增殖的活体金属', basePrice: 750 },
-  { id: 'f03', name: '泰拉钢铁王座', specialtyName: '督军级基因认证战斗装甲', specialtyDescription: '特定基因序列才能激活的顶级装甲', basePrice: 1200 },
-  { id: 'f04', name: '阿基米德圣咏体', specialtyName: '矛盾解构水晶', specialtyDescription: '瓦解物理法则矛盾的神秘水晶', basePrice: 900 },
-  { id: 'f05', name: '盖亚环廊商贸联合体', specialtyName: '概率债券', specialtyDescription: '以量子概率为背书的金融工具', basePrice: 600 },
-  { id: 'f06', name: '灵能蔷薇王朝', specialtyName: '忆晶华', specialtyDescription: '封存记忆的晶体', basePrice: 850 },
-  { id: 'f07', name: '诺瓦共鸣共和国', specialtyName: '共识场生成器', specialtyDescription: '让所有智慧生物瞬间达成共识', basePrice: 700 },
-  { id: 'f08', name: '光语者宁静域', specialtyName: '恒星谐波谐振器', specialtyDescription: '与恒星产生共振提取能源', basePrice: 950 },
-  { id: 'f09', name: '黑渊自由港邦联', specialtyName: '幽灵数据污泥', specialtyDescription: '废弃数据库中的活性信息残渣', basePrice: 650 },
-  { id: 'f10', name: '超念矩阵', specialtyName: '定制化人格副本', specialtyDescription: '将意识完整备份为数字人格', basePrice: 1100 },
+  { id: 'f01', name: '银河人类联邦', specialtyName: '凝滞时光导航图', specialtyDescription: '能冻结局部时空的远古星图', basePrice: 800, intro: '人类文明的星际联合体，以轨道枢纽与移民舰队为象征，承载种族扩张的使命感与乡愁。' },
+  { id: 'f02', name: '齐戈尔统一集群', specialtyName: '活体塑材', specialtyDescription: '自我增殖的活体金属', basePrice: 750, intro: '集体意识驱动的掠食性异虫文明，活体虫巢遍布尖刺与酸池，亿万个体共享一个意志。' },
+  { id: 'f03', name: '泰拉钢铁王座', specialtyName: '督军级基因认证战斗装甲', specialtyDescription: '特定基因序列才能激活的顶级装甲', basePrice: 1200, intro: '高度军事化的工业帝国，整星改造为要塞，装甲大陆与防御炮阵列彰显绝对秩序与压迫。' },
+  { id: 'f04', name: '阿基米德圣咏体', specialtyName: '矛盾解构水晶', specialtyDescription: '瓦解物理法则矛盾的神秘水晶', basePrice: 900, intro: '唯心主义的软体生物文明，相信现实由咏唱塑造，漂浮凝胶圣所中光晕随圣咏律动。' },
+  { id: 'f05', name: '盖亚环廊商贸联合体', specialtyName: '概率债券', specialtyDescription: '以量子概率为背书的金融工具', basePrice: 600, intro: '横跨数十星系的巨型企业联合体，环绕气态巨星的商业环廊是一座永不打烊的行星市场。' },
+  { id: 'f06', name: '灵能蔷薇王朝', specialtyName: '忆晶华', specialtyDescription: '封存记忆的晶体', basePrice: 850, intro: '以灵能为信仰的神权君主制，荆棘王座绽于巨型灵能蔷薇花蕊，光尘弥漫的圣地充满虔敬。' },
+  { id: 'f07', name: '诺瓦共鸣共和国', specialtyName: '共识场生成器', specialtyDescription: '让所有智慧生物瞬间达成共识', basePrice: 700, intro: '唯物主义科学民主政体，以对撞机巨构为地标，全民公投数据实时流转于议会穹顶之上。' },
+  { id: 'f08', name: '光语者宁静域', specialtyName: '恒星谐波谐振器', specialtyDescription: '与恒星产生共振提取能源', basePrice: 950, intro: '和平亲外主义文明，以纯粹的光之语言交流，不设防线的花园世界向所有来访者敞开怀抱。' },
+  { id: 'f09', name: '黑渊自由港邦联', specialtyName: '幽灵数据污泥', specialtyDescription: '废弃数据库中的活性信息残渣', basePrice: 650, intro: '盘踞星云暗区的犯罪集团联合体，废弃舰体焊接的漂移港城法外之地，交易与阴谋在阴影中滋生。' },
+  { id: 'f10', name: '超念矩阵', specialtyName: '定制化人格副本', specialtyDescription: '将意识完整备份为数字人格', basePrice: 1100, intro: '无领袖的AI机器文明，运行于戴森云计算阵列，机器思维以可见的几何形态在光束网络中流转。' },
 ];
 
 // 距离与跃迁回合数：唯一真值是星图（lib/galaxy/graph.ts 的最短路，航道长度由节点坐标推导）。
