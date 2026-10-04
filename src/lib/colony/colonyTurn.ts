@@ -175,6 +175,8 @@ export function processColonyTurn(ship: Mothership, _turn: number): void {
       const tid = colony.techState.currentResearch;
       const targetTurns = getResearchTargetTurns(tid, colony.planetType); // 唯一真值（极地 -1）
       if (colony.techState.currentProgress >= targetTurns) {
+        // 循环科技判定（与上面的目标回合数同属"这个科技是什么"的判定，勿分叉）
+        const rpt = REPEATABLE_TECHS.find((rt) => rt.id === tid);
         if (rpt) {
           // 循环科技：叠加次数
           colony.techState.repeatableLevels = { ...(colony.techState.repeatableLevels || {}) };
