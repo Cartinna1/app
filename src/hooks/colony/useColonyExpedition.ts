@@ -4,10 +4,11 @@
 
 import { useCallback } from 'react';
 import type { GameState } from '@/types/game';
-import { EXPEDITION_COST, getLeaderExpedition } from '@/data/colony/expeditions';
+import { EXPEDITION_COST, EXPEDITION_UNLOCK_COUNT, getLeaderExpedition } from '@/data/colony/expeditions';
 import { getLeaderDef } from '@/data/colony/leaders';
 import { getArchaeologySite } from '@/data/galaxy/archaeology';
 import { enterExpeditionHistory, recordExpeditionEnding } from '@/lib/colony/expeditionTurn';
+import { GOLD_LOG_LIMIT } from '@/data/gameData';
 import { findStationedSite } from '@/lib/galaxy/archaeologyTurn';
 import { deductResource, firstMissing, payCost } from '@/lib/turn/resourceCost';
 
@@ -49,7 +50,7 @@ export function useColonyExpedition(
         // 金币支付记入金币日志（与其它扣款口径一致）
         if (EXPEDITION_COST.gold) {
           const ld = getLeaderDef(leaderId);
-          s.goldLog = [{ turn: prev.turn, amount: -EXPEDITION_COST.gold, reason: `开启远征「${ld?.name || leaderId}」`, balanceAfter: s.gold }, ...s.goldLog].slice(0, 200);
+          s.goldLog = [{ turn: prev.turn, amount: -EXPEDITION_COST.gold, reason: `开启远征「${ld?.name || leaderId}」`, balanceAfter: s.gold }, ...s.goldLog].slice(0, GOLD_LOG_LIMIT);
         }
         s.colony = {
           ...s.colony,
@@ -92,7 +93,7 @@ export function useColonyExpedition(
         }
         // 金币支付记入金币日志（与其他扣款口径一致）
         if (cost.gold) {
-          s.goldLog = [{ turn: prev.turn, amount: -cost.gold, reason: `远征「${node.title}」支付`, balanceAfter: s.gold }, ...s.goldLog].slice(0, 200);
+          s.goldLog = [{ turn: prev.turn, amount: -cost.gold, reason: `远征「${node.title}」支付`, balanceAfter: s.gold }, ...s.goldLog].slice(0, GOLD_LOG_LIMIT);
         }
         c.expedition = { ...c.expedition, paidThisTurn: true };
         // 结局节点：支付即记账（写入 expeditionEndings + 记入剧情回顾），回合结算收尾时再幂等兜底一次；
@@ -115,7 +116,7 @@ export function useColonyExpedition(
     const colony = gameState.ships[0]?.colony;
     if (!colony) return { success: false, message: '殖民地未激活' };
     const endings = colony.expeditionEndings?.[leaderId] || [];
-    if (endings.length < 12) return { success: false, message: `需收集 12 个结局（当前 ${endings.length}/12）` };
+    if (endings.length < EXPEDITION_UNLOCK_COUNT) return { success: false, message: `需收集 ${EXPEDITION_UNLOCK_COUNT} 个结局（当前 ${endings.length}/${EXPEDITION_UNLOCK_COUNT}）` };
     if (colony.expeditionUnlocks?.includes(leaderId)) return { success: false, message: '该领袖终极技能已解锁' };
     const ld = getLeaderDef(leaderId);
     if (!ld?.ultimateSkill) return { success: false, message: '该领袖暂无终极技能' };

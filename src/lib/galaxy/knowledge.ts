@@ -14,11 +14,6 @@ export function getKnownFactionIds(ship: Mothership): Set<string> {
   return new Set(visited.filter((id) => getGalaxyNode(id)?.type === 'faction'));
 }
 
-/** 单个势力是否已探明 */
-export function isFactionKnown(ship: Mothership, factionId: string): boolean {
-  return getKnownFactionIds(ship).has(factionId);
-}
-
 /** 节点显示名（迷雾）：只对**已到访**的节点返回真名，否则返回「未探测星系」。
  *  唯一真值：星图信息卡、星图"途经/跃迁中"提示、贸易面板的目的地、**下一回合预告**共用，
  *  勿再各写一份内联判断（曾出现"下回合抵达「光语者宁静域」"这种提前泄露星系名的分叉）。 */

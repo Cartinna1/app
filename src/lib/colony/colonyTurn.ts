@@ -6,10 +6,11 @@ import type { Colony } from '@/types/colony';
 import { ALL_PLANETS } from '@/data/colony/planets';
 import { getBuildingDef } from '@/data/colony/buildings';
 import { getTechById, REPEATABLE_TECHS } from '@/data/colony/techs';
-import { getLeaderDef, getUltimateBonus } from '@/data/colony/leaders';
+import { getLeaderDef, getUltimateBonus, LEADER_CAP_BASE } from '@/data/colony/leaders';
 import { computeColonyEconomy, computeColonyPower } from './economy';
 import { applyColonyFounding } from './colonySetup';
 import { getPermaBonusValue } from '@/data/galaxy/permaBonuses';
+import { GOLD_LOG_LIMIT } from '@/data/gameData';
 import { processWonderTurn } from './wonderTurn';
 import { processExpeditionTurn } from './expeditionTurn';
 
@@ -23,6 +24,24 @@ export function hasBlackoutImmunity(colony: Colony): boolean {
 
 /** 余晖脉冲停电保护回合数（L22 Lv3：连续缺电时免疫 N 个回合，耗尽后仍未恢复供电则停电） */
 export const BLACKOUT_GUARD_TURNS = 10;
+
+/** 停电保护计数推进 + 是否停电（**唯一真值**）。原始口径逐字搬移自 processColonyTurn：
+ *  - 供电正常（projectedEnergy ≥ 0）→ 计数归零，不停电；
+ *  - 缺电且无保护 → 直接停电，计数保持原值；
+ *  - 缺电且有保护 → 计数 >0 则递减，否则重置为 guardTurnSpan；递减到 0 的那一回合**真的停电**。
+ *  结算用它写回计数，「下一回合预告」用同一次调用做 dry-run，避免"提示说不会停电、实际停电"。 */
+export function resolveBlackout(
+  colony: Colony,
+  projectedEnergy: number,
+  hasProtection: boolean,
+  guardTurnSpan: number
+): { blackout: boolean; guardTurns: number } {
+  if (projectedEnergy >= 0) return { blackout: false, guardTurns: 0 };
+  if (!hasProtection) return { blackout: true, guardTurns: colony.blackoutGuardTurns ?? 0 };
+  const cur = colony.blackoutGuardTurns ?? 0;
+  const next = cur > 0 ? cur - 1 : guardTurnSpan;
+  return { blackout: next === 0, guardTurns: next };
+}
 
 /** 下回合结算后的净电能（-1 以下＝停电）。**唯一真值**：结算（processColonyTurn）与「下一回合预告」共用，
  *  改动这里等于同时改结算与提示，不会出现"提示说断电、实际没断"。 */
@@ -98,21 +117,11 @@ export function processColonyTurn(ship: Mothership, _turn: number): void {
   const newEnergy = projectColonyEnergy(prevEnergy, power.net);
   colony.energy = newEnergy;
   // 余晖脉冲保护：连续缺电时免疫 BLACKOUT_GUARD_TURNS 个回合（首次缺电开启），
-  // 保护耗尽后仍未恢复供电 → 正常停电；中途恢复供电则重置计数
-  const blackoutBase = newEnergy < 0;
-  let blackout = blackoutBase;
-  if (blackoutBase && hasL22Lv3) {
-    blackout = false;
-    if (colony.blackoutGuardTurns === undefined) colony.blackoutGuardTurns = 0;
-    if (colony.blackoutGuardTurns > 0) {
-      colony.blackoutGuardTurns--;
-    } else {
-      colony.blackoutGuardTurns = guardTurns;
-    }
-    if (colony.blackoutGuardTurns === 0) blackout = true; // 保护耗尽，仍缺电 → 停电
-  } else if (!blackoutBase) {
-    colony.blackoutGuardTurns = 0; // 供电正常，重置保护计数
-  }
+  // 保护耗尽后仍未恢复供电 → 正常停电；中途恢复供电则重置计数。
+  // 判定唯一真值：resolveBlackout（与「下一回合预告」共用，勿在别处重写这段）
+  const resolved = resolveBlackout(colony, newEnergy, hasL22Lv3, guardTurns);
+  colony.blackoutGuardTurns = resolved.guardTurns;
+  const blackout = resolved.blackout;
 
   // ===== 建筑产出 + 领袖每回合特效（统一走 economy 模块） =====
   const eco = computeColonyEconomy(colony, { blackout, random: true, relics: ship.relics, permaBonuses: ship.galaxy?.permaBonuses || [] });
@@ -126,13 +135,14 @@ export function processColonyTurn(ship: Mothership, _turn: number): void {
   ship.stardust += eco.stardust;
   if (eco.gold > 0) {
     ship.gold += eco.gold;
-    ship.goldLog = [{ turn: _turn, amount: eco.gold, reason: `殖民地「${colony.planetName}」贸易收入`, balanceAfter: ship.gold }, ...(ship.goldLog || [])].slice(0, 200);
+    ship.goldLog = [{ turn: _turn, amount: eco.gold, reason: `殖民地「${colony.planetName}」贸易收入`, balanceAfter: ship.gold }, ...(ship.goldLog || [])].slice(0, GOLD_LOG_LIMIT);
   }
 
   // B28 克隆中心：基础每2回合免费1人口；L13 克隆·艾琳的克隆体强化（触发间隔缩至1回合、每回合人口取最高值），终极「克隆潮」再叠加
   const b28 = colony.buildings.find((b) => b.active && b.defId === 'B28' && b.assignedPop > 0);
   if (b28) {
-    let interval = 2;
+    // 基础触发间隔读建筑数据（唯一真值：buildings.B28.cloneInterval）
+    let interval = getBuildingDef(b28.defId)?.cloneInterval ?? 2;
     let amount = 1;
     let ultAdd = 0;
     for (const l of colony.leaders) {
@@ -156,14 +166,9 @@ export function processColonyTurn(ship: Mothership, _turn: number): void {
   colony.population.cap = calcPopCap(colony);
 
   // 领袖免费人口效果（终极技能「克隆潮」：远征 12/12 解锁后每回合免费人口再 +bonus，L13 = +1 合计每回合2；带上限钳制防溢出）
-  // 终极叠加取 getUltimateBonus(ld, 'freePop')，避免其他领袖的终极 bonus 被误当作免费人口加成
-  for (const l of colony.leaders) {
-    const ld = getLeaderDef(l.id); const ex = ld?.levelExtras[l.level-1];
-    if (ex?.freePopEveryTurns && _turn % ex.freePopEveryTurns === 0 && colony.population.total < colony.population.cap) {
-      const ultGain = colony.expeditionUnlocks?.includes(l.id) ? getUltimateBonus(ld, 'freePop') : 0;
-      const gain = Math.min(1 + ultGain, colony.population.cap - colony.population.total);
-      colony.population.total += gain; colony.population.available += gain;
-    }
+  // 判定与「下一回合预告」共用 getFreePopGains（唯一真值），勿在别处重写这段条件
+  for (const g of getFreePopGains(colony, _turn)) {
+    colony.population.total += g.gain; colony.population.available += g.gain;
   }
 
   // 科研处理
@@ -190,11 +195,13 @@ export function processColonyTurn(ship: Mothership, _turn: number): void {
     }
   }
 
-  // 领袖上限（科技+领袖，放在科研处理之后确保新研究的科技生效）
-  colony.leaderCap = 3;
+  // 领袖上限（科技 + 领袖，放在科研处理之后确保新研究的科技生效）
+  // 科技加成走数据字段 leaderCapBonus（唯一真值 data/colony/techs.ts），勿再按科技 id 硬编码数值
+  colony.leaderCap = LEADER_CAP_BASE;
   if (colony.techState) {
-    if (colony.techState.researched.includes('T23')) colony.leaderCap += 1;
-    if (colony.techState.researched.includes('T24')) colony.leaderCap += 3;
+    for (const tid of colony.techState.researched) {
+      colony.leaderCap += (getTechById(tid)?.leaderCapBonus || 0);
+    }
   }
   for (const l of colony.leaders) {
     const ld = getLeaderDef(l.id); const ex = ld?.levelExtras[l.level-1];
@@ -227,10 +234,13 @@ export function calcPopCap(colony: Colony): number {
   let cap = 5;
   const planetDef = colony.planetType ? ALL_PLANETS.find((p) => p.id === colony.planetType) : null;
   if (planetDef?.buffs.initialPopCap) cap = planetDef.buffs.initialPopCap;
+  // 居住建筑：每座人口上限读 BuildingDef.popCapBonus（唯一真值）+ 星球按建筑的额外增量
+  // （遗落星球 B1 +3，来自 planets.buffs.housingCapDelta）。历史上这里是裸 5/20 与 planetType 判断。
   for (const inst of colony.buildings) {
     if (!inst.active) continue;
-    if (inst.defId === 'B1') cap += 5 + (colony.planetType === 'ruin' ? 3 : 0);
-    if (inst.defId === 'B2') cap += 20;
+    const def = getBuildingDef(inst.defId);
+    if (!def?.popCapBonus) continue;
+    cap += def.popCapBonus + (planetDef?.buffs.housingCapDelta?.[inst.defId] || 0);
   }
   // 领袖人口上限加成
   for (const l of colony.leaders) {
@@ -240,13 +250,15 @@ export function calcPopCap(colony: Colony): number {
     if (colony.expeditionUnlocks?.includes(l.id)) {
       cap += getUltimateBonus(ld, 'populationCap');
     }
-    // 居住建筑人口效果加成（数据驱动：housingPopBonusPct，作用于 B1/B2 基础上限；终极「永恒穹顶」再叠加 housingPop）
+    // 居住建筑人口效果加成（数据驱动：housingPopBonusPct，作用于居住建筑**自身**的 popCapBonus；
+    // 终极「永恒穹顶」再叠加 housingPop）
     let housingPct = ex?.housingPopBonusPct || 0;
     if (colony.expeditionUnlocks?.includes(l.id)) housingPct += getUltimateBonus(ld, 'housingPop');
     if (housingPct > 0) {
       for (const inst of colony.buildings) {
-        if (!inst.active || (inst.defId !== 'B1' && inst.defId !== 'B2')) continue;
-        cap += Math.ceil((inst.defId === 'B1' ? 5 : 20) * (housingPct / 100));
+        if (!inst.active) continue;
+        const base = getBuildingDef(inst.defId)?.popCapBonus || 0;
+        if (base > 0) cap += Math.ceil(base * (housingPct / 100));
       }
     }
     // 每座穹顶都市（B2）额外人口上限（数据驱动：b2FlatCap）
@@ -256,4 +268,21 @@ export function calcPopCap(colony: Colony): number {
     }
   }
   return cap;
+}
+
+/** 本回合「每 N 回合免费 +1 人口」的领袖收益清单（**唯一真值**：回合结算与「下一回合预告」共用）。
+ *  逐位模拟发放过程（人口上限钳制），故预告与实际发放结果恒等——历史上提示只判 `turn % N`，
+ *  满人口时仍会报「+1」。 */
+export function getFreePopGains(colony: Colony, turn: number): { leaderId: string; gain: number }[] {
+  const out: { leaderId: string; gain: number }[] = [];
+  let projected = colony.population.total;
+  for (const l of colony.leaders) {
+    const ld = getLeaderDef(l.id); const ex = ld?.levelExtras[l.level - 1];
+    if (!ex?.freePopEveryTurns || turn % ex.freePopEveryTurns !== 0) continue;
+    if (projected >= colony.population.cap) continue;
+    const ultGain = colony.expeditionUnlocks?.includes(l.id) ? getUltimateBonus(ld, 'freePop') : 0;
+    const gain = Math.min(1 + ultGain, colony.population.cap - projected);
+    if (gain > 0) { out.push({ leaderId: l.id, gain }); projected += gain; }
+  }
+  return out;
 }

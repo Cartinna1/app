@@ -1,6 +1,9 @@
 import { useState, memo } from 'react';
-import { getWonderDef, ALL_WONDERS } from '@/data/colony/wonders';
+import { getWonderDef, ALL_WONDERS, toStageCost } from '@/data/colony/wonders';
+import { resourceAmount } from '@/lib/turn/resourceCost';
+import { RESOURCE_LABELS } from '@/data/colony/expeditions';
 import type { Colony } from '@/types/colony';
+import type { Mothership } from '@/types/game';
 
 interface Props {
   colony: Colony;
@@ -179,47 +182,20 @@ function WonderPanel({
     );
   }
 
-  // Resource check helper
-  const checkRes = (need: number, have: number, name: string) => {
-    if (need <= 0) return null;
-    const ok = have >= need;
-    return (
-      <span key={name} className={`text-xs px-1.5 py-0.5 rounded ${ok ? 'bg-green-900/30 text-green-400' : 'bg-red-900/30 text-red-400'}`}>
-        {name}：{have.toLocaleString()}/{need.toLocaleString()}
+  // 当前阶段的投入与充足性判定：投入走唯一真值 toStageCost（与 useWonder 的校验/扣减同源），
+  // 持有量走 lib/turn/resourceCost.resourceAmount，名称走 RESOURCE_LABELS。
+  // 面板只拿到拆分后的资源数值，故拼一个最小对象喂给真值函数（避免再写一份 11 项取值分支）。
+  const shipLike = { gold: shipGold, food: shipFood, alloy: shipAlloy, stardust: shipStardust, materials: shipMaterials } as unknown as Mothership;
+  const stageCost = toStageCost(stage);
+  const haveOf = (key: string) => resourceAmount(shipLike, colony, key);
+  const allPassed = Object.entries(stageCost).every(([key, need]) => haveOf(key) >= need);
+  const allChecks = Object.entries(stageCost)
+    .filter(([key, need]) => haveOf(key) < need)
+    .map(([key, need]) => (
+      <span key={key} className="text-xs px-1.5 py-0.5 rounded bg-red-900/30 text-red-400">
+        {RESOURCE_LABELS[key] || key}：{haveOf(key).toLocaleString()}/{need.toLocaleString()}
       </span>
-    );
-  };
-
-  const checkBool = (need: number, have: number) => need <= 0 || have >= need;
-
-  const resourceFlags = {
-    gold: checkBool(stage.gold, shipGold),
-    alloy: checkBool(stage.alloy, shipAlloy),
-    silicon: checkBool(stage.silicon, shipMaterials.silicon || 0),
-    quantum: checkBool(stage.quantum, shipMaterials.quantum || 0),
-    dark_matter: checkBool(stage.dark_matter, shipMaterials.dark_matter || 0),
-    stardust: checkBool(stage.stardust, shipStardust),
-    food: checkBool(stage.food, shipFood),
-    carbon: checkBool(stage.carbon, shipMaterials.carbon || 0),
-    oil: checkBool(stage.oil, shipMaterials.oil || 0),
-    gold_ore: checkBool(stage.gold_ore, shipMaterials.gold_ore || 0),
-    research: checkBool(stage.research, colony.techState?.researchPoints || 0),
-  };
-  const allPassed = Object.values(resourceFlags).every(Boolean);
-
-  const allChecks = [
-    checkRes(stage.gold, shipGold, '金币'),
-    checkRes(stage.alloy, shipAlloy, '合金'),
-    checkRes(stage.silicon, shipMaterials.silicon || 0, '硅片'),
-    checkRes(stage.quantum, shipMaterials.quantum || 0, '量子簇'),
-    checkRes(stage.dark_matter, shipMaterials.dark_matter || 0, '暗物质'),
-    checkRes(stage.stardust, shipStardust, '星尘'),
-    checkRes(stage.food, shipFood, '食物'),
-    checkRes(stage.carbon, shipMaterials.carbon || 0, '碳块'),
-    checkRes(stage.oil, shipMaterials.oil || 0, '石油'),
-    checkRes(stage.gold_ore, shipMaterials.gold_ore || 0, '黄金'),
-    checkRes(stage.research, colony.techState?.researchPoints || 0, '科研点'),
-  ].filter(Boolean);
+    ));
 
 
   return (
@@ -246,7 +222,7 @@ function WonderPanel({
         {/* 阶段进度条 */}
         <div className="mb-3">
           <p className="text-sm text-slate-400 mb-2">
-            阶段 {ws.currentStage + 1}/8 — {stage.name}（{ws.stageProgress}/{stage.turns} 回合）
+            阶段 {ws.currentStage + 1}/{wonder.stages.length} — {stage.name}（{ws.stageProgress}/{stage.turns} 回合）
           </p>
           <div className="w-full bg-slate-800 rounded-full h-4 overflow-hidden">
             {wonder.stages.map((st, i) => {

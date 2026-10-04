@@ -42,6 +42,8 @@ function EventPanel({
 }: EventPanelProps) {
   // 最终结果展示
   const [result, setResult] = useState<EventResult | null>(null);
+  /** 本次事件的金币收益是否被饥荒减半（结果卡与事件日志同口径，都显示**实收**值并标注） */
+  const [goldHalved, setGoldHalved] = useState(false);
   // 子选择栈：当前正在进行的多层选择
   const [choiceStack, setChoiceStack] = useState<EventSubChoice[]>([]);
   // 累积的资源变动
@@ -94,6 +96,7 @@ function EventPanel({
       ].filter(Boolean).join(' ');
       onLogEvent(current.title || '事件', `选择：${path}｜${res.result.message}${delta ? `（${delta}）` : ''}`);
       setResult(shownResult);
+      setGoldHalved(goldHalved);
       setChoiceStack([]);
       setPendingResources({});
     }
@@ -153,6 +156,7 @@ function EventPanel({
             {result.goldChange !== 0 && (
               <span className={`text-xs font-bold px-2 py-1 rounded ${result.goldChange > 0 ? 'bg-yellow-900/30 text-yellow-400' : 'bg-red-900/30 text-red-400'}`}>
                 <Coins size={10} className="inline mr-1" />{result.goldChange > 0 ? '+' : ''}{result.goldChange.toLocaleString()} 金币
+                {goldHalved && <span className="ml-1 font-normal">(饥荒减半)</span>}
               </span>
             )}
             {result.foodChange !== 0 && (

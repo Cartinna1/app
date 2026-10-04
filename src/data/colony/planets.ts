@@ -29,7 +29,7 @@ export const ALL_PLANETS: PlanetDef[] = [
     description: '永恒的冰雪世界。氮氧大气层，极地冰盖覆盖85%地表。赤道地区有稀疏针叶林和季节性融冰河流。',
     buffs: {
       stardustMult: 1.30, // 星尘 +30%
-      researchMult: 1.0, // 科研回合 -1（低温超导，在processColonyTurn中实现）
+      researchMult: 1.0, // 恒为 1.0（占位）；极地的「科研所需回合 −1」由 colonyTurn.getResearchTargetTurns 实现，不读本字段
       foodConsumptionDelta: 1, // 每人+1食物消耗
       buildTurnDelta: 1, // 建造+1回合
     },
@@ -106,6 +106,7 @@ export const ALL_PLANETS: PlanetDef[] = [
     description: '这个星球表面曾经被完全被单一城市所覆盖。如今这里只有废弃的古老遗迹，其原住民早已离去。',
     buffs: {
       specialEffects: ['初始拥有一座已建造完成的纳米铸造阵列、碳基材料合成器与暗物质压缩阱', '每栋居住舱额外提供 3 人口上限'],
+      housingCapDelta: { B1: 3 }, // 每栋居住舱（B1）额外 +3 人口上限（唯一真值：calcPopCap 读它）
       buildTurnDelta: 1, // 建造 +1回合
       powerUseMult: 1.10, // 功耗 +10%
     },

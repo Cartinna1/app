@@ -3,6 +3,7 @@ import type { GameState } from '@/types/game';
 import { getBuildingDef } from '@/data/colony/buildings';
 import { getRecruitCapPerTurn } from '@/lib/colony/colonyTurn';
 import { getEffectiveMaxPop, getRecruitCostPerPop } from '@/lib/colony/costs';
+import { GOLD_LOG_LIMIT } from '@/data/gameData';
 
 /** 殖民地人口招募 / 分配（从 useColony 拆出） */
 export function useColonyPop(
@@ -40,7 +41,7 @@ export function useColonyPop(
           return prev;
         }
         s.gold -= cost;
-        s.goldLog = [{ turn: prev.turn, amount: -cost, reason: `招募${amount}人口`, balanceAfter: s.gold }, ...s.goldLog].slice(0, 200);
+        s.goldLog = [{ turn: prev.turn, amount: -cost, reason: `招募${amount}人口`, balanceAfter: s.gold }, ...s.goldLog].slice(0, GOLD_LOG_LIMIT);
         s.colony = {
           ...s.colony,
           population: {

@@ -26,10 +26,6 @@ export function getDistance(fromId: string, toId: string): number {
   return getTradeDistance(fromId, toId);
 }
 
-export function getTravelTurns(fromId: string, toId: string): number {
-  return getDistance(fromId, toId);
-}
-
 // ==================== 贸易政策系统 ====================
 
 export const POLICY_EFFECTS: Record<TradePolicy, PolicyEffect> = {
@@ -121,51 +117,9 @@ export function getSellPrice(
 }
 
 // ==================== 投资系统 ====================
-
-export function getInvestmentTier(invested: number): number {
-  const pct = invested / 80000;
-  if (pct >= 1) return 6;
-  if (pct >= 0.625) return 5;
-  if (pct >= 0.5) return 4;
-  if (pct >= 0.375) return 3;
-  if (pct >= 0.25) return 2;
-  if (pct >= 0.125) return 1;
-  return 0;
-}
-
-export function getDiscountRate(tier: number): number {
-  switch (tier) {
-    case 6: return 0.38;
-    case 5: return 0.30;
-    case 4: return 0.25;
-    case 3: return 0.20;
-    case 2: return 0.20;
-    case 1: return 0.10;
-    default: return 0;
-  }
-}
-
-export function getIncomeCap(tier: number): number {
-  switch (tier) {
-    case 6: return 4500;
-    case 5: return 2000;
-    case 4: return 1300;
-    case 3: return 800;
-    default: return 0;
-  }
-}
-
-export function getBuffDescription(tier: number): string {
-  switch (tier) {
-    case 6: return '购买优惠38% + 每回合≤4500金币收益 + 每5回合自动补给特产x3';
-    case 5: return '购买优惠30% + 每回合≤2000金币收益';
-    case 4: return '购买优惠25% + 每回合≤1300金币收益';
-    case 3: return '购买优惠20% + 每回合≤800金币收益';
-    case 2: return '购买优惠20%';
-    case 1: return '购买优惠10%';
-    default: return '投资后可获得优惠';
-  }
-}
+// 旧的「投资档位」系统已退役（投资 = 固定 8000 金币 → +1 声望，回报走 REPUTATION_TIERS 的被动收入
+// 与买价折扣）。随之失活的 getInvestmentTier / getDiscountRate / getIncomeCap / getBuffDescription
+// 已删除，勿再引回（存档字段 FactionState.invested 仅保留给读档迁移做一次性声望折算）。
 
 // ==================== 势力声望 ====================
 

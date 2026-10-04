@@ -1,14 +1,23 @@
 import { useCallback } from 'react';
 import type { GameState, Loan } from '@/types/game';
+import { GOLD_LOG_LIMIT } from '@/data/gameData';
+import { createUid } from '@/lib/id';
 
-// 贷款利率表：5回合40%，10回合60%，15回合90%
-export const LOAN_PLANS = [
-  { turns: 5, rate: 0.4, label: '5回合', totalRate: '40%' },
-  { turns: 10, rate: 0.6, label: '10回合', totalRate: '60%' },
-  { turns: 15, rate: 0.9, label: '15回合', totalRate: '90%' },
+// 贷款利率表（唯一真值：面板 LoanPanel 也 import 本表，勿再在组件里另写一份）
+// 总利率口径：takeLoan 里 totalInterest = principal × rate
+export interface LoanPlan {
+  turns: number;
+  rate: number;
+  label: string;
+  rateLabel: string;
+}
+export const LOAN_PLANS: LoanPlan[] = [
+  { turns: 5, rate: 0.4, label: '5回合', rateLabel: '到期总利率40%' },
+  { turns: 10, rate: 0.6, label: '10回合', rateLabel: '到期总利率60%' },
+  { turns: 15, rate: 0.9, label: '15回合', rateLabel: '到期总利率90%' },
 ];
 
-// 贷款额度分档（随游戏进度解锁）
+// 贷款额度分档（随游戏进度解锁）—— 唯一真值：额度/名称/解锁条件都只在下面这张阶梯表里
 // 青铜 5万（初始） → 白银 20万（解锁殖民地） → 黄金 50万（人口≥50） → 白金 100万（任一势力声望=100）
 export interface LoanTier {
   name: string;
@@ -18,30 +27,39 @@ export interface LoanTier {
   nextCondition: string | null;
 }
 
-export function getLoanLimit(gameState: GameState): number {
+const LOAN_TIER_LADDER: Array<{ name: string; limit: number; condition: string | null }> = [
+  { name: '青铜', limit: 50000, condition: '解锁殖民地' },
+  { name: '白银', limit: 200000, condition: '殖民地人口达到 50' },
+  { name: '黄金', limit: 500000, condition: '任一势力声望达到 100' },
+  { name: '白金', limit: 1000000, condition: null },
+];
+
+/** 当前额度档位在阶梯中的下标（getLoanLimit 与 getLoanTierInfo 共用同一判据，勿各写一份） */
+function getLoanTierIndex(gameState: GameState): number {
   const ship = gameState.ships[0];
-  if (!ship?.colony) return 50000; // 青铜
+  if (!ship?.colony) return 0;
   const pop = ship.colony.population?.total || 0;
   const anyMax = Object.values(gameState.factionReputation || {}).some((r) => r >= 100);
-  if (anyMax) return 1000000; // 白金：满声望
-  if (pop >= 50) return 500000; // 黄金：50 人口
-  return 200000; // 白银
+  if (anyMax) return 3;
+  if (pop >= 50) return 2;
+  return 1;
+}
+
+export function getLoanLimit(gameState: GameState): number {
+  return LOAN_TIER_LADDER[getLoanTierIndex(gameState)].limit;
 }
 
 export function getLoanTierInfo(gameState: GameState): LoanTier {
-  const ship = gameState.ships[0];
-  if (!ship?.colony) {
-    return { name: '青铜', limit: 50000, nextName: '白银', nextLimit: 200000, nextCondition: '解锁殖民地' };
-  }
-  const pop = ship.colony.population?.total || 0;
-  const anyMax = Object.values(gameState.factionReputation || {}).some((r) => r >= 100);
-  if (anyMax) {
-    return { name: '白金', limit: 1000000, nextName: null, nextLimit: null, nextCondition: null };
-  }
-  if (pop >= 50) {
-    return { name: '黄金', limit: 500000, nextName: '白金', nextLimit: 1000000, nextCondition: '任一势力声望达到 100' };
-  }
-  return { name: '白银', limit: 200000, nextName: '黄金', nextLimit: 500000, nextCondition: '殖民地人口达到 50' };
+  const idx = getLoanTierIndex(gameState);
+  const cur = LOAN_TIER_LADDER[idx];
+  const next = idx + 1 < LOAN_TIER_LADDER.length ? LOAN_TIER_LADDER[idx + 1] : undefined;
+  return {
+    name: cur.name,
+    limit: cur.limit,
+    nextName: next ? next.name : null,
+    nextLimit: next ? next.limit : null,
+    nextCondition: next ? next.condition : null,
+  };
 }
 
 export function useLoan(
@@ -62,7 +80,7 @@ export function useLoan(
       const totalRepay = principal + totalInterest;
       const perTurnPayment = Math.round(totalRepay / plan.turns);
       const loan: Loan = {
-        id: `loan_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+        id: createUid('loan'),
         principal,
         interestRate: plan.rate,
         totalTurns: plan.turns,
@@ -81,7 +99,7 @@ export function useLoan(
           s.loans = [...s.loans, loan];
           s.gold += principal;
           if (s.bankrupt && s.gold > 0) s.bankrupt = false;
-          s.goldLog = [{ turn: prev.turn, amount: principal, reason: `星际银行贷款${principal}金币`, balanceAfter: s.gold }, ...s.goldLog].slice(0, 200);
+          s.goldLog = [{ turn: prev.turn, amount: principal, reason: `星际银行贷款${principal}金币`, balanceAfter: s.gold }, ...s.goldLog].slice(0, GOLD_LOG_LIMIT);
           ships[shipIndex] = s;
           return { ...prev, ships };
         },
@@ -105,7 +123,7 @@ export function useLoan(
           const remaining = loan.totalRepay - loan.repaid;
           if (s.gold < remaining) { result = { success: false, message: `金币不足，还需${remaining}金币` }; return prev; }
           s.gold -= remaining;
-          s.goldLog = [{ turn: prev.turn, amount: -remaining, reason: `提前还清贷款`, balanceAfter: s.gold }, ...s.goldLog].slice(0, 200);
+          s.goldLog = [{ turn: prev.turn, amount: -remaining, reason: `提前还清贷款`, balanceAfter: s.gold }, ...s.goldLog].slice(0, GOLD_LOG_LIMIT);
           s.loans = s.loans.filter((_, i) => i !== loanIdx);
           result = { success: true, message: `提前还清贷款！支付${remaining}金币` };
           ships[shipIndex] = s;

@@ -1,11 +1,14 @@
-import { useState, useMemo, memo } from 'react';
+import { useState, useMemo, memo, useEffect } from 'react';
 import type { Mothership, Faction, TradePolicy, PolicyEffect, FactionContract } from '@/types/game';
-import { getSellPrice, getReputationTier, FACTIONS as FACTIONS_DATA } from '@/data/factions';
-import { summarizeBuffs, isBuffExpiringSoon, getBuffRemainingTurns } from '@/lib/turn/factionTurn';
-import { getSpecialtyBuyUnitPrice, getSpecialtySellRevenue, getBlackMarketTotal } from '@/lib/turn/tradePrice';
-import { getContractItemName } from '@/lib/turn/contracts';
+import { getSellPrice, getReputationTier } from '@/data/factions';
+import { summarizeBuffs, isBuffExpiringSoon, getBuffRemainingTurns, getBuffMultiplier } from '@/lib/turn/factionTurn';
+import { getSpecialtyBuyUnitPrice, getSpecialtySellRevenue, getBlackMarketTotal, getBlackMarketMaxQty } from '@/lib/turn/tradePrice';
+import { getContractItemName, SMUGGLING_SUCCESS_RATE } from '@/lib/turn/contracts';
+import { RELIC_DECIPHERER } from '@/data/relics';
+import { BLACK_MARKET_DEFAULT, INVEST_GOLD_PER_REP, INVEST_MAX_PER_TURN } from '@/data/exchangeRates';
 import { getGalaxyNode } from '@/data/galaxy/nodes';
-import { getKnownFactionIds, getKnownRelation } from '@/lib/galaxy/knowledge';
+import { getKnownFactionIds, getKnownRelation, getNodeDisplayName } from '@/lib/galaxy/knowledge';
+import { HOSTILE_REP_THRESHOLD } from '@/lib/galaxy/access';
 import { Globe, ShoppingCart, TrendingUp, Compass, Coins, Rocket, BarChart3, Radio, AlertTriangle } from 'lucide-react';
 
 export interface TradePanelProps {
@@ -79,10 +82,9 @@ function TradePanel({ factions, ship, factionPrices, factionSellMultipliers, bla
     () => [...factions].sort((a, b) => Number(knownFactionIds.has(b.id)) - Number(knownFactionIds.has(a.id))),
     [factions, knownFactionIds]
   );
-  // 迷雾：跃迁途中不暴露未探测过的目的地名称（否则会泄露星球类型等信息）
-  const travelTargetName = travelTarget
-    ? ((ship.galaxy.visitedNodes || []).includes(travelTarget.id) ? travelTarget.name : '未探测星系')
-    : '未知星系';
+  // 迷雾：跃迁途中不暴露未探测过的目的地名称（否则会泄露星球类型等信息）。
+  // 唯一真值 lib/galaxy/knowledge.getNodeDisplayName（星图信息卡与「下一回合预告」同源），勿再内联判断
+  const travelTargetName = getNodeDisplayName(ship, galaxy.targetNodeId);
 
   const inventoryEntries = Object.entries(ts.inventory).filter(([, count]) => count > 0);
 
@@ -93,16 +95,16 @@ function TradePanel({ factions, ship, factionPrices, factionSellMultipliers, bla
   // 当前势力的市场价（带声望折扣 + 涨价buff + 讨价还价AI；与结算同源）
   const marketPrice = currentFaction ? (factionPrices[currentFaction.id] || currentFaction.basePrice) : 0;
   const curFid = currentFactionId || '';
-  const buyBuffMult = currentFaction ? (buyBuffs?.[currentFaction.id] || []).reduce((m, b) => m * b.multiplier, 1) : 1;
+  const buyBuffMult = currentFaction ? getBuffMultiplier(buyBuffs?.[currentFaction.id]) : 1;
   const buyPrice = currentFaction
     ? getSpecialtyBuyUnitPrice(currentFaction.id, factionPrices, currentRep, buyBuffMult, relicIds)
     : marketPrice;
   const buyStockLeft = currentFaction ? (buyStocks?.[currentFaction.id] ?? 0) : 0;
   const sellDemandLeft = sellDemands?.[curFid] ?? 0;
-  const sellBuffMult = (sellBuffs?.[curFid] || []).reduce((m, b) => m * b.multiplier, 1);
+  const sellBuffMult = getBuffMultiplier(sellBuffs?.[curFid]);
   // 选中跃迁目标是否为宿敌（声望 ≤ -91 禁止进入；恶意 -90~-51 可跃迁）
   const selectedRep = selectedTarget ? (factionReputation || {})[selectedTarget] || 0 : 0;
-  const isHostile = selectedRep <= -91;
+  const isHostile = selectedRep <= HOSTILE_REP_THRESHOLD;
 
   // 解析输入数量（字符串 → 数字，非法/空返回 0）
   const buyQtyNum = parseInt(buyQty, 10) || 0;
@@ -114,12 +116,18 @@ function TradePanel({ factions, ship, factionPrices, factionSellMultipliers, bla
   // 黑市采购：选中势力、单价、总价（唯一真值 lib/turn/tradePrice.ts：末尾一次 ceil，涨价 buff 也继承）
   const blackFactionData = blackFaction ? factions.find((f) => f.id === blackFaction) : null;
   const blackBasePrice = blackFactionData ? (factionPrices[blackFaction] || blackFactionData.basePrice) : 0;
-  const blackBuffMult = blackFaction ? (buyBuffs?.[blackFaction] || []).reduce((m, b) => m * b.multiplier, 1) : 1;
-  const blackPrice = blackFaction ? getBlackMarketTotal(blackFaction, factionPrices, blackBuffMult, blackMarketMultiplier || 3.2, 1) : 0;
+  const blackBuffMult = blackFaction ? getBuffMultiplier(buyBuffs?.[blackFaction]) : 1;
+  const blackPrice = blackFaction ? getBlackMarketTotal(blackFaction, factionPrices, blackBuffMult, blackMarketMultiplier || BLACK_MARKET_DEFAULT, 1) : 0;
   const blackQtyNum = parseInt(blackQty, 10) || 0;
-  const blackTotal = blackFaction ? getBlackMarketTotal(blackFaction, factionPrices, blackBuffMult, blackMarketMultiplier || 3.2, blackQtyNum) : 0;
+  const blackTotal = blackFaction ? getBlackMarketTotal(blackFaction, factionPrices, blackBuffMult, blackMarketMultiplier || BLACK_MARKET_DEFAULT, blackQtyNum) : 0;
   const canBlackBuy = !!(blackFactionData && blackQtyNum > 0 && ship.gold >= blackTotal);
-  const maxBlackQty = blackPrice > 0 ? Math.floor(ship.gold / blackPrice) : 0;
+  // 最大可买量走唯一真值（与"末尾一次 ceil"严格等价；旧写法 floor(金币 / ceil 单价) 会少给 1 件）
+  const maxBlackQty = blackFaction ? getBlackMarketMaxQty(blackFaction, factionPrices, blackBuffMult, blackMarketMultiplier || BLACK_MARKET_DEFAULT, ship.gold) : 0;
+
+  // 投资页签依赖"停泊在势力星系"：跃迁离开后自动回落到列表，避免出现"投资 undefined"的空页
+  useEffect(() => {
+    if (activeTab === 'buy-invest' && !currentFaction) setActiveTab('overview');
+  }, [activeTab, currentFaction]);
 
   const handleTravel = () => {
     if (!selectedTarget) { setMessage('请选择目标势力'); setMsgType('error'); return; }
@@ -158,8 +166,8 @@ function TradePanel({ factions, ship, factionPrices, factionSellMultipliers, bla
   };
 
   const handleInvest = () => {
-    if (ship.gold < 8000) { setMessage('金币不足，需要8000金币'); setMsgType('error'); return; }
-    const res = onInvest(8000);
+    if (ship.gold < INVEST_GOLD_PER_REP) { setMessage(`金币不足，需要${INVEST_GOLD_PER_REP}金币`); setMsgType('error'); return; }
+    const res = onInvest(INVEST_GOLD_PER_REP);
     setMessage(res.message); setMsgType(res.success ? 'success' : 'error');
     
     setTimeout(() => setMessage(''), 5000);
@@ -338,12 +346,12 @@ function TradePanel({ factions, ship, factionPrices, factionSellMultipliers, bla
                           <span className={`text-xs px-1.5 py-0.5 rounded font-bold ${fRep < -20 ? 'bg-red-900/60 text-red-300' : fRep < 30 ? 'bg-slate-700 text-slate-300' : fRep < 70 ? 'bg-cyan-700 text-cyan-100' : 'bg-amber-600 text-white'}`}>{fRepTier.label} <span className={fRep < 0 ? 'text-red-400' : fRep > 0 ? 'text-green-300' : ''}>{fRep}</span></span>
                           {fRel.allies.length > 0 && (
                             <span className="text-[10px] md:text-xs px-1.5 py-0.5 rounded bg-emerald-900/40 text-emerald-300 border border-emerald-700/50">
-                              友：{fRel.allies.map(id => FACTIONS_DATA.find(x => x.id === id)?.name).filter(Boolean).join('、')}
+                              友：{fRel.allies.map(id => factions.find(x => x.id === id)?.name).filter(Boolean).join('、')}
                             </span>
                           )}
                           {fRel.enemies.length > 0 && (
                             <span className="text-[10px] md:text-xs px-1.5 py-0.5 rounded bg-red-900/40 text-red-300 border border-red-700/50">
-                              敌：{fRel.enemies.map(id => FACTIONS_DATA.find(x => x.id === id)?.name).filter(Boolean).join('、')}
+                              敌：{fRel.enemies.map(id => factions.find(x => x.id === id)?.name).filter(Boolean).join('、')}
                             </span>
                           )}
                           {fRel.hiddenCount > 0 && (
@@ -465,16 +473,16 @@ function TradePanel({ factions, ship, factionPrices, factionSellMultipliers, bla
               <h3 className="text-lg font-bold text-slate-200 flex items-center gap-2"><BarChart3 size={18} className="text-blue-400" /> 投资 {currentFaction?.name}</h3>
               <button onClick={() => setActiveTab('buy')} className="text-xs text-slate-400 hover:text-slate-300">← 返回购买</button>
             </div>
-            <p className="text-sm text-slate-400 mb-4">向{currentFaction?.name || '当前势力'}换取声望。每<strong className="text-yellow-400">8000金币</strong>=1声望，每回合最多+10。</p>
+            <p className="text-sm text-slate-400 mb-4">向{currentFaction?.name || '当前势力'}换取声望。每<strong className="text-yellow-400">{INVEST_GOLD_PER_REP}金币</strong>=1声望，每回合最多+{INVEST_MAX_PER_TURN}。</p>
             <div className="mb-4 bg-slate-800/60 rounded-lg p-3">
-              <div className="flex justify-between text-xs text-slate-400 mb-1"><span>当前声望：<span className="text-amber-400 font-bold">{currentRep}</span>（{currentRepTier.label}）</span><span>每回合最多 10 次</span></div>
+              <div className="flex justify-between text-xs text-slate-400 mb-1"><span>当前声望：<span className="text-amber-400 font-bold">{currentRep}</span>（{currentRepTier.label}）</span><span>每回合最多 {INVEST_MAX_PER_TURN} 次</span></div>
               <div className="h-1.5 bg-slate-700 rounded-full relative">
                 <div className="absolute left-1/2 top-0 bottom-0 w-px bg-slate-500"></div>
                 <div className="absolute top-0 bottom-0 rounded-full bg-blue-500" style={{ left: `${Math.min(50 + currentRep/2, 100)}%`, width: `${Math.abs(currentRep)/2}%` }}></div>
               </div>
             </div>
-            <p className="text-xs text-slate-500 mb-3">每次点击投资按钮固定消耗 <span className="text-yellow-400 font-bold">8000金币</span> 获得 <span className="text-amber-400 font-bold">+1声望</span>，本回合最多 10 次。</p>
-            <button onClick={handleInvest} disabled={ship.gold < 8000} className="w-full py-2.5 bg-blue-700 hover:bg-blue-600 disabled:bg-slate-700 disabled:text-slate-500 rounded-lg font-bold text-white transition-colors flex items-center justify-center gap-2"><Coins size={16} /> 投资 8000 金币（+1声望）</button>
+            <p className="text-xs text-slate-500 mb-3">每次点击投资按钮固定消耗 <span className="text-yellow-400 font-bold">{INVEST_GOLD_PER_REP}金币</span> 获得 <span className="text-amber-400 font-bold">+1声望</span>，本回合最多 {INVEST_MAX_PER_TURN} 次。</p>
+            <button onClick={handleInvest} disabled={ship.gold < INVEST_GOLD_PER_REP} className="w-full py-2.5 bg-blue-700 hover:bg-blue-600 disabled:bg-slate-700 disabled:text-slate-500 rounded-lg font-bold text-white transition-colors flex items-center justify-center gap-2"><Coins size={16} /> 投资 {INVEST_GOLD_PER_REP} 金币（+1声望）</button>
           </div>
         )
       )}
@@ -495,7 +503,7 @@ function TradePanel({ factions, ship, factionPrices, factionSellMultipliers, bla
                         降价中 ×{sellBuffMult.toFixed(2)}
                         <span className="block text-[10px] font-normal mt-0.5 text-orange-400/80">
                           {(sellBuffs?.[curFid] || []).map((b, i) => (
-                            <span key={i} className="mr-2">×{b.multiplier.toFixed(2)} 剩 {Math.max(0, b.expiresTurn - currentTurn)} 回合</span>
+                            <span key={i} className="mr-2">×{b.multiplier.toFixed(2)} 剩 {getBuffRemainingTurns(b, currentTurn)} 回合</span>
                           ))}
                         </span>
                       </span>
@@ -622,17 +630,21 @@ function TradePanel({ factions, ship, factionPrices, factionSellMultipliers, bla
                     <div key={c.id} className="flex items-center justify-between bg-slate-800/60 rounded p-2 mb-1 text-xs">
                       <div className="flex-1">
                         <span className={c.type==='smuggling'?'text-red-400':'text-cyan-400'}>{c.type==='smuggling'?'走私':'采购'}</span>
-                        <span className="text-slate-100 font-bold ml-1">{getContractItemName(c, FACTIONS_DATA)}</span>
+                        <span className="text-slate-100 font-bold ml-1">{getContractItemName(c, factions)}</span>
                         <span className="text-slate-300 ml-1">x{c.targetQty}</span>
                         <span className="text-slate-500 ml-1">| +{c.rewardGold}金 +{c.rewardRep}声望</span>
                         <span className="text-slate-600 ml-1">| 剩余 {Math.max(0, c.expiresTurn - currentTurn)} 回合可接取</span>
+                        {/* 走私风险参数给出 UI 出口（唯一真值 SMUGGLING_SUCCESS_RATE；持破译器必定成功） */}
+                        {c.type === 'smuggling' && (
+                          <span className="text-red-400 ml-1">| 成功率 {relicIds.includes(RELIC_DECIPHERER) ? '100%（情报破译器）' : `${Math.round(SMUGGLING_SUCCESS_RATE * 100)}%（失败 −5 声望）`}</span>
+                        )}
                       </div>
                       <button onClick={() => { const r = onAcceptContract(c.id); setMessage(r.message); setMsgType(r.success ? 'success' : 'error'); setTimeout(() => setMessage(''), 5000); }} className="px-2 py-1 bg-amber-700 hover:bg-amber-600 rounded text-xs">接取</button>
                     </div>
                   ))}
                   {activeContracts.map((c) => (
                     <div key={c.id} className="flex items-center justify-between bg-green-900/30 rounded p-2 mb-1 text-xs">
-                      <span className="text-green-400">{c.type==='smuggling'?'走私':'采购'} <span className="font-bold">{getContractItemName(c, FACTIONS_DATA)}</span> x{c.targetQty} | +{c.rewardGold}金 +{c.rewardRep}声望 | 剩余 {Math.max(0, c.expiresTurn - currentTurn)} 回合完成</span>
+                      <span className="text-green-400">{c.type==='smuggling'?'走私':'采购'} <span className="font-bold">{getContractItemName(c, factions)}</span> x{c.targetQty} | +{c.rewardGold}金 +{c.rewardRep}声望 | 剩余 {Math.max(0, c.expiresTurn - currentTurn)} 回合完成</span>
                       <button onClick={() => { const r = onCompleteContract(c.id); setMessage(r.message); setMsgType(r.success ? 'success' : 'error'); }} className="px-2 py-1 bg-green-700 hover:bg-green-600 rounded text-xs">提交</button>
                     </div>
                   ))}
@@ -648,15 +660,20 @@ function TradePanel({ factions, ship, factionPrices, factionSellMultipliers, bla
             {/* 黑市采购 */}
             {currentFaction && (
               <div className="mt-3 pt-3 border-t border-slate-700">
-                <p className="text-xs text-slate-500 mb-2">黑市采购（当前 {blackMarketMultiplier || 3.2} 倍价格，不影响声望）</p>
-                {/* 势力选择 */}
+                <p className="text-xs text-slate-500 mb-2">黑市采购（当前 {blackMarketMultiplier || BLACK_MARKET_DEFAULT} 倍价格，不影响声望）</p>
+                {/* 势力选择：**受迷雾约束**（与「势力列表」同口径，唯一真值 lib/galaxy/knowledge.getKnownFactionIds）——
+                    未探明势力只显示锁定占位，不露名称/特产/市场价 */}
                 <div className="flex gap-1.5 mb-3 overflow-x-auto pb-1 scrollbar-hide">
-                  {['f01','f02','f03','f04','f05','f06','f07','f08','f09','f10'].map(fid => {
-                    const f = factions.find(ff => ff.id === fid);
-                    if (!f) return null;
-                    const isSel = blackFaction === fid;
+                  {orderedFactions.map((f) => {
+                    if (!knownFactionIds.has(f.id)) {
+                      return (
+                        <button key={f.id} disabled title="跃迁抵达后揭晓"
+                          className="flex-shrink-0 px-2.5 py-1.5 rounded-md text-xs font-bold border border-slate-700 bg-slate-800/60 text-slate-600 cursor-not-allowed">?</button>
+                      );
+                    }
+                    const isSel = blackFaction === f.id;
                     return (
-                      <button key={fid} onClick={() => { setBlackFaction(fid); setBlackQty('1'); }}
+                      <button key={f.id} onClick={() => { setBlackFaction(f.id); setBlackQty('1'); }}
                         className={`flex-shrink-0 px-2.5 py-1.5 rounded-md text-xs font-bold border transition-all ${isSel ? 'bg-purple-700 text-white border-purple-500' : 'bg-purple-900/60 text-purple-300 border-slate-700 hover:border-purple-500'}`}>
                         {isSel ? f.name : f.name.slice(0, 2)}
                       </button>
@@ -676,7 +693,7 @@ function TradePanel({ factions, ship, factionPrices, factionSellMultipliers, bla
                       <div className="flex-1 min-w-0">
                         <p className="text-sm font-bold text-slate-200">{blackFactionData.name}</p>
                         <p className="text-xs text-slate-400">特产：{blackFactionData.specialtyName}</p>
-                        <p className="text-xs text-slate-500 mt-0.5">单价 <span className="text-purple-300 font-bold">{blackPrice.toLocaleString()}</span> 金币（市场价 {blackBasePrice.toLocaleString()} × {blackMarketMultiplier || 3.2}{blackBuffMult > 1 ? ` × 涨价${blackBuffMult.toFixed(2)}（${(buyBuffs?.[blackFaction] || []).map((b) => `剩${Math.max(0, b.expiresTurn - currentTurn)}回`).join('，')}）` : ''}）</p>
+                        <p className="text-xs text-slate-500 mt-0.5">单价 <span className="text-purple-300 font-bold">{blackPrice.toLocaleString()}</span> 金币（市场价 {blackBasePrice.toLocaleString()} × {blackMarketMultiplier || BLACK_MARKET_DEFAULT}{blackBuffMult > 1 ? ` × 涨价${blackBuffMult.toFixed(2)}（${(buyBuffs?.[blackFaction] || []).map((b) => `剩${getBuffRemainingTurns(b, currentTurn)}回`).join('，')}）` : ''}）</p>
                       </div>
                     </div>
                     <div className="flex items-center gap-2 mb-3">

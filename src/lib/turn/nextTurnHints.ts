@@ -14,7 +14,8 @@ import type { GameState } from '@/types/game';
 import { computeCrewFoodCost } from '@/lib/turn/shipTurn';
 import { getShipPerTurnIncome } from '@/lib/turn/shipIncome';
 import { computeColonyPower } from '@/lib/colony/economy';
-import { getRecruitCapPerTurn, hasBlackoutImmunity, projectColonyEnergy, getResearchTargetTurns } from '@/lib/colony/colonyTurn';
+import { getRecruitCapPerTurn, hasBlackoutImmunity, projectColonyEnergy, getResearchTargetTurns, resolveBlackout, BLACKOUT_GUARD_TURNS, getFreePopGains } from '@/lib/colony/colonyTurn';
+import { isPaidStage } from '@/lib/colony/expeditionTurn';
 import { getContractEarliestExpiry, getContractHeldCount, getContractItemName, getContractRequiredTotals } from '@/lib/turn/contracts';
 import { getBuildingCostProfile, getRecruitCostPerPop } from '@/lib/colony/costs';
 import { checkRepBlock, getCurrentFactionId } from '@/lib/galaxy/access';
@@ -90,14 +91,25 @@ export function getNextTurnHints(state: GameState): NextTurnHint[] {
     const projected = projectColonyEnergy(colony.energy ?? 0, net);
     if (projected < 0) {
       const permGuard = getPermaBonusValue(ship.galaxy?.permaBonuses, 'blackoutGuardTurns');
-      const guarded = hasBlackoutImmunity(colony) || permGuard > 0;
-      out.push({
-        id: 'blackout',
-        severity: guarded ? 'warn' : 'danger',
-        text: guarded
-          ? `殖民地下回合净电力 ${net}（有停电保护：余晖脉冲 / 永续光，本次不会停电）`
-          : `殖民地下回合净电力 ${net} → 将停电（补电力建筑或调低用电）`,
-      });
+      const hasProtection = hasBlackoutImmunity(colony) || permGuard > 0;
+      // 与结算同一判定（resolveBlackout 是唯一真值）：**保护计数耗尽的那一回合会真的停电**，
+      // 只看"有没有保护"会漏报——曾出现"提示说本次不会停电、实际停电"。
+      const willBlackout = resolveBlackout(colony, projected, hasProtection, BLACKOUT_GUARD_TURNS + permGuard).blackout;
+      if (willBlackout) {
+        out.push({
+          id: 'blackout',
+          severity: 'danger',
+          text: hasProtection
+            ? `殖民地下回合净电力 ${net} → 将停电（停电保护在本回合耗尽）`
+            : `殖民地下回合净电力 ${net} → 将停电（补电力建筑或调低用电）`,
+        });
+      } else if (hasProtection) {
+        out.push({
+          id: 'blackout',
+          severity: 'warn',
+          text: `殖民地下回合净电力 ${net}（有停电保护：余晖脉冲 / 永续光，本次不会停电）`,
+        });
+      }
     }
   }
 
@@ -180,9 +192,9 @@ export function getNextTurnHints(state: GameState): NextTurnHint[] {
     }
   }
 
-  // B5 远征本回合未支付 → 下回合原地停留
+  // B5 远征本回合未支付 → 下回合原地停留（付费层判定走唯一真值 isPaidStage，勿写魔法区间）
   const ex = colony?.expedition;
-  if (ex && !ex.paidThisTurn && ex.stage >= 3 && ex.stage <= 5) {
+  if (ex && !ex.paidThisTurn && isPaidStage(ex.stage)) {
     out.push({
       id: 'expedition_unpaid',
       severity: 'warn',
@@ -265,12 +277,10 @@ export function getNextTurnHints(state: GameState): NextTurnHint[] {
       }
     }
 
-    // C5 下回合免费人口（每 N 回合一次，与 colonyTurn 的 `_turn % N` 同源）
-    for (const l of colony.leaders) {
-      const n = getLeaderDef(l.id)?.levelExtras[l.level - 1]?.freePopEveryTurns;
-      if (n && next % n === 0) {
-        out.push({ id: `free_pop_${l.id}`, severity: 'info', text: `下回合「${leaderNameOf(l.id)}」带来免费人口 +1` });
-      }
+    // C5 下回合免费人口（每 N 回合一次）——与 colonyTurn 的结算共用 getFreePopGains（唯一真值），
+    // 故满人口时会正确地不报（历史上只判 `next % N === 0`，满员也报「+1」）
+    for (const g of getFreePopGains(colony, next)) {
+      out.push({ id: `free_pop_${g.leaderId}`, severity: 'info', text: `下回合「${leaderNameOf(g.leaderId)}」带来免费人口 +${g.gain}` });
     }
 
     // C6 本回合还能招募领袖——条件与动作层同源（useColonyLeaders.rollAndRecruit：容量未满 + 星尘够），

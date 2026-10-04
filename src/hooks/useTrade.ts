@@ -1,14 +1,16 @@
 import { useCallback } from 'react';
 import type { GameState, Mothership } from '@/types/game';
 import { FACTIONS, getSellPrice, RELATION_MATRIX } from '@/data/factions';
-import { RECIPES } from '@/data/gameData';
-import { getContractItemKind } from '@/lib/turn/contracts';
+import { RECIPES, GOLD_LOG_LIMIT } from '@/data/gameData';
+import { getContractItemKind, SMUGGLING_SUCCESS_RATE } from '@/lib/turn/contracts';
+import { getBuffMultiplier } from '@/lib/turn/factionTurn';
+import { INVEST_GOLD_PER_REP, INVEST_MAX_PER_TURN, BLACK_MARKET_DEFAULT } from '@/data/exchangeRates';
 import { getShipTravel } from '@/lib/galaxy/travel';
 import { checkRepBlock, getBlockedNodeIds, getCurrentFactionId } from '@/lib/galaxy/access';
 import { getGalaxyNode } from '@/data/galaxy/nodes';
-import { MATERIAL_NAME_MAP } from '@/data/materialNames';
+import { MATERIAL_NAME_MAP, ALL_MATERIAL_IDS } from '@/data/materialNames';
 import { RELIC_DECIPHERER } from '@/data/relics';
-import { famineHalveGold } from '@/lib/turn/shipTurn';
+import { famineHalveGold, BANKRUPT_TURNS } from '@/lib/turn/shipTurn';
 import { getSpecialtyBuyUnitPrice, getSpecialtySellRevenue, getBlackMarketTotal } from '@/lib/turn/tradePrice';
 
 
@@ -132,12 +134,12 @@ export function useTrade(
           if (quantity > available) { result = { success: false, message: `库存不足，本回合仅剩${available}个` }; return prev; }
           // 价格：市场价 × 声望折扣 × 涨价buff × 讨价还价AI（唯一真值 lib/turn/tradePrice.ts，贸易面板显示同源）
           const rep = prev.factionReputation?.[faction.id] || 0;
-          const buyBuffMult = (prev.buyBuffs?.[faction.id] || []).reduce((m, b) => m * b.multiplier, 1);
+          const buyBuffMult = getBuffMultiplier(prev.buyBuffs?.[faction.id]);
           const price = getSpecialtyBuyUnitPrice(faction.id, prev.factionPrices, rep, buyBuffMult, s.relics.map((r) => r.id));
           const totalCost = price * quantity;
           if (s.gold < totalCost) { result = { success: false, message: `金币不足，需${totalCost}` }; return prev; }
           s.gold -= totalCost;
-          s.goldLog = [{ turn: prev.turn, amount: -totalCost, reason: `购买「${faction.specialtyName}」x${quantity}`, balanceAfter: s.gold }, ...s.goldLog].slice(0, 200);
+          s.goldLog = [{ turn: prev.turn, amount: -totalCost, reason: `购买「${faction.specialtyName}」x${quantity}`, balanceAfter: s.gold }, ...s.goldLog].slice(0, GOLD_LOG_LIMIT);
           s.tradeStatus = { ...s.tradeStatus };
           s.tradeStatus.inventory = { ...s.tradeStatus.inventory };
           s.tradeStatus.inventory[faction.id] = (s.tradeStatus.inventory[faction.id] || 0) + quantity;
@@ -188,12 +190,12 @@ export function useTrade(
           const faction = prev.factions.find((f) => f.id === factionId);
           if (!faction) { result = { success: false, message: '找不到势力' }; return prev; }
           const sellPrice = getSellPrice(factionId, prev.factionPrices, prev.factionSellMultipliers);
-          const sellBuffMult = (prev.sellBuffs?.[curFid] || []).reduce((m, b) => m * b.multiplier, 1);
+          const sellBuffMult = getBuffMultiplier(prev.sellBuffs?.[curFid]);
           // 收益加成（反垄断 1.1 / 套利凭证 1.05 / 贸易枢纽 1.15）唯一真值 lib/turn/tradePrice.ts
           const totalRevenue = getSpecialtySellRevenue(quantity, sellPrice, sellBuffMult, s.relics.map((r) => r.id), s.installedModuleIds);
           s.gold += totalRevenue;
           if (s.bankrupt && s.gold > 0) s.bankrupt = false;
-          s.goldLog = [{ turn: prev.turn, amount: totalRevenue, reason: `卖出「${faction.specialtyName}」x${quantity}`, balanceAfter: s.gold }, ...s.goldLog].slice(0, 200);
+          s.goldLog = [{ turn: prev.turn, amount: totalRevenue, reason: `卖出「${faction.specialtyName}」x${quantity}`, balanceAfter: s.gold }, ...s.goldLog].slice(0, GOLD_LOG_LIMIT);
           s.tradeStatus = { ...s.tradeStatus };
           s.tradeStatus.inventory = { ...s.tradeStatus.inventory };
           s.tradeStatus.inventory[factionId] = invCount - quantity;
@@ -234,7 +236,7 @@ export function useTrade(
           const ships = [...prev.ships]; const s = { ...ships[shipIndex] };
           const repBlockEx = checkRepBlock(prev, getCurrentFactionId(s) || '', 'explore'); if (repBlockEx) { result = { success: false, message: repBlockEx }; return prev; }
           if (s.tradeStatus.exploredThisTurn) { result = { success: false, message: '本回合已探索过' }; return prev; }
-          const matIds = ['carbon', 'gold_ore', 'oil', 'dark_matter', 'silicon', 'quantum'];
+          const matIds = ALL_MATERIAL_IDS;
           const matNames: Record<string, string> = MATERIAL_NAME_MAP;
           const dropCount = Math.floor(Math.random() * 3) + 1;
           s.materials = { ...s.materials };
@@ -274,15 +276,15 @@ export function useTrade(
           if (s.gold < amount) { result = { success: false, message: '金币不足' }; return prev; }
           const factionId = getCurrentFactionId(s) || '';
           const repBlockInv = checkRepBlock(prev, factionId, 'invest'); if (repBlockInv) { result = { success: false, message: repBlockInv }; return prev; }
-          const maxPerTurn = 10;
+          const maxPerTurn = INVEST_MAX_PER_TURN;
           const used = (prev.factionRepLog || {})[factionId + '_invest'] || 0;
           if (used >= maxPerTurn) { result = { success: false, message: `本回合已投资${maxPerTurn}次，下次回合再来` }; return prev; }
           const repGain = 1; // 每次投资固定 +1 声望
-          if (s.gold < 8000) { result = { success: false, message: '至少需要8000金币' }; return prev; }
-          const actualAmount = 8000;
+          if (s.gold < INVEST_GOLD_PER_REP) { result = { success: false, message: `至少需要${INVEST_GOLD_PER_REP}金币` }; return prev; }
+          const actualAmount = INVEST_GOLD_PER_REP;
           s.gold -= actualAmount;
           const factionName = FACTIONS.find((f) => f.id === factionId)?.name || factionId;
-          s.goldLog = [{ turn: prev.turn, amount: -actualAmount, reason: `投资「${factionName}」`, balanceAfter: s.gold }, ...s.goldLog].slice(0, 200);
+          s.goldLog = [{ turn: prev.turn, amount: -actualAmount, reason: `投资「${factionName}」`, balanceAfter: s.gold }, ...s.goldLog].slice(0, GOLD_LOG_LIMIT);
           const repResult = applyRepChange(prev.factionReputation, prev.factionRepLog, factionId, repGain, 'invest');
           ships[shipIndex] = s;
           const repNow = (repResult?.factionReputation ?? prev.factionReputation ?? {})[factionId] || 0;
@@ -295,10 +297,10 @@ export function useTrade(
 
   // ==================== 打探消息 ====================
   const intelStories: Record<string, string[]> = {
-    s1: ['你在一家阴暗的"信息交易所"里，遇到了一位自称"情报之王"的神秘人物。他压低声音告诉你，帝国即将对一片星域进行封锁，某几种原料价格会暴涨。你连夜囤积，三天后价格翻了三倍。','一位穿着太空站维护服的老人悄悄塞给你一张数据卡："这上面的坐标，藏着一个废弃的军工厂，里面有成吨的战略物资。"你带人前去，果然不虚此行。','你在某个不具名的通讯频道里，截获了一段加密对话。破译后发现，两大星际集团即将签署一份天价采购合同。你提前在市场上布局，合同公布那天，你笑得合不拢嘴。'],
-    s2: ['当地酒吧里一个喝醉的军官大声嚷嚷着："下个月我们要换装了！旧装备全部低价处理！"你赶紧联系后勤部门，以极低的价格收购了一批还能用的设备，转手就赚了一笔。','一位退役的舰队指挥官与你攀谈起来。他透露某支巡逻舰队即将扩编，对特定型号零件的需求会激增。你连夜进货，果然第二天就有人高价收购。','你的船员在空间站的公告栏上发现了一张内部采购单。虽然大部分信息被涂黑了，但关键的数量和价格区间清晰可见。你据此在期货市场上小赚了一笔。'],
-    s3: ['你帮一位迷路的外星商人找到了他的泊位，作为感谢，他告诉你一条"当地人都不一定知道"的贸易路线。那条路上有几颗资源星球，原料价格只有市场价的一半。','船员在废品回收站淘到了一块老旧的导航芯片。读取后发现，芯片上标记着一个未被登记的小行星带，探测器显示那里富含多种稀有矿物。你组织了小规模开采，收获颇丰。','一位与你关系不错的空间站调度员偷偷告诉你："明天有艘货船提前到达，急着卸货，价格可以谈。"你准时到场，以一个相当不错的价格拿下了一船原料。'],
-    s4: ['你在茶歇时 overheard 两个贸易商谈论某种原料最近"走俏"。虽然信息不算明确，但你决定小赌一把，买了一批。结果一周后那种原料价格真的涨了一些。','船员在空间站的公告板上看到了一则招工广告。虽然内容平平无奇，但上面列出的待遇和工期暗示了某个大型工程即将开工——这意味着短期内会有大量需求。你小赚了一笔。','一位认识的老船长在告别时拍了拍你的肩膀："老弟，最近那个方向的航线不太平，但走私利润高得吓人。"虽然没有具体细节，但你决定冒险一试，结果还真让你碰上了。','你的导航AI偶然截获了一段货运广播。虽然只是例行公事的物流信息，但你从中推断出了某种商品的供应趋势。你据此调整了自己的库存，赚了一笔小钱。'],
+    s1: ['你在信息交易所蹲守了几天，终于等到一条能用的线索：某个势力正在秘密收购一批指定物资。你没有去赌行情，而是把这条线索连同货源一起转手卖给了一位着急交货的中间商，当场结清。','一位穿着太空站维护服的老人悄悄塞给你一张数据卡："这上面的坐标，藏着一个废弃的军工厂。"你把坐标转手卖给了专做 salvage 的回收商，换了一笔干净利落的介绍费。','你在某个不具名的通讯频道里截获了一段加密对话。破译后发现是两家星际集团的采购谈判——你没有跟价，而是把这份谈判纪要卖给了对手阵营的商务代表。'],
+    s2: ['当地酒吧里一个喝醉的军官大声嚷嚷着换装计划。你没有去囤积装备，而是把"旧装备将集中处理"这条消息转给了做二手军械的商人，收了信息费。','一位退役的舰队指挥官与你攀谈，透露某支巡逻舰队即将扩编。你把这份需求预测转手卖给了一家零件代理商，价格公道、当场付款。','你的船员在空间站的公告栏上发现了一张内部采购单。你没有去碰期货，而是把它卖给了那家中标概率最大的供应商。'],
+    s3: ['你帮一位迷路的外星商人找到了泊位。作为感谢，他告诉你一条"当地人都不一定知道"的贸易路线——你把路线信息转卖给了一家想开新航线的运输公司。','船员在废品回收站淘到一块老旧导航芯片，上面标记着一个未登记的小行星带。你把这份矿点数据转手卖给了采矿公会。','一位与你关系不错的空间站调度员偷偷告诉你明天会有货船提前到达。你把这个时间窗口卖给了等着抢首单的批发商。'],
+    s4: ['你在茶歇时听到两个贸易商谈论某种原料最近走俏。你没有下注，而是把这份"市场情绪"整理成一页简报，卖给了做咨询的情报贩子，赚了一笔小钱。','船员在公告板上看到一则招工广告，待遇与工期暗示某个大工程即将开工。你把这条推断写成消息卖给了建材供应商。','一位老船长在告别时提醒你那个方向的航线不太平。你没去冒险，而是把这条航道风险提示卖给了保险公司。','你的导航AI截获了一段例行物流广播。你从里面推出一份供应趋势简报，转手卖给了需要它的人。'],
     s5: ['你花了不少金币从一个自称"包打听"的信息贩子那里买到了一份"独家情报"。结果那份情报三天前就在公共频道上免费发布了。你气得想找他理论，但他已经人间蒸发。','一位看起来很专业的分析师给了你一个"稳赚不赔"的投资建议。你照做了，结果市场走势完全相反。后来你才知道，那人是竞争对手派来故意误导你的。','船员兴冲冲地跑来告诉你他"打听到"一个千载难逢的机会。你抱着试试看的态度投了一些金币，结果那根本就是个已经过时的旧消息，钱打了水漂。'],
     s6: ['你收到了一份加密情报，声称某支星际商队将在明天经过这片星域。你做好了"迎接"准备，结果等了一整天什么都没有等到。后来才知道，那份情报的日期印错了，是上周的消息。','你按照一份"可靠线人"提供的市场分析进行操作，结果亏了一大笔。后来那位线人抱歉地告诉你："抱歉，那份数据是三个月前的，我没注意到。"你无言以对。','一家看起来很正规的情报机构卖给你一份"实时市场动态"。你花了大价钱买下，结果发现里面的数据全都是一周前的。等你反应过来，机构已经注销了账户。'],
     s7: ['你收到了一条匿名消息："想知道赚钱的秘诀吗？来老地方找我。"你到了约定的废弃船坞，结果迎接你的是一群持械歹徒。虽然你勉强逃脱，但金币被他们搜刮一空。','一位自称是"星际联盟特派员"的人找到你，声称你涉嫌走私，需要缴纳"保证金"才能洗清嫌疑。你虽然觉得可疑，但不想惹麻烦，交了一笔钱后对方就消失了。你意识到被骗了。','你收到了一封看起来很官方的邮件，说你的银行账户存在异常，需要"验证身份"。你按提示操作后，发现账户里的金币被转走了大半。这是一起精心设计的网络钓鱼骗局。'],
@@ -337,9 +339,9 @@ export function useTrade(
           else if (roll < 98) { goldChange = -Math.round((Math.floor(Math.random() * 401) + 600) * turnMultiplier); story = pick(intelStories.s7); }
           else { goldChange = -Math.round((Math.floor(Math.random() * 501) + 1000) * turnMultiplier); story = pick(intelStories.s8); }
           // 饥荒减半的唯一真值在 lib/turn/shipTurn.ts（勿就地再写一份）
-          const checkBankrupt = () => { if (s.gold < 0 && !s.bankrupt) { s.bankrupt = true; s.bankruptTimer = 10; } };
+          const checkBankrupt = () => { if (s.gold < 0 && !s.bankrupt) { s.bankrupt = true; s.bankruptTimer = BANKRUPT_TURNS; } };
           const finalGold = famineHalveGold(s.food, goldChange);
-          if (finalGold !== 0) { s.gold += finalGold; checkBankrupt(); if (s.gold >= 0 && s.bankrupt) { s.bankrupt = false; s.bankruptTimer = 0; } s.goldLog = [{ turn: prev.turn, amount: finalGold, reason: '打探消息', balanceAfter: s.gold }, ...s.goldLog].slice(0, 200); }
+          if (finalGold !== 0) { s.gold += finalGold; checkBankrupt(); if (s.gold >= 0 && s.bankrupt) { s.bankrupt = false; s.bankruptTimer = 0; } s.goldLog = [{ turn: prev.turn, amount: finalGold, reason: '打探消息', balanceAfter: s.gold }, ...s.goldLog].slice(0, GOLD_LOG_LIMIT); }
           let alloyText = '';
           if (Math.random() < 0.7) { const alloyGain = Math.floor(Math.random() * 3) + 3; s.alloy += alloyGain; alloyText = `回收了${alloyGain}个合金。`; }
           const message = `${story}${alloyText?' '+alloyText:''} ${finalGold>0?'获得+'+finalGold+'金币':finalGold<0?'损失'+finalGold+'金币':''}`.trim();
@@ -408,7 +410,7 @@ export function useTrade(
         if (contract.type === 'smuggling') {
           const hasDecipherer = s.relics.some((r) => r.id === RELIC_DECIPHERER);
           const roll = Math.random();
-          if (!hasDecipherer && roll > 0.65) {
+          if (!hasDecipherer && roll > SMUGGLING_SUCCESS_RATE) {
             contracts.splice(idx, 1);
             const rep = ((prev.factionReputation || {})[contract.factionId] || 0) - 5;
             const factionReputation = { ...(prev.factionReputation || {}), [contract.factionId]: Math.max(-100, rep) };
@@ -438,7 +440,7 @@ export function useTrade(
 
         // 发放奖励
         s.gold += contract.rewardGold;
-        s.goldLog = [{ turn: prev.turn, amount: contract.rewardGold, reason: '合同奖励', balanceAfter: s.gold }, ...s.goldLog].slice(0, 200);
+        s.goldLog = [{ turn: prev.turn, amount: contract.rewardGold, reason: '合同奖励', balanceAfter: s.gold }, ...s.goldLog].slice(0, GOLD_LOG_LIMIT);
         const repResult = applyRepChange(prev.factionReputation, prev.factionRepLog, contract.factionId, contract.rewardRep, 'contract');
         contracts.splice(idx, 1);
         ships[shipIndex] = s;
@@ -458,12 +460,12 @@ export function useTrade(
         const ships = [...prev.ships]; const s = { ...ships[shipIndex] };
         const faction = prev.factions.find((f) => f.id === factionId);
         if (!faction) { result = { success: false, message: '势力不存在' }; return prev; }
-        const buyBuffMult = (prev.buyBuffs?.[factionId] || []).reduce((m, b) => m * b.multiplier, 1); // 涨价buff（黑市也继承）
+        const buyBuffMult = getBuffMultiplier(prev.buyBuffs?.[factionId]); // 涨价buff（黑市也继承）
         // 黑市总价唯一真值 lib/turn/tradePrice.ts（末尾一次 ceil，显示侧同源）
-        const cost = getBlackMarketTotal(factionId, prev.factionPrices, buyBuffMult, prev.blackMarketMultiplier || 3.2, qty);
+        const cost = getBlackMarketTotal(factionId, prev.factionPrices, buyBuffMult, prev.blackMarketMultiplier || BLACK_MARKET_DEFAULT, qty);
         if (s.gold < cost) { result = { success: false, message: `金币不足，需${cost}` }; return prev; }
         s.gold -= cost;
-        s.goldLog = [{ turn: prev.turn, amount: -cost, reason: `黑市采购「${faction.specialtyName}」x${qty}`, balanceAfter: s.gold }, ...s.goldLog].slice(0, 200);
+        s.goldLog = [{ turn: prev.turn, amount: -cost, reason: `黑市采购「${faction.specialtyName}」x${qty}`, balanceAfter: s.gold }, ...s.goldLog].slice(0, GOLD_LOG_LIMIT);
         s.tradeStatus = { ...s.tradeStatus };
         s.tradeStatus.inventory = { ...s.tradeStatus.inventory };
         s.tradeStatus.inventory[factionId] = (s.tradeStatus.inventory[factionId] || 0) + qty;

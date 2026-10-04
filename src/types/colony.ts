@@ -29,6 +29,8 @@ export interface PlanetBuff {
   researchMult?: number;
   /** 指定原料产量倍率 (materialId → multiplier) */
   materialMults?: Record<string, number>;
+  /** 指定建筑每座额外人口上限 (buildingId → 增量，如遗落星球 B1 +3) */
+  housingCapDelta?: Record<string, number>;
   /** 招募人口费用变动（正数=增加） */
   recruitCostDelta?: number;
   /** 领袖招募费用变动（正数=增加） */
@@ -85,6 +87,10 @@ export interface BuildingDef {
   goldOutputMax?: number;
   requiresTech?: string;     // 需要的前置科技ID（Phase 2）
   powerConsumption?: number;  // 每回合电能消耗
+  /** 居住类：每座提供的人口上限（唯一真值，calcPopCap / 面板文案共用；勿再写裸 5/20） */
+  popCapBonus?: number;
+  /** 克隆中心：每 N 回合免费 +1 人口的间隔（唯一真值，colonyTurn 结算与文案共用） */
+  cloneInterval?: number;
 }
 
 // ==================== 建筑实例 ====================

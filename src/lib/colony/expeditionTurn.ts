@@ -7,6 +7,12 @@
 import type { Colony } from '@/types/colony';
 import { getLeaderExpedition } from '@/data/colony/expeditions';
 
+/** 需要玩家先支付才推进的层（B/C/D = stage 3~5）。**唯一真值**：
+ *  回合结算的"未支付则原地停留"判定与「下一回合预告」共用，勿再各写一个魔法区间。 */
+export function isPaidStage(stage: number): boolean {
+  return stage >= 3 && stage <= 5;
+}
+
 /** 累计「走过的节点」到 colony.expeditionVisited（跨远征去重）：图鉴的阶段图集与降落图格只收录走过的。
  *  ⚠ 不要为了记 'planet' 去走 enterExpeditionHistory：那条路会把它写进每轮重置的 history，
  *    而「回顾剧情」是按 history 去 route.nodes 里找节点的，planet 不是节点。 */

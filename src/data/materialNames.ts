@@ -16,3 +16,10 @@ export const MATERIAL_NAME_MAP: Record<string, string> = {
 export function getMaterialName(materialId: string): string {
   return MATERIAL_NAME_MAP[materialId] ?? materialId;
 }
+
+/** 全部原料 id（随机原料掉落/星尘购买/探索所得共用；唯一真值，勿在 hook 里各写一份数组。
+ *  顺序无关（抽取用 Math.random）。 */
+export const ALL_MATERIAL_IDS = ['carbon', 'gold_ore', 'oil', 'dark_matter', 'silicon', 'quantum'];
+
+/** 基础原料 id（深空采矿阵列用；不含暗物质/量子簇这两类稀有原料） */
+export const BASIC_MATERIAL_IDS = ['carbon', 'gold_ore', 'oil', 'silicon'];

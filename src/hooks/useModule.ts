@@ -1,6 +1,9 @@
 import { useCallback } from 'react';
 import type { GameState } from '@/types/game';
-import { getModuleDef, isModuleInstalled, canAffordModule } from '@/data/modules';
+import { getModuleDef, isModuleInstalled, canAffordModule, MODULE_STARDUST_POOL, MODULE_QUANTUM_REACTOR, MODULE_VOID_REPLICATOR } from '@/data/modules';
+import { GOLD_LOG_LIMIT } from '@/data/gameData';
+import { firstMissing, payCost } from '@/lib/turn/resourceCost';
+import { famineHalveGold } from '@/lib/turn/shipTurn';
 
 export function useModule(
   dispatch: React.Dispatch<{ type: 'FUNCTIONAL_UPDATE'; updater: (state: GameState) => GameState }>
@@ -66,29 +69,35 @@ export function useModule(
             const def = getModuleDef(moduleId);
             if (!def) { result = { success: false, message: '装置定义不存在' }; return prev; }
 
-          // 处理各手动装置的具体逻辑
+          // 手动装置的消耗/产出都读装置数据（ModuleDefinition.manualCost / manualGain，唯一真值），
+          // 校验与扣减复用 lib/turn/resourceCost（与远征、考古同口径）。历史上 500/50/30/30000 在
+          // hook、ModulePanel 与 effectDescription 各写一份 → 改价时三处不同步。
+          const manualCost = def.manualCost || {};
+          const missing = firstMissing(s, s.colony, manualCost);
+          if (missing) { result = { success: false, message: missing }; return prev; }
+          payCost(s, s.colony, manualCost);
+
+          // 处理各手动装置的专有效果
           switch (moduleId) {
-            case 'stardust_pool': {
-              if (s.alloy < 500) { result = { success: false, message: '需要 500 合金' }; return prev; }
-              s.alloy -= 500;
-              s.stardust += 10;
+            case MODULE_STARDUST_POOL: {
+              const gain = def.manualGain?.stardust || 0;
+              s.stardust += gain;
               mod.cooldown = def.cooldown;
-              result = { success: true, message: '消耗 500 合金，转化为 10 星尘' };
+              result = { success: true, message: `消耗 ${manualCost.alloy} 合金，转化为 ${gain} 星尘` };
               break;
             }
-            case 'quantum_reactor': {
-              if (s.food < 50) { result = { success: false, message: '需要 50 食物' }; return prev; }
-              s.food -= 50;
-              s.gold += 30000;
+            case MODULE_QUANTUM_REACTOR: {
+              const raw = def.manualGain?.gold || 0;
+              // 与其它金币收益同口径：饥荒（食物<0）时减半（历史上这里漏了 famineHalveGold）
+              const gain = famineHalveGold(s.food, raw);
+              s.gold += gain;
               if (s.bankrupt && s.gold > 0) s.bankrupt = false;
-              s.goldLog = [{ turn: prev.turn, amount: 30000, reason: '量子生物反应器转化', balanceAfter: s.gold }, ...s.goldLog].slice(0, 200);
+              s.goldLog = [{ turn: prev.turn, amount: gain, reason: '量子生物反应器转化', balanceAfter: s.gold }, ...s.goldLog].slice(0, GOLD_LOG_LIMIT);
               mod.cooldown = def.cooldown;
-              result = { success: true, message: '消耗 50 食物，转化为 30000 金币！' };
+              result = { success: true, message: gain < raw ? `消耗 ${manualCost.food} 食物，转化为 ${gain} 金币（饥荒减半）` : `消耗 ${manualCost.food} 食物，转化为 ${gain} 金币！` };
               break;
             }
-            case 'void_replicator': {
-              if (s.stardust < 30) { result = { success: false, message: '需要 30 星尘' }; return prev; }
-              s.stardust -= 30;
+            case MODULE_VOID_REPLICATOR: {
               const newMaterials: Record<string, number> = {};
               Object.entries(s.materials).forEach(([k, v]) => { if (v > 0) newMaterials[k] = v * 2; });
               s.materials = newMaterials;

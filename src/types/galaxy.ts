@@ -76,7 +76,7 @@ export interface ArchaeologyStage {
   title: string;
   /** 该阶段基础耗时（回合） */
   turns: number;
-  /** 难度 0~3 → 成功率 −0.12×难度 */
+  /** 难度 0~3 → 成功率 −0.18×难度（唯一真值 lib/galaxy/archaeologyTurn.ts 的 DIFFICULTY_PENALTY） */
   difficulty: number;
   cost: ArchaeologyCost;
   /** 阶段叙事（中文，正常标点，不用破折号） */

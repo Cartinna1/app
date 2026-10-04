@@ -8,11 +8,13 @@ import { getArchaeologySite } from '@/data/galaxy/archaeology';
 import { findStationedSite } from '@/lib/galaxy/archaeologyTurn';
 import { getTechById, getAvailableTechs, REPEATABLE_TECHS, getRepeatableCost } from '@/data/colony/techs';
 import { getLeaderDef, getLeaderUpgradeCost, getRecruitRollCost } from '@/data/colony/leaders';
-import { computeColonyEconomy, computeColonyPower } from '@/lib/colony/economy';
-import { getRecruitCapPerTurn, hasBlackoutImmunity } from '@/lib/colony/colonyTurn';
+import { computeColonyEconomy, computeColonyPower, getBuildingSourceBreakdown } from '@/lib/colony/economy';
+import { getRecruitCapPerTurn, hasBlackoutImmunity, getResearchTargetTurns } from '@/lib/colony/colonyTurn';
 import { getEffectiveMaxCount, getEffectiveMaxPop, getBuildingCostProfile, getRecruitCostPerPop, RECRUIT_BASE_COST } from '@/lib/colony/costs';
 import { MATERIAL_NAME_MAP } from '@/data/materialNames';
 import { canAfford, firstMissing, formatCost } from '@/lib/turn/resourceCost';
+import { UNLOCK_COST } from '@/hooks/colony/useColonyBase';
+import { EXPEDITION_UNLOCK_COUNT } from '@/data/colony/expeditions';
 import { Home, Users, Wrench, Play, UserPlus, FlaskConical, Crown, Trophy, Rocket, Images } from 'lucide-react';
 import WonderPanel from './WonderPanel';
 import ExpeditionPanel from './ExpeditionPanel';
@@ -159,7 +161,7 @@ function ColonyPanel(props: ColonyPanelProps) {
     if (!colony?.techState || colony.techState.currentResearch) return [];
     const available = getAvailableTechs(colony.techState.researched);
     if (available.length > 0) {
-      return [...available].sort(() => Math.random() - 0.5).slice(0, 2).map((t) => ({ id: t.id, name: t.name, desc: t.description, cost: t.costRP, turns: t.researchTurns, isRepeatable: false, repeatLevel: 0, unlocksBuilding: t.unlocksBuilding, leaderCapBonus: t.leaderCapBonus }));
+      return [...available].sort(() => Math.random() - 0.5).slice(0, 2).map((t) => ({ id: t.id, name: t.name, desc: t.description, cost: t.costRP, turns: getResearchTargetTurns(t.id, colony.planetType), isRepeatable: false, repeatLevel: 0, unlocksBuilding: t.unlocksBuilding, leaderCapBonus: t.leaderCapBonus }));
     }
     // 全部研究完：显示循环科技
     const levels = colony.techState.repeatableLevels || {};
@@ -168,7 +170,7 @@ function ColonyPanel(props: ColonyPanelProps) {
       name: rt.name,
       desc: `${rt.description}（已叠加 ${levels[rt.id] || 0} 次）`,
       cost: getRepeatableCost(rt, levels[rt.id] || 0),
-      turns: rt.researchTurns,
+      turns: getResearchTargetTurns(rt.id, colony.planetType),
       isRepeatable: true,
       repeatLevel: levels[rt.id] || 0,
     }));
@@ -212,7 +214,7 @@ function ColonyPanel(props: ColonyPanelProps) {
           <div className="bg-slate-900/60 border border-emerald-700/40 rounded-xl p-4 md:p-6">
             <h3 className="font-bold text-slate-100 mb-2">在「{herePlanet?.name || hereNode.name}」建立殖民地</h3>
             <p className="text-sm text-slate-400 mb-2">{herePlanet?.description}</p>
-            <p className="text-xs text-amber-400 mb-3">需要 30,000 金币；建立后立刻投入运营（无建设等待期）。全局只能殖民一颗星球。</p>
+            <p className="text-xs text-amber-400 mb-3">需要 {UNLOCK_COST.toLocaleString()} 金币；建立后立刻投入运营（无建设等待期）。全局只能殖民一颗星球。</p>
             <div className="flex flex-col md:flex-row gap-2">
               <input
                 value={foundName}
@@ -222,9 +224,9 @@ function ColonyPanel(props: ColonyPanelProps) {
               />
               <button
                 onClick={() => { const r = onFoundColony(hereNode.id, foundName); showMsg(r.message, r.success ? 'success' : 'error'); }}
-                disabled={ship.gold < 30000}
-                className={`px-4 py-2 rounded-lg font-bold text-sm min-h-[40px] ${ship.gold >= 30000 ? 'bg-emerald-600 hover:bg-emerald-500 text-white' : 'bg-slate-700 text-slate-500 cursor-not-allowed'}`}
-              >{ship.gold >= 30000 ? '建立殖民地（30,000 金币）' : '金币不足（30,000）'}</button>
+                disabled={ship.gold < UNLOCK_COST}
+                className={`px-4 py-2 rounded-lg font-bold text-sm min-h-[40px] ${ship.gold >= UNLOCK_COST ? 'bg-emerald-600 hover:bg-emerald-500 text-white' : 'bg-slate-700 text-slate-500 cursor-not-allowed'}`}
+              >{ship.gold >= UNLOCK_COST ? `建立殖民地（${UNLOCK_COST.toLocaleString()} 金币）` : `金币不足（${UNLOCK_COST.toLocaleString()}）`}</button>
             </div>
             <FeedbackMessage message={message} type={msgType} />
           </div>
@@ -355,12 +357,16 @@ function ColonyPanel(props: ColonyPanelProps) {
                   <div className="mt-2 pt-2 border-t border-slate-700/50 space-y-0.5">
                     {power.buildings.map((b) => {
                       const bd = getBuildingDef(b.defId);
-                      const parts = [`基础${b.base}`];
-                      if (b.planetPct !== 0) parts.push(`星球${b.planetPct > 0 ? '+' : ''}${b.planetPct}%`);
-                      if (b.leaderPct > 0) parts.push(`领袖+${b.leaderPct}%`);
-                      if (b.allPct > 0) parts.push(`全员+${b.allPct}%`);
-                      if (b.permPct && b.permPct > 0) parts.push(`永久加成+${b.permPct}%`);
-                      if (b.relicPct && b.relicPct > 0) parts.push(`遗物+${b.relicPct}%`);
+                      // 来源拆解唯一真值：lib/colony/economy.getBuildingSourceBreakdown（发电与产出同一函数，
+                      // 百分比一律小数 → 显示时 ×100；勿在此手写字段，否则新增加成又会漏）
+                      const parts = [
+                        `基础${b.base}`,
+                        ...getBuildingSourceBreakdown(b).map((l) =>
+                          l.pct !== 0
+                            ? `${l.label}${Math.round(l.pct * 100) > 0 ? '+' : ''}${Math.round(l.pct * 100)}%`
+                            : `${l.label}+${l.value}`
+                        ),
+                      ];
                       return (
                         <p key={b.uid} className="text-xs text-slate-500 flex flex-wrap items-baseline gap-x-1">
                           <span>{bd?.name || b.defId}:</span>
@@ -385,12 +391,12 @@ function ColonyPanel(props: ColonyPanelProps) {
               const d = getBuildingDef(e.defId);
               if (!d) continue;
               const parts: string[] = [e.outputType === 'gold' ? `${d.name}` : `${d.name}:${e.base}`];
-              if (e.planetPct !== 0) parts.push(`星球${e.planetPct>0?'+':''}${Math.round(e.planetPct*100)}%`);
-              if (e.leaderPct > 0) parts.push(`领袖+${Math.round(e.leaderPct*100)}%`);
-              if (e.repeatPct > 0) parts.push(`循环+${Math.round(e.repeatPct*100)}%`);
-              if (e.b26Pct > 0) parts.push(`量子实验室+${Math.round(e.b26Pct*100)}%`);
-              if (e.relicPct) parts.push(`遗物+${Math.round(e.relicPct*100)}%`);
-              if (e.relicBonus) parts.push(`遗物+${e.relicBonus}`);
+              // 来源拆解唯一真值（与总览、发电明细同一函数）——勿在此手写加成字段
+              for (const l of getBuildingSourceBreakdown(e)) {
+                parts.push(l.pct !== 0
+                  ? `${l.label}${Math.round(l.pct * 100) > 0 ? '+' : ''}${Math.round(l.pct * 100)}%`
+                  : `${l.label}+${l.value}`);
+              }
               if (e.outputType === 'material' && e.materialId) {
                 matLines.push({ k: e.materialId, v: e.value, detail: parts.join(' ') });
               } else {
@@ -491,17 +497,19 @@ function ColonyPanel(props: ColonyPanelProps) {
           const un = e.outputType === 'material' ? (MAT_UN[e.materialId || ''] || e.materialId || '') : (OUT_UN[e.outputType] || e.outputType);
           let detail = '';
           if (e.outputType !== 'gold') detail += `${e.base}`;
-          if (e.planetPct !== 0) detail += `星球${e.planetPct > 0 ? '+' : ''}${Math.round(e.planetPct * 100)}%`;
-          if (e.leaderPct > 0) detail += `领袖+${Math.round(e.leaderPct * 100)}%`;
-          if (e.repeatPct > 0) detail += `循环+${Math.round(e.repeatPct * 100)}%`;
-          if (e.b26Pct > 0) detail += `量子实验室+${Math.round(e.b26Pct * 100)}%`;
-          if (e.relicPct) detail += `遗物+${Math.round(e.relicPct * 100)}%`;
-          if (e.relicBonus) detail += `遗物+${e.relicBonus}`;
+          // 来源拆解唯一真值（同总览与明细行）
+          for (const l of getBuildingSourceBreakdown(e)) {
+            detail += l.pct !== 0
+              ? `${l.label}${Math.round(l.pct * 100) > 0 ? '+' : ''}${Math.round(l.pct * 100)}%`
+              : `${l.label}+${l.value}`;
+          }
           return { v: e.value, un, detail };
         };
         // 渲染单个建筑实例卡片（折叠展开态复用）
         const renderLiveCard = (inst: any, def: any, num?: string) => {
-          const maxLabel = def.maxPop > 0 ? `入驻 ${inst.assignedPop}/${def.maxPop}${def.minPop > 0 ? ` (最小${def.minPop}人)` : ''}` : `入驻 ${inst.assignedPop}`;
+          // 入驻槽位上限走唯一真值 getEffectiveMaxPop（含领袖 popCapBonus 扩展；人口页与分配校验同源）
+          const effMaxPop = getEffectiveMaxPop(def.id, colony);
+          const maxLabel = effMaxPop > 0 ? `入驻 ${inst.assignedPop}/${effMaxPop}${def.minPop > 0 ? ` (最小${def.minPop}人)` : ''}` : `入驻 ${inst.assignedPop}`;
           const catTag = <span className={`text-xs ${CAT_COLORS[def.category] || 'bg-slate-600 text-white'} px-1.5 py-0.5 rounded mr-1`}>{CAT_LABELS[def.category] || def.category}</span>;
           const lo = calcLiveOut(inst, def);
           const liveOut = lo ? `产出: ${lo.v} ${lo.un}/回合 (${lo.detail})` : '';
@@ -618,7 +626,7 @@ function ColonyPanel(props: ColonyPanelProps) {
                   <div key={inst.uid} className="bg-slate-900/60 border border-yellow-700/40 rounded-lg p-3 mb-2 flex justify-between items-center">
                     <div><span className="text-sm text-yellow-300 font-bold">{def.name}</span></div>
                     <div className="flex items-center gap-2">
-                      <span className="text-sm text-yellow-400">{inst.buildProgress}/{Math.max(1, def.buildTurns + (planet?.buffs.buildTurnDelta || 0))} 回合</span>
+                      <span className="text-sm text-yellow-400">{inst.buildProgress}/{getBuildingCostProfile(def, colony).turns} 回合</span>
                       <button onClick={() => onCancelBuilding(inst.uid)} className="px-2 py-1 bg-red-700 hover:bg-red-600 rounded text-xs font-bold">取消</button>
                     </div>
                   </div>
@@ -661,7 +669,7 @@ function ColonyPanel(props: ColonyPanelProps) {
                 if (insts.length === 1) return renderLiveCard(insts[0], def);
                 const isExpanded = !!expandedLiveGroups[defId];
                 const totalPop = insts.reduce((s: number, i: any) => s + (i.assignedPop || 0), 0);
-                const totalMax = def.maxPop > 0 ? def.maxPop * insts.length : 0;
+                const totalMax = getEffectiveMaxPop(def.id, colony) > 0 ? getEffectiveMaxPop(def.id, colony) * insts.length : 0;
                 let totalOut = '';
                 if (def.outputType) {
                   let sumV = 0, sumUn = '';
@@ -684,7 +692,7 @@ function ColonyPanel(props: ColonyPanelProps) {
                         <span className={`text-xs ${CAT_COLORS[def.category] || 'bg-slate-600 text-white'} px-1.5 py-0.5 rounded mr-1`}>{CAT_LABELS[def.category] || def.category}</span>
                         <span className="text-sm text-green-300 font-bold">{def.name}</span>
                         <span className="text-sm text-cyan-400 ml-2">×{insts.length}</span>
-                        {def.maxPop > 0 && <span className="text-sm text-slate-400 ml-2">入驻 {totalPop}/{totalMax}</span>}
+                        {totalMax > 0 && <span className="text-sm text-slate-400 ml-2">入驻 {totalPop}/{totalMax}</span>}
                         {totalOut && <span className="text-sm text-cyan-400 ml-2">{totalOut}</span>}
                         {def.powerConsumption !== undefined && def.powerConsumption > 0 && (
                           <span className="text-sm text-amber-500 ml-2">⚡ {def.powerConsumption * insts.length}</span>
@@ -787,7 +795,7 @@ function ColonyPanel(props: ColonyPanelProps) {
                     {isRp ? '🔄 ' : ''}研究中: {ct?.name}
                   </p>
                   <p className="text-sm text-slate-400">{isRp ? (ct as any).description : (ct as any)?.description}</p>
-                  <p className={`text-sm mt-1 ${isRp ? 'text-pink-400' : 'text-yellow-400'}`}>进度: {colony.techState.currentProgress}/{isRp ? (ct as any).researchTurns : (ct as any)?.researchTurns} 回合</p>
+                  <p className={`text-sm mt-1 ${isRp ? 'text-pink-400' : 'text-yellow-400'}`}>进度: {colony.techState.currentProgress}/{getResearchTargetTurns(tid, colony.planetType)} 回合</p>
                   {!isRp && (ct as any)?.unlocksBuilding && (() => {
                     const bd = getBuildingDef((ct as any).unlocksBuilding);
                     return bd ? <p className="text-sm text-cyan-400 mt-1">🏗 完成后解锁: {bd.name} — {getBuildingEffect(bd)}</p> : null;
@@ -994,7 +1002,7 @@ function ColonyPanel(props: ColonyPanelProps) {
                           <span className={`text-sm font-bold ${l.rarity==='SSR'?'text-amber-400':l.rarity==='SR'?'text-purple-400':'text-blue-400'}`}>{l.rarity} Lv{l.level}</span>
                           <span className="text-sm text-slate-200 font-bold ml-2">{l.name}</span>
                           <span className="text-sm text-amber-400 ml-2">· {l.abilityName}</span>
-                          <span className="text-xs text-cyan-400 ml-2">结局 {(colony.expeditionEndings?.[l.id] || []).length}/12</span>
+                          <span className="text-xs text-cyan-400 ml-2">结局 {(colony.expeditionEndings?.[l.id] || []).length}/{EXPEDITION_UNLOCK_COUNT}</span>
                           {/* 领袖去向：驻守考古遗迹 / 远征中（两者互斥）。与动作层同源：驻守读 findStationedSite（done/collapsed 视为已释放） */}
                           {(() => {
                             const stationedId = findStationedSite(ship.galaxy.archaeology, l.id);

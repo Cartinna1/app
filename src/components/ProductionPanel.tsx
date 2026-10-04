@@ -4,16 +4,7 @@ import { RECIPES, INITIAL_PRODUCTS } from '@/data/gameData';
 import { MATERIAL_NAME_MAP } from '@/data/materialNames';
 import { getProductionLimitBonus, getProductionTurns, getSellPriceBreakdown, MODULE_ENGINEER_AI } from '@/data/modules';
 import { Factory, Check, AlertCircle, Clock, Wheat } from 'lucide-react';
-
-// 产品分类标签颜色（按生产回合数，与集会一致）
-const TURN_COLORS: Record<number, string> = {
-  1: 'bg-green-900/30 text-green-400',
-  2: 'bg-yellow-900/30 text-yellow-400',
-  3: 'bg-orange-900/30 text-orange-400',
-  4: 'bg-red-900/30 text-red-400',
-  5: 'bg-purple-900/30 text-purple-400',
-  6: 'bg-cyan-900/30 text-cyan-400',
-};
+import { TURN_COLORS } from './turnColors';
 
 interface ProductionPanelProps {
   ship: Mothership;
@@ -27,6 +18,8 @@ function ProductionPanel({ ship, shipIndex, materials: _materials, onStartProduc
   const [messages, setMessages] = useState<Record<string, string>>({});
   const [filterTurn, setFilterTurn] = useState<number>(1);
   const maxProd = ship.maxProductionsPerTurn + getProductionLimitBonus(ship);
+  // 本回合生产次数是否已用完（唯一真值 maxProd 同行情/预告；曾经按钮不置灰 → 点了没入队却提示"开始生产"）
+  const capReached = ship.productionsThisTurn >= maxProd;
   // 售价加成明细（单一真值：data/modules.ts → getSellPriceBreakdown）
   const sellBd = getSellPriceBreakdown(ship);
 
@@ -263,10 +256,16 @@ function ProductionPanel({ ship, shipIndex, materials: _materials, onStartProduc
                   <span>原料不足</span>
                 </div>
               )}
+              {capReached && (
+                <div className="flex items-center gap-1 text-xs text-amber-400 mb-2">
+                  <AlertCircle size={12} />
+                  <span>本回合生产次数已用完（{ship.productionsThisTurn}/{maxProd}），结束回合后可继续</span>
+                </div>
+              )}
 
               <button
                 onClick={() => handleProduce(recipe)}
-                disabled={!ok}
+                disabled={!ok || capReached}
                 className={`w-full py-2 rounded-lg font-bold text-white text-sm transition-colors ${
                   isFood
                     ? 'bg-amber-700 hover:bg-amber-600 disabled:bg-slate-700 disabled:text-slate-500'

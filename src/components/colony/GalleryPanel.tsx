@@ -4,16 +4,13 @@
 
 import { useState, memo } from 'react';
 import type { Colony } from '@/types/colony';
-import { getLeaderExpedition } from '@/data/colony/expeditions';
+import { getLeaderExpedition, EXPEDITION_UNLOCK_COUNT } from '@/data/colony/expeditions';
 import { getLeaderDef } from '@/data/colony/leaders';
 import { Crown, Lock, ChevronDown, ChevronRight, Sparkles, ChevronUp, Camera } from 'lucide-react';
 
 interface GalleryPanelProps {
   colony: Colony;
 }
-
-// 解锁隐藏收藏所需结局数（与远征终极技能解锁门槛一致：12/12）
-const EXPEDITION_UNLOCK_COUNT = 12;
 
 function GalleryPanel({ colony }: GalleryPanelProps) {
   const [selected, setSelected] = useState<{ leaderId: string; nodeId: string; kind: 'planet' | 'ending' | 'hidden' | 'stage' } | null>(null);
@@ -122,7 +119,7 @@ function GalleryPanel({ colony }: GalleryPanelProps) {
         const visitedSet = new Set(colony.expeditionVisited?.[l.id] || []);
         const cells: { id: string; title: string; collected: boolean }[] = [
           { id: 'planet', title: route.planetName, collected: visitedSet.has('planet') },
-          ...Array.from({ length: 12 }, (_, i) => {
+          ...Array.from({ length: EXPEDITION_UNLOCK_COUNT }, (_, i) => {
             const did = `D${i + 1}`;
             return { id: did, title: route.nodes[did]?.title || did, collected: list.includes(did) };
           }),
@@ -139,7 +136,7 @@ function GalleryPanel({ colony }: GalleryPanelProps) {
             >
               <Crown size={14} className="text-amber-400" />
               <span className="text-sm font-bold text-slate-200 group-hover:text-white">{l.name}</span>
-              <span className="text-xs text-slate-500 font-normal">· {ld?.abilityName || ''} · 已收集 {list.length}/12</span>
+              <span className="text-xs text-slate-500 font-normal">· {ld?.abilityName || ''} · 已收集 {list.length}/{EXPEDITION_UNLOCK_COUNT}</span>
               <span className="ml-auto text-slate-500 group-hover:text-slate-300">
                 {expandedId === l.id ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
               </span>
@@ -179,7 +176,7 @@ function GalleryPanel({ colony }: GalleryPanelProps) {
               >
                 {unlocked ? (hiddenOpen[l.id] ? <ChevronUp size={18} /> : <Sparkles size={18} />) : <Lock size={18} />}
                 <span className="text-sm">{unlocked ? `CG图集 ${route.hiddenImages?.length || 0} 张` : 'CG图集'}</span>
-                {!unlocked && <span className="text-xs text-slate-600">集齐12结局解锁</span>}
+                {!unlocked && <span className="text-xs text-slate-600">集齐{EXPEDITION_UNLOCK_COUNT}结局解锁</span>}
               </button>
               {/* 阶段图集入口（只收录走过的节点，随时可回顾；未走过的显示为进度 x/21） */}
               <button

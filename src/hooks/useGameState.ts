@@ -10,12 +10,14 @@ import { useGalaxy } from './useGalaxy';
 import { useSave } from './useSave';
 import { useTurn } from './useTurn';
 import { getShipTotalAssets } from '@/lib/game/assets';
-import { MATERIAL_NAME_MAP } from '@/data/materialNames';
+import { MATERIAL_NAME_MAP, ALL_MATERIAL_IDS } from '@/data/materialNames';
+import { ALLOY_GOLD_PRICE, ALLOY_PER_STARDUST, FOOD_GOLD_PRICE, FOOD_PER_ALLOY, FOOD_PER_STARDUST, STARDUST_SHOP, POLICY_REROLL_STARDUST } from '@/data/exchangeRates';
 import { useRedeem } from './useRedeem';
 import { useModule } from './useModule';
 import { useColony } from './useColony';
 import { getRelicById } from '@/data/relics';
 import { rollPolicy, POLICY_EFFECTS } from '@/data/factions';
+import { GOLD_LOG_LIMIT } from '@/data/gameData';
 
 /**
  * 游戏主 Hook —— 整合所有子 Hook，对外保持接口兼容
@@ -55,7 +57,7 @@ export function useGameState() {
 
   // 子 Hook（dispatch 引用稳定，不会导致函数重建）
   const { buyStock, sellStock } = useStock(dispatch);
-  const { buyMaterial, startProduction, sellProduct, sellProductQty } = useProduction(dispatch);
+  const { buyMaterial, startProduction, sellProduct, sellProductQty } = useProduction(gameState, dispatch);
   const { activeEvent, eventDodged, drawEvent, chooseOption: chooseEventOption, applyResources: applyEventResources, logEvent: logEventEntry, clearActiveEvent, clearDodged: clearEventDodged } = useEvent(gameState, dispatch);
   const { takeLoan, repayLoan } = useLoan(gameState, dispatch);
   const { travelToNode, buySpecialty, sellSpecialty, exploreFaction, investFaction, gatherIntel, acceptContract, completeContract, blackMarketBuy } = useTrade(gameState, dispatch);
@@ -81,7 +83,7 @@ export function useGameState() {
       const ship = gameState.ships[0];
       if (!ship) return false;
       if (type === 'gold') {
-        const cost = 1200 * qty;
+        const cost = ALLOY_GOLD_PRICE * qty;
         if (ship.gold < cost) return false;
         dispatch({
           type: 'FUNCTIONAL_UPDATE',
@@ -90,7 +92,7 @@ export function useGameState() {
             const s = { ...ships[0] };
             s.gold -= cost;
             s.alloy += qty;
-            s.goldLog = [{ turn: prev.turn, amount: -cost, reason: `购买合金x${qty}`, balanceAfter: s.gold }, ...s.goldLog].slice(0, 200);
+            s.goldLog = [{ turn: prev.turn, amount: -cost, reason: `购买合金x${qty}`, balanceAfter: s.gold }, ...s.goldLog].slice(0, GOLD_LOG_LIMIT);
             ships[0] = s;
             return { ...prev, ships };
           },
@@ -103,7 +105,7 @@ export function useGameState() {
             const ships = [...prev.ships];
             const s = { ...ships[0] };
             s.stardust -= qty;
-            s.alloy += qty * 5;
+            s.alloy += qty * ALLOY_PER_STARDUST;
             ships[0] = s;
             return { ...prev, ships };
           },
@@ -120,7 +122,7 @@ export function useGameState() {
       const ship = gameState.ships[0];
       if (!ship) return false;
       if (type === 'gold') {
-        const cost = 800 * qty;
+        const cost = FOOD_GOLD_PRICE * qty;
         if (ship.gold < cost) return false;
         dispatch({
           type: 'FUNCTIONAL_UPDATE',
@@ -129,7 +131,7 @@ export function useGameState() {
             const s = { ...ships[0] };
             s.gold -= cost;
             s.food += qty;
-            s.goldLog = [{ turn: prev.turn, amount: -cost, reason: `购买食物x${qty}`, balanceAfter: s.gold }, ...s.goldLog].slice(0, 200);
+            s.goldLog = [{ turn: prev.turn, amount: -cost, reason: `购买食物x${qty}`, balanceAfter: s.gold }, ...s.goldLog].slice(0, GOLD_LOG_LIMIT);
             ships[0] = s;
             return { ...prev, ships };
           },
@@ -142,7 +144,7 @@ export function useGameState() {
             const ships = [...prev.ships];
             const s = { ...ships[0] };
             s.alloy -= qty;
-            s.food += qty * 2;
+            s.food += qty * FOOD_PER_ALLOY;
             ships[0] = s;
             return { ...prev, ships };
           },
@@ -184,13 +186,14 @@ export function useGameState() {
     [gameState.ships, dispatch]
   );
 
-  // 星尘购买随机原料（4星尘→10个随机原料）
+  // 星尘购买随机原料（星尘价与数量走 data/exchangeRates.STARDUST_SHOP 唯一真值）
   const buyRandomMats = useCallback(
     (): { success: boolean; message: string } => {
       const ship = gameState.ships[0];
       if (!ship) return { success: false, message: '舰队不存在' };
-      if (ship.stardust < 4) return { success: false, message: '星尘不足（需要4星尘）' };
-      const matIds = ['carbon', 'gold_ore', 'oil', 'dark_matter', 'silicon', 'quantum'];
+      const { cost, matsGain } = STARDUST_SHOP.randomMats;
+      if (ship.stardust < cost) return { success: false, message: `星尘不足（需要${cost}星尘）` };
+      const matIds = ALL_MATERIAL_IDS;
       const matNames: Record<string, string> = MATERIAL_NAME_MAP;
       let result = { success: false, message: '' };
       dispatch({
@@ -198,10 +201,10 @@ export function useGameState() {
         updater: (prev) => {
           const ships = [...prev.ships];
           const s = { ...ships[0] };
-          s.stardust -= 4;
+          s.stardust -= cost;
           s.materials = { ...s.materials };
           const drops: string[] = [];
-          for (let i = 0; i < 10; i++) {
+          for (let i = 0; i < (matsGain || 0); i++) {
             const mat = matIds[Math.floor(Math.random() * matIds.length)];
             s.materials[mat] = (s.materials[mat] || 0) + 1;
             drops.push(matNames[mat]);
@@ -240,23 +243,24 @@ export function useGameState() {
     [gameState.ships, dispatch]
   );
 
-  // 星尘兑换金币（2星尘→5000金币）
+  // 星尘兑换金币（星尘价与数额走 STARDUST_SHOP 唯一真值）
   const buyGoldWithStardust = useCallback(
     (): { success: boolean; message: string } => {
       const ship = gameState.ships[0];
       if (!ship) return { success: false, message: '舰队不存在' };
-      if (ship.stardust < 2) return { success: false, message: '星尘不足（需要2星尘）' };
+      const { cost, goldGain } = STARDUST_SHOP.gold5000;
+      if (ship.stardust < cost) return { success: false, message: `星尘不足（需要${cost}星尘）` };
       let result = { success: false, message: '' };
       dispatch({
         type: 'FUNCTIONAL_UPDATE',
         updater: (prev) => {
           const ships = [...prev.ships];
           const s = { ...ships[0] };
-          s.stardust -= 2;
-          s.gold += 5000;
+          s.stardust -= cost;
+          s.gold += goldGain || 0;
           if (s.bankrupt && s.gold > 0) s.bankrupt = false;
-          s.goldLog = [{ turn: prev.turn, amount: 5000, reason: '星尘集市兑换金币', balanceAfter: s.gold }, ...s.goldLog].slice(0, 200);
-          result = { success: true, message: '兑换成功，获得5000金币！' };
+          s.goldLog = [{ turn: prev.turn, amount: goldGain || 0, reason: '星尘集市兑换金币', balanceAfter: s.gold }, ...s.goldLog].slice(0, GOLD_LOG_LIMIT);
+          result = { success: true, message: `兑换成功，获得${goldGain}金币！` };
           ships[0] = s;
           return { ...prev, ships };
         },
@@ -266,19 +270,19 @@ export function useGameState() {
     [gameState.ships, dispatch]
   );
 
-  // 星尘强制刷新贸易政策
+  // 星尘强制刷新贸易政策（星尘价走 STARDUST_SHOP）
   const rerollPolicy = useCallback(
     (): { success: boolean; message: string } => {
       const ship = gameState.ships[0];
       if (!ship) return { success: false, message: '舰队不存在' };
-      if (ship.stardust < 15) return { success: false, message: '星尘不足（需要15星尘）' };
+      if (ship.stardust < POLICY_REROLL_STARDUST) return { success: false, message: `星尘不足（需要${POLICY_REROLL_STARDUST}星尘）` };
       let result = { success: false, message: '' };
       dispatch({
         type: 'FUNCTIONAL_UPDATE',
         updater: (prev) => {
           const ships = [...prev.ships];
           const s = { ...ships[0] };
-          s.stardust -= 15;
+          s.stardust -= POLICY_REROLL_STARDUST;
           const newType = rollPolicy();
           const newEffect = POLICY_EFFECTS[newType];
           const newRemaining = Math.floor(Math.random() * 3) + 3;
@@ -310,9 +314,9 @@ export function useGameState() {
           const ships = [...prev.ships];
           const s = { ...ships[0] };
           s.stardust -= qty;
-          s.food += qty * 20;
+          s.food += qty * FOOD_PER_STARDUST;
           if (s.food >= 0 && s.famineTimer > 0 && !s.isRebellion) s.famineTimer = 0;
-          result = { success: true, message: `花费${qty}星尘购买了${qty * 20}个食物` };
+          result = { success: true, message: `花费${qty}星尘购买了${qty * FOOD_PER_STARDUST}个食物` };
           ships[0] = s;
           return { ...prev, ships };
         },

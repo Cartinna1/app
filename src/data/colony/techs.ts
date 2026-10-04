@@ -148,19 +148,3 @@ export const REPEATABLE_TECHS: RepeatableTech[] = [
 export function getRepeatableCost(tech: RepeatableTech, level: number): number {
   return tech.baseCost + level * tech.costIncrement;
 }
-
-/** 根据循环科技ID获取建筑类别加成倍数 */
-export function getRepeatableBonus(repeatableLevels: Record<string, number>, category: string): number {
-  switch (category) {
-    case 'food': return 1 + (repeatableLevels['RP_FOOD'] || 0) * 0.05;
-    case 'alloy': return 1 + (repeatableLevels['RP_ALLOY'] || 0) * 0.05;
-    case 'stardust': return 1 + (repeatableLevels['RP_STARDUST'] || 0) * 0.05;
-    case 'material': return 1 + (repeatableLevels['RP_MATERIAL'] || 0) * 0.05;
-    case 'trade': return 1 + (repeatableLevels['RP_TRADE'] || 0) * 0.05;
-    case 'functional': {
-      const lv = repeatableLevels['RP_RESEARCH'] || 0;
-      return 1 + lv * 0.10; // research buildings
-    }
-    default: return 1;
-  }
-}

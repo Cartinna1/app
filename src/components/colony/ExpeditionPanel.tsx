@@ -5,7 +5,7 @@
 import { useState, memo } from 'react';
 import type { Colony, ExpeditionNodeDef } from '@/types/colony';
 import type { ArchaeologyState } from '@/types/galaxy';
-import { EXPEDITION_COST, RESOURCE_LABELS, getLeaderExpedition } from '@/data/colony/expeditions';
+import { EXPEDITION_COST, EXPEDITION_UNLOCK_COUNT, getLeaderExpedition } from '@/data/colony/expeditions';
 import { getLeaderDef } from '@/data/colony/leaders';
 import { getArchaeologySite } from '@/data/galaxy/archaeology';
 import { findStationedSite } from '@/lib/galaxy/archaeologyTurn';
@@ -23,10 +23,9 @@ interface ExpeditionPanelProps {
   onUnlockUltimate: (leaderId: string) => { success: boolean; message: string };
 }
 
-/** 消耗明细文案（数据驱动） */
+/** 消耗明细文案（数据驱动）。格式与唯一真值 lib/turn/resourceCost.formatCost 完全一致 → 直接委托，勿再写一份 */
 function renderCost(cost?: Record<string, number>): string {
-  if (!cost || Object.keys(cost).length === 0) return '';
-  return Object.entries(cost).map(([k, v]) => `${RESOURCE_LABELS[k] || k}×${v}`).join(' + ');
+  return cost ? formatCost(cost) : '';
 }
 
 function ExpeditionPanel({ colony, archaeology, onStartExpedition, onPayExpeditionNode, onUnlockUltimate }: ExpeditionPanelProps) {
@@ -48,7 +47,7 @@ function ExpeditionPanel({ colony, archaeology, onStartExpedition, onPayExpediti
   /** 结局屏（D 节点支付后与旧存档 stage 6 共用同一段 UI，勿写两份） */
   const renderEndingBlock = (leaderId: string, endingNode: ExpeditionNodeDef) => (
     <div className="mt-4 pt-3 border-t border-purple-700/30 text-center">
-      <p className="text-[10px] text-slate-500 mb-1">结局 {endingNode.id} · 已记录（{endingsCount(leaderId)}/12）</p>
+      <p className="text-[10px] text-slate-500 mb-1">结局 {endingNode.id} · 已记录（{endingsCount(leaderId)}/{EXPEDITION_UNLOCK_COUNT}）</p>
       <h4 className="font-bold text-purple-300 mb-2">{endingNode.title}</h4>
       <p className="text-sm italic text-purple-200/90 leading-relaxed whitespace-pre-line">{endingNode.motto}</p>
       <p className="text-xs text-slate-500 mt-3">远征结束，结束回合后返回选领袖界面。</p>
@@ -237,12 +236,12 @@ function ExpeditionPanel({ colony, archaeology, onStartExpedition, onPayExpediti
                   <span className="text-xs text-slate-500 font-normal">{l.rarity} Lv{l.level}</span>
                 </p>
                 <p className="text-sm text-slate-500 mt-1">
-                  已触发结局 {count}/12
+                  已触发结局 {count}/{EXPEDITION_UNLOCK_COUNT}
                   {stationedSiteId ? ` · 正在「${stationedName}」驻守考古遗迹（驻守与远征不可同时进行）` : ''}
                   {unlocked && ld?.ultimateSkill ? ` · 终极技能已解锁「${ld.ultimateSkill.name}」` : ''}
                 </p>
                 <div className="mt-2 flex flex-wrap gap-2">
-                  {!unlocked && count >= 12 && ld?.ultimateSkill && l.level >= 3 && (
+                  {!unlocked && count >= EXPEDITION_UNLOCK_COUNT && ld?.ultimateSkill && l.level >= 3 && (
                     <button
                       onClick={() => handleUnlock(l.id)}
                       className="px-3 py-1.5 bg-purple-600 hover:bg-purple-500 rounded-lg text-sm font-bold text-white transition-colors flex items-center gap-1"
@@ -250,7 +249,7 @@ function ExpeditionPanel({ colony, archaeology, onStartExpedition, onPayExpediti
                       <Lock size={14} /> 解锁终极技能
                     </button>
                   )}
-                  {!unlocked && count >= 12 && ld?.ultimateSkill && l.level < 3 && (
+                  {!unlocked && count >= EXPEDITION_UNLOCK_COUNT && ld?.ultimateSkill && l.level < 3 && (
                     <span className="text-xs text-slate-500">结局已集齐，需将该领袖升至 Lv3 才能解锁终极技能</span>
                   )}
                   <button

@@ -1,7 +1,9 @@
 import { useCallback } from 'react';
-import { getWonderDef } from '@/data/colony/wonders';
+import { getWonderDef, toStageCost } from '@/data/colony/wonders';
+import { firstMissing, payCost } from '@/lib/turn/resourceCost';
 import type { GameState } from '@/types/game';
 import type { WonderState } from '@/types/colony';
+import { GOLD_LOG_LIMIT } from '@/data/gameData';
 
 interface WonderActions {
   selectWonder: (wonderId: string) => { success: boolean; message: string };
@@ -72,36 +74,16 @@ export function useWonder(
         const stage = wonder.stages[ws.currentStage];
         if (!stage) { result = { success: false, message: '已是最终阶段' }; return prev; }
 
-        // 资源检查
-        const checks: string[] = [];
-        if (stage.gold > 0 && s.gold < stage.gold) checks.push(`金币不足（${s.gold}/${stage.gold}）`);
-        if (stage.alloy > 0 && s.alloy < stage.alloy) checks.push(`合金不足（${s.alloy}/${stage.alloy}）`);
-        if (stage.silicon > 0 && (s.materials.silicon || 0) < stage.silicon) checks.push(`硅片不足`);
-        if (stage.quantum > 0 && (s.materials.quantum || 0) < stage.quantum) checks.push(`量子簇不足`);
-        if (stage.dark_matter > 0 && (s.materials.dark_matter || 0) < stage.dark_matter) checks.push(`暗物质不足`);
-        if (stage.stardust > 0 && s.stardust < stage.stardust) checks.push(`星尘不足`);
-        if (stage.food > 0 && s.food < stage.food) checks.push(`食物不足`);
-        if (stage.carbon > 0 && (s.materials.carbon || 0) < stage.carbon) checks.push(`碳块不足`);
-        if (stage.oil > 0 && (s.materials.oil || 0) < stage.oil) checks.push(`石油不足`);
-        if (stage.gold_ore > 0 && (s.materials.gold_ore || 0) < stage.gold_ore) checks.push(`黄金不足`);
-        if (stage.research > 0 && (s.colony.techState?.researchPoints || 0) < stage.research) checks.push(`科研点不足`);
+        // 资源校验与扣减的唯一真值：toStageCost（把阶段的 11 个扁平字段摊平成 cost 对象）
+        // + lib/turn/resourceCost 的 firstMissing/payCost（科研点扣殖民地、其余扣母舰，与远征/考古同口径）。
+        // 历史上这里是手写的 11 项检查 + 11 项扣减，且面板另写一套 → 两处文案与顺序都不同。
+        const cost = toStageCost(stage);
+        const missing = firstMissing(s, s.colony, cost);
+        if (missing) { result = { success: false, message: missing }; return prev; }
 
-        if (checks.length > 0) { result = { success: false, message: checks.join('；') }; return prev; }
-
-        // 扣除资源
-        if (stage.gold > 0) { s.gold -= stage.gold; s.goldLog = [{ turn: prev.turn, amount: -stage.gold, reason: `奇观「${wonder.name}」${stage.name}`, balanceAfter: s.gold }, ...(s.goldLog || [])].slice(0, 200); }
-        if (stage.alloy > 0) s.alloy -= stage.alloy;
-        if (stage.stardust > 0) s.stardust -= stage.stardust;
-        if (stage.food > 0) s.food -= stage.food;
-        s.materials = { ...s.materials };
-        if (stage.silicon > 0) s.materials.silicon = (s.materials.silicon || 0) - stage.silicon;
-        if (stage.quantum > 0) s.materials.quantum = (s.materials.quantum || 0) - stage.quantum;
-        if (stage.dark_matter > 0) s.materials.dark_matter = (s.materials.dark_matter || 0) - stage.dark_matter;
-        if (stage.carbon > 0) s.materials.carbon = (s.materials.carbon || 0) - stage.carbon;
-        if (stage.oil > 0) s.materials.oil = (s.materials.oil || 0) - stage.oil;
-        if (stage.gold_ore > 0) s.materials.gold_ore = (s.materials.gold_ore || 0) - stage.gold_ore;
-        if (stage.research > 0 && s.colony.techState) {
-          s.colony = { ...s.colony, techState: { ...s.colony.techState, researchPoints: s.colony.techState.researchPoints - stage.research } };
+        payCost(s, s.colony, cost);
+        if (cost.gold > 0) {
+          s.goldLog = [{ turn: prev.turn, amount: -cost.gold, reason: `奇观「${wonder.name}」${stage.name}`, balanceAfter: s.gold }, ...(s.goldLog || [])].slice(0, GOLD_LOG_LIMIT);
         }
 
         s.colony = { ...s.colony, wonder: { ...ws, submittedThisTurn: true } };
@@ -122,13 +104,13 @@ export function useWonder(
       updater: (prev) => {
         const ship = prev.ships[0];
         const ws = ship?.colony?.wonder;
-        if (!ws || !ws.selectedWonderId || ws.currentStage < 8) {
+        const wonder = ws?.selectedWonderId ? getWonderDef(ws.selectedWonderId) : undefined;
+        if (!ws || !wonder || ws.currentStage < wonder.stages.length) {
           result = { success: false, message: '奇观尚未建设完成' };
           return prev;
         }
-        const wonder = getWonderDef(ws.selectedWonderId);
-        result = { success: true, message: `🎉 奇观「${wonder?.name || ''}」建成！` };
-        return { ...prev, gameWon: true, wonWonderName: wonder?.name || '' };
+        result = { success: true, message: `🎉 奇观「${wonder.name}」建成！` };
+        return { ...prev, gameWon: true, wonWonderName: wonder.name };
       },
     });
     return result;

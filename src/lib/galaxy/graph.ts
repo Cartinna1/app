@@ -200,3 +200,12 @@ export function validateGalaxy(): GalaxyValidationResult {
     },
   };
 }
+
+// 开发期自检（生产构建不执行）：改节点坐标 / 航道后立即在控制台暴露悬空航道、孤立节点、
+// 不连通与势力间距越界，避免"改了坐标忘了重跑 validateGalaxy"（AGENTS.md 第七节的人工流程改为自动兜底）。
+if (import.meta.env.DEV) {
+  const result = validateGalaxy();
+  if (!result.ok) {
+    console.warn('[galaxy] 星图校验未通过：', result.errors);
+  }
+}

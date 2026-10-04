@@ -1,6 +1,6 @@
 import { useState, memo } from 'react';
 import type { Mothership, Loan, GameState } from '@/types/game';
-import { getLoanLimit, getLoanTierInfo } from '@/hooks/useLoan';
+import { getLoanLimit, getLoanTierInfo, LOAN_PLANS } from '@/hooks/useLoan';
 import { Banknote, AlertTriangle, Clock, Coins, Check, ShieldAlert } from 'lucide-react';
 
 interface LoanPanelProps {
@@ -10,12 +10,7 @@ interface LoanPanelProps {
   onRepayLoan: (loanId: string) => { success: boolean; message: string };
 }
 
-// 贷款方案：总利率（useLoan.ts 中直接 principal * rate 计算总利息）
-const LOAN_PLANS = [
-  { turns: 5, rate: 0.4, label: '5回合', rateLabel: '到期总利率40%' },
-  { turns: 10, rate: 0.6, label: '10回合', rateLabel: '到期总利率60%' },
-  { turns: 15, rate: 0.9, label: '15回合', rateLabel: '到期总利率90%' },
-];
+// 贷款方案表：唯一真值在 hooks/useLoan.ts 的 LOAN_PLANS（面板不再自建一份，否则改表无效）
 
 function LoanPanel({ ship, gameState, onTakeLoan, onRepayLoan }: LoanPanelProps) {
   const [amount, setAmount] = useState('');

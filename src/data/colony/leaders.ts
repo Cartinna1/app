@@ -103,7 +103,7 @@ export const ALL_LEADERS: LeaderDef[] = [
     levelExtras: [{}, { buildingMaxCountBonus: { B15: 1 } }, { buildingMaxCountBonus: { B15: 1, B20: 1 }, popCapBonus: { B20:6 } }],
     ultimateSkill: { name: '碳之精华', description: '碳块建筑（碳沉积采集器/碳基材料合成器）产出额外+60%（与Lv3叠加，合计+110%）', bonus: 60 } },
   { id: 'L7', rarity: 'R', name: '幽影·泽维尔', abilityName: '暗影捕手',
-    description: '"他曾在黑洞阴影区捕获一缕暗物质流，并将其命名为"宇宙的呼吸"。没有人知道他如何做到的。"',
+    description: '他曾在黑洞阴影区捕获一缕暗物质流，并将其命名为「宇宙的呼吸」。没有人知道他如何做到的。',
     levelBonuses: [{ B16:20,B21:20 }, { B16:35,B21:35 }, { B16:50,B21:50 }],
     levelExtras: [{}, { buildingMaxCountBonus: { B16: 1 } }, { buildingMaxCountBonus: { B16: 1, B21: 1 }, popCapBonus: { B21:4 } }],
     ultimateSkill: { name: '暗质永夜', description: '暗物质建筑（暗物质捕获阱/暗物质压缩阱）产出额外+20%（与Lv3叠加，合计+70%）', bonus: 20 } },
@@ -193,6 +193,9 @@ export const ALL_LEADERS: LeaderDef[] = [
 ];
 
 // ==================== 领袖升级星尘费用（唯一真值） ====================
+/** 殖民地领袖容量基数（科技 T23/T24 与领袖 leaderCapBonus 在此之上累加）——单一真值，
+ *  colonyTurn 结算、colonySetup / useColonyBase 的初始值共用，勿再写裸 3。 */
+export const LEADER_CAP_BASE = 3;
 // 领袖升级费用（**资源成本对象**）：Lv1→2 = 50,000 金币，Lv2→3 = 150 合金。
 // UI 显示与 useColonyLeaders 扣费统一从这里取；校验/扣减走 lib/turn/resourceCost.ts 的 canAfford/firstMissing/payCost，
 // 历史上「UI 写 50/100 星尘、hook 写 20/45」的分叉已收敛至此，勿再就地硬编码。

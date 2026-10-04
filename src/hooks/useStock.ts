@@ -1,5 +1,6 @@
 import { useCallback } from 'react';
 import type { GameState } from '@/types/game';
+import { GOLD_LOG_LIMIT, getStockFeeMult, getStockSellFeeMult } from '@/data/gameData';
 
 export function useStock(
   dispatch: React.Dispatch<{ type: 'FUNCTIONAL_UPDATE'; updater: (state: GameState) => GameState }>
@@ -18,12 +19,13 @@ export function useStock(
           const stock = prev.stocks.find((s) => s.id === stockId);
           if (!stock) { result = { error: '股票不存在' }; return prev; }
 
-          const feeMult = ship.id === 2 ? 1.0 : ship.id === 0 ? 1.0 - 0.5 * 0.03 : 1.03;
+          // 买入手续费走唯一真值 getStockFeeMult（与 StockMarket 显示同源）
+          const feeMult = getStockFeeMult(ship);
           const cost = Math.round(stock.currentPrice * quantity * feeMult);
           if (ship.gold < cost) { result = { error: '金币不足' }; return prev; }
 
           ship.gold -= cost;
-          ship.goldLog = [{ turn: prev.turn, amount: -cost, reason: `买入股票「${stock.name}」x${quantity}`, balanceAfter: ship.gold }, ...ship.goldLog].slice(0, 200);
+          ship.goldLog = [{ turn: prev.turn, amount: -cost, reason: `买入股票「${stock.name}」x${quantity}`, balanceAfter: ship.gold }, ...ship.goldLog].slice(0, GOLD_LOG_LIMIT);
           ship.stockHoldings = { ...ship.stockHoldings };
           ship.stockHoldings[stockId] = (ship.stockHoldings[stockId] || 0) + quantity;
           ship.stockBuyTurn = { ...ship.stockBuyTurn, [stockId]: prev.turn };
@@ -58,7 +60,9 @@ export function useStock(
           const hold = ship.stockHoldings[stockId] || 0;
           if (hold < quantity) { result = { error: '持仓不足' }; return prev; }
 
-          const feeMult = ship.id === 2 ? 1.0 : 0.97;
+          // 卖出到账倍率唯一真值：黄金集团 0 手续费 = 1.0；万众一心手续费减半 = 0.985（与其技能文案一致）；
+          // 其余 = 0.97。显示侧（StockMarket 收入预览/说明）读同一函数。
+          const feeMult = getStockSellFeeMult(ship);
           const revenue = Math.round(stock.currentPrice * quantity * feeMult);
           const avgCost = ship.stockCosts[stockId] || stock.currentPrice;
           const costBasis = Math.round(avgCost * quantity);
@@ -67,7 +71,7 @@ export function useStock(
 
           ship.gold += revenue;
           if (ship.bankrupt && ship.gold > 0) ship.bankrupt = false;
-          ship.goldLog = [{ turn: prev.turn, amount: revenue, reason: `卖出股票「${stock.name}」x${quantity}`, balanceAfter: ship.gold }, ...ship.goldLog].slice(0, 200);
+          ship.goldLog = [{ turn: prev.turn, amount: revenue, reason: `卖出股票「${stock.name}」x${quantity}`, balanceAfter: ship.gold }, ...ship.goldLog].slice(0, GOLD_LOG_LIMIT);
           ship.stockHoldings = { ...ship.stockHoldings };
           ship.stockHoldings[stockId] = hold - quantity;
           ship.stockCosts = { ...ship.stockCosts };

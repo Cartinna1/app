@@ -1,6 +1,7 @@
 import { useState, memo } from 'react';
 import type { Mothership } from '@/types/game';
 import { MODULE_DEFINITIONS, canAffordModule, isModuleInstalled } from '@/data/modules';
+import { firstMissing } from '@/lib/turn/resourceCost';
 import { getMaterialName } from '@/data/materialNames';
 import { Wrench, Check, X, Clock, Zap, Sparkles } from 'lucide-react';
 
@@ -112,18 +113,11 @@ function ModulePanel({ ship, onInstallModule, onUseManualModule }: ModulePanelPr
                   </div>
                   {def.effectType === 'manual' && (
                     (() => {
-                      // 检查资源是否足够
-                      let canUse = !onCooldown;
-                      let reason = '';
-                      if (canUse) {
-                        if (mod.id === 'stardust_pool') {
-                          if (ship.alloy < 500) { canUse = false; reason = '合金不足(需500)'; }
-                        } else if (mod.id === 'quantum_reactor') {
-                          if (ship.food < 50) { canUse = false; reason = '食物不足(需50)'; }
-                        } else if (mod.id === 'void_replicator') {
-                          if (ship.stardust < 30) { canUse = false; reason = '星尘不足(需30)'; }
-                        }
-                      }
+                      // 资源是否足够：读装置数据 manualCost（唯一真值），与结算 useManualModule 同源，
+                      // 不再各自硬编码 500/50/30
+                      const missing = firstMissing(ship, undefined, def.manualCost || {});
+                      const canUse = !onCooldown && !missing;
+                      const reason = missing || '';
                       return (
                         <button
                           onClick={() => canUse && handleUse(mod.id)}

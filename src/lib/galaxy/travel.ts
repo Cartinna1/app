@@ -10,12 +10,14 @@
 import type { Mothership } from '@/types/game';
 import { shortestRoute, type GalaxyRoute } from '@/lib/galaxy/graph';
 import { RELIC_JUMP_ACCELERATOR } from '@/data/relics';
+import { MODULE_GRAVITY_ANCHOR } from '@/data/modules';
 import { getPermaBonusValue } from '@/data/galaxy/permaBonuses';
 
-/** 当前最短路减免（引力锚定器 / 跃迁加速器 / 永久加成），用于展示或日志说明 */
+/** 当前最短路减免（引力锚定器 / 跃迁加速器 / 永久加成），用于展示或日志说明。
+ *  ⚠ 减免来源**只在本函数列一次**：applyTravelReduction 也调它，新增第 4 种减免只改这里。 */
 export function getTravelReduction(ship: Mothership): number {
   let reduce = 0;
-  if (ship.installedModuleIds.includes('gravity_anchor')) reduce += 1;
+  if (ship.installedModuleIds.includes(MODULE_GRAVITY_ANCHOR)) reduce += 1;
   if (ship.relics.some((r) => r.id === RELIC_JUMP_ACCELERATOR)) reduce += 1;
   const perm = getPermaBonusValue(ship.galaxy?.permaBonuses, 'travelTurnReduce');
   if (perm > 0) reduce += perm;
@@ -34,12 +36,8 @@ export function getShipTravel(
   return { route, turns: applyTravelReduction(ship, route.turns) };
 }
 
-/** 把减免应用到原始回合数上（各自钳到下限 1；勿在别处重写这段） */
+/** 把减免应用到原始回合数上（各自钳到下限 1；口径 = max(1, 基础 − 减免合计)，勿在别处重写这段） */
 export function applyTravelReduction(ship: Mothership, baseTurns: number): number {
-  let turns = baseTurns;
-  if (ship.installedModuleIds.includes('gravity_anchor')) turns = Math.max(1, turns - 1);
-  if (ship.relics.some((r) => r.id === RELIC_JUMP_ACCELERATOR)) turns = Math.max(1, turns - 1);
-  const perm = getPermaBonusValue(ship.galaxy?.permaBonuses, 'travelTurnReduce');
-  if (perm > 0) turns = Math.max(1, turns - perm);
-  return turns;
+  const reduce = getTravelReduction(ship);
+  return reduce > 0 ? Math.max(1, baseTurns - reduce) : baseTurns;
 }

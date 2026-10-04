@@ -8,6 +8,8 @@ import { computeFactionTurn, applyPassiveIncome } from '@/lib/turn/factionTurn';
 import { generateContracts } from '@/lib/turn/contracts';
 import { getCurrentFactionId } from '@/lib/galaxy/access';
 import { processArchaeologyTurn } from '@/lib/galaxy/archaeologyTurn';
+import { EVENT_LOG_LIMIT } from '@/data/gameData';
+import { createUid } from '@/lib/id';
 
 /**
  * 回合推进 hook（编排器）。
@@ -55,7 +57,7 @@ export function useTurn(
         // 游戏结束检测
         const gameOverReason = getGameOverReason(ships[0]);
         if (gameOverReason) {
-          return { ...prev, ships, phase: 'ended' as const, eventLog: [{ id: `${prev.turn}-gameover-${Date.now()}`, turn: prev.turn, event: '游戏结束', detail: gameOverReason }, ...prev.eventLog] };
+          return { ...prev, ships, phase: 'ended' as const, eventLog: [{ id: createUid('gameover'), turn: prev.turn, event: '游戏结束', detail: gameOverReason }, ...prev.eventLog].slice(0, EVENT_LOG_LIMIT) };
         }
 
         // 合同生成
@@ -73,9 +75,9 @@ export function useTurn(
           ...market,
           buyTriggered: {},
           sellTriggered: {},
-          // 考古日志（每回合最多几条，挂到事件日志尾部）
+          // 考古日志（每回合最多几条，挂到事件日志尾部）；与 ADD_EVENT_LOG 共用同一上限
           eventLog: archaeologyLogs.length > 0
-            ? [...archaeologyLogs.map((detail, i) => ({ id: `${prev.turn}-arch-${i}-${Date.now()}`, turn: prev.turn, event: '考古', detail })), ...prev.eventLog]
+            ? [...archaeologyLogs.map((detail) => ({ id: createUid('arch'), turn: prev.turn, event: '考古', detail })), ...prev.eventLog].slice(0, EVENT_LOG_LIMIT)
             : prev.eventLog,
         };
       },

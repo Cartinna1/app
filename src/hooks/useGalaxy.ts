@@ -7,7 +7,7 @@ import type { GameState } from '@/types/game';
 import { getArchaeologySite } from '@/data/galaxy/archaeology';
 import { getGalaxyNode } from '@/data/galaxy/nodes';
 import { firstMissing, flattenCost, payCost } from '@/lib/turn/resourceCost';
-import { resolveStage, canOpenExcavation, leaderChangeTurns, findStationedSite } from '@/lib/galaxy/archaeologyTurn';
+import { resolveStage, canOpenExcavation, leaderChangeTurns, findStationedSite, SAFE_BONUS_MULT } from '@/lib/galaxy/archaeologyTurn';
 
 interface GalaxyActions {
   startExcavation: (siteId: string, leaderId: string) => { success: boolean; message: string };
@@ -169,8 +169,9 @@ export function useGalaxy(
       updater: (prev) => {
         const ships = [...prev.ships];
         const s = { ...ships[0], colony: ships[0].colony ? { ...ships[0].colony } : ships[0].colony };
-        // 阶段推进（含奖励发放与日志）由 lib/galaxy/archaeologyTurn.resolveStage 统一处理
-        resolveStage(s, site, st.stageIndex, { forced: true, bonusMult: 0.5 });
+        // 阶段推进（含奖励发放与日志）由 lib/galaxy/archaeologyTurn.resolveStage 统一处理；
+        // 折扣系数取 SAFE_BONUS_MULT（唯一真值），勿再写字面量 0.5
+        resolveStage(s, site, st.stageIndex, { forced: true, bonusMult: SAFE_BONUS_MULT });
         ships[0] = s;
         result = { success: true, message: '稳妥推进完成，阶段奖励减半' };
         return { ...prev, ships };

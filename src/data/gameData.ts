@@ -5,11 +5,13 @@ import { createGalaxyState } from './galaxy/nodes';
 
 // 母舰 ID 常量（单一真值：按 id 特判的逻辑一律引用，勿硬编码数字）
 export const MOTHERSHIP_ID_UNITY = 0;               // 万众一心
+export const MOTHERSHIP_ID_WARP_JUMPER = 1;         // 跃迁者
 export const MOTHERSHIP_ID_GOLD_GROUP = 2;          // 黄金集团
 export const MOTHERSHIP_ID_GALAXY_HEART = 3;        // 银河之心
 export const MOTHERSHIP_ID_SINGULARITY_SEEKER = 4;  // 奇点探求者
+export const MOTHERSHIP_ID_HOLY_GLORY = 5;          // 神圣荣耀
 
-export const MOTHERSHIP_TEMPLATES: Omit<Mothership, 'gold' | 'food' | 'alloy' | 'stardust' | 'modules' | 'installedModuleIds' | 'stockHoldings' | 'stockCosts' | 'stockBuyTurn' | 'sellPriceBonus' | 'productionsThisTurn' | 'maxProductionsPerTurn' | 'materials' | 'products' | 'productionQueue' | 'usedCodes' | 'loans' | 'bankrupt' | 'bankruptTimer' | 'famineTimer' | 'isRebellion' | 'relics' | 'tradeStatus' | 'galaxy' | 'goldLog'>[] = [
+export const MOTHERSHIP_TEMPLATES: Omit<Mothership, 'gold' | 'food' | 'alloy' | 'stardust' | 'modules' | 'installedModuleIds' | 'stockHoldings' | 'stockCosts' | 'stockBuyTurn' | 'sellPriceBonus' | 'productionsThisTurn' | 'maxProductionsPerTurn' | 'materials' | 'products' | 'productionQueue' | 'loans' | 'bankrupt' | 'bankruptTimer' | 'famineTimer' | 'isRebellion' | 'relics' | 'tradeStatus' | 'galaxy' | 'goldLog'>[] = [
   {
     id: MOTHERSHIP_ID_UNITY,
     name: '万众一心',
@@ -25,7 +27,7 @@ export const MOTHERSHIP_TEMPLATES: Omit<Mothership, 'gold' | 'food' | 'alloy' | 
     initialCapitalMultiplier: 1,
   },
   {
-    id: 1,
+    id: MOTHERSHIP_ID_WARP_JUMPER,
     name: '跃迁者',
     description: '掌握先进跃迁技术的舰队，行动如风',
     skill: {
@@ -81,7 +83,7 @@ export const MOTHERSHIP_TEMPLATES: Omit<Mothership, 'gold' | 'food' | 'alloy' | 
     initialCapitalMultiplier: 1,
   },
   {
-    id: 5,
+    id: MOTHERSHIP_ID_HOLY_GLORY,
     name: '神圣荣耀',
     description: '传说中的神圣舰队，受到星空的庇佑',
     skill: {
@@ -98,10 +100,29 @@ export const MOTHERSHIP_TEMPLATES: Omit<Mothership, 'gold' | 'food' | 'alloy' | 
 
 export const INITIAL_GOLD = 10000;
 
-// 股票交易买入手续费倍率（单一真值：扣款与 UI 显示都从这里取）
-// 黄金集团（MOTHERSHIP_ID_GOLD_GROUP）0 手续费 → 1.0；万众一心（MOTHERSHIP_ID_UNITY）手续费减半 → 0.985；其余 → 1.03
+/** 金币流水保留上限（各写入点共用；勿再就地写 .slice(0, 200)） */
+export const GOLD_LOG_LIMIT = 200;
+
+/** 事件日志保留上限（reducer 与 useTurn 的回合日志都按它裁剪，勿只在一处生效） */
+export const EVENT_LOG_LIMIT = 100;
+
+// 股票交易手续费率（单一真值：买入倍率与卖出到账倍率都从这里派生）
+// 黄金集团（MOTHERSHIP_ID_GOLD_GROUP）0 手续费；万众一心（MOTHERSHIP_ID_UNITY）手续费减半；其余 3%
+const STOCK_FEE_RATE = 0.03;
+function getStockFeeRate(ship: { id: number }): number {
+  return ship.id === MOTHERSHIP_ID_GOLD_GROUP ? 0 : ship.id === MOTHERSHIP_ID_UNITY ? STOCK_FEE_RATE * 0.5 : STOCK_FEE_RATE;
+}
+
+/** 买入成本倍率（1.03 = 含 3% 手续费）；扣款与 UI 显示都从这里取 */
 export function getStockFeeMult(ship: { id: number }): number {
-  return ship.id === MOTHERSHIP_ID_GOLD_GROUP ? 1.0 : ship.id === MOTHERSHIP_ID_UNITY ? 1.0 - 0.5 * 0.03 : 1.03;
+  return 1 + getStockFeeRate(ship);
+}
+
+/** 卖出到账倍率（0.97 = 扣 3% 手续费；万众一心手续费减半 → 0.985，与其技能文案一致）。
+ *  ⚠ 结算（useStock.sellStock）与显示（StockMarket 收入预览）必须共用本函数：
+ *  历史上显示侧用 `2 − 买入倍率` 反推，导致万众一心"面板显示 ×1.015、实收 ×0.97"。 */
+export function getStockSellFeeMult(ship: { id: number }): number {
+  return 1 - getStockFeeRate(ship);
 }
 
 export function createMotherships(): Mothership[] {
@@ -130,7 +151,6 @@ export function createMotherships(): Mothership[] {
     productionQueue: [],
     productionsThisTurn: 0,
     maxProductionsPerTurn: 5,
-    usedCodes: [],
     loans: [],
     bankrupt: false,
     bankruptTimer: 0,
@@ -428,7 +448,7 @@ export const PRODUCT_PRICE_LIMITS: Record<string, { maxUp: number; maxDown: numb
 
 // 产品基础数据。productionTurns 不在此手写——它是生产属性，唯一真值在 RECIPES，
 // 由 createProducts() 按 id 从 RECIPES 派生，避免两表重复维护导致分叉（如 p01 曾一处 1 一处 2）。
-export const INITIAL_PRODUCTS: Omit<Product, 'sellPrices' | 'currentSellPrice' | 'priceMaxUp' | 'priceMaxDown' | 'productionTurns'>[] = [
+export const INITIAL_PRODUCTS: Omit<Product, 'sellPrices' | 'currentSellPrice' | 'productionTurns'>[] = [
   // 1回合（12种）
   { id: 'p07', name: '生物培养基', description: '外星生态系统维持培养液', baseSellPrice: 734 },
   { id: 'p22', name: '外星香料', description: '珍稀外星植物提取的调味香料', baseSellPrice: 827 },
@@ -480,7 +500,6 @@ export const INITIAL_PRODUCTS: Omit<Product, 'sellPrices' | 'currentSellPrice' |
 
 export function createProducts(): Product[] {
   return INITIAL_PRODUCTS.map((p) => {
-    const limits = PRODUCT_PRICE_LIMITS[p.id] || { maxUp: 0.20, maxDown: 0.15 };
     // productionTurns 由 RECIPES 派生（单一真值），无对应配方时回退 1
     const productionTurns = RECIPES.find((r) => r.id === p.id)?.productionTurns ?? 1;
     // 初始价格在基准价 ±10% 范围内随机
@@ -489,7 +508,7 @@ export function createProducts(): Product[] {
     const initial = lower + Math.floor(Math.random() * (upper - lower + 1));
     const prices: number[] = [];
     for (let i = 0; i < 10; i++) prices.push(initial);
-    return { ...p, productionTurns, sellPrices: prices, currentSellPrice: initial, priceMaxUp: limits.maxUp, priceMaxDown: limits.maxDown };
+    return { ...p, productionTurns, sellPrices: prices, currentSellPrice: initial };
   });
 }
 
@@ -515,10 +534,8 @@ export const REDEEM_CODES: Record<string, number> = {
   '377425': 10000, '624987': 10000,
 };
 
-// ⚠️ 临时测试码（仅开发测试用，发布前删除）：
-export const REDEEM_STARDUST_CODES: Record<string, number> = {
-  'TEST5000': 5000, // 临时：兑换 5000 星尘
-};
+// 已删除临时测试码（原 REDEEM_STARDUST_CODES / 'TEST5000' 白送 5000 星尘）：
+// AGENTS.md 第七节明确「无调试码——不要加回 DEBUG 码」，且它与 UI 文案「兑换码为 6 位纯数字」冲突。
 
 export function getRedeemCodeList(): string[] {
   return Object.keys(REDEEM_CODES);

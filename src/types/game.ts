@@ -14,7 +14,7 @@ export interface Faction {
 
 export interface FactionState {
   factionId: string;
-  invested: number; // 已投资金额（上限50000）
+  invested: number; // 旧投资系统的累计投资额（**当前无写入点**，仅旧存档迁移读取）；新投资走「固定 8000 金币 +1 声望」模型
   investmentTier: number; // 0-5，对应投资档位
 }
 
@@ -91,8 +91,6 @@ export interface Product {
   sellPrices: number[];
   currentSellPrice: number;
   productionTurns: number; // 生产所需回合数（1-6，含重型配方4-6回合）
-  priceMaxUp: number;      // 相对基准价，最多涨多少（如0.2=20%）
-  priceMaxDown: number;    // 相对基准价，最多跌多少（如0.15=15%）
 }
 
 export interface ProductionTask {
@@ -141,6 +139,10 @@ export interface ModuleDefinition {
   effectType: 'per_turn' | 'passive' | 'manual';
   cooldown: number;     // 冷却回合（manual类型）
   effectDescription: string;
+  /** 手动装置的消耗（资源 key → 数量；结算与面板置灰判定同读，勿再在 hook/UI 各写一份数字） */
+  manualCost?: Record<string, number>;
+  /** 手动装置的产出（资源 key → 数量，如 gold: 30000 / stardust: 10） */
+  manualGain?: Record<string, number>;
 }
 
 export interface Relic {
@@ -187,7 +189,6 @@ export interface Mothership {
   productionQueue: ProductionTask[];
   productionsThisTurn: number;
   maxProductionsPerTurn: number;
-  usedCodes: string[];
   loans: Loan[];
   // 破产/饥荒/叛乱状态
   bankrupt: boolean;       // 金币<0时触发

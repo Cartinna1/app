@@ -1,7 +1,7 @@
 // ==================== 考古遗迹数据（10 处，唯一真值） ====================
 // 星图边陲带的 10 处遗迹（节点 siteId → 本文件，见 data/galaxy/nodes.ts）的发掘阶段与奖励。
 // 口径：每处遗迹需 1 名领袖驻守（minLeaderLevel 为驻守门槛，0 = 无要求）；
-//   每个阶段 = 耗时 turns 回合 · 难度 difficulty（成功率 −0.12×难度）· 投入 cost（金币/食物/合金/星尘扣母舰，科研点扣殖民地，原料见 materials）。
+//   每个阶段 = 耗时 turns 回合 · 难度 difficulty（成功率 −0.18×难度，唯一真值 lib/galaxy/archaeologyTurn.ts 的 DIFFICULTY_PENALTY）· 投入 cost（金币/食物/合金/星尘扣母舰，科研点扣殖民地，原料见 materials）。
 //   阶段抉择 choice 只影响该阶段奖励与成功率，不影响能否推进；阶段小奖励写在 bonus（成功时的「发现」同走此字段）。
 //   全部阶段完成后的最终奖励写在 reward（遗物 / 永久加成 / 称号 + 附带资源）。
 //   危险率 dangerRate 默认 0.35（碳壳巢为 0.5）。
@@ -10,6 +10,13 @@
 // ⚠ 数值为既定平衡（阶段数合计 42），改动前先出前后对比表；本文件是阶段与奖励的唯一来源，逻辑层与 UI 勿另行硬编码。
 
 import type { ArchaeologySite } from '@/types/galaxy';
+import {
+  RELIC_RESONANCE_FORK, RELIC_UNFINISHED_MIRROR, RELIC_DEEP_DRILL,
+  RELIC_ARBITRAGE_NOTE, RELIC_SEVENTH_LAYER, RELIC_BLANK_IDOL,
+} from '@/data/relics';
+import {
+  PERMA_AGRICULTURE, PERMA_CYCLE, PERMA_STARCAL, PERMA_ETERNAL_LIGHT,
+} from './permaBonuses';
 
 export const ARCHAEOLOGY_SITES: ArchaeologySite[] = [
   // ==================== 1. 无声钟楼 ====================
@@ -57,7 +64,7 @@ export const ARCHAEOLOGY_SITES: ArchaeologySite[] = [
         bonus: { stardust: 5 },
       },
     ],
-    reward: { relics: ['r_016'], researchPoints: 200 },
+    reward: { relics: [RELIC_RESONANCE_FORK], researchPoints: 1000 },
   },
 
   // ==================== 2. 镜面坟场 ====================
@@ -120,7 +127,7 @@ export const ARCHAEOLOGY_SITES: ArchaeologySite[] = [
         bonus: { researchPoints: 150 },
       },
     ],
-    reward: { relics: ['r_017'], alloy: 30 },
+    reward: { relics: [RELIC_UNFINISHED_MIRROR], alloy: 300 },
   },
 
   // ==================== 3. 碳壳巢 ====================
@@ -178,7 +185,7 @@ export const ARCHAEOLOGY_SITES: ArchaeologySite[] = [
         bonus: { gold: 6000 },
       },
     ],
-    reward: { relics: ['r_018'], materials: { carbon: 30, oil: 30 } },
+    reward: { relics: [RELIC_DEEP_DRILL], materials: { carbon: 100, oil: 100 } },
   },
 
   // ==================== 4. 停摆的摇篮 ====================
@@ -251,7 +258,7 @@ export const ARCHAEOLOGY_SITES: ArchaeologySite[] = [
         bonus: { gold: 5000 },
       },
     ],
-    reward: { permaBonuses: ['perm_agriculture'], food: 300 },
+    reward: { permaBonuses: [PERMA_AGRICULTURE], food: 1500 },
   },
 
   // ==================== 5. 折叠回廊 ====================
@@ -309,7 +316,7 @@ export const ARCHAEOLOGY_SITES: ArchaeologySite[] = [
         bonus: { stardust: 5 },
       },
     ],
-    reward: { relics: ['r_019'], gold: 60000 },
+    reward: { relics: [RELIC_ARBITRAGE_NOTE], gold: 60000 },
   },
 
   // ==================== 6. 九转丹炉残址 ====================
@@ -367,7 +374,7 @@ export const ARCHAEOLOGY_SITES: ArchaeologySite[] = [
         bonus: { stardust: 5 },
       },
     ],
-    reward: { permaBonuses: ['perm_cycle'], researchPoints: 800 },
+    reward: { permaBonuses: [PERMA_CYCLE], researchPoints: 800 },
   },
 
   // ==================== 7. 逆向星图台 ====================
@@ -435,7 +442,7 @@ export const ARCHAEOLOGY_SITES: ArchaeologySite[] = [
         bonus: { researchPoints: 200 },
       },
     ],
-    reward: { permaBonuses: ['perm_starcal'], researchPoints: 1200 },
+    reward: { permaBonuses: [PERMA_STARCAL], researchPoints: 1200 },
   },
 
   // ==================== 8. 七层碑林 ====================
@@ -578,7 +585,7 @@ export const ARCHAEOLOGY_SITES: ArchaeologySite[] = [
         bonus: { researchPoints: 180 },
       },
     ],
-    reward: { relics: ['r_020'], stardust: 20 },
+    reward: { relics: [RELIC_SEVENTH_LAYER], stardust: 20 },
   },
 
   // ==================== 9. 掌灯者灯塔基座 ====================
@@ -646,7 +653,7 @@ export const ARCHAEOLOGY_SITES: ArchaeologySite[] = [
         bonus: { stardust: 6 },
       },
     ],
-    reward: { permaBonuses: ['perm_eternal_light'], stardust: 25 },
+    reward: { permaBonuses: [PERMA_ETERNAL_LIGHT], stardust: 25 },
   },
 
   // ==================== 10. 空白神像厅 ====================
@@ -714,7 +721,7 @@ export const ARCHAEOLOGY_SITES: ArchaeologySite[] = [
         bonus: { stardust: 6 },
       },
     ],
-    reward: { relics: ['r_021'], title: '读信人', stardust: 40 },
+    reward: { relics: [RELIC_BLANK_IDOL], title: '读信人', stardust: 40 },
   },
 ];
 

@@ -4,6 +4,11 @@ import type { GameState, FactionContract, Faction, Mothership } from '@/types/ga
 import { RECIPES } from '@/data/gameData';
 import { RELATION_MATRIX } from '@/data/factions';
 
+/** 走私合同成功率（唯一真值：结算判定与贸易面板的风险提示共用）。
+ *  判定在 useTrade.completeContract：`Math.random() > SMUGGLING_SUCCESS_RATE` 即失败；
+ *  持有遗物「情报破译器」时必定成功。 */
+export const SMUGGLING_SUCCESS_RATE = 0.65;
+
 /** 合同生成：清理过期合同并按势力补充新合同，返回新列表 */
 export function generateContracts(prev: GameState): FactionContract[] {
   const factionContracts = [...(prev.factionContracts || [])];

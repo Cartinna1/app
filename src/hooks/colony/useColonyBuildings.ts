@@ -1,7 +1,9 @@
 import { useCallback } from 'react';
 import type { GameState } from '@/types/game';
 import { getBuildingDef } from '@/data/colony/buildings';
-import { getEffectiveMaxCount, getBuildingCostProfile } from '@/lib/colony/costs';
+import { getEffectiveMaxCount, getBuildingCostProfile, getBuildingRefundProfile } from '@/lib/colony/costs';
+import { GOLD_LOG_LIMIT } from '@/data/gameData';
+import { createUid } from '@/lib/id';
 
 /** 殖民地建筑建造 / 取消 / 拆除（从 useColony 拆出） */
 export function useColonyBuildings(
@@ -53,7 +55,7 @@ export function useColonyBuildings(
           }
         }
         s.gold -= actualGoldCost;
-        s.goldLog = [{ turn: prev.turn, amount: -actualGoldCost, reason: `建造「${def.name}」`, balanceAfter: s.gold }, ...s.goldLog].slice(0, 200);
+        s.goldLog = [{ turn: prev.turn, amount: -actualGoldCost, reason: `建造「${def.name}」`, balanceAfter: s.gold }, ...s.goldLog].slice(0, GOLD_LOG_LIMIT);
         if (def.costAlloy) s.alloy -= costProfile.alloy;
         if (def.costMaterials) {
           s.materials = { ...s.materials };
@@ -61,7 +63,7 @@ export function useColonyBuildings(
             s.materials[matId] = (s.materials[matId] || 0) - costProfile.materials[matId];
           }
         }
-        const uid = `${defId}_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
+        const uid = createUid(defId);
         s.colony.buildings = [...s.colony.buildings, {
           defId, uid, assignedPop: 0,
           buildProgress: 0, active: false,
@@ -82,19 +84,18 @@ export function useColonyBuildings(
         const ships = [...prev.ships]; const s = { ...ships[0] };
         if (!s.colony) return prev;
         const inst = s.colony.buildings.find((b: any) => b.uid === uid);
-        // 退还 40% 金币和 70% 原料
+        // 退还 40% 金币和 70% 合金/原料 —— 按**实付成本**算（唯一真值 getBuildingRefundProfile，
+        // 与 getBuildingCostProfile 同源）。按基础价算是历史 bug：低造价倍率下取消建造可无限套利。
         if (inst && inst.defId) {
           const def = getBuildingDef(inst.defId);
           if (def) {
-            const refundGold = Math.floor(def.costGold * 0.4);
-            s.gold += refundGold;
-            s.goldLog = [{ turn: prev.turn, amount: refundGold, reason: '取消建造返还', balanceAfter: s.gold }, ...s.goldLog].slice(0, 200);
-            if (def.costAlloy) s.alloy += Math.floor(def.costAlloy * 0.7);
+            const refund = getBuildingRefundProfile(def, s.colony);
+            s.gold += refund.gold;
+            s.goldLog = [{ turn: prev.turn, amount: refund.gold, reason: '取消建造返还', balanceAfter: s.gold }, ...s.goldLog].slice(0, GOLD_LOG_LIMIT);
+            s.alloy += refund.alloy;
             s.materials = { ...s.materials };
-            if (def.costMaterials) {
-              for (const [matId, amt] of Object.entries(def.costMaterials)) {
-                s.materials[matId] = (s.materials[matId] || 0) + Math.floor(amt * 0.7);
-              }
+            for (const [matId, amt] of Object.entries(refund.materials)) {
+              s.materials[matId] = (s.materials[matId] || 0) + amt;
             }
           }
         }
@@ -121,17 +122,15 @@ export function useColonyBuildings(
           result = { success: false, message: `${def.name}是居住类基础建筑，不可拆除` };
           return prev;
         }
-        // 退还 40% 金币和 70% 原料
+        // 退还 40% 金币和 70% 合金/原料（按实付成本，唯一真值 getBuildingRefundProfile，同取消建造）
         if (def) {
-          const refundGold = Math.floor(def.costGold * 0.4);
-          s.gold += refundGold;
-          s.goldLog = [{ turn: prev.turn, amount: refundGold, reason: '拆除建筑返还', balanceAfter: s.gold }, ...s.goldLog].slice(0, 200);
-          if (def.costAlloy) s.alloy += Math.floor(def.costAlloy * 0.7);
+          const refund = getBuildingRefundProfile(def, s.colony);
+          s.gold += refund.gold;
+          s.goldLog = [{ turn: prev.turn, amount: refund.gold, reason: '拆除建筑返还', balanceAfter: s.gold }, ...s.goldLog].slice(0, GOLD_LOG_LIMIT);
+          s.alloy += refund.alloy;
           s.materials = { ...s.materials };
-          if (def.costMaterials) {
-            for (const [matId, amt] of Object.entries(def.costMaterials)) {
-              s.materials[matId] = (s.materials[matId] || 0) + Math.floor(amt * 0.7);
-            }
+          for (const [matId, amt] of Object.entries(refund.materials)) {
+            s.materials[matId] = (s.materials[matId] || 0) + amt;
           }
         }
         s.colony = { ...s.colony, buildings: s.colony.buildings.filter((b: any) => b.uid !== uid), population: { ...s.colony.population, available: s.colony.population.available + (inst.assignedPop || 0) } };

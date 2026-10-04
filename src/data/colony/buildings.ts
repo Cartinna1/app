@@ -9,8 +9,8 @@ export const BUILDING_FUSION_PLANT = 'B30'; // 聚变电站
 /** 全部建筑定义（含科技要求） */
 export const FULL_BUILDINGS: BuildingDef[] = [
   // ===== 居住类 =====
-  { id: 'B1', name: '居住舱', description: '标准化殖民者居住单元，每间容纳5人。模块化设计，可堆叠扩建。', category: 'housing', costGold: 5000, buildTurns: 1, minPop: 0, maxPop: 0, powerConsumption: 2 },
-  { id: 'B2', name: '穹顶都市', description: '巨型穹顶覆盖的完整社区，含内部生态循环。殖民地的骄傲。', category: 'housing', costGold: 15000, costMaterials: { silicon: 30 }, buildTurns: 3, minPop: 0, maxPop: 0, requiresTech: 'T1', powerConsumption: 4 },
+  { id: 'B1', name: '居住舱', description: '标准化殖民者居住单元，每间容纳5人。模块化设计，可堆叠扩建。', category: 'housing', costGold: 5000, buildTurns: 1, minPop: 0, maxPop: 0, powerConsumption: 2, popCapBonus: 5 },
+  { id: 'B2', name: '穹顶都市', description: '巨型穹顶覆盖的完整社区，含内部生态循环。殖民地的骄傲。', category: 'housing', costGold: 15000, costMaterials: { silicon: 30 }, buildTurns: 3, minPop: 0, maxPop: 0, requiresTech: 'T1', powerConsumption: 4, popCapBonus: 20 },
 
   // ===== 食物生产 =====
   { id: 'B3', name: '气雾栽培舱', description: '悬浮在雾化营养液中的作物矩阵，利用大气氮氧循环种植，是殖民地的第一口粮仓。', category: 'food', costGold: 500, costMaterials: { carbon: 80 }, buildTurns: 2, minPop: 1, maxPop: 5, outputType: 'food', baseOutput: 5, popFactor: 4, powerConsumption: 1 },
@@ -48,7 +48,7 @@ export const FULL_BUILDINGS: BuildingDef[] = [
   { id: 'B25', name: '研究实验室', description: '装备了最先进分析仪器的研究中心，每一位科学家都在推进文明的知识边界。', category: 'functional', costGold: 8000, buildTurns: 1, minPop: 1, maxPop: 5, outputType: 'research', baseOutput: 0, popFactor: 20, powerConsumption: 6 },
   { id: BUILDING_QUANTUM_LAB, name: '量子实验室', description: '接近绝对零度的量子计算与实验设施，将研究实验室的产出效率倍增。', category: 'functional', costGold: 15000, buildTurns: 3, maxCount: 1, minPop: 5, maxPop: 5, requiresTech: 'T21', powerConsumption: 8 },
   { id: 'B27', name: '星河议政厅', description: '殖民地行政中枢，解锁招募领袖的功能。', category: 'functional', costGold: 10000, buildTurns: 1, maxCount: 1, minPop: 0, maxPop: 0, powerConsumption: 2 },
-  { id: 'B28', name: '克隆中心', description: '生物克隆设施，加速人口增长。存在伦理争议——但在殖民前线，实用主义压倒一切。', category: 'functional', costGold: 30000, buildTurns: 3, maxCount: 1, minPop: 1, maxPop: 1, requiresTech: 'T22', powerConsumption: 8 },
+  { id: 'B28', name: '克隆中心', description: '生物克隆设施，加速人口增长。存在伦理争议——但在殖民前线，实用主义压倒一切。', category: 'functional', costGold: 30000, buildTurns: 3, maxCount: 1, minPop: 1, maxPop: 1, requiresTech: 'T22', powerConsumption: 8, cloneInterval: 2 },
 
   // ===== 电能生产 =====
   { id: BUILDING_SOLAR_ARRAY, name: '太阳能阵列', description: '铺设在殖民地外围的巨型光伏矩阵，利用恒星辐射为基地提供基础电力。转化效率不高，但建造简单、无需原料。电能产出 = 5 + 3×人口。', category: 'power', costGold: 10000, costMaterials: { silicon: 300 }, buildTurns: 2, minPop: 1, maxPop: 3, outputType: 'power', baseOutput: 5, popFactor: 3, powerConsumption: 0 },
@@ -69,13 +69,15 @@ export function getBuildableBuildings(researchedIds: string[]): BuildingDef[] {
 /** 获取建筑产出效果描述（用于科技解锁提示） */
 export function getBuildingEffect(bd: BuildingDef): string {
   const min = bd.minPop, max = bd.maxPop;
+  // 居住类：人口上限一律读 BuildingDef.popCapBonus（唯一真值，与 calcPopCap 同源；
+  // 历史上这里手写「B1 提供5 / B2 提供额外10」，而结算给 B2 +20 → 玩家看到 10 实得 20）
+  if (bd.category === 'housing') {
+    return bd.popCapBonus ? `提供${bd.popCapBonus}人口上限` : '提供居住空间，提升人口上限';
+  }
   // 功能类特殊建筑
-  if (bd.id === 'B1') return '提供5人口上限';
-  if (bd.id === 'B2') return '提供额外10人口上限';
-  if (bd.id === BUILDING_QUANTUM_LAB) return '使所有研究实验室产出翻倍';
+  if (bd.id === BUILDING_QUANTUM_LAB) return '使所有研究实验室产出 +50%（领袖的量子实验室加成可再提高）';
   if (bd.id === 'B27') return '解锁领袖招募功能';
-  if (bd.id === 'B28') return '每2回合免费+1人口（需1人入驻）';
-  if (bd.category === 'housing') return '提供居住空间，提升人口上限';
+  if (bd.id === 'B28') return `每${bd.cloneInterval ?? 2}回合免费+1人口（需1人入驻）`;
   if (bd.category === 'power') {
     const lo = (bd.baseOutput || 0) + (bd.popFactor || 0) * bd.minPop;
     const hi = (bd.baseOutput || 0) + (bd.popFactor || 0) * bd.maxPop;

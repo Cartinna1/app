@@ -1,4 +1,5 @@
 import { useState, memo } from 'react';
+import { getRedeemCodeList } from '@/data/gameData';
 import { Gift, Check, AlertCircle } from 'lucide-react';
 
 interface RedeemCodeProps {
@@ -78,7 +79,7 @@ function RedeemCode({ shipIndex, redeemedCodes, onRedeem }: RedeemCodeProps) {
         {redeemedCodes.length > 0 && (
           <div className="mt-6 bg-slate-900/60 border border-slate-700 rounded-xl p-4">
             <h3 className="text-sm font-bold text-slate-400 mb-3">
-              本局已使用兑换码（{redeemedCodes.length}/35）
+              本局已使用兑换码（{redeemedCodes.length}/{getRedeemCodeList().length}）
             </h3>
             <div className="flex flex-wrap gap-2">
               {redeemedCodes.map((c) => (

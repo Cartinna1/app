@@ -5,11 +5,12 @@
 
 import { useState, memo } from 'react';
 import type { Mothership } from '@/types/game';
-import type { ArchaeologySite } from '@/types/galaxy';
+import type { ArchaeologySite, ArchaeologyReward } from '@/types/galaxy';
 import { ARCHAEOLOGY_SITES, ARCHAEOLOGY_SITE_COUNT, getArchaeologySite } from '@/data/galaxy/archaeology';
 import { PERMA_BONUS_MAP } from '@/data/galaxy/permaBonuses';
 import { getRelicById } from '@/data/relics';
-import { excavationSuccessRate, findStationedSite } from '@/lib/galaxy/archaeologyTurn';
+import { getMaterialName } from '@/data/materialNames';
+import { excavationSuccessRate, findStationedSite, DISCOVERY_CHANCE } from '@/lib/galaxy/archaeologyTurn';
 import { flattenCost, formatCost } from '@/lib/turn/resourceCost';
 import { getGalaxyNode } from '@/data/galaxy/nodes';
 import { getLeaderDef } from '@/data/colony/leaders';
@@ -27,21 +28,28 @@ interface ArchaeologyPanelProps {
   onAbandonExcavation: (siteId: string) => ActionResult;
 }
 
-/** 奖励一句话（遗物 / 永久加成 / 资源 / 称号） */
-function describeReward(site: ArchaeologySite): string {
+/** 奖励一句话（遗物 / 永久加成 / 资源 / 称号）——**最终奖励与阶段小奖励共用同一形状**，故同一函数 */
+function describeRewardValue(reward: ArchaeologyReward | undefined): string {
+  if (!reward) return '无';
   const parts: string[] = [];
-  for (const id of site.reward.relics || []) parts.push(`遗物「${getRelicById(id)?.name || id}」`);
-  for (const id of site.reward.permaBonuses || []) parts.push(`永久加成「${PERMA_BONUS_MAP[id]?.name || id}」`);
-  if (site.reward.title) parts.push(`称号「${site.reward.title}」`);
-  if (site.reward.gold) parts.push(`金币 ${site.reward.gold.toLocaleString()}`);
-  if (site.reward.stardust) parts.push(`星尘 ${site.reward.stardust}`);
-  if (site.reward.researchPoints) parts.push(`科研点 ${site.reward.researchPoints}`);
-  if (site.reward.food) parts.push(`食物 ${site.reward.food}`);
-  if (site.reward.alloy) parts.push(`合金 ${site.reward.alloy}`);
-  if (site.reward.materials) {
-    for (const [id, n] of Object.entries(site.reward.materials)) parts.push(`${id} ${n}`);
+  for (const id of reward.relics || []) parts.push(`遗物「${getRelicById(id)?.name || id}」`);
+  for (const id of reward.permaBonuses || []) parts.push(`永久加成「${PERMA_BONUS_MAP[id]?.name || id}」`);
+  if (reward.title) parts.push(`称号「${reward.title}」`);
+  if (reward.gold) parts.push(`金币 ${reward.gold.toLocaleString()}`);
+  if (reward.stardust) parts.push(`星尘 ${reward.stardust}`);
+  if (reward.researchPoints) parts.push(`科研点 ${reward.researchPoints}`);
+  if (reward.food) parts.push(`食物 ${reward.food}`);
+  if (reward.alloy) parts.push(`合金 ${reward.alloy}`);
+  if (reward.materials) {
+    // 原料译名一律走 getMaterialName（勿直接渲染 gold_ore / quantum 这类 id）
+    for (const [id, n] of Object.entries(reward.materials)) parts.push(`${getMaterialName(id)} ${n}`);
   }
   return parts.join(' + ') || '无';
+}
+
+/** 遗迹的最终奖励（启动/列表行用） */
+function describeReward(site: ArchaeologySite): string {
+  return describeRewardValue(site.reward);
 }
 
 function ArchaeologyPanel({
@@ -180,6 +188,14 @@ function ArchaeologyPanel({
               <span>阶段投入 {formatCost(cost)}</span>
               <span className="flex items-center gap-1"><Users size={12} /> 驻守：{stationedLeader ? `${leaderNameOf(stationedLeader.id)} Lv${stationedLeader.level}` : '未知'}</span>
               {activeState.fails > 0 && <span className="text-red-400">连续失败 {activeState.fails} 次</span>}
+              {/* 阶段小奖励：**成功时只有 DISCOVERY_CHANCE 概率触发**，且抉择/稳妥会改数值——
+                  不写出来的话，玩家只会看到抉择里的"小奖励翻倍/减半"却不知道那是什么、有没有、多少 */}
+              {stage.bonus && (
+                <span className="text-cyan-300">
+                  阶段奖励 {describeRewardValue(stage.bonus)}
+                  <span className="text-slate-500">（成功时 {Math.round(DISCOVERY_CHANCE * 100)}% 概率触发，抉择或稳妥推进会改变数值）</span>
+                </span>
+              )}
             </div>
             {/* 危险规则说明：失败后按危险率判定「意外」，再扣一份与投入相同的资源（一半） */}
             <p className="text-[10px] md:text-xs text-slate-500 mb-3">

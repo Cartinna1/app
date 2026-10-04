@@ -3,7 +3,8 @@ import type { GameState, GameAction, ChoiceEvent, EventOption, EventOutcome, Res
 import { ALL_EVENTS } from '@/data/choiceEvents';
 import { RESOURCE_EVENTS } from '@/data/resourceEvents';
 import { RELIC_DICE, RELIC_VOID_SAFE } from '@/data/relics';
-import { famineHalveGold } from '@/lib/turn/shipTurn';
+import { famineHalveGold, BANKRUPT_TURNS } from '@/lib/turn/shipTurn';
+import { GOLD_LOG_LIMIT, MOTHERSHIP_ID_HOLY_GLORY } from '@/data/gameData';
 
 export interface EventResult {
   description: string;
@@ -66,7 +67,7 @@ export function useEvent(
       const s = { ...ships[shipIndex] };
 
       const actualGoldChange = res.goldChange || 0;
-      const checkBk = () => { if (s.gold < 0 && !s.bankrupt) { s.bankrupt = true; s.bankruptTimer = 10; } };
+      const checkBk = () => { if (s.gold < 0 && !s.bankrupt) { s.bankrupt = true; s.bankruptTimer = BANKRUPT_TURNS; } };
 
       if (actualGoldChange) {
         // 饥荒减半的唯一真值在 lib/turn/shipTurn.ts（勿就地再写一份）
@@ -74,7 +75,7 @@ export function useEvent(
         s.gold += halved;
         checkBk();
         if (s.gold >= 0 && s.bankrupt) { s.bankrupt = false; s.bankruptTimer = 0; }
-        s.goldLog = [{ turn, amount: halved, reason, balanceAfter: s.gold }, ...s.goldLog].slice(0, 200);
+        s.goldLog = [{ turn, amount: halved, reason, balanceAfter: s.gold }, ...s.goldLog].slice(0, GOLD_LOG_LIMIT);
       }
       if (res.foodChange) s.food += res.foodChange;
       if (res.alloyChange) s.alloy = Math.max(0, s.alloy + res.alloyChange);
@@ -125,7 +126,7 @@ export function useEvent(
       // 神圣荣耀
       const isReward = isRewardOutcome(outcome.resources);
       const isPenalty = isPenaltyOutcome(outcome.resources);
-      const isHolyGlory = ship?.id === 5;
+      const isHolyGlory = ship?.id === MOTHERSHIP_ID_HOLY_GLORY;
       let gloryMul = 1;
       if (isHolyGlory && isPenalty && !isReward) gloryMul = 0.5;
       if (isHolyGlory && isReward) gloryMul = 1.25;

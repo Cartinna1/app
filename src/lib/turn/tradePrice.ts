@@ -10,6 +10,7 @@
 import { FACTIONS, getReputationTier } from '@/data/factions';
 import { RELIC_BARGAIN_AI, RELIC_ANTI_MONOPOLY, RELIC_ARBITRAGE_NOTE } from '@/data/relics';
 import { MODULE_TRADE_HUB } from '@/data/modules';
+import { BLACK_MARKET_DEFAULT } from '@/data/exchangeRates';
 
 /** 特产买入单价（分步向上取整：声望折扣/加价 → 涨价 buff → 讨价还价 AI 9 折） */
 export function getSpecialtyBuyUnitPrice(
@@ -38,7 +39,25 @@ export function getBlackMarketTotal(
 ): number {
   const faction = FACTIONS.find((f) => f.id === factionId);
   const basePrice = factionPrices[factionId] || faction?.basePrice || 0;
-  return Math.ceil(basePrice * buyBuffMult * (blackMarketMultiplier || 3.2) * qty);
+  return Math.ceil(basePrice * buyBuffMult * (blackMarketMultiplier || BLACK_MARKET_DEFAULT) * qty);
+}
+
+/** 黑市"最大可买数量"（唯一真值：与 getBlackMarketTotal 的末尾一次 ceil 严格等价）。
+ *  推导：ceil(单价 × qty) ≤ 金币 ⟺ 单价 × qty ≤ 金币（金币为整数）⟺ qty ≤ 金币 / 单价，
+ *  故取 floor(金币 / **未取整**单价)。旧实现在面板里写 `floor(金币 / ceil(单价))`，
+ *  比真实可买量偏保守（例如单价 1000.1、金币 3002 时可买 3 件，旧算法只给 2 件）。 */
+export function getBlackMarketMaxQty(
+  factionId: string,
+  factionPrices: Record<string, number>,
+  buyBuffMult: number,
+  blackMarketMultiplier: number,
+  gold: number
+): number {
+  const faction = FACTIONS.find((f) => f.id === factionId);
+  const basePrice = factionPrices[factionId] || faction?.basePrice || 0;
+  const unit = basePrice * buyBuffMult * (blackMarketMultiplier || BLACK_MARKET_DEFAULT);
+  if (unit <= 0) return 0;
+  return Math.max(0, Math.floor(gold / unit));
 }
 
 /** 特产卖出总收益（收购价 × 数量 × 反垄断 × 套利凭证 × 贸易枢纽 × 售出 buff，**末尾一次 round**）

@@ -1,6 +1,9 @@
 import type { GameState, GameAction } from '@/types/game';
 import { FACTIONS, POLICY_EFFECTS, refreshFactionPrices, calculateSellMultipliers } from '@/data/factions';
-import { createMotherships, createStocks, createMaterials, createProducts } from '@/data/gameData';
+import { createMotherships, createStocks, createMaterials, createProducts, EVENT_LOG_LIMIT } from '@/data/gameData';
+import { BLACK_MARKET_DEFAULT } from '@/data/exchangeRates';
+import { rollMarketBuyStock, rollMarketSellDemand } from '@/lib/turn/factionTurn';
+import { createUid } from '@/lib/id';
 import { migrateSave } from '@/lib/save';
 import { getCurrentFactionId } from '@/lib/galaxy/access';
 
@@ -20,7 +23,7 @@ export function createInitialGameState(): GameState {
     factions: FACTIONS,
     factionPrices: {},
     factionSellMultipliers: {},
-    blackMarketMultiplier: 3.2,
+    blackMarketMultiplier: BLACK_MARKET_DEFAULT,
     buyStocks: {},
     buyStockMax: {},
     sellDemands: {},
@@ -52,13 +55,15 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
       const materials = createMaterials();
       const products = createProducts();
       // 初始化市场库存/需求（第1回合即可交易）
+      // 区间与每回合刷新**共用同一套**（唯一真值：factionTurn.rollMarketBuyStock/rollMarketSellDemand）。
+      // 历史上开局写的是 800~1200 / 900~1500、每回合是 500~800 / 500~700 两套区间（已确认为遗留）。
       const buyStocks: Record<string, number> = {};
       const buyStockMax: Record<string, number> = {};
       const sellDemands: Record<string, number> = {};
       const sellDemandMax: Record<string, number> = {};
       for (const f of FACTIONS) {
-        const bs = 800 + Math.floor(Math.random() * 401); // 800~1200
-        const sd = 900 + Math.floor(Math.random() * 601); // 900~1500
+        const bs = rollMarketBuyStock();
+        const sd = rollMarketSellDemand();
         buyStocks[f.id] = bs;
         buyStockMax[f.id] = bs;
         sellDemands[f.id] = sd;
@@ -100,8 +105,8 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
       // 避免 eventLog 从头部 unshift 时用 index 作 key 导致的错位复用。
       const entry = action.entry.id
         ? action.entry
-        : { ...action.entry, id: `${action.entry.turn}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}` };
-      return { ...state, eventLog: [entry, ...state.eventLog].slice(0, 100) };
+        : { ...action.entry, id: createUid('log') };
+      return { ...state, eventLog: [entry, ...state.eventLog].slice(0, EVENT_LOG_LIMIT) };
     }
 
     default:

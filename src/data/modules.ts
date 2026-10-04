@@ -13,6 +13,11 @@ export const MODULE_DYSON_COLLECTOR = 'dyson_collector';
 export const MODULE_PROD_SCHEDULER = 'prod_scheduler';
 export const MODULE_PARALLEL_MATRIX = 'parallel_matrix';
 export const MODULE_AUTOMATION_HUB = 'automation_hub';
+// 手动操作型装置（结算 useModule 与面板 ModulePanel 均按这些 id 特判，勿再写字面量）
+export const MODULE_GRAVITY_ANCHOR = 'gravity_anchor';
+export const MODULE_QUANTUM_REACTOR = 'quantum_reactor';
+export const MODULE_STARDUST_POOL = 'stardust_pool';
+export const MODULE_VOID_REPLICATOR = 'void_replicator';
 
 /**
  * 母舰装置定义 — 共15种
@@ -68,7 +73,7 @@ export const MODULE_DEFINITIONS: ModuleDefinition[] = [
     effectDescription: '产品过期时间 +3 回合',
   },
   {
-    id: 'gravity_anchor',
+    id: MODULE_GRAVITY_ANCHOR,
     name: '引力锚定器',
     description: '稳定舰队周围的引力场以压缩跃迁路径：跃迁回合 -1（最少1回合）',
     costFood: 0,
@@ -81,7 +86,7 @@ export const MODULE_DEFINITIONS: ModuleDefinition[] = [
 
   // ===== 中级装置 =====
   {
-    id: 'quantum_reactor',
+    id: MODULE_QUANTUM_REACTOR,
     name: '量子生物反应器',
     description: '手动消耗50食物，转化为30000金币',
     costFood: 0,
@@ -90,6 +95,9 @@ export const MODULE_DEFINITIONS: ModuleDefinition[] = [
     effectType: 'manual',
     cooldown: 0,
     effectDescription: '消耗 50 食物 → +30000 金币（无冷却，食物不足时无法使用）',
+    // 手动装置的消耗与产出（唯一真值：useModule 结算与 ModulePanel 置灰判定同读，勿再各写数字）
+    manualCost: { food: 50 },
+    manualGain: { gold: 30000 },
   },
   {
     id: MODULE_MINING_ARRAY,
@@ -126,7 +134,7 @@ export const MODULE_DEFINITIONS: ModuleDefinition[] = [
   },
 
   {
-    id: 'stardust_pool',
+    id: MODULE_STARDUST_POOL,
     name: '星尘催化池',
     description: '消耗500合金，手动转化为10星尘（冷却2回合）',
     costFood: 0,
@@ -135,6 +143,8 @@ export const MODULE_DEFINITIONS: ModuleDefinition[] = [
     effectType: 'manual',
     cooldown: 2,
     effectDescription: '消耗500合金 → +10 星尘（冷却2回合）',
+    manualCost: { alloy: 500 },
+    manualGain: { stardust: 10 },
   },
   {
     id: MODULE_DYSON_COLLECTOR,
@@ -148,7 +158,7 @@ export const MODULE_DEFINITIONS: ModuleDefinition[] = [
     effectDescription: '每回合 +3 星尘',
   },
   {
-    id: 'void_replicator',
+    id: MODULE_VOID_REPLICATOR,
     name: '虚空复制器',
     description: '消耗30星尘，复制当前所有产品和原料库存（数量翻倍）',
     costFood: 0,
@@ -157,6 +167,8 @@ export const MODULE_DEFINITIONS: ModuleDefinition[] = [
     effectType: 'manual',
     cooldown: 5,
     effectDescription: '消耗30星尘 → 所有产品和原料数量翻倍（冷却5回合）',
+    manualCost: { stardust: 30 },
+    // 产出是"复制现有库存"，不是固定数值，故不走 manualGain（效果在 useModule 内实现）
   },
   {
     id: MODULE_PROD_SCHEDULER,
@@ -240,6 +252,41 @@ export function getProductionTurns(recipe: { productionTurns: number }, ship: { 
   return Math.max(0, recipe.productionTurns - (ship.productionSpeedBonus || 0) - engineerAiBonus);
 }
 
+/** 产品保质期（回合）——单一真值：立即完成（useProduction）与队列完成（shipTurn）共用，勿各写 3 */
+export const PRODUCT_SHELF_LIFE = 3;
+/** 应急储备舱延长的保质期（回合） */
+export const RESERVE_BAY_EXPIRY_BONUS = 3;
+
+/** 产品入库后的过期回合 = 当前回合 + 保质期 +（装了应急储备舱则再加成）。
+ *  单一真值：两条入库路径（立即完成 / 队列完成）共用。 */
+export function getProductExpiry(turn: number, installedModuleIds: string[]): number {
+  const bonus = installedModuleIds.includes(MODULE_RESERVE_BAY) ? RESERVE_BAY_EXPIRY_BONUS : 0;
+  return turn + PRODUCT_SHELF_LIFE + bonus;
+}
+
+/** 产品原料成本快照（按当前原料市价计算）——单一真值：
+ *  入库时记账（useProduction / shipTurn）与面板展示（ProductMarket）共用。 */
+export function computeProductMaterialCost(
+  recipe: { inputs: { materialId: string; amount: number }[] },
+  materials: { id: string; currentPrice: number }[]
+): number {
+  return recipe.inputs.reduce((sum, inp) => {
+    const m = materials.find((mm) => mm.id === inp.materialId);
+    return sum + (m ? m.currentPrice * inp.amount : 0);
+  }, 0);
+}
+
+/** 原料购买总价（**末尾一次 round**）——单一真值：
+ *  实扣（useProduction.buyMaterial）与面板显示（MaterialMarket 卡片/按钮置灰）共用。
+ *  历史上面板写 `round(单价) × 数量`、结算写 `round(单价 × 数量)`，两次取整次序不同会差 1 金币。 */
+export function getMaterialBuyCost(
+  mat: { currentPrice: number },
+  qty: number,
+  ship: { materialPriceDiscount: number; relics: { id: string }[]; installedModuleIds: string[] }
+): number {
+  return Math.round(mat.currentPrice * qty * (1 - getMaterialDiscountRate(ship)));
+}
+
 // 产品卖出价加成明细（母舰技能 + 事件套装 + 联盟）
 // 单一真值：逻辑层（useProduction 出售）与显示层（ProductMarket 单价/出售消息）都从这里取，
 // 避免三处拷贝分叉、漏联盟加成、eventBonus 单位不一致（历史坑）。
@@ -258,6 +305,15 @@ export function getSellPriceBreakdown(ship: { sellPriceBonus: number; sellBonuse
   // multiplier 内部用 sellPriceBonus 原始小数参与运算，勿用 skillPercent/100 重建（避免二次取整偏差）
   const multiplier = 1 + eventPercent / 100 + skillBonus + alliancePercent / 100;
   return { multiplier, eventPercent, skillPercent, alliancePercent };
+}
+
+/** 单个产品的实际卖出单价（标价 × 加成倍率，四舍五入）——单一真值：
+ *  结算（useProduction.sellProduct / sellProductQty）与显示（ProductMarket 列表/出售消息）共用。 */
+export function getProductSellUnitPrice(
+  currentSellPrice: number,
+  ship: { sellPriceBonus: number; sellBonuses?: { bonus: number }[]; allianceRounds?: number }
+): number {
+  return Math.round(currentSellPrice * getSellPriceBreakdown(ship).multiplier);
 }
 
 // 检查是否已安装

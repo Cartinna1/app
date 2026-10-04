@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect, useCallback, useMemo, memo } from 'react';
 import type { Stock, Mothership } from '@/types/game';
-import { getStockFeeMult } from '@/data/gameData';
+import { getStockFeeMult, getStockSellFeeMult } from '@/data/gameData';
 import { TrendingUp, TrendingDown, Search, Clock, ArrowLeft } from 'lucide-react';
 
 interface StockMarketProps {
@@ -42,6 +42,8 @@ function StockMarket({ stocks, ship, shipIndex, currentTurn, onBuy, onSell }: St
 
   const holdings = ship?.stockHoldings || {};
   const feeMult = getStockFeeMult(ship);
+  // 卖出到账倍率：唯一真值（勿再用 `2 − 买入倍率` 反推——万众一心手续费减半时反推会得到 ×1.015，与实收 ×0.985 差 4.6%）
+  const sellFeeMult = getStockSellFeeMult(ship);
 
   const filteredStocks = useMemo(() => {
     let result = stocks;
@@ -142,7 +144,7 @@ function StockMarket({ stocks, ship, shipIndex, currentTurn, onBuy, onSell }: St
         setMessage(result.error);
         setMessageType('error');
       } else {
-        const revenue = Math.round(selectedStock.currentPrice * tradeQty * (2 - feeMult));
+        const revenue = Math.round(selectedStock.currentPrice * tradeQty * sellFeeMult);
         setMessage(`成功卖出 ${tradeQty} 股 ${selectedStock.name}，收入 ${revenue.toLocaleString()} 金币`);
         setMessageType('success');
       }
@@ -351,6 +353,7 @@ function StockMarket({ stocks, ship, shipIndex, currentTurn, onBuy, onSell }: St
               setTradeQty={setTradeQty}
               handleTrade={handleTrade}
               feeMult={feeMult}
+              sellFeeMult={sellFeeMult}
             />
           ) : (
             <div className="bg-slate-900/60 border border-slate-700 rounded-xl p-8 text-center text-slate-500">
@@ -389,6 +392,7 @@ function MobileTradePanel({
   const buyTurns = ship?.stockBuyTurn || {};
   const cd = buyTurns[stock.id] !== undefined && currentTurn <= buyTurns[stock.id];
   const feeMult = getStockFeeMult(ship);
+  const sellFeeMult = getStockSellFeeMult(ship);
 
   const handleTrade = () => {
     if (tradeQty <= 0) return;
@@ -411,7 +415,7 @@ function MobileTradePanel({
       const result = onSell(shipIndex, stock.id, tradeQty);
       if (result.error) { setMessage(result.error); setMessageType('error'); }
       else {
-        const revenue = Math.round(stock.currentPrice * tradeQty * (2 - feeMult));
+        const revenue = Math.round(stock.currentPrice * tradeQty * sellFeeMult);
         setMessage(`卖出收入 ${revenue.toLocaleString()} 金币`);
         setMessageType('success');
       }
@@ -475,7 +479,7 @@ function MobileTradePanel({
         <div className="text-xs text-slate-500 mt-1">
           {tradeMode === 'buy'
             ? `需要: ${Math.round(stock.currentPrice * tradeQty * feeMult).toLocaleString()} 金币${feeMult === 1 ? '（无手续费）' : feeMult > 1 ? '（含手续费）' : '（手续费减免）'}`
-            : `收入: ${Math.round(stock.currentPrice * tradeQty * (2 - feeMult)).toLocaleString()} 金币${feeMult === 1 ? '（无手续费）' : feeMult > 1 ? '（含手续费）' : '（手续费减免）'}`
+            : `收入: ${Math.round(stock.currentPrice * tradeQty * sellFeeMult).toLocaleString()} 金币${sellFeeMult === 1 ? '（无手续费）' : '（含手续费）'}`
           }
         </div>
       </div>
@@ -514,6 +518,7 @@ function TradeDetailPanel({
   setTradeQty,
   handleTrade,
   feeMult,
+  sellFeeMult,
 }: {
   stock: Stock;
   tradeQty: number;
@@ -529,6 +534,7 @@ function TradeDetailPanel({
   setTradeQty: (qty: number) => void;
   handleTrade: () => void;
   feeMult: number;
+  sellFeeMult: number;
 }) {
   const sectorColor = SECTOR_COLORS[stock.sector] || 'bg-slate-800 text-slate-400 border-slate-700';
   const cd = getCooldownStatus(stock.id);
@@ -553,8 +559,8 @@ function TradeDetailPanel({
           {feeMult === 1
             ? '0%（无手续费）'
             : feeMult > 1
-              ? `${Math.round((feeMult - 1) * 100)}%（买入×${feeMult.toFixed(2)} / 卖出×${(2 - feeMult).toFixed(2)}）`
-              : `减免${Math.round((1 - feeMult) * 100)}%（买入×${feeMult.toFixed(3)}）`}
+              ? `${Math.round((feeMult - 1) * 100)}%（买入×${feeMult.toFixed(3)} / 卖出×${sellFeeMult.toFixed(3)}）`
+              : `减免${Math.round((1 - feeMult) * 100)}%（买入×${feeMult.toFixed(3)} / 卖出×${sellFeeMult.toFixed(3)}）`}
         </span>
       </div>
 
@@ -597,7 +603,7 @@ function TradeDetailPanel({
         <div className="text-xs text-slate-500 mt-1">
           {tradeMode === 'buy'
             ? `需要: ${Math.round(stock.currentPrice * tradeQty * feeMult).toLocaleString()} 金币${feeMult === 1 ? '（无手续费）' : feeMult > 1 ? '（含手续费）' : '（手续费减免）'}`
-            : `收入: ${Math.round(stock.currentPrice * tradeQty * (2 - feeMult)).toLocaleString()} 金币${feeMult === 1 ? '（无手续费）' : feeMult > 1 ? '（含手续费）' : '（手续费减免）'}`
+            : `收入: ${Math.round(stock.currentPrice * tradeQty * sellFeeMult).toLocaleString()} 金币${sellFeeMult === 1 ? '（无手续费）' : '（含手续费）'}`
           }
         </div>
       </div>

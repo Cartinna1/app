@@ -2,6 +2,7 @@ import { useCallback } from 'react';
 import type { GameState } from '@/types/game';
 import { getLeaderDef, rollLeaders, getLeaderUpgradeCost, getRecruitRollCost } from '@/data/colony/leaders';
 import { firstMissing, payCost } from '@/lib/turn/resourceCost';
+import { GOLD_LOG_LIMIT } from '@/data/gameData';
 
 /** 殖民地领袖招募 / 升级 / 招募池（从 useColony 拆出） */
 export function useColonyLeaders(
@@ -48,7 +49,7 @@ export function useColonyLeaders(
         payCost(s, s.colony, cost);
         // 金币支付记入金币日志（与其它扣款口径一致）
         if (cost.gold) {
-          s.goldLog = [{ turn: prev.turn, amount: -cost.gold, reason: `领袖「${li.name}」升级至 Lv${li.level + 1}`, balanceAfter: s.gold }, ...s.goldLog].slice(0, 200);
+          s.goldLog = [{ turn: prev.turn, amount: -cost.gold, reason: `领袖「${li.name}」升级至 Lv${li.level + 1}`, balanceAfter: s.gold }, ...s.goldLog].slice(0, GOLD_LOG_LIMIT);
         }
         s.colony!.leaders = s.colony!.leaders.map((l, i) => i === leaderIndex ? { ...l, level: l.level + 1 } : l);
         ships[0] = s; return { ...prev, ships };

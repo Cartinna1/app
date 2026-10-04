@@ -1,6 +1,7 @@
 import { useCallback } from 'react';
 import type { GameState } from '@/types/game';
 import { getTechById, REPEATABLE_TECHS, getRepeatableCost } from '@/data/colony/techs';
+import { getResearchTargetTurns } from '@/lib/colony/colonyTurn';
 
 /** 殖民地科技研究（从 useColony 拆出） */
 export function useColonyResearch(
@@ -23,7 +24,8 @@ export function useColonyResearch(
         // 普通科技不可重复研究
         if (tech && s.colony.techState.researched.includes(techId)) { result = { success: false, message: '该科技已研究完成' }; return prev; }
         const cost = tech ? tech.costRP : getRepeatableCost(rpt!, (s.colony.techState.repeatableLevels?.[techId] || 0));
-        const turns = tech ? tech.researchTurns : rpt!.researchTurns;
+        // 目标回合数走唯一真值（含极地 −1），上报给玩家的数字必须与结算/预告一致
+        const turns = getResearchTargetTurns(techId, s.colony.planetType);
         const name = tech ? tech.name : rpt!.name;
         if (s.colony.techState.researchPoints < cost) { result = { success: false, message: `科研点数不足（需要${cost}）` }; return prev; }
         s.colony = { ...s.colony, techState: { ...s.colony.techState, researchPoints: s.colony.techState.researchPoints - cost, currentResearch: techId, currentProgress: 0 } };

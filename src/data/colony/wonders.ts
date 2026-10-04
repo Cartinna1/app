@@ -1,4 +1,4 @@
-import type { WonderDef } from '@/types/colony';
+import type { WonderDef, WonderStageDef } from '@/types/colony';
 
 /** 五座奇观完整定义 */
 export const ALL_WONDERS: WonderDef[] = [
@@ -91,4 +91,23 @@ export const ALL_WONDERS: WonderDef[] = [
 
 export function getWonderDef(id: string): WonderDef | undefined {
   return ALL_WONDERS.find((w) => w.id === id);
+}
+
+/** 把「11 个扁平资源字段」的阶段投入摊平成资源成本对象（**唯一真值**）：
+ *  useWonder 的校验/扣减与 WonderPanel 的显示共用，勿再各写 11 项判断。
+ *  科研点扣殖民地、其余扣母舰，与 lib/turn/resourceCost 的口径一致。 */
+export function toStageCost(stage: WonderStageDef): Record<string, number> {
+  const cost: Record<string, number> = {};
+  if (stage.gold > 0) cost.gold = stage.gold;
+  if (stage.food > 0) cost.food = stage.food;
+  if (stage.alloy > 0) cost.alloy = stage.alloy;
+  if (stage.stardust > 0) cost.stardust = stage.stardust;
+  if (stage.research > 0) cost.researchPoints = stage.research;
+  if (stage.silicon > 0) cost.silicon = stage.silicon;
+  if (stage.quantum > 0) cost.quantum = stage.quantum;
+  if (stage.dark_matter > 0) cost.dark_matter = stage.dark_matter;
+  if (stage.carbon > 0) cost.carbon = stage.carbon;
+  if (stage.oil > 0) cost.oil = stage.oil;
+  if (stage.gold_ore > 0) cost.gold_ore = stage.gold_ore;
+  return cost;
 }

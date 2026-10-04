@@ -3,19 +3,11 @@ import type { ElementType } from 'react';
 import type { Mothership, Product, StardustMarket } from '@/types/game';
 import { INITIAL_PRODUCTS, RECIPES } from '@/data/gameData';
 import { getRelicById } from '@/data/relics';
-import { getSellPriceBreakdown } from '@/data/modules';
+import { getSellPriceBreakdown, getProductSellUnitPrice, PRODUCT_SHELF_LIFE } from '@/data/modules';
+import { ALLOY_GOLD_PRICE, ALLOY_PER_STARDUST, FOOD_GOLD_PRICE, FOOD_PER_ALLOY, FOOD_PER_STARDUST, STARDUST_SHOP } from '@/data/exchangeRates';
 import FeedbackMessage from './FeedbackMessage';
+import { TURN_COLORS } from './turnColors';
 import { ShoppingCart, AlertTriangle, TrendingUp, TrendingDown, Package, Sparkles, Gem, Coins, RefreshCw, Zap } from 'lucide-react';
-
-// 产品分类标签颜色（按生产回合数，与生产中心一致）
-const TURN_COLORS: Record<number, string> = {
-  1: 'bg-green-900/30 text-green-400',
-  2: 'bg-yellow-900/30 text-yellow-400',
-  3: 'bg-orange-900/30 text-orange-400',
-  4: 'bg-red-900/30 text-red-400',
-  5: 'bg-purple-900/30 text-purple-400',
-  6: 'bg-cyan-900/30 text-cyan-400',
-};
 
 // 星尘加成商店条目（星尘费 cost 为唯一数值，配色逐字保留原样；wide 占满整行）
 interface StardustBonusItem {
@@ -30,12 +22,13 @@ interface StardustBonusItem {
   wide?: boolean;
 }
 
+// 星尘加成商店条目（**星尘价一律读 data/exchangeRates.STARDUST_SHOP**，此处只留展示用的文案/配色/图标）
 const STARDUST_BONUS_ITEMS: StardustBonusItem[] = [
-  { key: 'randomMats', cost: 4, label: '随机10个原料', icon: Package, iconClass: 'text-amber-400', confirmClass: 'bg-amber-900/50 border-amber-500 cursor-pointer', hoverClass: 'bg-slate-800/60 border-slate-700 hover:border-amber-500 cursor-pointer' },
-  { key: 'bonus10', cost: 8, label: '产品售价+10%', sub: '(5回合)', icon: TrendingUp, iconClass: 'text-green-400', confirmClass: 'bg-green-900/50 border-green-500 cursor-pointer', hoverClass: 'bg-slate-800/60 border-slate-700 hover:border-green-500 cursor-pointer' },
-  { key: 'bonus25', cost: 15, label: '产品售价+25%', sub: '(5回合)', icon: TrendingUp, iconClass: 'text-emerald-400', confirmClass: 'bg-emerald-900/50 border-emerald-500 cursor-pointer', hoverClass: 'bg-slate-800/60 border-slate-700 hover:border-emerald-500 cursor-pointer' },
-  { key: 'gold5000', cost: 2, label: '兑换5000金币', icon: Coins, iconClass: 'text-yellow-400', confirmClass: 'bg-yellow-900/50 border-yellow-500 cursor-pointer', hoverClass: 'bg-slate-800/60 border-slate-700 hover:border-yellow-500 cursor-pointer' },
-  { key: 'rerollPolicy', cost: 15, label: '强制刷新贸易政策', sub: '(立即生效)', icon: RefreshCw, iconClass: 'text-blue-400', confirmClass: 'bg-blue-900/50 border-blue-500 cursor-pointer', hoverClass: 'bg-slate-800/60 border-slate-700 hover:border-blue-500 cursor-pointer', wide: true },
+  { key: 'randomMats', cost: STARDUST_SHOP.randomMats.cost, label: '随机10个原料', icon: Package, iconClass: 'text-amber-400', confirmClass: 'bg-amber-900/50 border-amber-500 cursor-pointer', hoverClass: 'bg-slate-800/60 border-slate-700 hover:border-amber-500 cursor-pointer' },
+  { key: 'bonus10', cost: STARDUST_SHOP.bonus10.cost, label: '产品售价+10%', sub: `(${STARDUST_SHOP.bonus10.turns}回合)`, icon: TrendingUp, iconClass: 'text-green-400', confirmClass: 'bg-green-900/50 border-green-500 cursor-pointer', hoverClass: 'bg-slate-800/60 border-slate-700 hover:border-green-500 cursor-pointer' },
+  { key: 'bonus25', cost: STARDUST_SHOP.bonus25.cost, label: '产品售价+25%', sub: `(${STARDUST_SHOP.bonus25.turns}回合)`, icon: TrendingUp, iconClass: 'text-emerald-400', confirmClass: 'bg-emerald-900/50 border-emerald-500 cursor-pointer', hoverClass: 'bg-slate-800/60 border-slate-700 hover:border-emerald-500 cursor-pointer' },
+  { key: 'gold5000', cost: STARDUST_SHOP.gold5000.cost, label: `兑换${(STARDUST_SHOP.gold5000.goldGain || 0).toLocaleString()}金币`, icon: Coins, iconClass: 'text-yellow-400', confirmClass: 'bg-yellow-900/50 border-yellow-500 cursor-pointer', hoverClass: 'bg-slate-800/60 border-slate-700 hover:border-yellow-500 cursor-pointer' },
+  { key: 'rerollPolicy', cost: STARDUST_SHOP.rerollPolicy.cost, label: '强制刷新贸易政策', sub: '(立即生效)', icon: RefreshCw, iconClass: 'text-blue-400', confirmClass: 'bg-blue-900/50 border-blue-500 cursor-pointer', hoverClass: 'bg-slate-800/60 border-slate-700 hover:border-blue-500 cursor-pointer', wide: true },
 ];
 
 interface ProductMarketProps {
@@ -103,6 +96,10 @@ function ProductMarket({ ship, shipIndex, products, materials, stardustMarket, c
       setTimeout(() => setConfirmBonus((cur) => (cur === key ? null : cur)), 3000);
     }
   };
+
+  // 售价加成明细（单一真值：data/modules.ts → getSellPriceBreakdown，供渲染/消息/徽章共用）。
+  // 声明提前到各 handler 之前：sell() 会读它，原先写在文件后段、靠"渲染后回调"绕过 TDZ，属脆弱写法。
+  const sellBd = getSellPriceBreakdown(ship);
 
   // 按productId分组合并
   const groups = useMemo<ProductGroup[]>(() => {
@@ -184,7 +181,7 @@ function ProductMarket({ ship, shipIndex, products, materials, stardustMarket, c
   const handleBuyAlloy = (type: 'gold' | 'stardust') => {
     if (!onBuyAlloy) return;
     if (type === 'gold') {
-      const cost = 1200 * goldAlloyQtyNum;
+      const cost = ALLOY_GOLD_PRICE * goldAlloyQtyNum;
       if (ship.gold < cost) {
         setAlloyMessage(`金币不足（需要${cost.toLocaleString()}金币）`);
         setAlloyMsgType('error');
@@ -202,7 +199,7 @@ function ProductMarket({ ship, shipIndex, products, materials, stardustMarket, c
         return;
       }
       onBuyAlloy('stardust', stardustAlloyQtyNum);
-      setAlloyMessage(`花费${stardustAlloyQtyNum}星尘购买了${stardustAlloyQtyNum * 5}个合金`);
+      setAlloyMessage(`花费${stardustAlloyQtyNum}星尘购买了${stardustAlloyQtyNum * ALLOY_PER_STARDUST}个合金`);
       setAlloyMsgType('success');
     }
     setTimeout(() => setAlloyMessage(''), 3000);
@@ -211,7 +208,7 @@ function ProductMarket({ ship, shipIndex, products, materials, stardustMarket, c
   const handleBuyFood = (type: 'gold' | 'alloy') => {
     if (!onBuyFood) return;
     if (type === 'gold') {
-      const cost = 800 * goldFoodQtyNum;
+      const cost = FOOD_GOLD_PRICE * goldFoodQtyNum;
       if (ship.gold < cost) {
         setFoodMessage(`金币不足（需要${cost.toLocaleString()}金币）`);
         setFoodMsgType('error');
@@ -229,7 +226,7 @@ function ProductMarket({ ship, shipIndex, products, materials, stardustMarket, c
         return;
       }
       onBuyFood('alloy', alloyFoodQtyNum);
-      setFoodMessage(`花费${alloyFoodQtyNum}合金购买了${alloyFoodQtyNum * 2}个食物`);
+      setFoodMessage(`花费${alloyFoodQtyNum}合金购买了${alloyFoodQtyNum * FOOD_PER_ALLOY}个食物`);
       setFoodMsgType('success');
     }
     setTimeout(() => setFoodMessage(''), 3000);
@@ -284,12 +281,15 @@ function ProductMarket({ ship, shipIndex, products, materials, stardustMarket, c
     showShopMsg(res.message, res.success ? 'success' : 'error');
   };
 
-  // 星尘加成条目 → 具体购买动作（与 STARDUST_BONUS_ITEMS 的 key 一一对应）
+  // 星尘加成条目 → 具体购买动作（数字一律读 STARDUST_SHOP，与 hook 的校验/扣减同源）
   const handleStardustBonus = (key: string) => {
+    const entry = STARDUST_SHOP[key];
     switch (key) {
       case 'randomMats': handleBuyRandomMats(); break;
-      case 'bonus10': handleBuySellBonus(5, 10, 8); break;
-      case 'bonus25': handleBuySellBonus(5, 25, 15); break;
+      case 'bonus10':
+      case 'bonus25':
+        if (entry) handleBuySellBonus(entry.turns || 5, entry.bonus || 0, entry.cost);
+        break;
       case 'gold5000': handleBuyGoldWithStardust(); break;
       case 'rerollPolicy': handleRerollPolicy(); break;
     }
@@ -297,9 +297,6 @@ function ProductMarket({ ship, shipIndex, products, materials, stardustMarket, c
 
   // 当前可售的遗物
   const currentRelic = stardustMarket.currentRelicId ? getRelicById(stardustMarket.currentRelicId) : null;
-
-  // 售价加成明细（单一真值：data/modules.ts → getSellPriceBreakdown，供渲染/消息/徽章共用）
-  const sellBd = getSellPriceBreakdown(ship);
 
   return (
     <div className="space-y-4">
@@ -309,7 +306,7 @@ function ProductMarket({ ship, shipIndex, products, materials, stardustMarket, c
         <p className="text-xs md:text-sm text-slate-400 mb-2">出售你的产品换取金币。收购价每回合波动，注意时机。</p>
         <div className="flex items-center gap-2 mb-4 md:mb-6 text-xs md:text-sm text-red-400">
           <AlertTriangle size={16} />
-          <span>产品生产后3回合内未售出将自动过期销毁！快过期的产品优先卖出。</span>
+          <span>产品生产后{PRODUCT_SHELF_LIFE}回合内未售出将自动过期销毁！快过期的产品优先卖出。</span>
         </div>
 
         {groups.length === 0 ? (
@@ -323,7 +320,8 @@ function ProductMarket({ ship, shipIndex, products, materials, stardustMarket, c
             {groups.map((group) => {
               const productInfo = products.find((p) => p.id === group.productId);
               const basePrice = productInfo?.currentSellPrice || 0;
-              const unitSellPrice = Math.round(basePrice * sellBd.multiplier);
+              // 卖出单价唯一真值（与 useProduction 结算同源）
+              const unitSellPrice = getProductSellUnitPrice(basePrice, ship);
               const baseRef = INITIAL_PRODUCTS.find((p) => p.id === group.productId)?.baseSellPrice || basePrice;
               const currentMatCost = getCurrentMatCost(group.productId, materials);
               const matProfitPerUnit = unitSellPrice - group.avgMatCost;
@@ -463,22 +461,22 @@ function ProductMarket({ ship, shipIndex, products, materials, stardustMarket, c
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-3">
           <BuyCard
-            rateLabel="1200金币 → 1合金"
+            rateLabel={`${ALLOY_GOLD_PRICE.toLocaleString()}金币 → 1合金`}
             rateClass="text-yellow-400"
             cardBorderClass="border-slate-700"
             qty={goldAlloyQty}
             onQtyChange={setGoldAlloyQty}
-            disabled={goldAlloyQtyNum <= 0 || ship.gold < 1200 * goldAlloyQtyNum}
+            disabled={goldAlloyQtyNum <= 0 || ship.gold < ALLOY_GOLD_PRICE * goldAlloyQtyNum}
             buttonLabel="金币购买"
             buttonSizeClass="py-2 rounded-lg text-sm"
             buttonActiveClass="bg-yellow-600 hover:bg-yellow-500 text-white"
             inputFocusClass="focus:border-cyan-500"
-            costText={`花费: ${(1200 * goldAlloyQtyNum).toLocaleString()}金币`}
+            costText={`花费: ${(ALLOY_GOLD_PRICE * goldAlloyQtyNum).toLocaleString()}金币`}
             gainText={`获得: ${goldAlloyQtyNum}合金`}
             onBuy={() => handleBuyAlloy('gold')}
           />
           <BuyCard
-            rateLabel="1星尘 → 5合金"
+            rateLabel={`1星尘 → ${ALLOY_PER_STARDUST}合金`}
             rateClass="text-purple-400"
             cardBorderClass="border-purple-700/40"
             qty={stardustAlloyQty}
@@ -489,7 +487,7 @@ function ProductMarket({ ship, shipIndex, products, materials, stardustMarket, c
             buttonActiveClass="bg-purple-600 hover:bg-purple-500 text-white"
             inputFocusClass="focus:border-cyan-500"
             costText={`花费: ${stardustAlloyQtyNum}星尘`}
-            gainText={`获得: ${stardustAlloyQtyNum * 5}合金`}
+            gainText={`获得: ${stardustAlloyQtyNum * ALLOY_PER_STARDUST}合金`}
             onBuy={() => handleBuyAlloy('stardust')}
           />
         </div>
@@ -508,22 +506,22 @@ function ProductMarket({ ship, shipIndex, products, materials, stardustMarket, c
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-3">
           <BuyCard
-            rateLabel="800金币 → 1食物"
+            rateLabel={`${FOOD_GOLD_PRICE.toLocaleString()}金币 → 1食物`}
             rateClass="text-yellow-400"
             cardBorderClass="border-slate-700"
             qty={goldFoodQty}
             onQtyChange={setGoldFoodQty}
-            disabled={goldFoodQtyNum <= 0 || ship.gold < 800 * goldFoodQtyNum}
+            disabled={goldFoodQtyNum <= 0 || ship.gold < FOOD_GOLD_PRICE * goldFoodQtyNum}
             buttonLabel="金币购买"
             buttonSizeClass="py-1.5 rounded-lg text-xs"
             buttonActiveClass="bg-yellow-600 hover:bg-yellow-500 text-white"
             inputFocusClass="focus:border-green-500"
-            costText={`花费: ${(800 * goldFoodQtyNum).toLocaleString()}金币`}
+            costText={`花费: ${(FOOD_GOLD_PRICE * goldFoodQtyNum).toLocaleString()}金币`}
             gainText={`获得: ${goldFoodQtyNum}食物`}
             onBuy={() => handleBuyFood('gold')}
           />
           <BuyCard
-            rateLabel="1合金 → 2食物"
+            rateLabel={`1合金 → ${FOOD_PER_ALLOY}食物`}
             rateClass="text-slate-300"
             cardBorderClass="border-slate-700"
             qty={alloyFoodQty}
@@ -534,11 +532,11 @@ function ProductMarket({ ship, shipIndex, products, materials, stardustMarket, c
             buttonActiveClass="bg-slate-600 hover:bg-slate-500 text-white"
             inputFocusClass="focus:border-green-500"
             costText={`花费: ${alloyFoodQtyNum}合金`}
-            gainText={`获得: ${alloyFoodQtyNum * 2}食物`}
+            gainText={`获得: ${alloyFoodQtyNum * FOOD_PER_ALLOY}食物`}
             onBuy={() => handleBuyFood('alloy')}
           />
           <BuyCard
-            rateLabel="1星尘 → 20食物"
+            rateLabel={`1星尘 → ${FOOD_PER_STARDUST}食物`}
             rateClass="text-purple-400"
             cardBorderClass="border-purple-700/40"
             qty={stardustFoodQty}
@@ -549,7 +547,7 @@ function ProductMarket({ ship, shipIndex, products, materials, stardustMarket, c
             buttonActiveClass="bg-purple-600 hover:bg-purple-500 text-white"
             inputFocusClass="focus:border-green-500"
             costText={`花费: ${stardustFoodQtyNum}星尘`}
-            gainText={`获得: ${stardustFoodQtyNum * 20}食物`}
+            gainText={`获得: ${stardustFoodQtyNum * FOOD_PER_STARDUST}食物`}
             onBuy={handleBuyFoodWithStardust}
           />
         </div>

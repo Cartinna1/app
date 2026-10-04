@@ -5,6 +5,7 @@
 
 import type { Colony, PlanetTypeId, BuildingInstance } from '@/types/colony';
 import { ALL_PLANETS } from '@/data/colony/planets';
+import { LEADER_CAP_BASE } from '@/data/colony/leaders';
 
 /**
  * 把 colony 草稿补成"已建成"状态（含遗落星球赠送的 B7/B20/B21）。
@@ -32,7 +33,7 @@ export function applyColonyFounding(colony: Colony, planetId: PlanetTypeId, name
     population: { total: initialPop, available: initialPop, cap: initialCap },
     techState: { researched: [], currentResearch: null, currentProgress: 0, researchPoints: 500, researchSeed: 0, repeatableLevels: {} },
     leaders: [],
-    leaderCap: 3,
+    leaderCap: LEADER_CAP_BASE,
     energy: 0,
     blackoutGuardTurns: 0,
   };

@@ -1,6 +1,6 @@
 import { useState, memo } from 'react';
 import type { RawMaterial, Mothership } from '@/types/game';
-import { getMaterialDiscountRate, getMaterialDiscountBreakdown } from '@/data/modules';
+import { getMaterialDiscountRate, getMaterialDiscountBreakdown, getMaterialBuyCost } from '@/data/modules';
 import { TrendingUp, TrendingDown, Warehouse } from 'lucide-react';
 
 interface MaterialMarketProps {
@@ -20,9 +20,11 @@ function MaterialMarket({ materials, ship, shipIndex, onBuy }: MaterialMarketPro
     const qty = getQty(mat.id);
     const result = onBuy(shipIndex, mat.id, qty);
     if (result) {
+      // result 非空 = 结算侧拒绝了这笔交易（金币不足等），直接显示原因，不再打印"成功"
       setMessages({ ...messages, [mat.id]: result });
     } else {
-      const cost = Math.round(mat.currentPrice * qty * (1 - getMaterialDiscountRate(ship)));
+      // 成本算式唯一真值（末尾一次 round，与实扣同源）
+      const cost = getMaterialBuyCost(mat, qty, ship);
       setMessages({ ...messages, [mat.id]: `成功购买 ${qty} 单位${mat.name}，花费 ${cost} 金币` });
     }
     setTimeout(() => {
@@ -94,8 +96,9 @@ function MaterialMarket({ materials, ship, shipIndex, onBuy }: MaterialMarketPro
           const change = ((mat.currentPrice - mat.basePrice) / mat.basePrice) * 100;
           const inventory = ship.materials[mat.id] || 0;
           const discount = getMaterialDiscountRate(ship);
-          const unitCost = Math.round(mat.currentPrice * (1 - discount));
-          const totalCost = unitCost * getQty(mat.id);
+          // 折扣价与总价都走唯一真值（末尾一次 round）：历史上这里是 round(单价) × 数量，与实扣差 1 金币
+          const unitCost = getMaterialBuyCost(mat, 1, ship);
+          const totalCost = getMaterialBuyCost(mat, getQty(mat.id), ship);
           const msg = messages[mat.id] || '';
 
           return (

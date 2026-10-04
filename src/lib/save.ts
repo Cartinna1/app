@@ -5,8 +5,11 @@
 import type { GameState, SaveData, Mothership } from '@/types/game';
 import { FACTIONS, POLICY_EFFECTS, refreshFactionPrices } from '@/data/factions';
 import { createGalaxyState } from '@/data/galaxy/nodes';
+import { BLACK_MARKET_DEFAULT } from '@/data/exchangeRates';
 
 export const SAVE_KEY = 'aviation_career_save';
+/** 音乐静音开关的 localStorage key（与存档同处声明，避免组件里写裸字符串） */
+export const BGM_MUTED_KEY = 'bgm_muted';
 /** 2：位置与跃迁迁入 ship.galaxy（星图）；旧档不做星图进度迁移，只补一份全新星图 */
 export const SAVE_VERSION = 2;
 
@@ -74,8 +77,18 @@ export function stateFromSave(d: Record<string, any>): GameState {
     currentShipIndex: d.currentShipIndex || 0,
     ships: (d.ships || []).map((s: Mothership) => ({
       ...s,
-      // galaxy 缺省补一份全新星图；同时保证 archaeology 一定存在（旧档/手工改档可能没有这个键）
-      galaxy: { ...(s.galaxy || createGalaxyState()), archaeology: s.galaxy?.archaeology || {} },
+      // galaxy 归一化：先铺一份**完整**默认星图（保留已到达的节点），再覆盖存档里实际存在的字段。
+      // 只兜「galaxy 整键缺失」是不够的：老档/改档可能 galaxy 存在却缺 visitedNodes/permaBonuses/titles，
+      // 而 shipTurn（到达即探明）与 archaeologyTurn（写称号）是裸读 → 读档即 TypeError 白屏。
+      galaxy: {
+        ...createGalaxyState(s.galaxy?.currentNodeId),
+        ...(s.galaxy || {}),
+        archaeology: s.galaxy?.archaeology || {},
+      },
+      // 旧投资系统已退役（投资 = 8000 金币 → +1 声望，回报走 REPUTATION_TIERS 被动收入）：
+      // 旧的 factionStates.invested 在上面的声望迁移里已一次性折算，这里**清零**，
+      // 使 shipTurn 不再有"投资收益/档位6补给"这条永不可达的分支（自检报告 🔴R6）。
+      tradeStatus: { ...s.tradeStatus, factionStates: {} },
     })),
     stocks: d.stocks || [],
     materials: d.materials || [],
@@ -85,7 +98,7 @@ export function stateFromSave(d: Record<string, any>): GameState {
     factions: d.factions || FACTIONS,
     factionPrices: d.factionPrices || refreshFactionPrices(),
     factionSellMultipliers: d.factionSellMultipliers || {},
-    blackMarketMultiplier: d.blackMarketMultiplier || 3.2,
+    blackMarketMultiplier: d.blackMarketMultiplier || BLACK_MARKET_DEFAULT,
     buyStocks: d.buyStocks || {},
     buyStockMax: d.buyStockMax || {},
     sellDemands: d.sellDemands || {},
@@ -106,19 +119,17 @@ export function stateFromSave(d: Record<string, any>): GameState {
   };
 }
 
-/** 旧存档兼容补丁（由 gameReducer 的 LOAD_SAVE 统一调用） */
+/** 旧存档兼容补丁（由 gameReducer 的 LOAD_SAVE 统一调用）。
+ *  ⚠ 职责分工：**字段级默认值一律由 stateFromSave 负责**（它是唯一兜底点，LOAD_SAVE 的两个入口
+ *  都先过它），本函数只做「结构/语义改写」——旧字段缺失的补写在这里属于死代码（判空永不成立）。 */
 export function migrateSave(loaded: GameState): GameState {
-  if (!loaded.stardustMarket) {
-    loaded.stardustMarket = { currentRelicId: null, soldRelicIds: [] };
-  }
-  // 兼容旧存档：补充破产/饥荒/叛乱字段
+  // 兼容旧存档：补充破产/饥荒/叛乱字段（这几个字段不在 stateFromSave 的清单里，故仍需在此兜底）
   if (loaded.ships) {
     loaded.ships = loaded.ships.map((s: Mothership) => ({
       ...s,
       bankruptTimer: s.bankruptTimer || 0,
       famineTimer: s.famineTimer || 0,
       isRebellion: s.isRebellion || false,
-      galaxy: s.galaxy || createGalaxyState(), // v2：旧档补一份全新星图（不做进度迁移）
       colony: s.colony ? {
         ...s.colony,
         recruitedThisTurn: s.colony.recruitedThisTurn || 0,
@@ -143,20 +154,5 @@ export function migrateSave(loaded: GameState): GameState {
       } : s.colony,
     }));
   }
-  // 兼容旧存档：声望/合同字段
-  if (!loaded.factionReputation) loaded.factionReputation = {};
-  if (!loaded.factionRepLog) loaded.factionRepLog = {};
-  if (!loaded.factionContracts) loaded.factionContracts = [];
-  // 兼容旧存档：黑市倍率字段
-  if (!loaded.blackMarketMultiplier) loaded.blackMarketMultiplier = 3.2;
-  // 兼容旧存档：市场库存/需求/buff 字段
-  if (!loaded.buyStocks) loaded.buyStocks = {};
-  if (!loaded.buyStockMax) loaded.buyStockMax = {};
-  if (!loaded.sellDemands) loaded.sellDemands = {};
-  if (!loaded.sellDemandMax) loaded.sellDemandMax = {};
-  if (!loaded.buyTriggered) loaded.buyTriggered = {};
-  if (!loaded.sellTriggered) loaded.sellTriggered = {};
-  if (!loaded.buyBuffs) loaded.buyBuffs = {};
-  if (!loaded.sellBuffs) loaded.sellBuffs = {};
   return loaded;
 }

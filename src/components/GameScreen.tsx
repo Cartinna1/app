@@ -39,16 +39,15 @@ import LoanPanel from './LoanPanel';
 import TradePanel from './TradePanel';
 import GalaxyMapPanel from './GalaxyMapPanel';
 import ArchaeologyPanel from './ArchaeologyPanel';
-import { getInvestmentTier, getBuffDescription } from '@/data/factions';
 import { getContractItemName, getContractItemKind, getContractHeldCount, getContractEarliestExpiry, getContractRequiredTotals } from '@/lib/turn/contracts';
-import { getSellPriceBreakdown, MODULE_MINING_ARRAY } from '@/data/modules';
-import { RELIC_TRANSCRIBER, RELIC_CRYSTAL } from '@/data/relics';
-import { MOTHERSHIP_ID_UNITY, MOTHERSHIP_ID_SINGULARITY_SEEKER } from '@/data/gameData';
+import { getSellPriceBreakdown } from '@/data/modules';
+import { getShipPerTurnIncome, sumShipIncome, getDynamicIncomeLines } from '@/lib/turn/shipIncome';
+import { BGM_MUTED_KEY } from '@/lib/save';
 import GoldLogViewer from './GoldLogViewer';
 import ModulePanel from './ModulePanel';
 import ColonyPanel from './colony/ColonyPanel';
-import { computeColonyEconomy } from '@/lib/colony/economy';
-import { computeCrewFoodCost } from '@/lib/turn/shipTurn';
+import { computeColonyEconomy, getBuildingSourceBreakdown } from '@/lib/colony/economy';
+import { computeCrewFoodCost, famineHalveGold } from '@/lib/turn/shipTurn';
 import { getShipPerTurnIncome, sumShipIncome } from '@/lib/turn/shipIncome';
 import { getNextTurnHints } from '@/lib/turn/nextTurnHints';
 import { MATERIAL_NAME_MAP } from '@/data/materialNames';
@@ -218,7 +217,7 @@ export default function GameScreen({
   const [showConfirmNext, setShowConfirmNext] = useState(false);
   // 下一回合预告（唯一真值 lib/turn/nextTurnHints；确认弹窗与总览共用同一份）
   const nextHints = useMemo(() => getNextTurnHints(gameState), [gameState]);
-  const [bgmMuted, setBgmMuted] = useState(() => localStorage.getItem('bgm_muted') === 'true');
+  const [bgmMuted, setBgmMuted] = useState(() => localStorage.getItem(BGM_MUTED_KEY) === 'true');
   const bgmRef = useRef<HTMLAudioElement | null>(null);
   const bgmIndexRef = useRef(0);
 
@@ -243,7 +242,7 @@ export default function GameScreen({
     audio.src = BGM_LIST[0];
 
     const startOnInteraction = () => {
-      if (localStorage.getItem('bgm_muted') !== 'true') {
+      if (localStorage.getItem(BGM_MUTED_KEY) !== 'true') {
         audio.play().catch(() => {});
       }
       document.removeEventListener('click', startOnInteraction);
@@ -270,7 +269,7 @@ export default function GameScreen({
   const toggleMute = () => {
     const next = !bgmMuted;
     setBgmMuted(next);
-    localStorage.setItem('bgm_muted', String(next));
+    localStorage.setItem(BGM_MUTED_KEY, String(next));
   };
 
   const currentShip = gameState.ships[0];
@@ -885,23 +884,22 @@ function OverviewTab({
         const colonyParts = (kind: EcoKind, materialId?: string): { total: number; text: string } => {
           if (!eco) return { total: 0, text: '' };
           const list = eco.buildings.filter((e) => e.outputType === kind && (kind !== 'material' || e.materialId === materialId));
-          const acc = (f: (e: (typeof list)[number]) => number) => list.reduce((a, e) => a + f(e), 0);
           const perTurnLeader = kind === 'research' ? eco.leaderPerTurn.research
             : kind === 'material' ? (eco.leaderPerTurn.materials[materialId || ''] || 0)
             : kind === 'stardust' ? eco.leaderPerTurn.stardust : 0;
           const perTurnRelic = kind === 'research' ? eco.relicPerTurn.research : 0;
           const total = list.reduce((a, e) => a + e.value, 0) + perTurnLeader + perTurnRelic;
-          // ⚠ 数组字面量要先标注为元组数组，否则 [[label, v]] 会被推断成 (string|number)[][]，
-          //   后面 .map(([label, v]) => Math.round(v)) 就会因 v: string|number 报 TS2345
-          const rawParts: Array<[string, number]> = [
-            ['星球', acc((e) => e.base * e.planetPct)],
-            ['领袖', acc((e) => e.base * e.leaderPct)],
-            ['循环', acc((e) => e.base * e.repeatPct)],
-            ['量子实验室', acc((e) => e.base * e.b26Pct)],
-            ['遗物', acc((e) => e.base * (e.relicPct || 0)) + perTurnRelic],
-            ['遗物每座', acc((e) => e.relicBonus || 0)],
-            ['领袖特效', perTurnLeader],
-          ];
+          // 来源拆解：**唯一真值** lib/colony/economy.getBuildingSourceBreakdown（与殖民地页签同源）。
+          // 这里只做"按标签汇总 + 残差归建筑"，不再手写每个加成字段——新增加成字段只需改 economy 的一张表。
+          const byLabel = new Map<string, number>();
+          for (const e of list) {
+            for (const line of getBuildingSourceBreakdown(e)) {
+              byLabel.set(line.label, (byLabel.get(line.label) || 0) + line.value);
+            }
+          }
+          const rawParts: Array<[string, number]> = [...byLabel.entries()];
+          if (perTurnRelic) rawParts.push(['遗物', perTurnRelic]);
+          if (perTurnLeader) rawParts.push(['领袖特效', perTurnLeader]);
           const parts = rawParts.map(([label, v]) => [label, Math.round(v)] as [string, number]).filter(([, v]) => v !== 0);
           const base = total - parts.reduce((a, [, v]) => a + v, 0);
           const segments = [
@@ -920,14 +918,14 @@ function OverviewTab({
         const stardustParts = colonyParts('stardust');
         const goldParts = colonyParts('gold');
         const rpParts = colonyParts('research');
-        // 动态/随机来源（无法计入固定数字，只能文字说明）
-        const dynamicNotes: string[] = [];
-        const assetPct = Math.max(0, Math.floor(assets * 0.01));
-        if (ship.relics.some((r) => r.id === RELIC_TRANSCRIBER)) dynamicNotes.push(`誊录仪 +总资产1%（约 ${assetPct.toLocaleString()} 金币）`);
-        if (ship.id === MOTHERSHIP_ID_UNITY) dynamicNotes.push(`万众一心股息 +总资产1%（约 ${assetPct.toLocaleString()} 金币）`);
-        if (ship.relics.some((r) => r.id === RELIC_CRYSTAL)) dynamicNotes.push('奥得律斯基亚水晶 +3 随机原料');
-        if (ship.installedModuleIds.includes(MODULE_MINING_ARRAY)) dynamicNotes.push('深空采矿阵列 +10 随机基础原料');
-        if (ship.id === MOTHERSHIP_ID_SINGULARITY_SEEKER) dynamicNotes.push('奇点探求者 +2~4 随机原料');
+        // 动态/随机来源（无法计入固定数字，只能文字说明）。
+        // 清单与数值走唯一真值 getDynamicIncomeLines（与 processShipTurn 的实际发放同源），
+        // 金币类按**饥荒减半后的实收**显示并标注（历史上这里是硬编码的 3/10/2~4 文案）。
+        const dynamicNotes = getDynamicIncomeLines(ship, assets).map((line) => {
+          if (line.gold <= 0) return `${line.label} ${line.matsText}`;
+          const actual = famineHalveGold(ship.food, line.gold);
+          return `${line.label} +总资产1%（约 ${actual.toLocaleString()} 金币${actual < line.gold ? '，饥荒减半' : ''}）`;
+        });
         return (
           <div className="mb-4 bg-slate-900/60 border border-slate-700 rounded-xl p-3 md:p-4">
             <h3 className="text-xs text-amber-400 font-bold mb-3">资源收支</h3>
@@ -980,30 +978,9 @@ function OverviewTab({
         </div>
       )}
 
-      {/* 星际贸易投资BUFF */}
-      {ship.tradeStatus && Object.values(ship.tradeStatus.factionStates).some((fs) => fs.invested > 0) && (
-        <div className="mb-4 md:mb-6">
-          <h3 className="text-[10px] md:text-xs text-slate-500 font-semibold uppercase tracking-wider mb-2">星际贸易投资</h3>
-          <div className="space-y-2">
-            {Object.entries(ship.tradeStatus.factionStates).map(([fid, fState]) => {
-              if (fState.invested <= 0) return null;
-              const f = gameState.factions.find((fa) => fa.id === fid);
-              if (!f) return null;
-              const t = getInvestmentTier(fState.invested);
-              return (
-                <div key={fid} className="flex items-center gap-2 bg-blue-900/20 border border-blue-700/30 rounded-lg px-3 md:px-4 py-2">
-                  <Globe size={14} className="text-blue-400 flex-shrink-0" />
-                  <div>
-                    <span className="text-[10px] md:text-xs text-blue-400 font-semibold">「{f.name}」</span>
-                    <span className="text-[10px] md:text-xs text-slate-500 ml-1 md:ml-2">投资 {fState.invested.toLocaleString()} 金币</span>
-                    {t > 0 && <p className="text-[10px] md:text-xs text-green-400">{getBuffDescription(t)}</p>}
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        </div>
-      )}
+      {/* 旧「星际贸易投资」区块已随投资系统退役删除：
+          投资的唯一形态是「固定 8000 金币 → +1 声望」，回报走声望层级被动收入（贸易页签可见），
+          factionStates.invested 已无写入点（读档时一次性折成声望后清零），此处原为永不可见的死 UI。 */}
 
       {/* 舰队信息 */}
       <div className="bg-slate-900/60 border border-cyan-700/30 rounded-xl p-4 md:p-5 mb-6 md:mb-8">

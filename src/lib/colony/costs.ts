@@ -81,3 +81,23 @@ export function getRecruitCostPerPop(colony: Colony): number {
   }
   return Math.max(0, RECRUIT_BASE_COST + delta);
 }
+
+/** 取消建造 / 拆除建筑的返还（**唯一真值**）：按**实付成本**返还 40% 金币、70% 合金与原料。
+ *  为什么必须走 getBuildingCostProfile：实扣含星球造价倍率与领袖减免，
+ *  若按基础价算（旧实现），低倍率配置下"建了立刻取消"可无限套利（实测每循环净赚 3000 金币 + 15 硅片），
+ *  高倍率星球上玩家又只能拿回实付的 33%（注释却写着 40%）。 */
+export function getBuildingRefundProfile(
+  def: BuildingDef,
+  colony: Colony
+): { gold: number; alloy: number; materials: Record<string, number> } {
+  const paid = getBuildingCostProfile(def, colony);
+  const materials: Record<string, number> = {};
+  for (const [matId, amt] of Object.entries(paid.materials)) {
+    materials[matId] = Math.floor(amt * 0.7);
+  }
+  return {
+    gold: Math.floor(paid.gold * 0.4),
+    alloy: paid.alloy ? Math.floor(paid.alloy * 0.7) : 0,
+    materials,
+  };
+}

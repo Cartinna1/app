@@ -56,10 +56,9 @@ export const ALL_PERMA_BONUSES: PermaBonusDef[] = [
   {
     id: PERMA_ETERNAL_LIGHT,
     name: '永续光',
-    description: '掌灯者的光电结构被复刻到殖民地电网，电力产出 +20%、停电保护 +5 回合',
+    description: '掌灯者的光电结构被复刻到殖民地电网，电力产出 +20%',
     effects: [
       { kind: 'powerPct', value: 20 },
-      { kind: 'blackoutGuardTurns', value: 5 },
     ],
     siteId: 'lighthouse',
   },
@@ -85,15 +84,4 @@ export function getPermaBonusValue(ids: string[] | undefined, kind: PermaBonusKi
     }
   }
   return total;
-}
-
-/** 玩家可见的加成名称列表（UI 展示用，按 id 去重） */
-export function getPermaBonusNames(ids: string[] | undefined): string[] {
-  if (!ids || ids.length === 0) return [];
-  const names: string[] = [];
-  for (const id of new Set(ids)) {
-    const def = getPermaBonusDef(id);
-    if (def) names.push(def.name);
-  }
-  return names;
 }

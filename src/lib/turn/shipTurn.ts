@@ -3,20 +3,22 @@
 // 跃迁、投资收益、贷款还款等所有"每艘母舰"级别的回合结算。
 
 import type { Mothership, Stock, RawMaterial, Product } from '@/types/game';
-import { RECIPES, MOTHERSHIP_ID_UNITY, MOTHERSHIP_ID_SINGULARITY_SEEKER } from '@/data/gameData';
-import { FACTIONS, getInvestmentTier, getIncomeCap } from '@/data/factions';
+import { RECIPES, MOTHERSHIP_ID_UNITY, MOTHERSHIP_ID_SINGULARITY_SEEKER, GOLD_LOG_LIMIT } from '@/data/gameData';
 import { getShipTotalAssets } from '@/lib/game/assets';
+import { ALL_MATERIAL_IDS, BASIC_MATERIAL_IDS } from '@/data/materialNames';
 import {
   RELIC_CRYSTAL, RELIC_TRANSCRIBER, RELIC_FOOD_PRESERVER,
 } from '@/data/relics';
 import {
-  MODULE_MINING_ARRAY, MODULE_RESERVE_BAY,
+  MODULE_MINING_ARRAY, getProductExpiry, computeProductMaterialCost,
 } from '@/data/modules';
-import { getShipPerTurnIncome } from '@/lib/turn/shipIncome';
+import { getShipPerTurnIncome, getAssetPercentIncome, DYNAMIC_INCOME_AMOUNTS } from '@/lib/turn/shipIncome';
 
-// 原料 ID 清单（随机原料效果用，勿就地重复声明）
-const BASIC_MATERIAL_IDS = ['carbon', 'gold_ore', 'oil', 'silicon'];
-const ALL_MATERIAL_IDS = ['carbon', 'gold_ore', 'oil', 'dark_matter', 'silicon', 'quantum'];
+/** 破产倒计时（回合数）：金币 < 0 时触发并从该值倒数，归零仍未回正则舰队解散。
+ *  唯一真值：shipTurn / useTrade / useEvent 的破产判定共用，勿再写裸 10。 */
+export const BANKRUPT_TURNS = 10;
+/** 饥荒倒计时（回合数）：食物 < 0 时触发并从该值倒数，归零仍为负则升级为叛乱（同样 10 回合）。 */
+export const FAMINE_TURNS = 10;
 
 /** 饥荒（食物 &lt; 0）时金币收益减半；非正数原样返回。
  *  唯一真值：shipTurn / useTrade（打探）/ useEvent（事件结算与结果卡显示）共用，勿再就地写第三份。 */
@@ -80,53 +82,53 @@ export function processShipTurn(
 
   // ==================== 饥荒buff + 破产辅助函数 ====================
   const checkBankrupt = () => {
-    if (s.gold < 0 && !s.bankrupt) { s.bankrupt = true; s.bankruptTimer = 10; }
+    if (s.gold < 0 && !s.bankrupt) { s.bankrupt = true; s.bankruptTimer = BANKRUPT_TURNS; }
   };
 
   // ==================== 食物消耗（船员维持）- 允许变负数 ====================
   s.food -= computeCrewFoodCost(turn, s);
   // 食物刚变负数 → 触发饥荒
   if (s.food < 0 && s.famineTimer === 0 && !s.isRebellion) {
-    s.famineTimer = 10;
+    s.famineTimer = FAMINE_TURNS;
   }
 
   // 万众一心股息（MOTHERSHIP_ID_UNITY）- 饥荒减半
   if (s.id === MOTHERSHIP_ID_UNITY) {
-    const div = famineHalveGold(s.food, Math.floor(getShipTotalAssets(s, stocks, mats, prods) * 0.01));
+    const div = famineHalveGold(s.food, getAssetPercentIncome(getShipTotalAssets(s, stocks, mats, prods)));
     if (div > 0) {
       s.gold += div;
       checkBankrupt();
-      s.goldLog = [{ turn, amount: div, reason: "万众一心股息", balanceAfter: s.gold }, ...s.goldLog].slice(0, 200);
+      s.goldLog = [{ turn, amount: div, reason: "万众一心股息", balanceAfter: s.gold }, ...s.goldLog].slice(0, GOLD_LOG_LIMIT);
     }
   }
 
-  // 奇点探求者原料（MOTHERSHIP_ID_SINGULARITY_SEEKER）
+  // 奇点探求者原料（MOTHERSHIP_ID_SINGULARITY_SEEKER）——数量走 shipIncome 的动态收益常量
   if (s.id === MOTHERSHIP_ID_SINGULARITY_SEEKER) {
     const matIds = ALL_MATERIAL_IDS;
     const pickedMat = matIds[Math.floor(Math.random() * matIds.length)];
-    const amount = Math.floor(Math.random() * 3) + 2;
+    const { singularityMatsMin, singularityMatsMax } = DYNAMIC_INCOME_AMOUNTS;
+    const amount = singularityMatsMin + Math.floor(Math.random() * (singularityMatsMax - singularityMatsMin + 1));
     s.materials = { ...s.materials };
     s.materials[pickedMat] = (s.materials[pickedMat] || 0) + amount;
   }
 
-  // 遗物「奥得律斯基亚水晶」——每回合3个随机原料
+  // 遗物「奥得律斯基亚水晶」——每回合 N 个随机原料（N = DYNAMIC_INCOME_AMOUNTS.crystalMats）
   if (s.relics.some((r) => r.id === RELIC_CRYSTAL)) {
     const matIds = ALL_MATERIAL_IDS;
     s.materials = { ...s.materials };
-    for (let i = 0; i < 3; i++) {
+    for (let i = 0; i < DYNAMIC_INCOME_AMOUNTS.crystalMats; i++) {
       const picked = matIds[Math.floor(Math.random() * matIds.length)];
       s.materials[picked] = (s.materials[picked] || 0) + 1;
     }
   }
 
-  // 遗物「誊录仪」——每回合+1%总资产金币
+  // 遗物「誊录仪」——每回合 +1% 总资产金币（百分比走 shipIncome.ASSET_INCOME_PCT）
   if (s.relics.some((r) => r.id === RELIC_TRANSCRIBER)) {
-    const assets = getShipTotalAssets(s, stocks, mats, prods);
-    const bonus = famineHalveGold(s.food, Math.max(0, Math.floor(assets * 0.01)));
+    const bonus = famineHalveGold(s.food, getAssetPercentIncome(getShipTotalAssets(s, stocks, mats, prods)));
     if (bonus > 0) {
       s.gold += bonus;
       checkBankrupt();
-      s.goldLog = [{ turn, amount: bonus, reason: "遗物「誊录仪」收益", balanceAfter: s.gold }, ...s.goldLog].slice(0, 200);
+      s.goldLog = [{ turn, amount: bonus, reason: "遗物「誊录仪」收益", balanceAfter: s.gold }, ...s.goldLog].slice(0, GOLD_LOG_LIMIT);
     }
   }
 
@@ -146,7 +148,7 @@ export function processShipTurn(
       if (bonus > 0) {
         s.gold += bonus;
         checkBankrupt();
-        s.goldLog = [{ turn, amount: bonus, reason: `遗物「${line.label}」收益`, balanceAfter: s.gold }, ...s.goldLog].slice(0, 200);
+        s.goldLog = [{ turn, amount: bonus, reason: `遗物「${line.label}」收益`, balanceAfter: s.gold }, ...s.goldLog].slice(0, GOLD_LOG_LIMIT);
       }
     }
   }
@@ -162,7 +164,7 @@ export function processShipTurn(
     s.famineTimer -= 1;
     if (s.food >= 0) { s.famineTimer = 0; s.isRebellion = false; }
     else if (s.famineTimer <= 0 && !s.isRebellion) {
-      s.isRebellion = true; s.famineTimer = 10;
+      s.isRebellion = true; s.famineTimer = FAMINE_TURNS;
     } else if (s.famineTimer <= 0 && s.isRebellion) {
       s.famineTimer = 0;
     }
@@ -182,9 +184,9 @@ export function processShipTurn(
         s.famineTimer = 0;
       }
     } else {
-      const mCost = recipe ? recipe.inputs.reduce((sum, inp) => { const m = mats.find((mm) => mm.id === inp.materialId); return sum + (m ? m.currentPrice * inp.amount : 0); }, 0) : 0;
-      const expiryBonus = s.installedModuleIds.includes(MODULE_RESERVE_BAY) ? 3 : 0;
-      s.products.push({ productId: task.productId, expiresAt: turn + 3 + expiryBonus, materialCost: mCost });
+      // 原料成本快照与保质期都走 data/modules 的唯一真值（与立即完成路径 useProduction 同源）
+      const mCost = recipe ? computeProductMaterialCost(recipe, mats) : 0;
+      s.products.push({ productId: task.productId, expiresAt: getProductExpiry(turn, s.installedModuleIds), materialCost: mCost });
     }
   });
   s.products = s.products.filter((p) => p.expiresAt > turn);
@@ -207,25 +209,10 @@ export function processShipTurn(
     }
   }
 
-  // 投资收益
-  for (const [fid, fs] of Object.entries(s.tradeStatus.factionStates)) {
-    if (fs.invested <= 0) continue;
-    const tier = getInvestmentTier(fs.invested);
-    const incomeCap = getIncomeCap(tier);
-    if (incomeCap > 0) {
-      const income = famineHalveGold(s.food, Math.floor(Math.random() * incomeCap) + 1);
-      s.gold += income;
-      checkBankrupt();
-      const factionName = FACTIONS.find((f) => f.id === fid)?.name || '未知';
-      s.goldLog = [{ turn, amount: income, reason: `「${factionName}」投资收益`, balanceAfter: s.gold }, ...s.goldLog].slice(0, 200);
-    }
-    // 档位6自动补给：每5回合自动获得该势力特产×3
-    if (tier >= 6 && turn % 5 === 0) {
-      s.tradeStatus = { ...s.tradeStatus };
-      s.tradeStatus.inventory = { ...s.tradeStatus.inventory };
-      s.tradeStatus.inventory[fid] = (s.tradeStatus.inventory[fid] || 0) + 3;
-    }
-  }
+  // 旧「投资收益 + 档位6自动补给」已随投资系统退役一并删除：
+  // 投资的唯一形态是「固定 8000 金币 → +1 声望」（useTrade.investFaction），
+  // 回报走 REPUTATION_TIERS 的被动收入（factionTurn.applyPassiveIncome）+ 买价折扣；
+  // 旧的 factionStates.invested 已无写入点（读档时一次性折成声望后清零），故这里不再有结算分支。
 
   // 贷款还款：到期一次性还清（金币允许变负）
   if (s.loans.length > 0) {
@@ -237,9 +224,9 @@ export function processShipTurn(
     if (dueLoans.length > 0) {
       const totalDue = dueLoans.reduce((sum, l) => sum + l.totalRepay, 0);
       s.gold -= totalDue;
-      s.goldLog = [{ turn, amount: -totalDue, reason: "贷款到期扣款", balanceAfter: s.gold }, ...s.goldLog].slice(0, 200);
+      s.goldLog = [{ turn, amount: -totalDue, reason: "贷款到期扣款", balanceAfter: s.gold }, ...s.goldLog].slice(0, GOLD_LOG_LIMIT);
       s.loans = s.loans.filter((l) => l.remainingTurns > 0);
-      if (s.gold < 0 && !s.bankrupt) { s.bankrupt = true; s.bankruptTimer = 10; }
+      if (s.gold < 0 && !s.bankrupt) { s.bankrupt = true; s.bankruptTimer = BANKRUPT_TURNS; }
     }
   }
 

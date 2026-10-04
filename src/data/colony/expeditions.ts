@@ -29,24 +29,26 @@ import { expeditionL19 } from './expeditions/L19';
 import { expeditionL20 } from './expeditions/L20';
 import { expeditionL21 } from './expeditions/L21';
 import { expeditionL22 } from './expeditions/L22';
+import { MATERIAL_NAME_MAP } from '@/data/materialNames';
+
+/** 结局收集门槛（集齐 12 个结局解锁终极技能与 CG 图集）——单一真值：
+ *  图鉴 GalleryPanel、远征面板 ExpeditionPanel、动作层 useColonyExpedition 共用，勿再写裸 12。 */
+export const EXPEDITION_UNLOCK_COUNT = 12;
 
 /** 开启远征的资源消耗（**cost 对象**：20,000 金币 + 50 合金）。
  *  校验与扣减走 lib/turn/resourceCost.ts 的 firstMissing/payCost，勿在 hook 里就地写。 */
 export const EXPEDITION_COST: Record<string, number> = { gold: 20000, alloy: 50 };
 
-/** 节点消耗资源 → 中文显示名（hook 报错与 UI 消耗明细共用） */
+/** 节点消耗资源 → 中文显示名（hook 报错与 UI 消耗明细共用）。
+ *  原料键一律复用 MATERIAL_NAME_MAP（唯一真值 data/materialNames.ts），此处只补非原料键，
+ *  勿再列一遍原料译名（历史上这里与 MATERIAL_NAME_MAP 各有一份「硅片/量子簇/碳块…」）。 */
 export const RESOURCE_LABELS: Record<string, string> = {
   gold: '金币',
   food: '食物',
   alloy: '合金',
   stardust: '星尘',
-  silicon: '硅片',
-  quantum: '量子簇',
-  carbon: '碳块',
-  dark_matter: '暗物质',
-  gold_ore: '黄金',
-  oil: '石油',
   researchPoints: '科研点',
+  ...MATERIAL_NAME_MAP,
 };
 
 /** 全部领袖远征路线（key = leaderId） */

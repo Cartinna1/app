@@ -17,29 +17,81 @@ const BLANK_IDOL_PCT = 10;
 /** 遗物「未完成的镜」：每回合 +2 科研点（计入 relicPerTurn 明细，避免总览漏显） */
 const UNFINISHED_MIRROR_RESEARCH = 2;
 
-/** 单个电力建筑实例的发电明细（供 UI 展示加成来源） */
+/** 单个电力建筑实例的发电明细（供 UI 展示加成来源）。
+ *  ⚠ 所有 `*Pct` 字段一律是**小数**（0.15 = +15%），与 BuildingEconomyEntry 口径一致；
+ *    显示统一走 getBuildingSourceBreakdown，勿在 UI 里各写 ×100。 */
 export interface PowerBuildingEntry {
   uid: string;
   defId: string;
   /** 基础产出（加成前） */
   base: number;
-  /** 领袖电力建筑加成（%，如 L22 余晖脉冲 +30，含终极技能叠加） */
+  /** 领袖电力建筑加成（小数，如 L22 余晖脉冲 +0.30，含终极技能叠加） */
   leaderPct: number;
-  /** 星球修正（%，仅太阳能阵列，如热带 -30） */
+  /** 星球修正（小数，仅太阳能阵列，如热带 −0.30） */
   planetPct: number;
-  /** 领袖全员加成（%） */
+  /** 领袖全员加成（小数） */
   allPct: number;
-  /** 考古永久加成「永续光」电力加成（%，可选） */
+  /** 考古永久加成「永续光」电力加成（小数，可选） */
   permPct?: number;
-  /** 遗物「空白神像」电力加成（%，可选；单独标注，勿并入领袖全员加成） */
+  /** 遗物「空白神像」电力加成（小数，可选；单独标注，勿并入领袖全员加成） */
   relicPct?: number;
   /** 最终发电（floor 后） */
   value: number;
 }
 
+// ==================== 产出/发电「来源拆解」唯一真值 ====================
+// 为什么放在这里：明细的字段（planetPct/leaderPct/…）由本模块产出，拆解就该由本模块给出。
+// 历史上拆解被**手写在三处**（大总览「资源收支」、殖民地页签汇总、殖民地建筑卡片），
+// 于是加 `permPct`（考古永久加成，如农业遗产食物+15%）时只补了两处、漏了两处，
+// 数字对但来源被并进「建筑」——同一份加成又分叉一次。
+// ⚠ 新增任何加成字段：**只在本表加一行**，三处明细自动跟随；别再去 UI 里手写。
+
+/** 加成字段 → 显示名（产出的百分比类来源；顺序即显示顺序） */
+export const ECO_SOURCE_FIELDS: Array<{ field: 'planetPct' | 'leaderPct' | 'allPct' | 'repeatPct' | 'b26Pct' | 'permPct' | 'relicPct'; label: string }> = [
+  { field: 'planetPct', label: '星球' },
+  { field: 'leaderPct', label: '领袖' },
+  { field: 'allPct', label: '全员' },
+  { field: 'repeatPct', label: '循环' },
+  { field: 'b26Pct', label: '量子实验室' },
+  { field: 'permPct', label: '永久加成' },
+  { field: 'relicPct', label: '遗物' },
+];
+
+export interface EcoSourceLine {
+  label: string;
+  /** 该来源带来的增量（已按 base 折算，四舍五入前） */
+  value: number;
+  /** 百分比（小数，0.15 = +15%）；"每座 +N" 类为 0 */
+  pct: number;
+}
+
+/** 单个建筑（产出或发电）的加成来源拆解。
+ *  口径保证：Σ(各来源 value) + 「建筑」残差恒等于该建筑的 value（UI 用残差兜底，永远不会丢来源）。 */
+export function getBuildingSourceBreakdown(entry: {
+  base: number;
+  planetPct?: number;
+  leaderPct?: number;
+  allPct?: number;
+  repeatPct?: number;
+  b26Pct?: number;
+  permPct?: number;
+  relicPct?: number;
+  relicBonus?: number;
+}): EcoSourceLine[] {
+  const out: EcoSourceLine[] = [];
+  for (const { field, label } of ECO_SOURCE_FIELDS) {
+    const pct = entry[field] || 0;
+    if (pct === 0) continue;
+    out.push({ label, pct, value: entry.base * pct });
+  }
+  // 遗物「每座 +N」（合金精炼手册 r_008 / 深层钻头）：**单独标签**，勿与百分比遗物并成一项
+  //（大总览原本就是「遗物+2」与「遗物每座+3」两行，合并会弱化"每座"这个关键信息）
+  if (entry.relicBonus) out.push({ label: '遗物每座', pct: 0, value: entry.relicBonus });
+  return out;
+}
+
 /** 电能结算结果 */
-export interface ColonyPowerInfo {
-  /** 总发电（逐建筑 floor，含 领袖电力加成/星球/领袖全员加成） */
+export interface ColonyPowerInfo {  /** 总发电（逐建筑 floor，含 领袖电力加成/星球/领袖全员加成） */
   gen: number;
   /** 总耗电（含 负载平衡折扣与星球倍率，ceil） */
   use: number;
@@ -187,12 +239,16 @@ export function computeColonyPower(
     // 加成加算合并（与其他资源口径一致：1 + 各加成%之和）：
     // 领袖电力建筑加成（levelBonuses 电力键，如 L22 余晖脉冲；含终极技能「永昼」叠加）
     // + 星球修正（仅太阳能阵列，如热带 −30%）+ 领袖全员加成 + 永久加成 + 遗物「空白神像」
-    const pwrPct = powerLeaderBonus[def.id] || 0;
-    const planetPct = (def.id === BUILDING_SOLAR_ARRAY && powerGenPlanetMult !== 1) ? Math.round((powerGenPlanetMult - 1) * 100) : 0;
-    const allPct = lAllBonus;
-    const combinedPct = pwrPct + planetPct + allPct + permPowerPct + relicAllPct;
-    const value = Math.floor(combinedPct !== 0 ? baseRaw * (1 + combinedPct / 100) : baseRaw);
-    powerBuildings.push({ uid: inst.uid, defId: def.id, base: baseRaw, leaderPct: pwrPct, planetPct, allPct, permPct: permPowerPct, relicPct: relicAllPct, value });
+    const pwrPct = (powerLeaderBonus[def.id] || 0) / 100;
+    const planetPct = (def.id === BUILDING_SOLAR_ARRAY && powerGenPlanetMult !== 1) ? Math.round((powerGenPlanetMult - 1) * 100) / 100 : 0;
+    const allPct = lAllBonus / 100;
+    const permPct = permPowerPct / 100;
+    const relicPct = relicAllPct / 100;
+    const combinedPct = pwrPct + planetPct + allPct + permPct + relicPct;
+    // ⚠ 百分比一律存**小数**（0.15 = +15%），与产出建筑口径统一：曾出现"电力存百分数、产出存小数"，
+    //   导致两处明细各写一套 ×100 / 不 ×100 的显示（漏掉永久加成就是这么来的）。
+    const value = Math.floor(combinedPct !== 0 ? baseRaw * (1 + combinedPct) : baseRaw);
+    powerBuildings.push({ uid: inst.uid, defId: def.id, base: baseRaw, leaderPct: pwrPct, planetPct, allPct, permPct, relicPct, value });
     gen += value;
   }
 
