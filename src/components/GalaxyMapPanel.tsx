@@ -415,8 +415,10 @@ function GalaxyMapPanel({ ship, factionReputation, onTravelToNode }: GalaxyMapPa
           <p className="text-xs text-slate-400">此地暂未发现任何内容，后续更新。</p>
         )}
 
-        {/* 节点配图：可殖民星球用星球地貌图、遗迹用其图鉴封面、势力用势力景观图（待补，缺图自动隐藏）。
-            移动端限高，避免占满屏幕；未开发节点与未探测节点不显示图片。
+        {/* 节点配图：可殖民星球用星球地貌图、遗迹用其图鉴封面、势力用势力景观图（缺图自动隐藏）。
+            配图统一 **16:9 完整显示、不裁切**：max-w 锁宽 + max-h 锁高 → 宽高比正好 16:9
+            （移动端 266×150、桌面 462×260），所以素材按 16:9 做即可，主体不必留可裁区。
+            未开发节点与未探测节点不显示图片。
             ⚠ 图片按 URL 记失败：缺图时整块（含外边距）收起，不留空白带；切到有图的节点正常显示。 */}
         {(() => {
           const img = getNodeLandscapeImage(node);
@@ -428,7 +430,7 @@ function GalaxyMapPanel({ ship, factionReputation, onTravelToNode }: GalaxyMapPa
                 alt={node.name}
                 loading="lazy"
                 onError={() => setFailedImg(img)}
-                className="w-full max-h-[150px] md:max-h-[260px] object-cover rounded-lg border border-slate-700 bg-slate-800/40"
+                className="block w-full max-w-[266px] md:max-w-[462px] mx-auto max-h-[150px] md:max-h-[260px] object-cover rounded-lg border border-slate-700 bg-slate-800/40"
               />
             </div>
           );
