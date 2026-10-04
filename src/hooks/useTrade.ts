@@ -4,7 +4,7 @@ import { FACTIONS, getSellPrice, RELATION_MATRIX } from '@/data/factions';
 import { RECIPES } from '@/data/gameData';
 import { getContractItemKind } from '@/lib/turn/contracts';
 import { shortestRoute } from '@/lib/galaxy/graph';
-import { getBlockedNodeIds, getCurrentFactionId, HOSTILE_REP_THRESHOLD } from '@/lib/galaxy/access';
+import { checkRepBlock, getBlockedNodeIds, getCurrentFactionId } from '@/lib/galaxy/access';
 import { getPermaBonusValue } from '@/data/galaxy/permaBonuses';
 import { getGalaxyNode } from '@/data/galaxy/nodes';
 import { MATERIAL_NAME_MAP } from '@/data/materialNames';
@@ -59,23 +59,8 @@ export function useTrade(
     return { factionReputation: rep, factionRepLog: log };
   }
 
-  function checkRepBlock(prev: GameState, factionId: string, action: string): string | null {
-    const rep = (prev.factionReputation || {})[factionId] || 0;
-    // 宿敌 -100~-91：拒绝一切操作（含跃迁）
-    if (rep <= HOSTILE_REP_THRESHOLD) return '宿敌势力拒绝与你交易';
-    // 恶意 -90~-51：可跃迁、可投资，其余拒绝
-    if (rep >= -90 && rep <= -51) {
-      if (action === 'travel' || action === 'invest') return null;
-      return '恶意势力拒绝此项操作';
-    }
-    // 敌意 -50~-21：可跃迁、可购买、可投资，其余拒绝
-    if (rep >= -50 && rep <= -21) {
-      if (action === 'buy' || action === 'invest' || action === 'travel') return null;
-      return '敌意势力拒绝此项操作';
-    }
-    if (rep < 0 && action === 'intel') return '该势力不信任你，无法打探消息';
-    return null;
-  }
+  // 声望拦截的唯一真值已移到 lib/galaxy/access.ts（checkRepBlock），与 HOSTILE_REP_THRESHOLD 同处，
+  // 「下一回合预告」的探索/打探提醒共用同一判定。
 
   // 跃迁（目标可以是任意星系节点；回合数由星图最短路给出）
   const travelToNode = useCallback(

@@ -24,6 +24,21 @@ export function hasBlackoutImmunity(colony: Colony): boolean {
 /** 余晖脉冲停电保护回合数（L22 Lv3：连续缺电时免疫 N 个回合，耗尽后仍未恢复供电则停电） */
 export const BLACKOUT_GUARD_TURNS = 10;
 
+/** 下回合结算后的净电能（-1 以下＝停电）。**唯一真值**：结算（processColonyTurn）与「下一回合预告」共用，
+ *  改动这里等于同时改结算与提示，不会出现"提示说断电、实际没断"。 */
+export function projectColonyEnergy(prevEnergy: number, net: number): number {
+  return Math.max(-1, Math.min(50, prevEnergy + net));
+}
+
+/** 当前研究项目的目标回合数（极地 -1：低温超导）。**唯一真值**：结算（processColonyTurn）与预告共用。 */
+export function getResearchTargetTurns(techId: string, planetTypeId: string | null): number {
+  const tech = getTechById(techId);
+  const rpt = REPEATABLE_TECHS.find((rt) => rt.id === techId);
+  let targetTurns = tech ? tech.researchTurns : rpt ? rpt.researchTurns : 99;
+  if (planetTypeId === 'polar') targetTurns = Math.max(1, targetTurns - 1);
+  return targetTurns;
+}
+
 /** 处理殖民地每个回合的推进（在 useTurn 中调用） */
 export function processColonyTurn(ship: Mothership, _turn: number): void {
   const colony = ship.colony;
@@ -78,9 +93,9 @@ export function processColonyTurn(ship: Mothership, _turn: number): void {
   const permGuardTurns = getPermaBonusValue(ship.galaxy?.permaBonuses, 'blackoutGuardTurns');
   const guardTurns = BLACKOUT_GUARD_TURNS + permGuardTurns;
   const hasL22Lv3 = hasBlackoutImmunity(colony) || permGuardTurns > 0;
-  // 电能累积（容量上限 50，防止无限堆）
+  // 电能累积（容量上限 50，防止无限堆）——算式唯一真值：projectColonyEnergy
   const prevEnergy = typeof colony.energy === 'number' ? colony.energy : 0;
-  const newEnergy = Math.max(-1, Math.min(50, prevEnergy + power.net));
+  const newEnergy = projectColonyEnergy(prevEnergy, power.net);
   colony.energy = newEnergy;
   // 余晖脉冲保护：连续缺电时免疫 BLACKOUT_GUARD_TURNS 个回合（首次缺电开启），
   // 保护耗尽后仍未恢复供电 → 正常停电；中途恢复供电则重置计数
@@ -156,13 +171,9 @@ export function processColonyTurn(ship: Mothership, _turn: number): void {
     colony.techState.researchPoints += totalRP;
     colony.techState.researchSeed = (colony.techState.researchSeed || 0) + 1;
     if (colony.techState.currentResearch) {
-      const isPolar = planetDef && planetDef.id === 'polar';
       colony.techState.currentProgress += 1;
       const tid = colony.techState.currentResearch;
-      const tech = getTechById(tid);
-      const rpt = REPEATABLE_TECHS.find(rt => rt.id === tid);
-      let targetTurns = tech ? tech.researchTurns : rpt ? rpt.researchTurns : 99;
-      if (isPolar) targetTurns = Math.max(1, targetTurns - 1); // 极地：科研回合 -1（低温超导）
+      const targetTurns = getResearchTargetTurns(tid, colony.planetType); // 唯一真值（极地 -1）
       if (colony.techState.currentProgress >= targetTurns) {
         if (rpt) {
           // 循环科技：叠加次数

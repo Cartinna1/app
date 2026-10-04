@@ -9,7 +9,7 @@ import type { ArchaeologySite } from '@/types/galaxy';
 import { ARCHAEOLOGY_SITES, ARCHAEOLOGY_SITE_COUNT, getArchaeologySite } from '@/data/galaxy/archaeology';
 import { PERMA_BONUS_MAP } from '@/data/galaxy/permaBonuses';
 import { getRelicById } from '@/data/relics';
-import { excavationSuccessRate } from '@/lib/galaxy/archaeologyTurn';
+import { excavationSuccessRate, findStationedSite } from '@/lib/galaxy/archaeologyTurn';
 import { flattenCost, formatCost } from '@/lib/turn/resourceCost';
 import { getGalaxyNode } from '@/data/galaxy/nodes';
 import { getLeaderDef } from '@/data/colony/leaders';
@@ -86,11 +86,19 @@ function ArchaeologyPanel({
   /** 领袖显示名（LeaderInstance.id 是内部编号如 L14，UI 一律显示 data/colony/leaders.ts 里的名字） */
   const leaderNameOf = (id: string) => getLeaderDef(id)?.name || id;
 
-  /** 母舰是否停在"当前进行中的那处遗迹"（继续投入需要在场） */
-  const activeIsHere = !!activeSite && currentSiteId === activeSite.id;
-
   /** 可更换的领袖：排除当前驻守者（换成本人无意义，动作层也会拦下） */
   const replaceableLeaders = (currentLeaderId: string | undefined) => leaders.filter((l) => l.id !== currentLeaderId);
+
+  /** 某领袖此刻不能派驻到 site 的原因（'' = 可派驻）：远征中 / 已在别处驻守 / 等级不够。
+   *  仅用于下拉里的禁用提示；真正的拦截在动作层（useGalaxy.checkDigContext），两处同源：
+   *  "是否在驻守"读 findStationedSite，"是否在远征"读 colony.expedition。 */
+  const leaderBlockReason = (leader: { id: string; level: number }, site: { id: string; minLeaderLevel: number }): string => {
+    if (ship.colony?.expedition?.leaderId === leader.id) return '远征中';
+    const stationed = findStationedSite(archaeology, leader.id);
+    if (stationed && stationed !== site.id) return `驻守「${getArchaeologySite(stationed)?.name || stationed}」`;
+    if (site.minLeaderLevel > 0 && leader.level < site.minLeaderLevel) return `需 Lv${site.minLeaderLevel}`;
+    return '';
+  };
 
   const completed = ARCHAEOLOGY_SITES.filter((s) => archaeology[s.id]?.status === 'done');
   /** 发掘被迫中止（自然失败按 HALT_CHANCE 触发）的遗迹：永久无法继续，列表显示中止剧情与配图 */
@@ -212,18 +220,13 @@ function ArchaeologyPanel({
 
             {/* 操作 */}
             <div className="flex flex-wrap gap-2">
-              {/* 继续投入需要母舰在场（与动作层 useGalaxy.continueExcavation 的守卫一致）；
-                  已开工的阶段（digging）会自行推进，因此稳妥推进/中止/换领袖不要求在场 */}
-              {activeState.status === 'idle' && activeIsHere && (
+              {activeState.status === 'idle' && (
                 <button
                   onClick={() => showMsg(onContinueExcavation(activeSite.id))}
                   className="px-4 py-2 bg-purple-600 hover:bg-purple-500 rounded-lg font-bold text-white text-sm min-h-[40px]"
                 >
                   继续发掘（投入 {formatCost(cost)}）
                 </button>
-              )}
-              {activeState.status === 'idle' && !activeIsHere && (
-                <p className="text-xs text-slate-400 self-center">母舰不在该遗迹星系，请先在「星图」跃迁抵达后继续投入。</p>
               )}
               {activeState.status === 'digging' && activeState.fails >= 2 && !activeState.pendingChoice && (
                 <button
@@ -241,7 +244,8 @@ function ArchaeologyPanel({
                   中止（进度保留）
                 </button>
               )}
-              {replaceableLeaders(activeState.leaderId).length > 0 && activeState.status !== 'done' && (
+              {/* 换领袖只在"人在那儿"的状态下有意义（已完成/已封闭的遗迹没有驻守领袖可换） */}
+              {(activeState.status === 'digging' || activeState.status === 'idle') && replaceableLeaders(activeState.leaderId).length > 0 && (
                 <div className="flex items-center gap-2">
                   <select
                     value=""
@@ -249,9 +253,14 @@ function ArchaeologyPanel({
                     className="bg-slate-800 border border-slate-600 rounded-lg px-2 py-2 text-xs text-slate-200 min-h-[40px]"
                   >
                     <option value="">更换驻守领袖…</option>
-                    {replaceableLeaders(activeState.leaderId).map((l) => (
-                      <option key={l.id} value={l.id}>{leaderNameOf(l.id)} Lv{l.level}</option>
-                    ))}
+                    {replaceableLeaders(activeState.leaderId).map((l) => {
+                      const reason = leaderBlockReason(l, activeSite);
+                      return (
+                        <option key={l.id} value={l.id} disabled={!!reason}>
+                          {leaderNameOf(l.id)} Lv{l.level}{reason ? `（${reason}）` : ''}
+                        </option>
+                      );
+                    })}
                   </select>
                 </div>
               )}
@@ -353,8 +362,6 @@ function ArchaeologyPanel({
                       <p className="text-xs text-emerald-400">已完成发掘，奖励见考古图鉴。</p>
                     ) : status === '进行中' ? (
                       <p className="text-xs text-amber-300">正在发掘中，进度见上方面板。</p>
-                    ) : status === '已中止' && !isHere ? (
-                      <p className="text-xs text-slate-400">发掘已中止（进度保留）。母舰不在此遗迹星系，请先在「星图」跃迁抵达后继续。</p>
                     ) : status === '已中止' ? (
                       <div className="space-y-2">
                         <p className="text-xs text-amber-300">
@@ -376,11 +383,14 @@ function ArchaeologyPanel({
                                 className="bg-slate-800 border border-slate-600 rounded-lg px-2 py-2 text-xs text-slate-200 min-h-[40px]"
                               >
                                 <option value="">更换驻守领袖…</option>
-                                {replaceableLeaders(st!.leaderId).map((l) => (
-                                  <option key={l.id} value={l.id} disabled={site.minLeaderLevel > 0 && l.level < site.minLeaderLevel}>
-                                    {leaderNameOf(l.id)} Lv{l.level}{site.minLeaderLevel > 0 && l.level < site.minLeaderLevel ? `（需 Lv${site.minLeaderLevel}）` : ''}
-                                  </option>
-                                ))}
+                                {replaceableLeaders(st!.leaderId).map((l) => {
+                                  const reason = leaderBlockReason(l, site);
+                                  return (
+                                    <option key={l.id} value={l.id} disabled={!!reason}>
+                                      {leaderNameOf(l.id)} Lv{l.level}{reason ? `（${reason}）` : ''}
+                                    </option>
+                                  );
+                                })}
                               </select>
                             </div>
                           )}
@@ -398,11 +408,14 @@ function ArchaeologyPanel({
                           className="bg-slate-800 border border-slate-600 rounded-lg px-2 py-2 text-xs text-slate-200 min-h-[40px]"
                         >
                           <option value="">选择驻守领袖…</option>
-                          {leaders.map((l) => (
-                            <option key={l.id} value={l.id} disabled={site.minLeaderLevel > 0 && l.level < site.minLeaderLevel}>
-                              {leaderNameOf(l.id)} Lv{l.level}{site.minLeaderLevel > 0 && l.level < site.minLeaderLevel ? `（需 Lv${site.minLeaderLevel}）` : ''}
-                            </option>
-                          ))}
+                          {leaders.map((l) => {
+                            const reason = leaderBlockReason(l, site);
+                            return (
+                              <option key={l.id} value={l.id} disabled={!!reason}>
+                                {leaderNameOf(l.id)} Lv{l.level}{reason ? `（${reason}）` : ''}
+                              </option>
+                            );
+                          })}
                         </select>
                         <button
                           disabled={!leaderPick}

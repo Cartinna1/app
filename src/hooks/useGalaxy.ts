@@ -7,7 +7,7 @@ import type { GameState } from '@/types/game';
 import { getArchaeologySite } from '@/data/galaxy/archaeology';
 import { getGalaxyNode } from '@/data/galaxy/nodes';
 import { firstMissing, flattenCost, payCost } from '@/lib/turn/resourceCost';
-import { resolveStage, canOpenExcavation, leaderChangeTurns } from '@/lib/galaxy/archaeologyTurn';
+import { resolveStage, canOpenExcavation, leaderChangeTurns, findStationedSite } from '@/lib/galaxy/archaeologyTurn';
 
 interface GalaxyActions {
   startExcavation: (siteId: string, leaderId: string) => { success: boolean; message: string };
@@ -22,14 +22,18 @@ export function useGalaxy(
   gameState: GameState,
   dispatch: React.Dispatch<{ type: 'FUNCTIONAL_UPDATE'; updater: (state: GameState) => GameState }>
 ): GalaxyActions {
-  /** 通用前置校验：遗迹存在 + 母舰停在该遗迹星系 + 驻守领袖合规 */
-  const checkDigContext = (siteId: string, leaderId: string): string | null => {
+  /** 通用前置校验：遗迹存在 +（可选）母舰停在该遗迹星系 + 驻守领袖合规。
+   *  位置只在**首次开始发掘**时要求：一旦有领袖入驻，考古队就留在原地作业，
+   *  续投/换领袖/稳妥/中止/抉择都不再受母舰位置限制（requirePresence=false 跳过位置校验）。 */
+  const checkDigContext = (siteId: string, leaderId: string, requirePresence = true): string | null => {
     const ship = gameState.ships[0];
     if (!ship) return '舰队不存在';
     const site = getArchaeologySite(siteId);
     if (!site) return '遗迹数据缺失';
-    const node = getGalaxyNode(ship.galaxy.currentNodeId);
-    if (node?.siteId !== siteId) return '母舰不在该遗迹星系，请先跃迁抵达';
+    if (requirePresence) {
+      const node = getGalaxyNode(ship.galaxy.currentNodeId);
+      if (node?.siteId !== siteId) return '母舰不在该遗迹星系，请先跃迁抵达';
+    }
     const leaders = ship.colony?.leaders || [];
     if (leaders.length === 0) return '需要先建立殖民地并招募领袖，才能派出考古队';
     const leader = leaders.find((l) => l.id === leaderId);
@@ -37,11 +41,10 @@ export function useGalaxy(
     if (site.minLeaderLevel > 0 && leader.level < site.minLeaderLevel) {
       return `该遗迹需驻守领袖达到 Lv${site.minLeaderLevel}（当前 Lv${leader.level}）`;
     }
-    for (const [id, st] of Object.entries(ship.galaxy.archaeology || {})) {
-      if (id !== siteId && st.status === 'digging' && st.leaderId === leaderId) {
-        return '该领袖正在驻守另一处遗迹';
-      }
-    }
+    // 驻守互斥（双向）：正在远征的领袖不能来驻守；已在别处驻守的也不能再驻守第二处。
+    // "是否在驻守"的唯一真值在 lib/galaxy/archaeologyTurn.findStationedSite（digging 与 idle 都算驻守）
+    const stationed = findStationedSite(ship.galaxy.archaeology, leaderId);
+    if (stationed && stationed !== siteId) return '该领袖正在驻守另一处遗迹';
     if (ship.colony?.expedition?.leaderId === leaderId) return '该领袖正在远征中，无法驻守遗迹';
     return null;
   };
@@ -95,10 +98,7 @@ export function useGalaxy(
     if (st.status === 'done') return { success: false, message: '此处遗迹已完成' };
     if (st.status === 'collapsed') return { success: false, message: `「${site.name}」的发掘已经中止，遗迹封闭，无法再进入` };
     if (st.status === 'digging') return { success: false, message: '该阶段正在发掘中' };
-    // 续投需要母舰在场（与开始发掘同一口径；已开工的倒计时不受位置影响，故只拦"投入"这一步）
-    if (getGalaxyNode(ship0.galaxy.currentNodeId)?.siteId !== siteId) {
-      return { success: false, message: '母舰不在该遗迹星系，请先跃迁抵达' };
-    }
+    // 续投**不要求母舰在场**：领袖已入驻，考古队留在原地作业（倒计时也不受位置影响）
     const stage = site.stages[st.stageIndex];
     if (!stage) return { success: false, message: '没有可继续的阶段' };
     const cost = flattenCost(stage.cost);
@@ -179,9 +179,10 @@ export function useGalaxy(
     return result;
   }, [gameState, dispatch]);
 
-  /** 更换驻守领袖（当前阶段耗时 +1，进度保留；换成同一人无意义直接拦下，且耗时不会超过「基础耗时+1」） */
+  /** 更换驻守领袖（当前阶段耗时 +1，进度保留；换成同一人无意义直接拦下，且耗时不会超过「基础耗时+1」）。
+   *  不要求母舰在场：换的是**已经驻守在那儿**的考古队队长，母舰可以在别处。 */
   const changeExcavationLeader = useCallback((siteId: string, leaderId: string): { success: boolean; message: string } => {
-    const ctxError = checkDigContext(siteId, leaderId);
+    const ctxError = checkDigContext(siteId, leaderId, false);
     if (ctxError) return { success: false, message: ctxError };
     const ship0 = gameState.ships[0];
     const st = ship0.galaxy.archaeology?.[siteId];

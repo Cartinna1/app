@@ -6,7 +6,9 @@ import { useCallback } from 'react';
 import type { GameState } from '@/types/game';
 import { EXPEDITION_COST, getLeaderExpedition } from '@/data/colony/expeditions';
 import { getLeaderDef } from '@/data/colony/leaders';
+import { getArchaeologySite } from '@/data/galaxy/archaeology';
 import { enterExpeditionHistory, recordExpeditionEnding } from '@/lib/colony/expeditionTurn';
+import { findStationedSite } from '@/lib/galaxy/archaeologyTurn';
 import { deductResource, firstMissing, payCost } from '@/lib/turn/resourceCost';
 
 interface ExpeditionActions {
@@ -27,6 +29,13 @@ export function useColonyExpedition(
     if (colony.expedition) return { success: false, message: '已有远征进行中，请先完成当前远征' };
     if (!colony.leaders.some((l) => l.id === leaderId)) return { success: false, message: '该领袖尚未招募' };
     if (!getLeaderExpedition(leaderId)) return { success: false, message: '该领袖的远征故事尚未开启，敬请期待！' };
+    // 驻守↔远征互斥：正在考古遗迹驻守的领袖不能同时出征（反向守卫在 useGalaxy.checkDigContext；
+    // "是否在驻守"的唯一真值：lib/galaxy/archaeologyTurn.findStationedSite，digging 与 idle 都算驻守）
+    const stationed = findStationedSite(ship.galaxy.archaeology, leaderId);
+    if (stationed) {
+      const siteName = getArchaeologySite(stationed)?.name || stationed;
+      return { success: false, message: `该领袖正在「${siteName}」驻守考古遗迹，无法远征` };
+    }
     const missing = firstMissing(ship, colony, EXPEDITION_COST);
     if (missing) return { success: false, message: missing };
 

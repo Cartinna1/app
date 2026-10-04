@@ -4,14 +4,20 @@
 
 import { useState, memo } from 'react';
 import type { Colony, ExpeditionNodeDef } from '@/types/colony';
+import type { ArchaeologyState } from '@/types/galaxy';
 import { EXPEDITION_COST, RESOURCE_LABELS, getLeaderExpedition } from '@/data/colony/expeditions';
 import { getLeaderDef } from '@/data/colony/leaders';
+import { getArchaeologySite } from '@/data/galaxy/archaeology';
+import { findStationedSite } from '@/lib/galaxy/archaeologyTurn';
 import { Rocket, Sparkles, Crown, Lock } from 'lucide-react';
 import { formatCost } from '@/lib/turn/resourceCost';
 import FeedbackMessage from '../FeedbackMessage';
 
 interface ExpeditionPanelProps {
   colony: Colony;
+  /** 考古进度（ship.galaxy.archaeology）：用于显示"该领袖正在某处驻守"并禁用出征按钮。
+   *  与动作层守卫同源（findStationedSite），UI 只做提示，不替代校验。 */
+  archaeology?: Record<string, ArchaeologyState>;
   onStartExpedition: (leaderId: string) => { success: boolean; message: string };
   onPayExpeditionNode: () => { success: boolean; message: string };
   onUnlockUltimate: (leaderId: string) => { success: boolean; message: string };
@@ -23,7 +29,7 @@ function renderCost(cost?: Record<string, number>): string {
   return Object.entries(cost).map(([k, v]) => `${RESOURCE_LABELS[k] || k}×${v}`).join(' + ');
 }
 
-function ExpeditionPanel({ colony, onStartExpedition, onPayExpeditionNode, onUnlockUltimate }: ExpeditionPanelProps) {
+function ExpeditionPanel({ colony, archaeology, onStartExpedition, onPayExpeditionNode, onUnlockUltimate }: ExpeditionPanelProps) {
   const [msg, setMsg] = useState('');
   const [msgType, setMsgType] = useState<'success' | 'error'>('success');
   const [showHistory, setShowHistory] = useState(false);
@@ -211,6 +217,9 @@ function ExpeditionPanel({ colony, onStartExpedition, onPayExpeditionNode, onUnl
           const count = endingsCount(l.id);
           const unlocked = colony.expeditionUnlocks?.includes(l.id) || false;
           const hasRoute = !!getLeaderExpedition(l.id);
+          // 驻守↔远征互斥：正在考古遗迹驻守的领袖不能出征（唯一真值 findStationedSite；动作层也会拦）
+          const stationedSiteId = findStationedSite(archaeology, l.id);
+          const stationedName = stationedSiteId ? (getArchaeologySite(stationedSiteId)?.name || stationedSiteId) : '';
           return (
             <div key={l.id} className="bg-slate-800/60 border border-slate-700 rounded-lg p-3 flex gap-3 items-start">
               <img
@@ -227,6 +236,7 @@ function ExpeditionPanel({ colony, onStartExpedition, onPayExpeditionNode, onUnl
                 </p>
                 <p className="text-sm text-slate-500 mt-1">
                   已触发结局 {count}/12
+                  {stationedSiteId ? ` · 正在「${stationedName}」驻守考古遗迹（驻守与远征不可同时进行）` : ''}
                   {unlocked && ld?.ultimateSkill ? ` · 终极技能已解锁「${ld.ultimateSkill.name}」` : ''}
                 </p>
                 <div className="mt-2 flex flex-wrap gap-2">
@@ -243,8 +253,8 @@ function ExpeditionPanel({ colony, onStartExpedition, onPayExpeditionNode, onUnl
                   )}
                   <button
                     onClick={() => handleStart(l.id)}
-                    disabled={!!ex}
-                    className={`px-3 py-1.5 rounded-lg text-sm font-bold transition-colors ${hasRoute ? 'bg-cyan-600 hover:bg-cyan-500 text-white' : 'bg-slate-700 text-slate-400'} ${ex ? 'opacity-50 cursor-not-allowed' : ''}`}
+                    disabled={!!ex || !!stationedSiteId}
+                    className={`px-3 py-1.5 rounded-lg text-sm font-bold transition-colors ${hasRoute ? 'bg-cyan-600 hover:bg-cyan-500 text-white' : 'bg-slate-700 text-slate-400'} ${ex || stationedSiteId ? 'opacity-50 cursor-not-allowed' : ''}`}
                   >
                     远征（{formatCost(EXPEDITION_COST)}）
                   </button>

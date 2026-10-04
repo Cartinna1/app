@@ -88,3 +88,19 @@ export function getContractEarliestExpiry(ship: Mothership, contract: FactionCon
   const expiries = ship.products.filter((p) => p.productId === contract.targetItemId).map((p) => p.expiresAt);
   return expiries.length > 0 ? Math.min(...expiries) : null;
 }
+
+/** 同一物品可能被多张合同需要，而货舱/特产库存是**共享池**：按物品汇总需求，
+ *  避免每张合同各自显示"已够"（实际交完第一张就不够了）。
+ *  唯一真值：大总览「进行中的合同」（GameScreen）与「下一回合预告」共用。 */
+export function getContractRequiredTotals(contracts: FactionContract[]): {
+  requiredByItem: Record<string, number>;
+  contractsByItem: Record<string, number>;
+} {
+  const requiredByItem: Record<string, number> = {};
+  const contractsByItem: Record<string, number> = {};
+  for (const c of contracts) {
+    requiredByItem[c.targetItemId] = (requiredByItem[c.targetItemId] || 0) + c.targetQty;
+    contractsByItem[c.targetItemId] = (contractsByItem[c.targetItemId] || 0) + 1;
+  }
+  return { requiredByItem, contractsByItem };
+}

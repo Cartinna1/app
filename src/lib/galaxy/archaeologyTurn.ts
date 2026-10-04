@@ -11,7 +11,7 @@
 //             （已完成的阶段奖励保留；剧情走数据里的 site.haltText + halt.webp，不得写成"失败，无法挖掘"）
 
 import type { Mothership } from '@/types/game';
-import type { ArchaeologyReward, ArchaeologySite, ArchaeologyStage } from '@/types/galaxy';
+import type { ArchaeologyReward, ArchaeologySite, ArchaeologyStage, ArchaeologyState } from '@/types/galaxy';
 import { getArchaeologySite } from '@/data/galaxy/archaeology';
 import { getRelicById, RELIC_SEVENTH_LAYER } from '@/data/relics';
 import { flattenCost, deductResource, resourceAmount } from '@/lib/turn/resourceCost';
@@ -45,6 +45,18 @@ export const RESEARCH_TO_GOLD = 10;
  *  （与失败惩罚同一上限）。没有这个上限时反复更换会无限叠加剩余回合，把阶段拖成几十回合。 */
 export function leaderChangeTurns(turnsLeft: number, stageTurns: number): number {
   return Math.min(turnsLeft + FAIL_EXTRA_TURNS, stageTurns + FAIL_EXTRA_TURNS);
+}
+
+/** 该领袖正驻守哪处遗迹（无则 null）。**digging 与 idle 都算"人在那儿"**（idle=已中止，进度与领袖都留在原地）；
+ *  done / collapsed 不算——遗迹封闭或完成即释放领袖，人可另派（与"封闭后无法再进入"一致）。
+ *  唯一真值：驻守↔远征互斥的双向守卫（`useGalaxy.checkDigContext`：远征中不可驻守；`useColonyExpedition.startExpedition`：驻守中不可远征）
+ *  与考古面板下拉里的禁用提示共用，勿在别处再写一份遍历。 */
+export function findStationedSite(archaeology: Record<string, ArchaeologyState> | undefined, leaderId: string): string | null {
+  if (!archaeology || !leaderId) return null;
+  for (const [siteId, st] of Object.entries(archaeology)) {
+    if ((st.status === 'digging' || st.status === 'idle') && st.leaderId === leaderId) return siteId;
+  }
+  return null;
 }
 
 /** 当前阶段成功率（唯一公式） */

@@ -40,7 +40,7 @@ import TradePanel from './TradePanel';
 import GalaxyMapPanel from './GalaxyMapPanel';
 import ArchaeologyPanel from './ArchaeologyPanel';
 import { getInvestmentTier, getBuffDescription } from '@/data/factions';
-import { getContractItemName, getContractItemKind, getContractHeldCount, getContractEarliestExpiry } from '@/lib/turn/contracts';
+import { getContractItemName, getContractItemKind, getContractHeldCount, getContractEarliestExpiry, getContractRequiredTotals } from '@/lib/turn/contracts';
 import { getSellPriceBreakdown, MODULE_MINING_ARRAY } from '@/data/modules';
 import { RELIC_TRANSCRIBER, RELIC_CRYSTAL } from '@/data/relics';
 import { MOTHERSHIP_ID_UNITY, MOTHERSHIP_ID_SINGULARITY_SEEKER } from '@/data/gameData';
@@ -50,6 +50,7 @@ import ColonyPanel from './colony/ColonyPanel';
 import { computeColonyEconomy } from '@/lib/colony/economy';
 import { computeCrewFoodCost } from '@/lib/turn/shipTurn';
 import { getShipPerTurnIncome, sumShipIncome } from '@/lib/turn/shipIncome';
+import { getNextTurnHints } from '@/lib/turn/nextTurnHints';
 import { MATERIAL_NAME_MAP } from '@/data/materialNames';
 
 // 背景音乐曲目列表（放 public/ 目录下，按顺序自动循环播放）
@@ -215,6 +216,8 @@ export default function GameScreen({
 }: GameScreenProps) {
   const [activeTab, setActiveTab] = useState<TabId>('overview');
   const [showConfirmNext, setShowConfirmNext] = useState(false);
+  // 下一回合预告（唯一真值 lib/turn/nextTurnHints；确认弹窗与总览共用同一份）
+  const nextHints = useMemo(() => getNextTurnHints(gameState), [gameState]);
   const [bgmMuted, setBgmMuted] = useState(() => localStorage.getItem('bgm_muted') === 'true');
   const bgmRef = useRef<HTMLAudioElement | null>(null);
   const bgmIndexRef = useRef(0);
@@ -474,7 +477,7 @@ export default function GameScreen({
         {/* ===== 主内容区 ===== */}
         <main className="flex-1 p-3 md:p-6 overflow-auto min-h-[calc(100vh-120px)] md:min-h-[calc(100vh-60px)]">
           <div className={activeTab === 'overview' ? '' : 'hidden'}>
-            <OverviewTab gameState={gameState} ship={currentShip} getShipTotalAssets={getShipTotalAssets} />
+            <OverviewTab gameState={gameState} ship={currentShip} getShipTotalAssets={getShipTotalAssets} nextHints={nextHints} />
           </div>
           <div className={activeTab === 'stocks' ? '' : 'hidden'}>
             <StockMarket
@@ -682,9 +685,30 @@ export default function GameScreen({
         <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 px-4">
           <div className="bg-slate-800 border border-slate-600 rounded-xl p-6 max-w-sm w-full shadow-2xl">
             <h3 className="text-lg font-bold text-white mb-3">确认结束回合？</h3>
-            <p className="text-slate-400 text-sm mb-6">
-              结束回合后，市场价格会波动，生产进度会推进，部分产品可能过期。
-            </p>
+            {/* 下一回合预告：按严重度分组（危险会掉资源 / 提醒会错过机会 / 信息是进度播报） */}
+            <div className="space-y-3 mb-5 max-h-[45vh] md:max-h-[50vh] overflow-y-auto pr-1">
+              {([
+                { sev: 'danger', title: '需要注意', color: 'text-red-300', dot: 'bg-red-400' },
+                { sev: 'warn', title: '提醒', color: 'text-amber-300', dot: 'bg-amber-400' },
+                { sev: 'info', title: '预告', color: 'text-slate-400', dot: 'bg-slate-500' },
+              ] as const).map((g) => {
+                const items = nextHints.filter((h) => h.severity === g.sev);
+                if (items.length === 0) return null;
+                return (
+                  <div key={g.sev}>
+                    <p className={`text-[11px] font-bold mb-1 ${g.color}`}>{g.title}</p>
+                    <ul className="space-y-1">
+                      {items.map((h) => (
+                        <li key={h.id} className="flex gap-1.5 text-xs md:text-sm text-slate-300">
+                          <span className={`mt-[6px] w-1.5 h-1.5 rounded-full flex-shrink-0 ${g.dot}`} />
+                          <span>{h.text}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                );
+              })}
+            </div>
             <div className="flex gap-3 justify-end">
               <button
                 onClick={() => setShowConfirmNext(false)}
@@ -711,10 +735,13 @@ function OverviewTab({
   gameState,
   ship,
   getShipTotalAssets,
+  nextHints,
 }: {
   gameState: GameState;
   ship: GameState['ships'][0] | undefined;
   getShipTotalAssets: (ship: GameState['ships'][0]) => number;
+  /** 下一回合预告（唯一真值 lib/turn/nextTurnHints，与确认弹窗同一份） */
+  nextHints: ReturnType<typeof getNextTurnHints>;
 }) {
   if (!ship) return null;
 
@@ -728,6 +755,24 @@ function OverviewTab({
   return (
     <div>
       <h2 className="text-xl md:text-2xl font-bold text-white mb-4 md:mb-6">舰队总览</h2>
+
+      {/* 下一回合预告（读 lib/turn/nextTurnHints；与「确认结束回合」弹窗同一份提示） */}
+      {nextHints.length > 0 && (
+        <div className="bg-slate-900/60 border border-slate-700 rounded-xl p-3 md:p-4 mb-4 md:mb-6">
+          <p className="text-xs md:text-sm font-bold text-slate-200 mb-2">下回合预告</p>
+          <ul className="space-y-1">
+            {nextHints.slice(0, 6).map((h) => (
+              <li key={h.id} className="flex gap-1.5 text-xs md:text-sm">
+                <span className={`mt-[6px] w-1.5 h-1.5 rounded-full flex-shrink-0 ${h.severity === 'danger' ? 'bg-red-400' : h.severity === 'warn' ? 'bg-amber-400' : 'bg-slate-500'}`} />
+                <span className={h.severity === 'danger' ? 'text-red-300' : h.severity === 'warn' ? 'text-amber-200' : 'text-slate-400'}>{h.text}</span>
+              </li>
+            ))}
+          </ul>
+          {nextHints.length > 6 && (
+            <p className="text-[10px] text-slate-500 mt-2">另有 {nextHints.length - 6} 条提示，结束回合前会完整列出。</p>
+          )}
+        </div>
+      )}
 
       {/* 核心数据卡片 - 移动端2列，桌面4列 */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4 mb-4 md:mb-6">
@@ -773,13 +818,8 @@ function OverviewTab({
       {(() => {
         const activeContracts = (gameState.factionContracts || []).filter((c) => c.accepted);
         if (activeContracts.length === 0) return null;
-        // 同一物品可能被多张合同需要，而货舱/特产库存是共享池：按物品汇总需求，避免两行都显示"已够"
-        const requiredByItem: Record<string, number> = {};
-        const contractsByItem: Record<string, number> = {};
-        for (const c of activeContracts) {
-          requiredByItem[c.targetItemId] = (requiredByItem[c.targetItemId] || 0) + c.targetQty;
-          contractsByItem[c.targetItemId] = (contractsByItem[c.targetItemId] || 0) + 1;
-        }
+        // 同一物品可能被多张合同需要，货舱/特产库存是共享池：按物品汇总需求（唯一真值 lib/turn/contracts）
+        const { requiredByItem, contractsByItem } = getContractRequiredTotals(activeContracts);
         return (
           <div className="mb-4 md:mb-6 bg-amber-900/20 border border-amber-700/30 rounded-xl p-3 md:p-4">
             <h3 className="text-xs text-amber-400 font-bold mb-3 flex items-center gap-2">

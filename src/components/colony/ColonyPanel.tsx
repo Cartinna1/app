@@ -4,6 +4,8 @@ import type { PlanetDef } from '@/types/colony';
 import { getBuildableBuildings, getBuildingDef, getBuildingEffect, BUILDING_QUANTUM_LAB } from '@/data/colony/buildings';
 import { getPlanetById } from '@/data/colony/planets';
 import { getGalaxyNode } from '@/data/galaxy/nodes';
+import { getArchaeologySite } from '@/data/galaxy/archaeology';
+import { findStationedSite } from '@/lib/galaxy/archaeologyTurn';
 import { getTechById, getAvailableTechs, REPEATABLE_TECHS, getRepeatableCost } from '@/data/colony/techs';
 import { getLeaderDef, getLeaderUpgradeCost, getRecruitRollCost } from '@/data/colony/leaders';
 import { computeColonyEconomy, computeColonyPower } from '@/lib/colony/economy';
@@ -993,6 +995,13 @@ function ColonyPanel(props: ColonyPanelProps) {
                           <span className="text-sm text-slate-200 font-bold ml-2">{l.name}</span>
                           <span className="text-sm text-amber-400 ml-2">· {l.abilityName}</span>
                           <span className="text-xs text-cyan-400 ml-2">结局 {(colony.expeditionEndings?.[l.id] || []).length}/12</span>
+                          {/* 领袖去向：驻守考古遗迹 / 远征中（两者互斥）。与动作层同源：驻守读 findStationedSite（done/collapsed 视为已释放） */}
+                          {(() => {
+                            const stationedId = findStationedSite(ship.galaxy.archaeology, l.id);
+                            if (stationedId) return <span className="text-xs text-purple-300 ml-2">驻守「{getArchaeologySite(stationedId)?.name || stationedId}」</span>;
+                            if (colony.expedition?.leaderId === l.id) return <span className="text-xs text-cyan-300 ml-2">远征中</span>;
+                            return null;
+                          })()}
                           {ultimateUnlocked && ld.ultimateSkill && (
                             <span className="text-xs md:text-sm text-amber-400 font-bold ml-2">· 终极技能「{ld.ultimateSkill.name}」</span>
                           )}
@@ -1049,6 +1058,7 @@ function ColonyPanel(props: ColonyPanelProps) {
       {tab === 'expedition' && (
         <ExpeditionPanel
           colony={colony}
+          archaeology={ship.galaxy.archaeology}
           onStartExpedition={onStartExpedition}
           onPayExpeditionNode={onPayExpeditionNode}
           onUnlockUltimate={onUnlockUltimate}
