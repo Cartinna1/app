@@ -220,6 +220,31 @@ export default function GameScreen({
   const bgmRef = useRef<HTMLAudioElement | null>(null);
   const bgmIndexRef = useRef(0);
 
+  // ==================== 移动端底栏：横向滚动的页签条 ====================
+  const tabStripRef = useRef<HTMLDivElement | null>(null);
+  /** 右侧是否还有未显示的页签（决定是否画右缘渐隐提示） */
+  const [tabStripMoreRight, setTabStripMoreRight] = useState(false);
+  const updateTabStripOverflow = () => {
+    const el = tabStripRef.current;
+    if (!el) return;
+    // 留 2px 容差：亚像素宽度下 scrollLeft 取整会误判"已到底"
+    setTabStripMoreRight(el.scrollLeft + el.clientWidth < el.scrollWidth - 2);
+  };
+  // 切页签时把当前项滚进视野（否则可能是从别处跳回，当前页签在屏幕外）
+  useEffect(() => {
+    const el = tabStripRef.current;
+    if (!el) return;
+    const active = el.querySelector<HTMLElement>('[data-tab-active="true"]');
+    active?.scrollIntoView({ inline: 'center', block: 'nearest', behavior: 'smooth' });
+    updateTabStripOverflow();
+  }, [activeTab]);
+  // 首次挂载与窗口尺寸变化时重算渐隐提示
+  useEffect(() => {
+    updateTabStripOverflow();
+    window.addEventListener('resize', updateTabStripOverflow);
+    return () => window.removeEventListener('resize', updateTabStripOverflow);
+  }, []);
+
   // 背景音乐：多首曲目按顺序自动循环，首次用户交互时启动
   useEffect(() => {
     if (bgmRef.current) return;
@@ -310,7 +335,7 @@ export default function GameScreen({
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-slate-950 via-indigo-950 to-slate-950 text-slate-100 pb-[104px] md:pb-0">
+    <div className="min-h-screen bg-gradient-to-b from-slate-950 via-indigo-950 to-slate-950 text-slate-100 pb-[68px] md:pb-0">
       {/* ==================== 顶部状态栏 ==================== */}
       <header className="bg-slate-900/80 border-b border-slate-700/50 px-3 py-2 md:px-4 md:py-3">
         <div className="max-w-7xl mx-auto flex items-center justify-between">
@@ -636,46 +661,65 @@ export default function GameScreen({
 
       {/* ==================== 移动端底部 Tab 栏 ====================
           全部页签都要渲染（曾用 tabs.slice(0, 11) 导致"改造/兑换"根本不出现）；
-          用 grid-cols-9 固定两行（17 项 = 结束 + 音乐 + 15 页签 → 9+8），栏高恒定 ≈96px，
-          不随机型宽度在两行/三行之间跳，配合根容器 pb-[104px] 留位。
-          ⚠ 别改回 flex-wrap + min-w：375/390px 机型会排成三行（140px）压住内容。 */}
-      <nav className="fixed bottom-0 left-0 right-0 bg-slate-900/95 border-t border-slate-700/50 z-40 md:hidden grid grid-cols-9 px-1 py-1">
-        {/* 结束回合按钮 */}
-        <button
-          onClick={() => setShowConfirmNext(true)}
-          className="flex flex-col items-center justify-center gap-0.5 py-1 rounded-md text-red-400 min-h-[44px]"
-        >
-          <Zap size={18} />
-          <span className="text-[10px] font-bold whitespace-nowrap">结束</span>
-        </button>
-        {/* 移动端背景音乐开关 */}
-        <button
-          onClick={toggleMute}
-          className={`flex flex-col items-center justify-center gap-0.5 py-1 rounded-md transition-all min-h-[44px] ${
-            bgmMuted ? 'text-slate-500' : 'text-cyan-400'
-          }`}
-        >
-          {bgmMuted ? <VolumeX size={18} /> : <Volume2 size={18} />}
-          <span className="text-[10px] font-bold whitespace-nowrap">{bgmMuted ? '静音' : '音乐'}</span>
-        </button>
-        {tabs.map((tab) => {
-          const Icon = tab.icon;
-          const isActive = activeTab === tab.id;
-          return (
+          结构 = **单行**：「结束回合 / 音乐」钉在左侧不动（每回合都要点的按钮永远在拇指位），
+          右侧 15 个页签横向滚动 + 可见拖动条（切页签会自动把它滚进视野，右缘有渐隐提示"还有"）。
+          栏高恒为一行（≈64px），配合根容器 pb-[68px] 留位；nav 自身带 env(safe-area-inset-bottom)
+          以避开 iPhone 底部横条。
+          ⚠ 别改回 flex-wrap + min-w：375/390px 机型会排成多行（曾排到 140px）压住内容。 */}
+      <nav className="fixed bottom-0 left-0 right-0 bg-slate-900/95 border-t border-slate-700/50 z-40 md:hidden pb-[env(safe-area-inset-bottom)]">
+        <div className="flex items-stretch py-1 pl-1">
+          {/* 钉住区：结束回合 + 音乐（不参与横向滚动） */}
+          <div className="flex shrink-0 gap-0.5 pr-1 mr-1 border-r border-slate-700/60">
             <button
-              key={tab.id}
-              onClick={() => setActiveTab(tab.id)}
-              className={`flex flex-col items-center justify-center gap-0.5 py-1 rounded-md transition-all min-h-[44px] ${
-                isActive
-                  ? 'text-cyan-400 bg-cyan-600/15'
-                  : 'text-slate-400'
+              onClick={() => setShowConfirmNext(true)}
+              className="w-[52px] flex flex-col items-center justify-center gap-0.5 py-1 rounded-md text-red-400 min-h-[44px]"
+            >
+              <Zap size={18} />
+              <span className="text-[10px] font-bold whitespace-nowrap">结束</span>
+            </button>
+            <button
+              onClick={toggleMute}
+              className={`w-[52px] flex flex-col items-center justify-center gap-0.5 py-1 rounded-md transition-all min-h-[44px] ${
+                bgmMuted ? 'text-slate-500' : 'text-cyan-400'
               }`}
             >
-              <Icon size={18} />
-              <span className="text-[10px] font-bold whitespace-nowrap">{tab.shortLabel}</span>
+              {bgmMuted ? <VolumeX size={18} /> : <Volume2 size={18} />}
+              <span className="text-[10px] font-bold whitespace-nowrap">{bgmMuted ? '静音' : '音乐'}</span>
             </button>
-          );
-        })}
+          </div>
+          {/* 滚动区：15 个页签（56px/个，一屏约 6~7 个；**全部渲染**，靠横向拖动到达） */}
+          <div className="relative flex-1 min-w-0">
+            <div
+              ref={tabStripRef}
+              onScroll={updateTabStripOverflow}
+              className="flex gap-0.5 overflow-x-auto scroll-smooth pr-6 pb-1 [scrollbar-width:thin] [&::-webkit-scrollbar]:h-1.5 [&::-webkit-scrollbar-track]:bg-slate-800/40 [&::-webkit-scrollbar-thumb]:bg-slate-600 [&::-webkit-scrollbar-thumb]:rounded-full"
+            >
+              {tabs.map((tab) => {
+                const Icon = tab.icon;
+                const isActive = activeTab === tab.id;
+                return (
+                  <button
+                    key={tab.id}
+                    onClick={() => setActiveTab(tab.id)}
+                    data-tab-active={isActive ? 'true' : undefined}
+                    className={`w-14 shrink-0 flex flex-col items-center justify-center gap-0.5 py-1 rounded-md transition-all min-h-[44px] ${
+                      isActive
+                        ? 'text-cyan-400 bg-cyan-600/15'
+                        : 'text-slate-400'
+                    }`}
+                  >
+                    <Icon size={18} />
+                    <span className="text-[10px] font-bold whitespace-nowrap">{tab.shortLabel}</span>
+                  </button>
+                );
+              })}
+            </div>
+            {/* 右缘渐隐：只在右边还有内容时出现，提示"可以拖" */}
+            {tabStripMoreRight && (
+              <div className="pointer-events-none absolute inset-y-0 right-0 w-6 bg-gradient-to-l from-slate-900 to-transparent" />
+            )}
+          </div>
+        </div>
       </nav>
 
       {/* ==================== 确认结束回合弹窗 ==================== */}
