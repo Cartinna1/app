@@ -14,6 +14,7 @@ import { excavationSuccessRate, findStationedSite, DISCOVERY_CHANCE } from '@/li
 import { flattenCost, formatCost } from '@/lib/turn/resourceCost';
 import { getGalaxyNode } from '@/data/galaxy/nodes';
 import { getLeaderDef } from '@/data/colony/leaders';
+import { getThumbPath } from '@/lib/assetThumb';
 import { Landmark, Clock, Users, Trophy, AlertTriangle, Sparkles, ChevronRight, ChevronDown } from 'lucide-react';
 
 type ActionResult = { success: boolean; message: string };
@@ -331,7 +332,7 @@ function ArchaeologyPanel({
                   {/* 遗迹封面缩略图（16:9；移动端 64px、桌面 96px 宽）。缺图时整块不渲染，不留空洞 */}
                   {!failedCovers.has(site.id) && (
                     <img
-                      src={site.galleryImage}
+                      src={getThumbPath(site.galleryImage)}
                       alt={site.name}
                       loading="lazy"
                       onError={() => markCoverFailed(site.id)}

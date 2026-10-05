@@ -15,6 +15,7 @@ import { MATERIAL_NAME_MAP } from '@/data/materialNames';
 import { canAfford, firstMissing, formatCost } from '@/lib/turn/resourceCost';
 import { UNLOCK_COST } from '@/hooks/colony/useColonyBase';
 import { EXPEDITION_UNLOCK_COUNT } from '@/data/colony/expeditions';
+import { getThumbPath } from '@/lib/assetThumb';
 import { Home, Users, Wrench, Play, UserPlus, FlaskConical, Crown, Trophy, Rocket, Images } from 'lucide-react';
 import WonderPanel from './WonderPanel';
 import ExpeditionPanel from './ExpeditionPanel';
@@ -520,7 +521,7 @@ function ColonyPanel(props: ColonyPanelProps) {
           return (
             <div key={inst.uid} className="bg-slate-900/60 border border-green-700/40 rounded-lg p-3 mb-2 flex justify-between items-center gap-3">
               <img
-                src={`/buildings/${def.id}.jpg`}
+                src={getThumbPath(`/buildings/${def.id}.jpg`)}
                 alt={def.name}
                 onError={(e) => { (e.target as HTMLImageElement).style.display='none'; }}
                 className="w-[60px] h-[60px] md:w-[80px] md:h-[80px] rounded-lg object-cover border border-slate-700 flex-shrink-0"
@@ -687,7 +688,7 @@ function ColonyPanel(props: ColonyPanelProps) {
                   <div key={defId} className="mb-2">
                     <div className="bg-slate-900/60 border border-green-700/40 rounded-lg p-3 flex justify-between items-center gap-3">
                       <img
-                        src={`/buildings/${def.id}.jpg`}
+                        src={getThumbPath(`/buildings/${def.id}.jpg`)}
                         alt={def.name}
                         onError={(e) => { (e.target as HTMLImageElement).style.display='none'; }}
                         className="w-[60px] h-[60px] md:w-[80px] md:h-[80px] rounded-lg object-cover border border-slate-700 flex-shrink-0"

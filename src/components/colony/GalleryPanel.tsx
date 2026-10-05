@@ -6,6 +6,7 @@ import { useState, memo } from 'react';
 import type { Colony } from '@/types/colony';
 import { getLeaderExpedition, EXPEDITION_UNLOCK_COUNT } from '@/data/colony/expeditions';
 import { getLeaderDef } from '@/data/colony/leaders';
+import { getThumbPath } from '@/lib/assetThumb';
 import { Crown, Lock, ChevronDown, ChevronRight, Sparkles, ChevronUp, Camera } from 'lucide-react';
 
 interface GalleryPanelProps {
@@ -152,7 +153,7 @@ function GalleryPanel({ colony }: GalleryPanelProps) {
                   {c.collected ? (
                     <>
                       <img
-                        src={imgPath(l.id, `${c.id}.webp`)}
+                        src={getThumbPath(imgPath(l.id, `${c.id}.webp`))}
                         alt={c.title}
                         onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
                         className="w-full aspect-video object-cover"
@@ -203,7 +204,7 @@ function GalleryPanel({ colony }: GalleryPanelProps) {
                       className="rounded-lg overflow-hidden border border-slate-700 cursor-pointer hover:border-amber-500 text-left"
                     >
                       <img
-                        src={imgPath(l.id, `${h.id}.webp`)}
+                        src={getThumbPath(imgPath(l.id, `${h.id}.webp`))}
                         alt={h.title || `CG${i + 1}`}
                         onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
                         className="w-full aspect-video object-cover"
@@ -229,7 +230,7 @@ function GalleryPanel({ colony }: GalleryPanelProps) {
                     >
                       <img
                         key={imgPath(l.id, `${id}.webp`)}
-                        src={imgPath(l.id, `${id}.webp`)}
+                        src={getThumbPath(imgPath(l.id, `${id}.webp`))}
                         alt={route.nodes[id].title}
                         onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
                         className="w-full aspect-video object-cover"

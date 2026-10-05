@@ -2,6 +2,7 @@ import { useState, memo } from 'react';
 import { getWonderDef, ALL_WONDERS, toStageCost } from '@/data/colony/wonders';
 import { resourceAmount } from '@/lib/turn/resourceCost';
 import { RESOURCE_LABELS } from '@/data/colony/expeditions';
+import { getThumbPath } from '@/lib/assetThumb';
 import type { Colony } from '@/types/colony';
 import type { Mothership } from '@/types/game';
 
@@ -89,7 +90,7 @@ function WonderPanel({
               </div>
               <div className="flex gap-3">
                 <img
-                  src={`/wonders/${w.id}.webp`}
+                  src={getThumbPath(`/wonders/${w.id}.webp`)}
                   alt={w.name}
                   onError={(e) => { (e.target as HTMLImageElement).style.display='none'; }}
                   className="w-32 h-20 rounded-lg object-cover border border-slate-700 flex-shrink-0"

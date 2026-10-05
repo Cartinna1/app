@@ -91,6 +91,7 @@ src/
 | 生产上限加成 | `data/modules.ts` → `getProductionLimitBonus` |
 | 殖民地建筑「实际成本与上限」 | `lib/colony/costs.ts` → `getEffectiveMaxCount`（数量上限 = 基础 `maxCount` + 领袖 `levelExtras.buildingMaxCountBonus[建筑id]`，全数据驱动无硬编码）/ `getEffectiveMaxPop`（建筑人口上限，含 popCapBonus 覆盖）/ `getBuildingCostProfile`（金币·合金·原料·工期，含星球倍率+领袖减免）/ `getRecruitCostPerPop`（招募单价，含星球修正+领袖减免）/ `RECRUIT_BASE_COST`（2000 基础价锚点）/ `getBuildingRefundProfile`（取消/拆除返还 = 实付 ×0.4 金币、×0.7 合金与原料）；人口上限的唯一真值是 `BuildingDef.popCapBonus`（B1=5 / B2=20）+ `planets.buffs.housingCapDelta`（遗落星球 B1 +3）——hook 结算与 UI 显示必须同源，勿就地重算（历史上面板只算星球倍率导致显示与实扣分叉；B2 文案曾写 10 而实给 20） |
 | 产品卖出价加成 | `data/modules.ts` → `getSellPriceBreakdown`（母舰技能+事件套装+联盟，逻辑层与显示层共用；含 multiplier/eventPercent/skillPercent/alliancePercent） |
+| 列表/网格缩略图路径 | `lib/assetThumb.ts` → `getThumbPath`（`/<dir>/<rest>/<name>.<ext>` → `/<dir>/thumbs/<rest>/<name>.webp`）——缩略图文件由脚本生成到 `public/<dir>/thumbs/`，**别在别处手写第二套命名** |
 
 ## 四、改 GameState 字段：存档三处同步
 
@@ -108,6 +109,7 @@ src/
 - 新增/修改 action：统一进 `hooks/useGameState.ts` 的 `useStableActions` 包装，再把稳定引用传给面板。**禁止**在 App/GameScreen 里写 inline 箭头函数传给已 memo 的面板——会让 memo 失效。
 - 新面板组件默认 `export default memo(...)`；props 里的空数组/空对象用模块级常量（参照 `EMPTY_REPUTATION` / `EMPTY_CONTRACTS`）。
 - `shipIndex` 恒为 0（单舰队），接口已收敛，组件层不感知该参数。
+- **列表/网格里的图一律走缩略图**（`lib/assetThumb.ts` → `getThumbPath`）。为什么：解码开销 = 宽×高×4 字节，**与文件大小无关**——用 1200×675 的图去填 96px 的格子，每张白解 3 MB（实测浪费 6~19 倍，而一屏可能同时挂十几到几十张）。**只有「详情 / 全宽 / 大图鉴卡」位才用原图**。⚠ 缺缩略图时各面板的 `onError` 会把整块**静默隐藏**，所以**新增一类图片时先出缩略图，再改代码**（2026-10 已为 archaeology / expeditions / wonders / buildings 四类建好 thumbs，并校验过 939 个映射全部命中）。判断该不该缩，标准是「**这张图在游戏里最大的那个出口是多大**」：只有一个 64px 出口的图（如母舰、原料图标）直接把源文件改小即可，不必另出一档。
 
 ## 六、重构纪律（搬移代码时）
 
