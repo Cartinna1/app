@@ -265,7 +265,7 @@ function ColonyPanel(props: ColonyPanelProps) {
   return (
     <div className="space-y-4">
       <div className="flex items-center gap-4">
-        {colony.planetType && <img src={`/planets/${colony.planetType}.png`} alt={planet?.name} className="w-16 h-16 rounded-xl object-cover border border-slate-700 flex-shrink-0" />}
+        {colony.planetType && <img src={`/planets/${colony.planetType}.webp`} alt={planet?.name} className="w-16 h-16 rounded-xl object-cover border border-slate-700 flex-shrink-0" />}
         <div>
           <h2 className="text-xl font-bold text-white">星际殖民 · {colony.planetName}</h2>
           <p className="text-sm text-slate-400">星球类型：{planet?.name || '未知'} | 人口：{colony.population.total}/{colony.population.cap} | 空闲：{colony.population.available}</p>
@@ -376,21 +376,36 @@ function ColonyPanel(props: ColonyPanelProps) {
             const OUT_LABEL: Record<string, string> = { food:'食物', alloy:'合金', stardust:'星尘', gold:'金币', research:'科研' };
             const bonusLines: { label: string; value: number; detail: string }[] = [];
             const matLines: { k: string; v: number; detail: string }[] = [];
+            // **同类建筑合并成一行**：同类型实例的加成组合必然相同（星球/领袖/循环/量子实验室/永久加成/遗物
+            // 都按「类型 + 殖民地」取，与入驻人口无关，只有基础值不同），所以汇总产出、加成沿用首个实例即可。
+            // 不合并的话，建十几座气雾栽培舱就会把明细撑成一大片重复文本（玩家反馈）。
+            const merged = new Map<string, { kind: 'material' | 'output'; label: string; name: string; value: number; count: number; extras: string; materialId?: string; isGold: boolean }>();
             for (const e of eco.buildings) {
               const d = getBuildingDef(e.defId);
               if (!d) continue;
-              const parts: string[] = [e.outputType === 'gold' ? `${d.name}` : `${d.name}:${e.base}`];
               // 来源拆解唯一真值（与总览、发电明细同一函数）——勿在此手写加成字段
-              for (const l of getBuildingSourceBreakdown(e)) {
-                parts.push(l.pct !== 0
-                  ? `${l.label}${Math.round(l.pct * 100) > 0 ? '+' : ''}${Math.round(l.pct * 100)}%`
-                  : `${l.label}+${l.value}`);
-              }
-              if (e.outputType === 'material' && e.materialId) {
-                matLines.push({ k: e.materialId, v: e.value, detail: parts.join(' ') });
-              } else {
-                bonusLines.push({ label: OUT_LABEL[e.outputType] || e.outputType, value: e.value, detail: parts.join(' ') });
-              }
+              const extras = getBuildingSourceBreakdown(e).map((l) => l.pct !== 0
+                ? `${l.label}${Math.round(l.pct * 100) > 0 ? '+' : ''}${Math.round(l.pct * 100)}%`
+                : `${l.label}+${l.value}`).join(' ');
+              const key = `${e.defId}|${e.materialId || ''}|${e.outputType}`;
+              const hit = merged.get(key);
+              if (hit) { hit.value += e.value; hit.count += 1; continue; }
+              merged.set(key, {
+                kind: e.outputType === 'material' && e.materialId ? 'material' : 'output',
+                label: OUT_LABEL[e.outputType] || e.outputType,
+                name: d.name,
+                value: e.value,
+                count: 1,
+                extras,
+                materialId: e.materialId,
+                isGold: e.outputType === 'gold',
+              });
+            }
+            for (const m of merged.values()) {
+              const head = m.isGold ? `${m.name}${m.count > 1 ? `×${m.count}` : ''}` : `${m.name}${m.count > 1 ? `×${m.count}` : ''}:${m.value}`;
+              const detail = [head, m.extras].filter(Boolean).join(' ');
+              if (m.kind === 'material') matLines.push({ k: m.materialId || '', v: m.value, detail });
+              else bonusLines.push({ label: m.label, value: m.value, detail });
             }
             // 聚合同类
             const agg: Record<string, {value:number;details:string[]}> = {};
@@ -461,7 +476,7 @@ function ColonyPanel(props: ColonyPanelProps) {
             {colony.planetType && (
               <div className="bg-slate-900/60 border border-slate-700 rounded-xl p-3">
                 <img
-                  src={`/planet-landscape/${colony.planetType}.png`}
+                  src={`/planet-landscape/${colony.planetType}.webp`}
                   alt={planet?.name || '星球地貌'}
                   onError={(e) => { (e.target as HTMLImageElement).parentElement!.style.display='none'; }}
                   className="w-full aspect-video object-cover rounded-lg border border-slate-700"

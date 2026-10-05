@@ -28,12 +28,20 @@ interface ArchaeologyPanelProps {
   onAbandonExcavation: (siteId: string) => ActionResult;
 }
 
-/** 奖励一句话（遗物 / 永久加成 / 资源 / 称号）——**最终奖励与阶段小奖励共用同一形状**，故同一函数 */
+/** 奖励一句话（遗物 / 永久加成 / 资源 / 称号）——**最终奖励与阶段小奖励共用同一形状**，故同一函数。
+ *  ⚠ 必须带**效果**：只写名字（如"永久加成「农业遗产」"）玩家不知道它干什么；
+ *    效果文案的唯一来源是数据（遗物 `effect` / 永久加成 `description`），别在这里手写第二份。 */
 function describeRewardValue(reward: ArchaeologyReward | undefined): string {
   if (!reward) return '无';
   const parts: string[] = [];
-  for (const id of reward.relics || []) parts.push(`遗物「${getRelicById(id)?.name || id}」`);
-  for (const id of reward.permaBonuses || []) parts.push(`永久加成「${PERMA_BONUS_MAP[id]?.name || id}」`);
+  for (const id of reward.relics || []) {
+    const r = getRelicById(id);
+    parts.push(`遗物「${r?.name || id}」${r?.effect ? `（${r.effect}）` : ''}`);
+  }
+  for (const id of reward.permaBonuses || []) {
+    const p = PERMA_BONUS_MAP[id];
+    parts.push(`永久加成「${p?.name || id}」${p?.description ? `（${p.description}）` : ''}`);
+  }
   if (reward.title) parts.push(`称号「${reward.title}」`);
   if (reward.gold) parts.push(`金币 ${reward.gold.toLocaleString()}`);
   if (reward.stardust) parts.push(`星尘 ${reward.stardust}`);
@@ -311,7 +319,15 @@ function ArchaeologyPanel({
                 key={site.id}
                 className={`rounded-lg border p-3 ${selectedSiteId === site.id ? 'border-purple-500 bg-purple-900/20' : 'border-slate-700 bg-slate-800/40'}`}
               >
-                <button onClick={() => { setSelectedSiteId(site.id); setLeaderPick(''); }} className="w-full text-left min-h-[40px] flex items-start gap-2 md:gap-3">
+                <button
+                  onClick={() => {
+                    // 开合开关：再点同一行要收起（曾写成只 setSelectedSiteId(site.id) → 点开后永远收不回去）
+                    setSelectedSiteId((prev) => (prev === site.id ? null : site.id));
+                    setLeaderPick('');
+                  }}
+                  aria-expanded={selectedSiteId === site.id}
+                  className="w-full text-left min-h-[40px] flex items-start gap-2 md:gap-3"
+                >
                   {/* 遗迹封面缩略图（16:9；移动端 64px、桌面 96px 宽）。缺图时整块不渲染，不留空洞 */}
                   {!failedCovers.has(site.id) && (
                     <img
@@ -328,7 +344,9 @@ function ArchaeologyPanel({
                       <span className="text-[10px] px-1.5 py-0.5 rounded bg-slate-900 text-slate-400 border border-slate-700">{site.civilization}</span>
                       <span className={`text-[10px] px-1.5 py-0.5 rounded ${status === '已完成' ? 'bg-emerald-900/50 text-emerald-300' : status === '已封闭' ? 'bg-red-900/40 text-red-300 border border-red-800' : status === '进行中' ? 'bg-amber-900/50 text-amber-300' : status === '已中止' ? 'bg-slate-800 text-slate-300 border border-slate-600' : 'bg-slate-800 text-slate-400'}`}>{status}</span>
                       {isHere && <span className="text-[10px] px-1.5 py-0.5 rounded bg-cyan-600 text-white">母舰在此</span>}
-                      <ChevronRight size={14} className="text-slate-500 ml-auto" />
+                      {selectedSiteId === site.id
+                        ? <ChevronDown size={14} className="text-purple-400 ml-auto" />
+                        : <ChevronRight size={14} className="text-slate-500 ml-auto" />}
                     </div>
                     <p className="text-[10px] md:text-xs text-slate-500 mt-1">
                       {site.stages.length} 阶段{site.minLeaderLevel > 0 ? ` · 需 Lv${site.minLeaderLevel} 领袖` : ''} ·{' '}

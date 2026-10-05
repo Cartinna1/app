@@ -1,7 +1,7 @@
 // ==================== 星图节点配图（唯一真值） ====================
 // 星图信息卡（components/GalaxyMapPanel）在跃迁按钮上方展示一张节点配图。
 // 命名规则（与其它资源目录保持一致：public/ 映射站点根，路径里不写 public/）：
-//   可殖民星球  /planet-landscape/<星球类型id>.png   已有（类型 id：desert/ocean/polar/arid/terran/alpine/savannah/tropical/tundra/ruin）
+//   可殖民星球  /planet-landscape/<星球类型id>.webp  已有（类型 id：desert/ocean/polar/arid/terran/alpine/savannah/tropical/tundra/ruin）
 //   遗迹        /archaeology/<遗迹id>/cover.webp      已有（直接复用该遗迹的图鉴封面，避免两套图分叉）
 //   势力        /faction-landscape/<势力id>.webp     **待补**（如 /faction-landscape/f01.webp，共 f01~f10；缺图自动隐藏，不影响功能）
 //   未开发(empty) 无图（后续更新）
@@ -19,7 +19,7 @@ export const NODE_IMAGE_DIR = {
 
 /** 返回该节点在星图信息卡里要展示的配图路径；无图返回 null */
 export function getNodeLandscapeImage(node: GalaxyNode): string | null {
-  if (node.type === 'colony') return node.planetId ? `${NODE_IMAGE_DIR.planet}/${node.planetId}.png` : null;
+  if (node.type === 'colony') return node.planetId ? `${NODE_IMAGE_DIR.planet}/${node.planetId}.webp` : null;
   if (node.type === 'ruin') {
     const site = node.siteId ? getArchaeologySite(node.siteId) : undefined;
     return site?.galleryImage || null; // 形如 /archaeology/<siteId>/cover.webp
