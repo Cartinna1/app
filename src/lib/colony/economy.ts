@@ -46,8 +46,13 @@ export interface PowerBuildingEntry {
 // 数字对但来源被并进「建筑」——同一份加成又分叉一次。
 // ⚠ 新增任何加成字段：**只在本表加一行**，三处明细自动跟随；别再去 UI 里手写。
 
-/** 加成字段 → 显示名（产出的百分比类来源；顺序即显示顺序） */
-export const ECO_SOURCE_FIELDS: Array<{ field: 'planetPct' | 'leaderPct' | 'allPct' | 'repeatPct' | 'b26Pct' | 'permPct' | 'relicPct'; label: string }> = [
+/** 产出的加成作用点（**唯一真值**：值的求和、明细字段的落盘、UI 的显示名都以它为准）。
+ *  各分支声明 `Record<EcoSourceField, number>` —— 键必须写全，**新增作用点时漏写 = 编译错误**，
+ *  从根上杜绝"值里算了、明细里查不到"（农业遗产/循环理论就这么隐形过一轮）。 */
+export type EcoSourceField = 'planetPct' | 'leaderPct' | 'allPct' | 'repeatPct' | 'b26Pct' | 'permPct' | 'relicPct';
+
+/** 加成字段 → 显示名（顺序即显示顺序） */
+export const ECO_SOURCE_FIELDS: Array<{ field: EcoSourceField; label: string }> = [
   { field: 'planetPct', label: '星球' },
   { field: 'leaderPct', label: '领袖' },
   { field: 'allPct', label: '全员' },
@@ -239,16 +244,25 @@ export function computeColonyPower(
     // 加成加算合并（与其他资源口径一致：1 + 各加成%之和）：
     // 领袖电力建筑加成（levelBonuses 电力键，如 L22 余晖脉冲；含终极技能「永昼」叠加）
     // + 星球修正（仅太阳能阵列，如热带 −30%）+ 领袖全员加成 + 永久加成 + 遗物「空白神像」
-    const pwrPct = (powerLeaderBonus[def.id] || 0) / 100;
-    const planetPct = (def.id === BUILDING_SOLAR_ARRAY && powerGenPlanetMult !== 1) ? Math.round((powerGenPlanetMult - 1) * 100) / 100 : 0;
-    const allPct = lAllBonus / 100;
-    const permPct = permPowerPct / 100;
-    const relicPct = relicAllPct / 100;
-    const combinedPct = pwrPct + planetPct + allPct + permPct + relicPct;
+    // 加成来源唯一真值（与产出分支同一套键集与口径）：值由它求和、明细字段由它落盘
+    const sources: Record<EcoSourceField, number> = {
+      leaderPct: (powerLeaderBonus[def.id] || 0) / 100,
+      planetPct: (def.id === BUILDING_SOLAR_ARRAY && powerGenPlanetMult !== 1) ? Math.round((powerGenPlanetMult - 1) * 100) / 100 : 0,
+      allPct: lAllBonus / 100,
+      permPct: permPowerPct / 100,
+      relicPct: relicAllPct / 100,
+      repeatPct: 0,
+      b26Pct: 0,
+    };
+    const combinedPct = Object.values(sources).reduce((a, b) => a + b, 0);
     // ⚠ 百分比一律存**小数**（0.15 = +15%），与产出建筑口径统一：曾出现"电力存百分数、产出存小数"，
     //   导致两处明细各写一套 ×100 / 不 ×100 的显示（漏掉永久加成就是这么来的）。
     const value = Math.floor(combinedPct !== 0 ? baseRaw * (1 + combinedPct) : baseRaw);
-    powerBuildings.push({ uid: inst.uid, defId: def.id, base: baseRaw, leaderPct: pwrPct, planetPct, allPct, permPct, relicPct, value });
+    powerBuildings.push({
+      uid: inst.uid, defId: def.id, base: baseRaw,
+      leaderPct: sources.leaderPct, planetPct: sources.planetPct, allPct: sources.allPct,
+      permPct: sources.permPct, relicPct: sources.relicPct, value,
+    });
     gen += value;
   }
 
@@ -388,9 +402,21 @@ export function computeColonyEconomy(colony: Colony, opts: ColonyEconomyOptions)
     else if (def.outputType === 'material') repeatPct = (rl.RP_MATERIAL || 0) * 0.05;
     else if (def.outputType === 'research') repeatPct = (rl.RP_RESEARCH || 0) * 0.10;
 
+    // ==================== 「加成来源」唯一真值 ====================
+    // 每个分支**只声明一份 sources**：值由它求和、明细字段由它落盘（Object.assign），
+    // 因此不可能再出现"值里算了 permPct、entry.permPct 却没赋值"这种漏（见 AGENTS 第九节）。
+    // `Record<EcoSourceField, number>` 强制 7 个键写全：新增作用点漏写 = 编译错误。
+    // ⚠ 插入顺序 = 历史公式的相加顺序（0 不影响浮点结果），保证结算数值与改造前逐位一致。
     const entry: BuildingEconomyEntry = {
       uid: inst.uid, defId: inst.defId, outputType: def.outputType,
-      effPop, base: 0, planetPct: 0, leaderPct, repeatPct, b26Pct: 0, relicPct, value: 0,
+      effPop, base: 0, planetPct: 0, leaderPct: 0, repeatPct: 0, b26Pct: 0, permPct: 0, relicPct: 0, value: 0,
+    };
+    /** 由 sources 求和（顺序即对象插入顺序）+ 落到 entry 字段，值公式一律用它 */
+    const applySources = (base: number, sources: Record<EcoSourceField, number>): number => {
+      Object.assign(entry, sources);
+      const sum = Object.values(sources).reduce((a, b) => a + b, 0);
+      entry.base = base;
+      return Math.ceil(base * (1 + sum));
     };
 
     if (def.outputType === 'gold') {
@@ -399,24 +425,24 @@ export function computeColonyEconomy(colony: Colony, opts: ColonyEconomyOptions)
         ? Math.floor(Math.random() * (max - min + 1)) + min
         : Math.floor((min + max) / 2);
       const tm = buffs?.tradeMult ? (buffs.tradeMult - 1) : 0;
-      entry.base = roll; // 记录基础值：供 UI 把金币产出按来源（星球/领袖/遗物%）拆分，与其它资源口径一致
-      entry.planetPct = tm;
-      entry.value = Math.ceil(roll * (1 + leaderPct + repeatPct + tm + relicPct));
+      // 历史公式顺序：leaderPct + repeatPct + tm + relicPct
+      entry.value = applySources(roll, { leaderPct, repeatPct, planetPct: tm, relicPct, allPct: 0, b26Pct: 0, permPct: 0 });
       result.gold += entry.value;
     } else if (def.outputType === 'material' && def.outputMaterialId) {
       const base = (def.popFactor || 0) * effPop;
       const matMult = buffs?.materialMults?.[def.outputMaterialId];
       const pm = matMult ? (matMult - 1) : 0;
-      entry.base = base; entry.planetPct = pm; entry.materialId = def.outputMaterialId;
-      entry.value = Math.ceil(base * (1 + pm + leaderPct + repeatPct + relicPct));
+      entry.materialId = def.outputMaterialId;
+      // 历史公式顺序：pm + leaderPct + repeatPct + relicPct
+      entry.value = applySources(base, { planetPct: pm, leaderPct, repeatPct, relicPct, allPct: 0, b26Pct: 0, permPct: 0 });
       // 考古遗物「深层钻头」：每座在产原料建筑 +1（口径同合金精炼手册）
       if (hasDeepDrill) { entry.value += 1; entry.relicBonus = 1; }
       result.materials[def.outputMaterialId] = (result.materials[def.outputMaterialId] || 0) + entry.value;
     } else if (def.outputType === 'research') {
       const base = (def.popFactor || 0) * effPop;
       const pm = buffs?.researchMult ? (buffs.researchMult - 1) : 0;
-      entry.base = base; entry.planetPct = pm; entry.b26Pct = b26Bonus;
-      entry.value = Math.ceil(base * (1 + pm + leaderPct + b26Bonus + repeatPct + permResearchPct + relicPct));
+      // 历史公式顺序：pm + leaderPct + b26Bonus + repeatPct + permResearchPct + relicPct
+      entry.value = applySources(base, { planetPct: pm, leaderPct, b26Pct: b26Bonus, repeatPct, permPct: permResearchPct, relicPct, allPct: 0 });
       result.research += entry.value;
     } else {
       // food / alloy / stardust：baseOutput + popFactor × 人口
@@ -426,8 +452,8 @@ export function computeColonyEconomy(colony: Colony, opts: ColonyEconomyOptions)
         : buffs?.stardustMult;
       const pm = mult ? (mult - 1) : 0;
       const permPct = def.outputType === 'food' ? permFoodPct : 0;
-      entry.base = base; entry.planetPct = pm;
-      entry.value = Math.ceil(base * (1 + pm + leaderPct + repeatPct + permPct + relicPct));
+      // 历史公式顺序：pm + leaderPct + repeatPct + permPct + relicPct
+      entry.value = applySources(base, { planetPct: pm, leaderPct, repeatPct, permPct, relicPct, allPct: 0, b26Pct: 0 });
       // 合金精炼手册 r_008：每座在产合金建筑 +1 合金（结算与显示共用；relicBonus 供 UI 标注来源）
       if (def.outputType === 'alloy' && hasAlloyManual) { entry.value += 1; entry.relicBonus = 1; }
       if (def.outputType === 'food') result.food += entry.value;
