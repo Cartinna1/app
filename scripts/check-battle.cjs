@@ -29,6 +29,7 @@ const STEPS = [
   ['机库（卡库聚合 / 舰队视图 / 编成守卫 / 出征舰队不许动）', ['scripts/check-battle-hangar.cjs'], true],
   ['掠夺循环（触发前提 / 8% / 防守池合并 / 损失不为负 / 20 回合免疫 / 可预告）', ['scripts/check-battle-raid.cjs'], true],
   ['船坞与科技（造价 / 船坞等级 / 门槛 / 同时 2 艘+无限排队 / 取消返还 / 电力 6-10-18 / T28-T36）', ['scripts/check-battle-shipyard.cjs'], true],
+  ['星图海盗老巢（迷雾：未探明与普通节点逐字节相同 / 已探明才变红 / 标签不出现空星系）', ['scripts/check-galaxy-lair.cjs'], true],
 ];
 
 let bad = 0;

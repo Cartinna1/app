@@ -21,6 +21,9 @@ import { BATTLE_TUNING } from '@/data/battle/tuning';
 // 舰船图在战斗里的出口是「卡面 320×190」与「场上横条 370×144」，机库沿用同一套图位，
 // 故复用 view.ts 的 unitArtSrc（内部已走 getThumbPath 缩略图，AGENTS 第五节：不许再写第二套命名）。
 import { unitArtSrc } from './view';
+// 机库「总览」标签要报船坞概况（几级 / 在建几艘 / 队列几项）：等级与中文名都只有 shipyard.ts 一份真值，
+// 不在这里另写一遍判定（AGENTS 第三节）。⚠ 依赖是单向的：shipyard.ts 不 import 本文件，故不成环。
+import { dockLevel, dockLevelText } from './shipyard';
 
 /** 编成上下限提示用的余量：还能再编 5 份以上就只说"卡库还有 N 份"，不再报个位数 */
 const AVAILABILITY_NOTE_MARGIN = 5;
@@ -364,5 +367,125 @@ export function hangarSummary(state: GameState): HangarSummary {
     totalShips: state.cardLibrary.length,
     fleetCount: state.fleets.length,
     assignedShips,
+  };
+}
+
+// ============================================================================
+// 机库内部四个标签（总览 / 卡库 / 船坞 / 编队）
+//   ⚠ 标签 id 放在 lib 而不是组件里：**"下一步该去哪"的引导要给出目标标签**
+//     （卡库为空 → 去船坞；有船没编队 → 去编队），这句引导是派生逻辑不是渲染细节，
+//     放这里才能被 check-battle 的纯函数验收覆盖。
+// ============================================================================
+
+/** 机库内部的四个标签（与 components/hangar/HangarTab 的标签栏一一对应） */
+export type HangarTabId = 'overview' | 'library' | 'shipyard' | 'fleet';
+
+/** 标签 id → 中文名（**唯一真值**：标签栏与引导文案都读它，不许两边各写一份） */
+export const HANGAR_TAB_LABEL: Record<HangarTabId, string> = {
+  overview: '总览',
+  library: '卡库',
+  shipyard: '船坞',
+  fleet: '编队',
+};
+
+/** 引导里"去哪"的三个去向（= 需要玩家动作的标签；`overview` 不会是引导目标） */
+export type HangarGuideTab = 'library' | 'shipyard' | 'fleet';
+
+/**
+ * 「下一步该去哪」的引导（机库总览标签的那一句）。
+ * 判据只有两条，按"挡路程度"排先后：
+ *   ① 卡库一艘都没有 → 造舰是**唯一**能推进的事，指向船坞；
+ *      （卡库为空时一定是 `no_dock` 或 `need_dock` 两种情况 —— 有船坞就会显示"造船台是空的"）
+ *   ② 卡库有船、但一支舰队都没编入 → 兵在手上却没上阵，指向编队；
+ *   ③ 都做完了（或"已有编制、只是还能再多编几艘"）→ 给一句中性状态。
+ * ⚠ 不新增任何判定口径：全都读 `hangarSummary`（卡库/舰队/已编的唯一真值）。
+ */
+export interface HangarGuide {
+  /** 这一步指向哪个标签（只用 `HANGAR_TAB_LABEL` 能取到中文名的三个之一） */
+  tab: HangarGuideTab;
+  /** 目标标签的中文名（= HANGAR_TAB_LABEL[tab]，UI 直接渲染，不用自己查表） */
+  label: string;
+  /** 引导正文（UI 直接显示） */
+  text: string;
+  /** 这一步属于哪一类（`need_dock` = 连船坞都没有，UI 想加重语气时用它） */
+  kind: 'no_dock' | 'need_dock' | 'need_assign' | 'ready';
+}
+
+export function hangarGuide(state: GameState): HangarGuide {
+  const summary = hangarSummary(state);
+  if (summary.totalShips === 0) {
+    const dock = dockLevel(state);
+    if (dock === 0) {
+      return {
+        tab: 'shipyard',
+        label: HANGAR_TAB_LABEL.shipyard,
+        kind: 'no_dock',
+        text: '下一步：卡库是空的，而且还没有船坞。去「船坞」标签看三级船坞的造价与解锁条件，先把一级船坞建起来，再下单造第一批战舰。',
+      };
+    }
+    return {
+      tab: 'shipyard',
+      label: HANGAR_TAB_LABEL.shipyard,
+      kind: 'need_dock',
+      text: `下一步：卡库是空的，去「船坞」标签下单造舰（当前${dockLevelText(dock)}，同时可造 2 艘，完工的当回合自动进卡库）。`,
+    };
+  }
+  if (summary.assignedShips === 0) {
+    return {
+      tab: 'fleet',
+      label: HANGAR_TAB_LABEL.fleet,
+      kind: 'need_assign',
+      text: `下一步：卡库有 ${summary.totalShips} 艘战舰，但一支舰队都还没编入。去「编队」标签新建一支舰队，或先点选一张卡再用上面的「编入当前舰队」。`,
+    };
+  }
+  return {
+    tab: 'fleet',
+    label: HANGAR_TAB_LABEL.fleet,
+    kind: 'ready',
+    text: `已有 ${summary.assignedShips} 艘编入舰队（共 ${summary.fleetCount} 支）。可以继续在「编队」标签调整编制、打防守标签，或去「战斗」页签安排出征。`,
+  };
+}
+
+/** 机库总览标签里的"船坞概况"一行（当前几级 / 在建几艘 / 队列几项） */
+export interface HangarOverview {
+  /** 卡库与舰队的四个数字（= hangarSummary，原样透出，避免 UI 再算一遍） */
+  summary: HangarSummary;
+  /** 船坞等级（0 = 没建） */
+  dockLevel: 0 | 1 | 2 | 3;
+  /** 船坞等级的中文名（`未建造船坞` 等，唯一真值在 shipyard.dockLevelText） */
+  dockText: string;
+  /** 已开工几艘（占同时建造位；上限 = shipyard.MAX_CONCURRENT_BUILDS） */
+  building: number;
+  /** 正在开工的第一艘（队列里第一个 active 项的**卡名**；没有已开工项时为 null） */
+  currentCardName: string | null;
+  /** 队列总项数（在建 + 排队；排队无限，§11 #5） */
+  queueTotal: number;
+  /** 「下一步该去哪」的引导 */
+  guide: HangarGuide;
+}
+
+/**
+ * 机库总览标签的整份渲染模型。
+ * ⚠ **遍历完整队列**（不 slice）：在建数与总数都是数出来的，`currentCardName` 取第一个已开工项。
+ */
+export function hangarOverview(state: GameState): HangarOverview {
+  const queue = state.buildQueue;
+  let building = 0;
+  let firstActive: ShipCardId | null = null;
+  for (const item of queue) {
+    if (!item.active) continue;
+    building++;
+    if (firstActive === null) firstActive = item.cardId;
+  }
+  const d = firstActive !== null ? defOf(firstActive) : undefined;
+  const level = dockLevel(state);
+  return {
+    summary: hangarSummary(state),
+    dockLevel: level,
+    dockText: dockLevelText(level),
+    building,
+    currentCardName: firstActive !== null ? (d ? d.name : firstActive) : null,
+    queueTotal: queue.length,
+    guide: hangarGuide(state),
   };
 }

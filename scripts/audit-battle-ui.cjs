@@ -55,7 +55,7 @@ for (const VIEW of VIEWS) {
   const base = path.basename(VIEW);
   const need = base === 'view.ts'
     ? ['unitView', 'boardView', 'poolView', 'infoBarView', 'bossView', 'graveView', 'canEndTurn']
-    : ['libraryRows', 'fleetRows', 'canAddShip', 'canRemoveShip', 'canDeleteFleet', 'canToggleDefending', 'hangarSummary'];
+    : ['libraryRows', 'fleetRows', 'canAddShip', 'canRemoveShip', 'canDeleteFleet', 'canToggleDefending', 'hangarSummary', 'hangarOverview', 'hangarGuide'];
   const miss = need.filter((n) => !exps.includes(n));
   console.log('\n=== ' + base + ' 导出（' + exps.length + ' 个）===');
   console.log('  ' + exps.join(', '));

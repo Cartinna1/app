@@ -1,4 +1,4 @@
-﻿// ============================================================================
+// ============================================================================
 // 舰队卡牌战斗 · 船坞与造舰（V1.5 §8「殖民地建筑与战舰生产」/ §9「战舰科技树」）
 //   —— 纯函数，**不依赖 React / DOM**（与 lib/battle/hangar.ts 同性质）。
 //
@@ -186,6 +186,15 @@ export interface ShipyardLockedSummary {
   tiers: ShipyardLockedTier[];
 }
 
+/** 可造列表的系列标签（chip）一档：`铁血 3` = 铁血系已有 3 型解锁。
+ *  ⚠ 系列名与排序全部**从卡牌数据取**（`ShipCardDef.series`，见 `shipyardSeriesFilters`），UI 不许硬编码系列清单。 */
+export interface ShipyardSeriesFilter {
+  /** 系列名（data/battle/cards.ts 的 `series`，如 '圣辉'） */
+  series: string;
+  /** 该系列**已解锁**的卡有几种（型数，与 `unlockedCards` 同源） */
+  unlockedCount: number;
+}
+
 /** 船坞面板的整份渲染模型 */
 export interface ShipyardView {
   /** 殖民地是否存在（不存在时整块给"先建立殖民地"的指引） */
@@ -195,8 +204,11 @@ export interface ShipyardView {
   /** 三级船坞各自"已建成几座"（0/1；上限 1 座） */
   built: Array<{ id: string; name: string; level: 1 | 2 | 3; count: number }>;
   /** **主列表**：只含已解锁的卡（白卡默认解锁；蓝/紫/橙要对应船坞 + 科技）。
-   *  ⚠ 未解锁的卡不在这里，但绝**不静默隐藏** —— 见 `locked` 汇总行与 `allCards`。 */
+   *  ⚠ 未解锁的卡不在这里，但绝**不静默隐藏** —— 见 `locked` 汇总行与 `cards`。 */
   unlockedCards: ShipyardCardRow[];
+  /** 系列标签（chip）的档位与计数（只含"有已解锁卡"的系列；序列按卡牌数据出现顺序）。
+   *  面板在它前面加一个「全部」档（= `unlockedCards.length`）后渲染 —— 计数与筛选判定都在本文件。 */
+  seriesFilters: ShipyardSeriesFilter[];
   /** 全部可造卡（含未解锁的）：**遍历完整数组**，不 slice / 不 filter 静默截断。
    *  逐张给出 `unlocked` / `ok` / `reason` / `lockReason`；未解锁的卡不在主列表里，但总数与要求由 `locked` 汇总 */
   cards: ShipyardCardRow[];
@@ -606,6 +618,22 @@ function lockedSummary(lockedRows: ShipyardCardRow[]): ShipyardLockedSummary {
   return { total: lockedRows.length, tiers };
 }
 
+/**
+ * 可造列表的系列标签档位：**只收「有已解锁卡」的系列**（没有已解锁卡的系列不出现 —— 那是
+ * 未解锁汇总行与 `lockHint` 的活，标签只用来缩列表）。
+ * 系列名与顺序都从**卡牌数据的出现顺序**取（`ShipCardDef.series`），不硬编码「圣辉/铁血/…」，
+ * 以后加系列卡自动出现；计数 = 已解锁型数，与 `unlockedCards` 同源（同一次遍历算完）。
+ */
+function shipyardSeriesFilters(unlockedCards: ShipyardCardRow[]): ShipyardSeriesFilter[] {
+  const filters: ShipyardSeriesFilter[] = [];
+  for (const row of unlockedCards) {
+    const hit = filters.find((f) => f.series === row.series);
+    if (hit) hit.unlockedCount += 1;
+    else filters.push({ series: row.series, unlockedCount: 1 });
+  }
+  return filters;
+}
+
 /** 下一步解锁指引的一句中文（已全部解锁 / 没有殖民地时 null）。
  *  ⚠ 门槛文案（几级船坞 + 哪些科技 + 哪些系列）只在 shipyard.ts 里生成，UI 不写第二份判断。 */
 function lockHintText(view: {
@@ -704,6 +732,7 @@ export function shipyardView(state: GameState): ShipyardView {
     dockLevel: level,
     built,
     unlockedCards,
+    seriesFilters: shipyardSeriesFilters(unlockedCards),
     cards,
     locked,
     lockHint: lockHintText({ hasColony, locked, allCards: cards, dockLevel: level }),

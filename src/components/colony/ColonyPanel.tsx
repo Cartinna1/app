@@ -7,6 +7,7 @@ import { getGalaxyNode } from '@/data/galaxy/nodes';
 import { getArchaeologySite } from '@/data/galaxy/archaeology';
 import { findStationedSite } from '@/lib/galaxy/archaeologyTurn';
 import { getTechById, getAvailableTechs, REPEATABLE_TECHS, getRepeatableCost } from '@/data/colony/techs';
+import { techUnlockText } from '@/lib/battle/techUnlocks';
 import { getLeaderDef, getLeaderUpgradeCost, getRecruitRollCost } from '@/data/colony/leaders';
 import { computeColonyEconomy, computeColonyPower, getBuildingSourceBreakdown } from '@/lib/colony/economy';
 import { getRecruitCapPerTurn, hasBlackoutImmunity, getResearchTargetTurns } from '@/lib/colony/colonyTurn';
@@ -151,7 +152,7 @@ function ColonyPanel(props: ColonyPanelProps) {
     if (!colony?.techState || colony.techState.currentResearch) return [];
     const available = getAvailableTechs(colony.techState.researched);
     if (available.length > 0) {
-      return [...available].sort(() => Math.random() - 0.5).slice(0, 2).map((t) => ({ id: t.id, name: t.name, desc: t.description, cost: t.costRP, turns: getResearchTargetTurns(t.id, colony.planetType), isRepeatable: false, repeatLevel: 0, unlocksBuilding: t.unlocksBuilding, leaderCapBonus: t.leaderCapBonus }));
+      return [...available].sort(() => Math.random() - 0.5).slice(0, 2).map((t) => ({ id: t.id, name: t.name, desc: t.description, cost: t.costRP, turns: getResearchTargetTurns(t.id, colony.planetType), isRepeatable: false, repeatLevel: 0, unlocksBuilding: t.unlocksBuilding, leaderCapBonus: t.leaderCapBonus, unlockShips: techUnlockText(t.id) }));
     }
     // 全部研究完：显示循环科技
     const levels = colony.techState.repeatableLevels || {};
@@ -794,6 +795,8 @@ function ColonyPanel(props: ColonyPanelProps) {
               const tid = colony.techState.currentResearch;
               const ct = getTechById(tid) || REPEATABLE_TECHS.find(rt => rt.id === tid);
               const isRp = ct && 'costIncrement' in ct;
+              // 战舰科技（T28–T36）「解锁哪些舰船」：从卡牌数据派生（唯一真值 lib/battle/techUnlocks）
+              const unlockShips = isRp ? null : techUnlockText(tid);
               return (
                 <div className={`rounded-lg p-3 ${isRp ? 'bg-pink-900/20 border border-pink-700/40' : 'bg-yellow-900/20 border border-yellow-700/40'}`}>
                   <p className={`text-sm font-bold ${isRp ? 'text-pink-400' : 'text-yellow-400'}`}>
@@ -806,6 +809,7 @@ function ColonyPanel(props: ColonyPanelProps) {
                     return bd ? <p className="text-sm text-cyan-400 mt-1">🏗 完成后解锁: {bd.name} — {getBuildingEffect(bd)}</p> : null;
                   })()}
                   {!isRp && (ct as any)?.leaderCapBonus && <p className="text-sm text-amber-400 mt-1">👥 领袖上限 +{(ct as any).leaderCapBonus}</p>}
+                  {unlockShips && <p className="text-sm text-cyan-400 mt-1">🔓 {unlockShips}</p>}
                 </div>
               );            })() : <p className="text-sm text-slate-500">{getAvailableTechs(colony.techState.researched).length === 0 ? '全部科技已研究完毕，可选循环科技。' : '尚未选择研究项目'}</p>}
           </div>
@@ -837,6 +841,7 @@ function ColonyPanel(props: ColonyPanelProps) {
                         return bd ? <p className="text-sm text-cyan-400">🏗 解锁: {bd.name} — {getBuildingEffect(bd)}</p> : null;
                       })()}
                       {tech.leaderCapBonus && <p className="text-sm text-amber-400 mt-1">👥 领袖上限 +{tech.leaderCapBonus}</p>}
+                      {tech.unlockShips && <p className="text-sm text-cyan-400 mt-1">🔓 {tech.unlockShips}</p>}
                     </div>
                     <div className="flex justify-end mt-2">
                       <button onClick={() => { const r = onStartResearch(tech.id); showMsg(r.message, r.success ? 'success' : 'error'); }}

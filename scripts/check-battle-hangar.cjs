@@ -1,10 +1,11 @@
 'use strict';
 /* ============================================================================
-   P6 验收：机库（卡库聚合 / 舰队视图 / 编成守卫 / reducer 不许动出征舰队）
+   P6 验收：机库（卡库聚合 / 舰队视图 / 编成守卫 / reducer 不许动出征舰队 / 内部标签模型）
    用法：node --import ./scripts/register-ts.mjs scripts/check-battle-hangar.cjs
    为什么测这些：机库是全新 UI（没有 DEMO 可对拍），组件渲染验证不了，
    但"能不能编、显示什么数字、点了会不会出错"全在纯函数与 reducer 守卫里 —— 那是可判定的。
    重点盯三条既有口径：① 编成按**份数** ② 每队上限 30（唯一来源 tuning） ③ **出征中的舰队一个字都不许动**
+   ＋ ④ 机库拆成四个内部标签后新加的派生模型（总览数字 / 船坞概况 / "下一步该去哪"的引导）
    ============================================================================ */
 const fails = [];
 const check = (ok, label, detail) => {
@@ -19,7 +20,7 @@ const J = (v) => JSON.stringify(v);
   const fleetsMod = await import('@/data/battle/fleets');
   const { BATTLE_TUNING } = await import('@/data/battle/tuning');
 
-  const need = ['libraryRows', 'fleetRows', 'canAddShip', 'canRemoveShip', 'canDeleteFleet', 'canToggleDefending', 'hangarSummary'];
+  const need = ['libraryRows', 'fleetRows', 'canAddShip', 'canRemoveShip', 'canDeleteFleet', 'canToggleDefending', 'hangarSummary', 'hangarOverview', 'hangarGuide'];
   const missing = need.filter((k) => typeof H[k] !== 'function');
   if (missing.length) { console.error('hangar.ts 缺少导出：' + missing.join(', ') + '（现有：' + Object.keys(H).join(', ') + '）'); process.exit(2); }
 
@@ -144,6 +145,55 @@ const J = (v) => JSON.stringify(v);
     check(s.fleetCount === 2 && s.assignedShips === 2, '舰队 2 支 / 已编 2 艘');
     const e = D(st, { type: 'START_EXPEDITION', bossId: 'b1', fleetId: st.fleets[0].id, turns: 2 });
     check(H.hangarSummary(e).fleetCount === 2, '出征中舰队仍计入概览');
+  }
+
+  // ---------- ⑥ 内部四个标签的派生模型（总览 / 引导） ----------
+  //  拆标签后新加的两个纯函数：`hangarOverview`（总览标签的数字与船坞概况）与
+  //  `hangarGuide`（"下一步该去哪"）。组件渲染验证不了，但"引导指向哪个标签、说了什么"
+  //  是可判定的 —— 而它正好是"卡库为空 → 去船坞 / 有船没编队 → 去编队"这条新手路径的唯一出口。
+  console.log('\n[6] 内部标签模型（总览数字 / 船坞概况 / 下一步引导）');
+  {
+    // 空卡库 + 没殖民地（= 也没有船坞）→ 引导去船坞，且是"连船坞都没有"那一类
+    const empty = createInitialGameState();
+    const g0 = H.hangarGuide(empty);
+    check(g0.tab === 'shipyard' && g0.label === H.HANGAR_TAB_LABEL.shipyard, '空卡库 → 引导去船坞', J(g0));
+    check(g0.kind === 'no_dock', '空卡库 + 没船坞 → 引导文案写"先把船坞建起来"', g0.text);
+    check(/船坞/.test(g0.text) && g0.text.length > 0, '引导文案里点名了目标标签', g0.text);
+
+    // 有船没编队 → 引导去编队（"兵在手上却没上阵"）
+    const idle = build(['h1', 'c1'], []);
+    const g1 = H.hangarGuide(idle);
+    check(g1.tab === 'fleet' && g1.kind === 'need_assign', '有船没编队 → 引导去编队', J(g1));
+    check(g1.text.indexOf('2 艘') >= 0, '引导里报出卡库艘数（2 艘）', g1.text);
+
+    // 有编制 → ready（中性状态，仍指向编队做微调）
+    const ready = build(['h1', 'c1'], [['h1']]);
+    const g2 = H.hangarGuide(ready);
+    check(g2.kind === 'ready' && g2.tab === 'fleet', '已有编制 → ready', J(g2));
+
+    // 四个标签的中文名各一份（标签栏与引导共读这张表，不许两边各写一套）
+    check(
+      H.HANGAR_TAB_LABEL.overview === '总览' && H.HANGAR_TAB_LABEL.library === '卡库' &&
+        H.HANGAR_TAB_LABEL.shipyard === '船坞' && H.HANGAR_TAB_LABEL.fleet === '编队',
+      '四个标签的中文名 = 总览 / 卡库 / 船坞 / 编队（唯一真值）',
+      J(H.HANGAR_TAB_LABEL)
+    );
+
+    // 总览派生的数字与 shipyard.dockLevelText 同源（不写第二份等级名）
+    const ov = H.hangarOverview(idle);
+    check(ov.summary.totalShips === 2 && ov.summary.fleetCount === 0 && ov.summary.assignedShips === 0, '总览数字与 hangarSummary 一致', J(ov.summary));
+    check(ov.dockLevel === 0 && ov.dockText === '未建造船坞', '没船坞 → dockText = 未建造船坞（读 shipyard.dockLevelText）', ov.dockText);
+    check(ov.building === 0 && ov.currentCardName === null && ov.queueTotal === 0, '空队列：在建 0 / 无在造卡型 / 队列 0 项', J(ov));
+    check(ov.guide.tab === g1.tab && ov.guide.text === g1.text, '总览里的引导与 hangarGuide 同一份');
+
+    // 队列：2 艘开工 + 1 项排队 → 在建 2 / 队列 3 项 / 在造的是第一项
+    const q = [{ cardId: 'h1', active: true, turnsLeft: 1, cost: { gold: 1600, alloy: 16, materials: {} } },
+               { cardId: 'c1', active: true, turnsLeft: 1, cost: { gold: 1600, alloy: 16, materials: {} } },
+               { cardId: 'h1', active: false, turnsLeft: 1, cost: { gold: 1600, alloy: 16, materials: {} } }];
+    const ov2 = H.hangarOverview({ ...idle, buildQueue: q });
+    check(ov2.building === 2 && ov2.queueTotal === 3, '在建 2 艘 / 队列 3 项（遍历完整队列，不截断）', J({ b: ov2.building, t: ov2.queueTotal }));
+    check(typeof ov2.currentCardName === 'string' && ov2.currentCardName.length > 0, '在造卡型给出名字（不是内部 id）', ov2.currentCardName);
+    check(ov2.currentCardName !== 'h1', '在造卡型渲染的是卡名而不是 cardId', ov2.currentCardName);
   }
 
   console.log('\n=== P6 验收结果 ===');

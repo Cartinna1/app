@@ -15,8 +15,19 @@ import type { ShipTravelPlan } from '@/lib/galaxy/travel';
 /** 无选中节点时的空方案（模块级常量，避免每次渲染新建对象击穿 memo） */
 const EMPTY_TRAVEL: ShipTravelPlan = { route: null, turns: 0, tollRoute: null, tollTurns: 0, hostileVia: [], tollGold: 0 };
 import { getBlockedNodeIds, canEnterNode, HOSTILE_TOLL_GOLD } from '@/lib/galaxy/access';
-import { getKnownFactionIds, getKnownRelation, getNodeDisplayName } from '@/lib/galaxy/knowledge';
+import { getKnownFactionIds, getKnownRelation, getNodeDisplayName, isNodeDiscovered } from '@/lib/galaxy/knowledge';
 import { getNodeLandscapeImage } from '@/lib/galaxy/nodeImage';
+import {
+  LAIR_FILL,
+  LAIR_LABEL,
+  LAIR_STROKE,
+  NODE_FILL,
+  NODE_RADIUS,
+  NODE_STROKE,
+  TYPE_LABEL,
+  nodeStyle,
+  nodeTypeLabel,
+} from '@/lib/galaxy/nodeStyle';
 import { FACTIONS } from '@/data/factions';
 import { getArchaeologySite } from '@/data/galaxy/archaeology';
 import { ALL_PLANETS } from '@/data/colony/planets';
@@ -33,34 +44,19 @@ function laneKey(a: string, b: string): string {
   return a < b ? `${a}|${b}` : `${b}|${a}`;
 }
 
-const NODE_RADIUS: Record<GalaxyNode['type'], number> = { faction: 20, colony: 17, ruin: 17, empty: 12 };
-const NODE_FILL: Record<GalaxyNode['type'], string> = {
-  faction: '#0e7490',
-  colony: '#047857',
-  ruin: '#6d28d9',
-  empty: '#334155',
-};
-const NODE_STROKE: Record<GalaxyNode['type'], string> = {
-  faction: '#22d3ee',
-  colony: '#34d399',
-  ruin: '#a78bfa',
-  empty: '#64748b',
-};
-const TYPE_LABEL: Record<GalaxyNode['type'], string> = {
-  faction: '势力星系',
-  colony: '可殖民星球',
-  ruin: '遗迹星系',
-  empty: '空星系',
-};
-
-/** 信息卡的类型标签。`empty` 里混着 5 个海盗老巢（data/galaxy/nodes.ts 的 `pirateLair`）：
- *  它们**不是空星系**（有 BOSS、有战利品、可出征），标签必须写「海盗老巢」；
- *  其余 empty 节点确实没有内容，保持「空星系」（用户 2026-08 两轮裁定）。
- *  ⚠ 本标签只在**已探明**的信息卡里渲染（未探明走迷雾分支、不渲染标签）→ 不泄露老巢身份。
- *  判据：对 5 个老巢节点，玩家可见处不出现「空星系」四个字（名字 + 这个标签一起算）。 */
-function nodeLabel(node: GalaxyNode): string {
-  return node.pirateLair ? '海盗老巢' : TYPE_LABEL[node.type];
-}
+/**
+ * 图例（星图下方那排小圆点）：**从 lib/galaxy/nodeStyle 的配色表派生**，不另抄一份颜色。
+ * `empty` 那一行取 `TYPE_LABEL.empty`（「空星系」），老巢单独占一行 —— 红色节点没有图例
+ * 玩家不会知道它是什么（文案与信息卡的类型标签同源，都是「海盗老巢」）。
+ * ⚠ 图例只讲**节点分类**、不讲位置：它不泄露任何一个具体节点的身份，也不受迷雾影响。
+ */
+const LEGEND_ITEMS: ReadonlyArray<{ key: string; label: string; fill: string; stroke: string }> = [
+  { key: 'faction', label: TYPE_LABEL.faction, fill: NODE_FILL.faction, stroke: NODE_STROKE.faction },
+  { key: 'colony', label: TYPE_LABEL.colony, fill: NODE_FILL.colony, stroke: NODE_STROKE.colony },
+  { key: 'ruin', label: TYPE_LABEL.ruin, fill: NODE_FILL.ruin, stroke: NODE_STROKE.ruin },
+  { key: 'empty', label: TYPE_LABEL.empty, fill: NODE_FILL.empty, stroke: NODE_STROKE.empty },
+  { key: 'lair', label: LAIR_LABEL, fill: LAIR_FILL, stroke: LAIR_STROKE },
+];
 
 /** 缩放范围与平移边界（viewBox 为 1000×700） */
 const MIN_SCALE = 0.6;
@@ -80,7 +76,13 @@ function GalaxyMapPanel({ ship, factionReputation, onTravelToNode }: GalaxyMapPa
   const traveling = galaxy.travelTurnsRemaining > 0;
 
   const blocked = useMemo(() => getBlockedNodeIds(factionReputation), [factionReputation]);
-  const visited = useMemo(() => new Set(galaxy.visitedNodes), [galaxy.visitedNodes]);
+  /** 已探明节点集合 —— **迷雾的唯一判据** `lib/galaxy/knowledge.isNodeDiscovered`（AGENTS 第九节：
+   *  规则要落到函数上）；本面板的节点上色、名称文字、信息卡分支与点击容错都读它，
+   *  不再就地写 `visitedNodes.includes` / `new Set(visitedNodes)`。 */
+  const discoveredIds = useMemo(
+    () => new Set(GALAXY_NODES.filter((node) => isNodeDiscovered(ship, node.id)).map((node) => node.id)),
+    [ship]
+  );
   /** 已探明势力（迷雾判定唯一真值） */
   const knownFactionIds = useMemo(() => getKnownFactionIds(ship), [ship]);
 
@@ -200,8 +202,8 @@ function GalaxyMapPanel({ ship, factionReputation, onTravelToNode }: GalaxyMapPa
       const r = NODE_RADIUS[node.type];
       const d = Math.hypot(node.x - mx, node.y - my);
       const nearMarker = d <= r + pad;
-      // 已探明节点下方还有名称文字，点文字同样算命中
-      const nearLabel = visited.has(node.id) && node.type !== 'empty'
+      // 已探明节点下方还有名称文字（含已探明的海盗老巢），点文字同样算命中
+      const nearLabel = discoveredIds.has(node.id) && (node.type !== 'empty' || !!node.pirateLair)
         && Math.abs(mx - node.x) <= 90 && my >= node.y + r - 4 && my <= node.y + r + 34;
       if ((nearMarker || nearLabel) && d < hitDist) { hitNode = node; hitDist = d; }
     }
@@ -308,7 +310,7 @@ function GalaxyMapPanel({ ship, factionReputation, onTravelToNode }: GalaxyMapPa
 
   /** 信息卡内容（按节点类型分派） */
   const renderInfoCard = (node: GalaxyNode) => {
-    const isVisited = visited.has(node.id);
+    const isVisited = discoveredIds.has(node.id);
     const isCurrent = node.id === galaxy.currentNodeId;
 
     if (!isVisited) {
@@ -334,7 +336,7 @@ function GalaxyMapPanel({ ship, factionReputation, onTravelToNode }: GalaxyMapPa
         <div className="flex items-center gap-2 mb-2 flex-wrap">
           <MapPin size={16} className="text-cyan-400" />
           <h3 className="font-bold text-slate-100">{node.name}</h3>
-          <span className="text-[10px] px-1.5 py-0.5 rounded bg-slate-800 text-slate-300 border border-slate-700">{nodeLabel(node)}</span>
+          <span className="text-[10px] px-1.5 py-0.5 rounded bg-slate-800 text-slate-300 border border-slate-700">{nodeTypeLabel(node)}</span>
           {isCurrent && <span className="text-[10px] px-1.5 py-0.5 rounded bg-cyan-600 text-white">母舰所在</span>}
         </div>
 
@@ -529,11 +531,12 @@ function GalaxyMapPanel({ ship, factionReputation, onTravelToNode }: GalaxyMapPa
 
             {/* 节点 */}
             {GALAXY_NODES.map((node) => {
-              const isVisited = visited.has(node.id);
+              const isDiscovered = discoveredIds.has(node.id);
               const isCurrent = node.id === galaxy.currentNodeId;
               const isSelected = selectedId === node.id;
               const isTarget = galaxy.targetNodeId === node.id;
-              const r = NODE_RADIUS[node.type];
+              // 配色与半径的唯一入口：未探明 → 灰底虚线 + ?（老巢也不例外，见 nodeStyle）
+              const { r, fill, stroke } = nodeStyle(node, isDiscovered);
               return (
                 <g key={node.id} style={{ cursor: 'pointer' }}>
                   {(isCurrent || isSelected || isTarget) && (
@@ -551,15 +554,15 @@ function GalaxyMapPanel({ ship, factionReputation, onTravelToNode }: GalaxyMapPa
                     cx={node.x}
                     cy={node.y}
                     r={r}
-                    fill={isVisited ? NODE_FILL[node.type] : '#1e293b'}
-                    stroke={isVisited ? NODE_STROKE[node.type] : '#475569'}
+                    fill={fill}
+                    stroke={stroke}
                     strokeWidth={2}
-                    strokeDasharray={isVisited ? undefined : '5 4'}
+                    strokeDasharray={isDiscovered ? undefined : '5 4'}
                   />
-                  {!isVisited && (
+                  {!isDiscovered && (
                     <text x={node.x} y={node.y + 7} textAnchor="middle" fontSize={20} fill="#94a3b8">?</text>
                   )}
-                  {isVisited && node.type !== 'empty' && (
+                  {isDiscovered && (node.type !== 'empty' || !!node.pirateLair) && (
                     <text x={node.x} y={node.y + r + 22} textAnchor="middle" fontSize={21} fill="#cbd5e1">
                       {node.name}
                     </text>
@@ -577,6 +580,19 @@ function GalaxyMapPanel({ ship, factionReputation, onTravelToNode }: GalaxyMapPa
             )}
           </g>
         </svg>
+
+        {/* 图例：红点（海盗老巢）只有在这里才解释得清是什么 —— 只讲分类，不讲位置（不泄露迷雾） */}
+        <div className="flex flex-wrap items-center justify-center gap-x-3 gap-y-1 mt-2">
+          {LEGEND_ITEMS.map((item) => (
+            <span key={item.key} className="flex items-center gap-1 text-[10px] md:text-xs text-slate-400">
+              <span
+                className="inline-block w-2.5 h-2.5 rounded-full border-2 flex-none"
+                style={{ backgroundColor: item.fill, borderColor: item.stroke }}
+              />
+              {item.label}
+            </span>
+          ))}
+        </div>
 
         {/* 缩放控件（移动端也有 40px 触控尺寸） */}
         <div className="flex items-center justify-between gap-2 mt-2">
