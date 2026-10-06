@@ -117,7 +117,15 @@ const check = (ok, label, detail) => {
     check(!!EXP.readyExpedition(e1, true), '还剩 1 回合、按**本次 TICK 后**判：**开战**（否则 off-by-one）');
     const e0 = withTurns(0);
     check(!!EXP.readyExpedition(e0) && !!EXP.readyExpedition(e0, true), '已经 0 回合：两种口径都开战');
-    const eNoFleet = D(e0, { type: 'DELETE_BATTLE_FLEET', fleetId: fid });
+    // ⚠ P6 起 reducer 已经**不允许删除出征中的舰队**（DELETE_BATTLE_FLEET 有守卫）——
+    //   这一步再也不能用 dispatch 造出"出征指向已不存在的舰队"。但 readyExpedition 的这条兜底仍必须保留：
+    //   旧存档（P6 之前删过）与"舰船全被击毁/永久损失后编制为空"都可能落到这个形状。
+    //   故这里**直接构造**那个形状（手写一份去掉该舰队的 fleets），而不是绕开守卫。
+    check(
+      D(e0, { type: 'DELETE_BATTLE_FLEET', fleetId: fid }) === e0,
+      'P6 守卫：出征中的舰队删不掉（返回原对象）'
+    );
+    const eNoFleet = { ...e0, fleets: e0.fleets.filter((f) => f.id !== fid) };
     check(EXP.readyExpedition(eNoFleet, true) === null, '舰队被删 → 不开战（不崩）');
     const eBattle = { ...e0, battle: E.createBattle({ seed: 9, bossId: 'b1' }) };
     check(EXP.readyExpedition(eBattle, true) === null, '战斗已在进行 → 不开新战');

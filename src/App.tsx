@@ -74,7 +74,15 @@ function App() {
     cancelBattleExpedition,
     battleAction,
     endBattle,
-    debugFillSampleLibrary,
+    // 船坞与造舰（V1.5 §8）：机库页签的船坞面板
+    enqueueBuild,
+    cancelBuild,
+    // 机库（V1.5 §10.1）：卡库 / 舰队 / 编成
+    deleteBattleFleet,
+    renameBattleFleet,
+    addShipToFleet,
+    removeShipFromFleet,
+    toggleFleetDefending,
     hasSave,
     loadSave,
     exportSave,
@@ -192,7 +200,13 @@ function App() {
       onBattleAction={battleAction}
       onEndBattle={endBattle}
       onCreateBattleFleet={createBattleFleet}
-      onDebugFillSampleLibrary={debugFillSampleLibrary}
+      onEnqueueBuild={enqueueBuild}
+      onCancelBuild={cancelBuild}
+      onDeleteBattleFleet={deleteBattleFleet}
+      onRenameBattleFleet={renameBattleFleet}
+      onAddShipToFleet={addShipToFleet}
+      onRemoveShipFromFleet={removeShipFromFleet}
+      onToggleFleetDefending={toggleFleetDefending}
     />
   );
 }

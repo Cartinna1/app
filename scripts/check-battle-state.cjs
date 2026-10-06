@@ -3,8 +3,8 @@
    P3 验收：卡牌战斗状态 + 存档三处同步
    用法：node --import ./scripts/register-ts.mjs scripts/check-battle-state.cjs
    覆盖：
-     ① SAVE_VERSION=3 ② 新开局默认值 ③ **新开局与读档默认值必须一致**（AGENTS 反复踩的坑）
-     ④ `battle` 不进存档 ⑤ 存档往返一致 ⑥ v2 旧档能读入且拿到默认值
+     ① SAVE_VERSION=4 ② 新开局默认值 ③ **新开局与读档默认值必须一致**（AGENTS 反复踩的坑）
+     ④ `battle` 不进存档 ⑤ 存档往返一致 ⑥ v2/v3 旧档能读入且拿到默认值（含 v4 的造船队列）
      ⑦ 舰队不变量（**按份数**：编入份数≤卡库份数 / 每队 30 / 同型可拆分 / 出征队不能打防守标签 / 同时只能 1 个出征）
      ⑧ reducer 不 mutate prev（快照比对）  ⑨ cloneBattleState 深拷贝
      ⑩ END_BATTLE 写回永久损失（**按份**），且**掠夺战与出征战收尾不同**（§10.1 vs §10.2）
@@ -45,7 +45,7 @@ const eq = (a, b) => J(a) === J(b);
 
   // ---------- ① 版本 ----------
   console.log('\n[1] 存档版本与新开局默认值');
-  check(SAVE_VERSION === 3, 'SAVE_VERSION = 3', '实际 ' + SAVE_VERSION);
+  check(SAVE_VERSION === 4, 'SAVE_VERSION = 4', '实际 ' + SAVE_VERSION);
 
   const init = createInitialGameState();
   check(Array.isArray(init.cardLibrary) && init.cardLibrary.length === 0, '新开局卡库为空（不赠送战舰）');
@@ -53,12 +53,13 @@ const eq = (a, b) => J(a) === J(b);
   check(init.expedition === null, '新开局没有出征');
   check(eq(init.raid, EMPTY_RAID), '新开局掠夺状态为默认', J(init.raid));
   check(init.battle === null, '新开局没有进行中的战斗');
+  check(Array.isArray(init.buildQueue) && init.buildQueue.length === 0, '新开局造船队列为空（v4 字段）');
 
   // ---------- ③ 新开局 ↔ 读档默认值一致 ----------
   console.log('\n[2] 新开局 与 读档默认值 必须一致（AGENTS 的坑）');
-  const minimal = { saveVersion: 3, phase: 'playing', turn: 1, ships: init.ships };
+  const minimal = { saveVersion: 4, phase: 'playing', turn: 1, ships: init.ships };
   const fromSave = stateFromSave(minimal);
-  for (const f of ['cardLibrary', 'fleets', 'expedition', 'raid', 'battle']) {
+  for (const f of ['cardLibrary', 'fleets', 'expedition', 'raid', 'battle', 'buildQueue']) {
     check(eq(fromSave[f], init[f]), `stateFromSave 的 ${f} 与新开局一致`, J(fromSave[f]) + ' vs ' + J(init[f]));
   }
 
@@ -66,10 +67,10 @@ const eq = (a, b) => J(a) === J(b);
   console.log('\n[3] battle 不进存档');
   const save = buildSaveData(init);
   check(!('battle' in save), 'buildSaveData 不含 battle');
-  for (const f of ['cardLibrary', 'fleets', 'expedition', 'raid']) check(f in save, `buildSaveData 含 ${f}`);
+  for (const f of ['cardLibrary', 'fleets', 'expedition', 'raid', 'buildQueue']) check(f in save, `buildSaveData 含 ${f}`);
 
   // ---------- ⑤ 存档往返 ----------
-  console.log('\n[4] 存档往返（含卡库/舰队/出征/掠夺）');
+  console.log('\n[4] 存档往返（含卡库/舰队/出征/掠夺/造船队列）');
   const lib = fleetsMod.FLEET_STARTER.slice(0, 6);
   // ⚠ 卡库必须先赋值：编入校验要查卡库份数（放在循环之后会让舰队恒为空 → 出征往返变成空测）
   let st = { ...DISPATCH(init, { type: 'CREATE_BATTLE_FLEET', name: '测试队' }), cardLibrary: lib.slice() };
@@ -78,18 +79,27 @@ const eq = (a, b) => J(a) === J(b);
   st = DISPATCH(st, { type: 'START_EXPEDITION', bossId: 'b1', fleetId: st.fleets[0].id, turns: 5 });
   check(!!st.expedition, '出征已登记（往返才有意义）');
   st = { ...st, raid: { inTurns: 3, immuneTurns: 7, raiders: 2 } };
+  // 造船队列：手写两项（不靠 ENQUEUE_BUILD，避免把"资源/船坞门槛"混进存档往返这一条）
+  st = {
+    ...st,
+    buildQueue: [
+      { cardId: 'c1', active: true, turnsLeft: 1, cost: { gold: 1600, alloy: 16, materials: { silicon: 4 } } },
+      { cardId: 'c2', active: false, turnsLeft: 1, cost: { gold: 1600, alloy: 16, materials: { silicon: 4 } } },
+    ],
+  };
   const round = stateFromSave(JSON.parse(JSON.stringify(buildSaveData(st))));
   check(eq(round.cardLibrary, st.cardLibrary), '往返后卡库一致', round.cardLibrary.length + ' vs ' + st.cardLibrary.length);
   check(eq(round.fleets, st.fleets), '往返后舰队一致');
   check(eq(round.expedition, st.expedition), '往返后出征一致', J(round.expedition));
   check(eq(round.raid, st.raid), '往返后掠夺状态一致');
+  check(eq(round.buildQueue, st.buildQueue), '往返后造船队列一致', J(round.buildQueue));
   check(round.battle === null, '往返后 battle 为 null');
 
-  // ---------- ⑥ v2 旧档 ----------
-  console.log('\n[5] v2 旧档读入（不该崩，且拿到默认值）');
+  // ---------- ⑥ v2/v3 旧档 ----------
+  console.log('\n[5] v2/v3 旧档读入（不该崩，且拿到默认值）');
   const v2 = JSON.parse(JSON.stringify(buildSaveData(st)));
   v2.saveVersion = 2;
-  delete v2.cardLibrary; delete v2.fleets; delete v2.expedition; delete v2.raid;
+  delete v2.cardLibrary; delete v2.fleets; delete v2.expedition; delete v2.raid; delete v2.buildQueue;
   let oldOk = true, oldState = null;
   try { oldState = migrateSave(stateFromSave(v2)); } catch (e) { oldOk = false; console.log('    抛错：' + e.message); }
   check(oldOk, 'v2 旧档不抛错');
@@ -99,6 +109,20 @@ const eq = (a, b) => J(a) === J(b);
     check(oldState.expedition === null, 'v2 旧档无出征');
     check(eq(oldState.raid, EMPTY_RAID), 'v2 旧档掠夺状态为默认');
     check(oldState.battle === null, 'v2 旧档 battle 为 null');
+    check(eq(oldState.buildQueue, []), 'v2 旧档的造船队列为空（v4 兜底）', J(oldState.buildQueue));
+  }
+
+  // v3 → v4：只多一个 buildQueue 字段（不该崩，且兜底成 []）
+  console.log('\n[5b] v3 旧档读入（v4 新增 buildQueue 的兜底）');
+  const v3 = JSON.parse(JSON.stringify(buildSaveData(st)));
+  v3.saveVersion = 3;
+  delete v3.buildQueue;
+  let v3Ok = true, v3State = null;
+  try { v3State = migrateSave(stateFromSave(v3)); } catch (e) { v3Ok = false; console.log('    抛错：' + e.message); }
+  check(v3Ok, 'v3 旧档不抛错');
+  if (v3State) {
+    check(eq(v3State.buildQueue, []), 'v3 旧档的造船队列兜底为 []', J(v3State.buildQueue));
+    check(eq(v3State.cardLibrary, st.cardLibrary), 'v3 旧档的卡库原样读入（只新增字段、不改既有语义）');
   }
 
   // ---------- ⑦ 舰队不变量（按份数） ----------

@@ -14,8 +14,13 @@ export const BGM_MUTED_KEY = 'bgm_muted';
  *  3：卡牌战斗（V1.5 §10）新增 cardLibrary / fleets / expedition / raid 四个存档字段；
  *     **只新增字段、不改任何既有字段的结构与语义**，故没有结构迁移（老档缺字段一律由 stateFromSave 兜底）。
  *     ⚠ 卡库初始为空，**不赠送战舰**（战舰只能靠船坞建造，V1.5 §8）。
- *     ⚠ `battle`（进行中的战斗）**故意不进存档**：读档一律为 null（V1.5 §〇「战斗中不能保存」）。 */
-export const SAVE_VERSION = 3;
+ *     ⚠ `battle`（进行中的战斗）**故意不进存档**：读档一律为 null（V1.5 §〇「战斗中不能保存」）。
+ *  4：船坞与科技（V1.5 §8.2 造船建筑 / §8.3 生产规则 / §9 科技树 T28–T36）新增造船队列
+ *     `buildQueue`。⚠ 同样**只新增字段、不改既有字段的结构与语义** → **无需 v3→v4 结构迁移**：
+ *       老档缺 `buildQueue` 由 stateFromSave 兜底成 `[]`（队列为空 = 什么都没有在造，语义正确）。
+ *     ⚠ 建筑（船坞 B32/B33/B34）与科技（T28–T36）都是纯数据追加，存量存档里的
+ *       `colony.buildings` / `colony.techState.researched` 照常读，不需要迁移。 */
+export const SAVE_VERSION = 4;
 
 /** 存档结构校验（防止损坏/恶意存档导致崩溃） */
 export function validateSaveData(data: unknown): data is Record<string, unknown> {
@@ -63,6 +68,8 @@ export function buildSaveData(prev: GameState): SaveData {
     fleets: prev.fleets,
     expedition: prev.expedition,
     raid: prev.raid,
+    // 船坞与科技（v4）：造船队列
+    buildQueue: prev.buildQueue,
   };
 }
 
@@ -137,6 +144,10 @@ export function stateFromSave(d: Record<string, any>): GameState {
     raid: { inTurns: null, immuneTurns: 0, raiders: 0, ...(d.raid || {}) },
     // 进行中的战斗**不进存档**：即使存档里混入了 battle 也一律丢弃（V1.5 §〇「战斗中不能保存」）
     battle: null,
+    // ===== 船坞与科技（V1.5 §8，v4 新增）=====
+    // v4 新增字段的**唯一兜底点**（v3 及更早的存档没有这个字段，一律在这里补默认值）。
+    // ⚠ 这个默认值必须与 gameReducer.createInitialGameState 的初值**逐一一致**（都是 []）。
+    buildQueue: d.buildQueue || [],
   };
 }
 
@@ -145,7 +156,11 @@ export function stateFromSave(d: Record<string, any>): GameState {
  *  都先过它），本函数只做「结构/语义改写」——旧字段缺失的补写在这里属于死代码（判空永不成立）。
  *  v3：只**新增**卡牌战斗字段（cardLibrary / fleets / expedition / raid），不改任何既有字段的结构与语义
  *  → **无需 v2→v3 结构迁移**（故这里没有对应分支）：老档缺这四个字段由 stateFromSave 补默认值，
- *    `battle`（进行中的战斗）读档一律为 null。 */
+ *    `battle`（进行中的战斗）读档一律为 null。
+ *  v4：只**新增**造船队列字段（buildQueue），不改任何既有字段的结构与语义
+ *  → **同样无需 v3→v4 结构迁移**：老档缺该字段由 stateFromSave 补 `[]`（队列为空 = 没有在造，
+ *    与"新开局还没有船坞"的语义一致）。船坞建筑（B32–B34）与科技（T28–T36）是纯数据追加，
+ *    存量的 `colony.buildings` / `colony.techState.researched` 原样可读。 */
 export function migrateSave(loaded: GameState): GameState {
   // 兼容旧存档：补充破产/饥荒/叛乱字段（这几个字段不在 stateFromSave 的清单里，故仍需在此兜底）
   if (loaded.ships) {

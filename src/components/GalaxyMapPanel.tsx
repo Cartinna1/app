@@ -434,13 +434,13 @@ function GalaxyMapPanel({ ship, factionReputation, onTravelToNode }: GalaxyMapPa
           <p className="text-xs text-slate-400">此地暂未发现任何内容，后续更新。</p>
         )}
 
-        {/* 节点配图：可殖民星球用星球地貌图、遗迹用其图鉴封面、势力用势力景观图（缺图自动隐藏）。
+        {/* 节点配图：可殖民星球用星球地貌图、遗迹用其图鉴封面、势力用势力景观图、海盗老巢用老巢图
+            （缺图自动隐藏；未探测节点由 getNodeLandscapeImage 的迷雾守卫拦住 → 也不出图）。
             配图**宽度跟卡片走、按 16:9 完整显示**：w-full + aspect-video → 高度 = 宽度 × 9/16，
             既不会被裁，也不会缩成一小块（手机 ≈342×192、桌面 1440px ≈1360×765）。
-            未开发节点与未探测节点不显示图片。
             ⚠ 图片按 URL 记失败：缺图时整块（含外边距）收起，不留空白带；切到有图的节点正常显示。 */}
         {(() => {
-          const img = getNodeLandscapeImage(node);
+          const img = getNodeLandscapeImage(node, ship);
           if (!img || failedImg === img) return null;
           return (
             <div className="mt-3">

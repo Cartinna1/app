@@ -390,11 +390,17 @@ export function useGameState() {
   }, []);
 
   /**
-   * ⚠ P4 临时调试入口：把示例舰队（FLEET_STARTER，26 艘）填进卡库，好让战斗页签在 P8 船坞上线前能试玩。
-   * P8 船坞上线后**连同这个 action 与 BattleTab 里的「测试用」按钮一起删除**。
+   * 造舰（V1.5 §8.3）：下单建造一艘战舰。门槛（船坞等级 / 科技 / 资源）与扣费都在 reducer 里走
+   * lib/battle/shipyard.canEnqueue + lib/turn/resourceCost.payCost（UI 的禁用原因读同一份判定）。
+   * 同时建造 2 艘、排队无限 —— 入队时由 shipyard.enqueueBuild 决定"立刻开工"还是"排队"。
    */
-  const debugFillSampleLibrary = useCallback(() => {
-    dispatch({ type: 'DEBUG_FILL_SAMPLE_LIBRARY' });
+  const enqueueBuild = useCallback((cardId: ShipCardId) => {
+    dispatch({ type: 'ENQUEUE_BUILD', cardId });
+  }, []);
+
+  /** 取消**未开工**的排队项（已开工的由 canCancelBuild 挡住；完工由 useTurn 的 advanceQueue 写进卡库） */
+  const cancelBuild = useCallback((index: number) => {
+    dispatch({ type: 'CANCEL_BUILD', index });
   }, []);
 
   /** 每个游戏回合调用一次（useTurn 编排）：出征 / 掠夺倒计时各减 1；归零后开战由调用方判断 */
@@ -500,7 +506,9 @@ export function useGameState() {
     battleAction,
     endBattle,
     tickBattleState,
-    debugFillSampleLibrary,
+    // 船坞与造舰（V1.5 §8.2 / §8.3：船坞建筑在殖民地页签建造，造舰在机库页签的船坞面板下单）
+    enqueueBuild,
+    cancelBuild,
 
     // 存档
     autoSave,

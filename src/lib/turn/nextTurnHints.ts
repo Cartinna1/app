@@ -26,6 +26,7 @@ import { getWonderDef } from '@/data/colony/wonders';
 import { getArchaeologySite } from '@/data/galaxy/archaeology';
 import { getPermaBonusValue } from '@/data/galaxy/permaBonuses';
 import { FACTIONS } from '@/data/factions';
+import { raidHintLines } from '@/lib/battle/raid';
 
 export type HintSeverity = 'danger' | 'warn' | 'info';
 
@@ -47,6 +48,12 @@ export function getNextTurnHints(state: GameState): NextTurnHint[] {
   const colony = ship.colony;
 
   // ==================== A. 危险级：不处理会掉资源/触发惩罚 ====================
+
+  // A0 殖民地掠夺（V1.5 §10.2）：文案与分级**全部来自** lib/battle/raid.raidHintLines
+  //    （复用函数，这里不重写任何算式：倒计时、防守合并池都读 raid.ts 的同一份）。
+  //    danger / warn 两档放 A 段最前（掠夺是"会掉资源"的事，最该先看到）；info 档（免疫期）归入 C 段播报。
+  const raidHints = raidHintLines(state);
+  out.push(...raidHints.filter((h) => h.severity !== 'info'));
 
   // A1 产品过期（结算口径：shipTurn 用 `p.expiresAt > turn` 过滤，故 expiresAt <= 下回合 即下回合消失）
   const expiring = ship.products.filter((p) => p.expiresAt <= next);
@@ -330,6 +337,9 @@ export function getNextTurnHints(state: GameState): NextTurnHint[] {
     // 唯一真值 lib/galaxy/knowledge.getNodeDisplayName（星图与贸易面板同源）
     out.push({ id: 'travel_arrival', severity: 'info', text: `下回合抵达「${getNodeDisplayName(ship, ship.galaxy.targetNodeId)}」` });
   }
+
+  // C9 掠夺免疫期（V1.5 §10.2：掠夺结束后 20 回合内不会再被掠夺）——A0 那批里分出来的 info 档
+  out.push(...raidHints.filter((h) => h.severity === 'info'));
 
   // 兜底：没有任何需要注意的事时，保留原来那句总述
   if (out.length === 0) {

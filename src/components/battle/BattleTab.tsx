@@ -1,4 +1,4 @@
-import { memo, useCallback, useMemo, useState } from 'react';
+import { memo, useCallback, useMemo, useRef, useState } from 'react';
 import type { GameState } from '@/types/game';
 import type { BattleAction, BattleExpedition, BattleFleet, BattleRaidState, BattleState, PirateBossId, ShipCardId } from '@/types/battle';
 import { BATTLE_TUNING } from '@/data/battle/tuning';
@@ -6,6 +6,7 @@ import { LAIR_BOSS_IDS, PIRATE_BOSSES } from '@/data/battle/pirates';
 import { getThumbPath } from '@/lib/assetThumb';
 import { bossArtSrc } from '@/lib/battle/view';
 import { canStartExpedition, discoveredLairs, lairNodeId } from '@/lib/battle/expedition';
+import { RAID_CHANCE, RAID_IMMUNE_TURNS, RAID_WARNING_TURNS, raidDefensePool } from '@/lib/battle/raid';
 import { LAIR_REWARD_GOLD, LAIR_REWARD_STARDUST } from '@/lib/battle/rewards';
 import BattleScreen from './BattleScreen';
 import { BossAvatar } from './parts';
@@ -40,7 +41,6 @@ interface BattleTabProps {
   onAction: (action: BattleAction) => void;
   onEndBattle: () => void;
   onCreateFleet: (name?: string) => void;
-  onDebugFillSampleLibrary: () => void;
 }
 
 function isLair(id: string): boolean {
@@ -75,7 +75,6 @@ function BattleTabBase({
   onAction,
   onEndBattle,
   onCreateFleet,
-  onDebugFillSampleLibrary,
 }: BattleTabProps) {
   const [bossId, setBossId] = useState<PirateBossId>('b1');
   const [fleetId, setFleetId] = useState<string>('');
@@ -98,12 +97,15 @@ function BattleTabBase({
   // ColonyPhase = 'inactive' | 'scouting' | 'active'（'selecting' 属奇观阶段，勿混）
   const hasColony = colonyPhase !== 'inactive';
 
-  /** 带防守标签的舰队合并池（V1.5 §10.2：掠夺战 = 所有防守舰队一起接战） */
+  /** 带防守标签的舰队合并池（V1.5 §10.2：掠夺战 = 所有防守舰队一起接战）。
+   *  合并顺序与池上限的**唯一真值**是 lib/battle/raid.raidDefensePool（与 useTurn 自动开战同源），
+   *  这里不再手写 flatMap。 */
   const defenders = useMemo(() => fleets.filter((f) => f.defending), [fleets]);
+  const raidPool = useMemo(() => raidDefensePool(state), [state]);
   const kind: 'expedition' | 'defense' = bossId === 'raid' ? 'defense' : 'expedition';
   const selected = fleets.find((f) => f.id === fleetId) || null;
   const participants: ShipCardId[] = kind === 'defense'
-    ? defenders.flatMap((f) => f.shipIds)
+    ? raidPool
     : (selected ? selected.shipIds : []);
   const missing = kind === 'defense' ? defenders.length === 0 : !selected;
   const canStart = participants.length > 0;
@@ -116,13 +118,10 @@ function BattleTabBase({
     onStartBattle(bossId, participants.slice(), kind, s);
   }, [battle, participants, seed, onStartBattle, bossId, kind]);
 
-  // 稳定引用：两个按钮共用同一个处理器（onCreateFleet / onDebugFillSampleLibrary 已是稳定引用）
+  // 稳定引用：按钮共用同一个处理器（onCreateFleet 已是稳定引用）
   const newFleet = useCallback(() => {
     onCreateFleet();
   }, [onCreateFleet]);
-  const fillSample = useCallback(() => {
-    onDebugFillSampleLibrary();
-  }, [onDebugFillSampleLibrary]);
 
   /** 发起出征：拦截至此为止的唯一真值是 canStartExpedition（已在进行中 / 没有舰队 / 舰队空手都会被拦） */
   const startExpedition = useCallback(() => {
@@ -135,9 +134,34 @@ function BattleTabBase({
     onCancelExpedition();
   }, [onCancelExpedition]);
 
+  // ---------------- 战斗实例序号（BattleScreen 的 key） ----------------
+  // 换**一场新的**战斗就整体重挂载 BattleScreen → 清掉上一场残留的「已选卡 / 已选舰 / 临时提示 /
+  // 自动战斗」。为什么需要它：2 支海盗掠夺队"连打两场"时第二场由 reducer 的 END_BATTLE 直接接上，
+  // 主游戏侧的 seed 不变（seed 是下面的本地 state），只靠 seed 会把第一场的选择态带进第二场。
+  // ⚠ 判据不能用"battle 对象身份变了"：每次 BATTLE_ACTION 都会克隆出新对象，那会把玩家每次操作的
+  //   选择态都清掉。只有「上一场已结束（或还没有过战斗）→ 现在这场没结束」才算新的一场；
+  //   没有战斗时把记录清空，下一场必然算新的。
+  const battleSeq = useRef(0);
+  const lastBattle = useRef<BattleState | null>(null);
+  if (battle) {
+    const prev = lastBattle.current;
+    if (!prev || (prev.over && !battle.over)) battleSeq.current += 1;
+    lastBattle.current = battle;
+  } else {
+    lastBattle.current = null;
+  }
+
   // ---------------- 有战斗：整屏战斗界面 ----------------
   if (battle) {
-    return <BattleScreen battle={battle} seed={battleSeed} onAction={onAction} onEnd={onEndBattle} />;
+    return (
+      <BattleScreen
+        key={battleSeq.current}
+        battle={battle}
+        seed={battleSeed}
+        onAction={onAction}
+        onEnd={onEndBattle}
+      />
+    );
   }
 
   // ---------------- 没有战斗：选择敌人 + 选择参战舰队 ----------------
@@ -235,6 +259,36 @@ function BattleTabBase({
         )}
       </div>
 
+      {/* ==================== 掠夺预警（V1.5 §10.2） ====================
+           有掠夺在途 / 处于免疫期时显示；倒计时、掠夺队支数、防守合并池都读 lib/battle/raid（唯一真值）。 */}
+      {(raid.inTurns !== null || raid.immuneTurns > 0) && (
+        <div className={`${cardBase} ${raid.inTurns !== null ? 'border-amber-700/70' : 'border-[#2b3550]'}`}>
+          <h3 className="mb-2 flex items-center gap-2 text-[13px] font-bold text-slate-200">
+            殖民地掠夺
+            <span className="text-[11px] font-normal text-slate-500">
+              V1.5 §10.2：每回合 {RAID_CHANCE * 100}% 触发，{RAID_WARNING_TURNS} 回合预警，结束免疫 {RAID_IMMUNE_TURNS} 回合
+            </span>
+          </h3>
+          {raid.inTurns !== null ? (
+            <>
+              <p className="text-[12.5px] font-bold text-amber-300">
+                海盗还有 {raid.inTurns} 回合抵达
+                {raid.raiders > 1 ? `（本次 ${raid.raiders} 支，赢下第一场要连打第二场）` : ''}
+              </p>
+              <p className="mt-1 text-[11px] leading-relaxed text-slate-400">
+                {raidPool.length > 0
+                  ? `留守的 ${defenders.length} 支舰队带「防守」标签，抵达时合并部署池共 ${raidPool.length} 艘会接战。`
+                  : '没有带「防守」标签的舰队 —— 抵达即掠夺成功，会损失金币 / 原料 / 星尘（去机库给留守舰队打上防守标签）。'}
+              </p>
+            </>
+          ) : (
+            <p className="text-[12.5px] text-slate-300">
+              海盗已退（击退或已结算），{raid.immuneTurns} 回合内不会再被掠夺。
+            </p>
+          )}
+        </div>
+      )}
+
       {/* ==================== ① 选择敌人（6 个：b1~b5 + 掠夺队） ==================== */}
       <div className={cardBase}>
         <h3 className="mb-2 flex items-center gap-2 text-[13px] font-bold text-slate-200">
@@ -288,7 +342,7 @@ function BattleTabBase({
         {kind === 'defense' ? (
           defenders.length === 0 ? (
             <p className="text-xs leading-relaxed text-amber-400">
-              还没有带「防守」标签的舰队 —— 先创建舰队并给它打上防守标签（舰队编成在 P8 船坞里做）。
+              还没有带「防守」标签的舰队 —— 去机库页签里创建舰队、编好战舰，再给它打上防守标签。
             </p>
           ) : (
             <div className="flex flex-wrap gap-2">
@@ -305,7 +359,7 @@ function BattleTabBase({
         ) : fleets.length === 0 ? (
           <div>
             <p className="mb-2 text-xs leading-relaxed text-amber-400">
-              还没有舰队 —— 先建一支（P8 船坞会有完整的编队界面；现在建完用下面的「测试用」按钮填卡库即可试玩）。
+              还没有舰队 —— 先建一支，然后去机库页签里编成（卡库与编队都在机库）。
             </p>
             <button
               type="button"
@@ -349,15 +403,7 @@ function BattleTabBase({
             （剩 {expedition.turnsRemaining} 回合开战）—— 同时只能出征 1 个老巢。
           </p>
         )}
-        {kind === 'defense' && raid.inTurns !== null && (
-          <p className="mt-2 text-[11px] text-amber-400">
-            掠夺队还有 {raid.inTurns} 回合到场
-            {raid.raiders > 1 ? `（本次 ${raid.raiders} 支，赢下第一场还要连打一场）` : ''}。
-          </p>
-        )}
-        {kind === 'defense' && raid.immuneTurns > 0 && (
-          <p className="mt-2 text-[11px] text-slate-500">当前免疫期还剩 {raid.immuneTurns} 回合。</p>
-        )}
+        {/* 掠夺在途 / 免疫期的两行提示已上移到页签顶部的「殖民地掠夺」卡片（同一份 raid 状态，不重复显示） */}
       </div>
 
       {/* ==================== ③ 开战摘要 + 按钮 ==================== */}
@@ -382,12 +428,12 @@ function BattleTabBase({
           <p className="text-xs leading-relaxed text-amber-400">
             {missing
               ? '请先选择舰队（或给舰队打上防守标签）。'
-              : '这支队里还没有战舰 —— 出征不能空手（V1.5 §10.1）；船坞（P8）上线前可先建队，编成在船坞里做。'}
+              : '这支队里还没有战舰 —— 出征不能空手（V1.5 §10.1）；去机库页签里把战舰编进这支队。'}
           </p>
         )}
         {cardLibrary.length === 0 && (
           <p className="mt-2 text-xs leading-relaxed text-slate-500">
-            卡库是空的：战舰只能靠船坞建造（V1.5 §8，P8 上线）。想现在试玩，用下面的「测试用」按钮。
+            卡库是空的：战舰只能靠船坞建造（V1.5 §8）—— 去机库页签的船坞面板建成船坞、下单造舰，完工后自动进卡库。
           </p>
         )}
         {/* 出征在途时**直接开战**也要挡住（打老巢 = 又一次出征；V1.5 §10.1 同时只能出征 1 个老巢）。
@@ -412,14 +458,6 @@ function BattleTabBase({
             className="rounded-[7px] border border-[#39507d] bg-[#22304d] px-3 py-1.5 text-[12px] text-slate-200 hover:bg-[#2c3d61]"
           >
             新建舰队
-          </button>
-          {/* ⚠ P4 临时入口：P8 船坞上线后删除（连同 types/game.ts 的 DEBUG_FILL_SAMPLE_LIBRARY） */}
-          <button
-            type="button"
-            onClick={fillSample}
-            className="rounded-[7px] border border-amber-600 bg-amber-900/30 px-3 py-1.5 text-[12px] text-amber-200 hover:bg-amber-900/50"
-          >
-            测试用：填入示例舰队（26 艘）
           </button>
         </div>
       </div>

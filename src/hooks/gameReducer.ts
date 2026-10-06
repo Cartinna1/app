@@ -1,16 +1,28 @@
-import type { GameState, GameAction } from '@/types/game';
+import type { GameState, GameAction, Mothership } from '@/types/game';
 import type { BattleAction, BattleFleet, BattleState, ShipCardId } from '@/types/battle';
 import { FACTIONS, POLICY_EFFECTS, refreshFactionPrices, calculateSellMultipliers } from '@/data/factions';
 import { createMotherships, createStocks, createMaterials, createProducts, EVENT_LOG_LIMIT } from '@/data/gameData';
 import { BLACK_MARKET_DEFAULT } from '@/data/exchangeRates';
-import { BATTLE_TUNING } from '@/data/battle/tuning';
 import { rollMarketBuyStock, rollMarketSellDemand } from '@/lib/turn/factionTurn';
 import { createUid } from '@/lib/id';
 import { migrateSave } from '@/lib/save';
 import { getCurrentFactionId } from '@/lib/galaxy/access';
 import { createBattle, cloneBattleState, deploy, attack, endTurn, resolvePending, aiTurn } from '@/lib/battle/engine';
-import { grantBattleRewards } from '@/lib/battle/rewards';
-import { FLEET_STARTER } from '@/data/battle/fleets';
+import { grantBattleRewards, grantRaidReward, rollRaidReward } from '@/lib/battle/rewards';
+import type { RaidReward } from '@/lib/battle/rewards';
+import {
+  RAID_IMMUNE_TURNS,
+  RAID_WARNING_TURNS,
+  raidBattleFleet,
+  raidDefensePool,
+  raidLootLoss,
+  raidLootText,
+  tickRaid,
+} from '@/lib/battle/raid';
+import { flattenCost, payCost } from '@/lib/turn/resourceCost';
+import { pushGoldLog } from '@/lib/turn/goldLog';
+import { canAddShip, canDeleteFleet, canRemoveShip, canToggleDefending, isFleetOnExpedition } from '@/lib/battle/hangar';
+import { buildRefund, buildCost, canCancelBuild, canEnqueue, enqueueBuild } from '@/lib/battle/shipyard';
 
 // ==================== 初始状态（单一真值：新开局/重置/选船共用，勿另抄一份） ====================
 
@@ -53,25 +65,16 @@ export function createInitialGameState(): GameState {
     expedition: null,
     raid: { inTurns: null, immuneTurns: 0, raiders: 0 },
     battle: null,
+    // 船坞与科技（V1.5 §8.2 / §8.3）：造船队列初始为空。
+    // ⚠ 这个初值必须与 lib/save.ts 的 stateFromSave 兜底**逐一一致**（都是 []）。
+    buildQueue: [],
   };
 }
 
 // ==================== 卡牌战斗（V1.5 §10）：工具 ====================
 
-/** 掠夺打赢后的免疫回合数（V1.5 §10.2：打败海盗后 20 回合内不再被掠夺）。
- *  战斗数值锚点统一在 data/battle/tuning.ts，但该文件由脚本导出（勿手改），
- *  故这条**主游戏侧的冷却**放在这里（后续接入掠夺循环时从这里取，勿另写 20）。 */
-const RAID_IMMUNE_TURNS = 20;
-
-/** 卡库里有几份这张卡（卡库可含同型多艘，故一律按**份数**比较，不按"存在与否"） */
-function countInCardLibrary(cardLibrary: ShipCardId[], shipId: ShipCardId): number {
-  return cardLibrary.filter((id) => id === shipId).length;
-}
-
-/** 所有舰队一共编入了几份这张卡（用于校验"编入的份数不能超过卡库持有份数"） */
-function countInFleets(fleets: BattleFleet[], shipId: ShipCardId): number {
-  return fleets.reduce((n, f) => n + f.shipIds.filter((id) => id === shipId).length, 0);
-}
+/** 「卡库里有几份这张卡」与「所有舰队一共编入了几份」的唯一实现都在 lib/battle/hangar.ts
+ *  （reducer 的编成守卫 canAddShip / canRemoveShip 与机库 UI 共用同一份判定），这里不再种第二份拷贝。 */
 
 /** 只替换目标舰队的编成：其余舰队原样返回，被改的那支新建对象（不 mutate prev） */
 function withFleetShipIds(fleets: BattleFleet[], fleetId: string, shipIds: ShipCardId[]): BattleFleet[] {
@@ -114,6 +117,47 @@ function applyBattleAction(battle: BattleState, action: BattleAction): void {
     // DEMO 的「一键打完」= 循环调用它直到 over（见 P4 的战斗界面）。定位是临时功能，勿让存档/其它系统依赖。
     case 'autoTurn': aiTurn(battle, battle.active); break;
   }
+}
+
+// ==================== 掠夺循环（V1.5 §10.2）：写回工具 ====================
+// ⚠ 判定与算式都在 lib/battle/raid.ts（唯一真值）；这里只负责"按结算结果写回状态"。
+
+/**
+ * 掠夺损失结算：**没有防守舰队（掠夺成功）** 与 **防守战打输** 走**同一条**路径
+ * （§10.2 原话"防守战打输了 = 与'没有防守舰队'完全一样"）。
+ * 返回新的 ships 与一条事件日志明细。
+ * 扣减走 lib/turn/resourceCost 的 flattenCost + payCost（AGENTS 第三节：勿在 reducer 里自己写一份扣资源），
+ * 实扣值（每项以当前持有量为上限）由 raid.ts 的 raidLootLoss 给（唯一真值）。
+ */
+function settleRaidLoot(state: GameState): { ships: Mothership[]; detail: string } {
+  const lead = state.ships[0];
+  if (!lead) return { ships: state.ships, detail: '' };
+  const loss = raidLootLoss(state);
+  const next: Mothership = { ...lead, materials: { ...(lead.materials || {}) } };
+  payCost(next, lead.colony, flattenCost(loss));
+  // 金币流水：**必须先改完金币再记账**（pushGoldLog 读当前金币当 balanceAfter，AGENTS 第十节）
+  if (loss.gold > 0) pushGoldLog(next, state.turn, -loss.gold, '殖民地被掠夺');
+  return { ships: [next, ...state.ships.slice(1)], detail: raidLootText(loss) };
+}
+
+/**
+ * 掠夺胜利的随机奖励写回（§10.2「打败海盗后：随机获得星尘 / 原料 / 金币 / 某势力声望」）。
+ * 金币 / 星尘 / 原料在 lib/battle/rewards.grantRaidReward（过 famineHalveGold 与 pushGoldLog）；
+ * 声望是 GameState 字段（Mothership 上没有）→ 在这里写回，上限 ±100 与 useTrade.applyRepChange 同口径。
+ */
+function applyRaidReward(
+  state: GameState,
+  reward: RaidReward,
+): { ships: Mothership[]; factionReputation: Record<string, number> } {
+  const lead = state.ships[0];
+  if (!lead) return { ships: state.ships, factionReputation: state.factionReputation };
+  const rewarded = grantRaidReward(lead, reward, state.turn);
+  const ships = rewarded !== lead ? [rewarded, ...state.ships.slice(1)] : state.ships;
+  if (!reward.factionId || reward.reputation <= 0) return { ships, factionReputation: state.factionReputation };
+  const factionId = reward.factionId;
+  const current = state.factionReputation[factionId] || 0;
+  const clamped = Math.max(-100, Math.min(100, current + reward.reputation));
+  return { ships, factionReputation: { ...state.factionReputation, [factionId]: clamped } };
 }
 
 // ==================== Reducer ====================
@@ -193,9 +237,14 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
     }
 
     case 'DELETE_BATTLE_FLEET':
+      // 出征中的舰队不能删：删了会让这次出征指向一支不存在的舰队，倒计时停在 0 回合永不开战（P3 遗留的空档）。
+      // 判定与机库 UI 的禁用提示共用同一个纯函数（lib/battle/hangar.canDeleteFleet），不在这里再写一份。
+      if (!canDeleteFleet(state, action.fleetId).ok) return state;
       return { ...state, fleets: state.fleets.filter((f) => f.id !== action.fleetId) };
 
     case 'RENAME_BATTLE_FLEET':
+      // 改名同属"编成/操作"：出征中的舰队不许动（判据同 canDeleteFleet = 出征中即 false）
+      if (!canDeleteFleet(state, action.fleetId).ok) return state;
       return {
         ...state,
         fleets: state.fleets.map((f) => (f.id === action.fleetId ? { ...f, name: action.name } : f)),
@@ -205,19 +254,22 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
       const { fleetId, shipId } = action;
       const fleet = state.fleets.find((f) => f.id === fleetId);
       if (!fleet) return state;
-      // ① 编入的**份数**不能超过卡库持有份数。这一条同时精确表达了 §10.1「一艘战舰同一时间只能编入一个舰队」：
+      // ① 出征中的舰队不能编成
+      // ② 编入的**份数**不能超过卡库持有份数 —— 这一条同时精确表达了 §10.1「一艘战舰同一时间只能编入一个舰队」：
       //    卡库只有 1 份时，编进 A 队后再编 B 队会因"已编 1 ≥ 持有 1"被拒；卡库有 2 份时，则可以拆成"一队一份"
       //    （同型多艘本来就是常态，编制示例里 h1×2 / c1×2 都是）。
       //    早先还额外按"卡 id 跨舰队"整类查重，那会让同型 2 份永远无法拆到两队 —— 比 §10.1 更严，已去掉。
-      if (countInCardLibrary(state.cardLibrary, shipId) <= countInFleets(state.fleets, shipId)) return state;
-      // ② 每队编制上限 30 艘（唯一数值来源 data/battle/tuning.ts 的 fleetSize）
-      if (fleet.shipIds.length >= BATTLE_TUNING.fleetSize) return state;
+      // ③ 每队编制上限 30 艘（唯一数值来源 data/battle/tuning.ts 的 fleetSize）
+      // 三条都走同一份纯函数（机库 UI 的禁用提示读的就是它），reducer 不重写判定。
+      if (!canAddShip(state, fleetId, shipId).ok) return state;
       return { ...state, fleets: withFleetShipIds(state.fleets, fleetId, [...fleet.shipIds, shipId]) };
     }
 
     case 'REMOVE_SHIP_FROM_FLEET': {
       const fleet = state.fleets.find((f) => f.id === action.fleetId);
       if (!fleet) return state;
+      // 出征中的舰队不能编成（卸下也算改编制）
+      if (!canRemoveShip(state, action.fleetId, action.shipId).ok) return state;
       const idx = fleet.shipIds.indexOf(action.shipId);
       if (idx < 0) return state;
       const shipIds = fleet.shipIds.slice();
@@ -230,7 +282,7 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
       if (!fleet) return state;
       // 出征中的舰队在外头，不允许打防守标签（V1.5 §10.1）。
       // 反向由 START_EXPEDITION 挡住（带防守标签的舰队不能出征）——互斥规则两个方向都写。
-      if (state.expedition && state.expedition.fleetId === action.fleetId) return state;
+      if (!canToggleDefending(state, action.fleetId).ok) return state;
       return {
         ...state,
         fleets: state.fleets.map((f) => (f.id === action.fleetId ? { ...f, defending: !f.defending } : f)),
@@ -243,6 +295,9 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
       const fleet = state.fleets.find((f) => f.id === fleetId);
       if (!fleet) return state;
       if (fleet.defending) return state;                        // 带防守标签的舰队留守，不能出征
+      // 出征舰队必须是"可编辑"的（= 不在出征中）：与机库 UI 的 canEdit 同一判据（lib/battle/hangar.isFleetOnExpedition）。
+      // 互斥规则两个方向都要挡（AGENTS 第九节）：这一条挡"出征中的舰队再出征"，TOGGLE_FLEET_DEFENDING 挡"出征中打标签"。
+      if (isFleetOnExpedition(state, fleetId)) return state;
       if (fleet.shipIds.length === 0) return state;             // 空舰队没有可出征的战舰
       return { ...state, expedition: { bossId, fleetId, turnsRemaining: turns } };
     }
@@ -276,78 +331,174 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
       if (!battle) return state;
       // 掠夺战（防守，敌方恒为 'raid' 海盗旗舰）与出征战（打老巢 b1~b5）的收尾**不一样**：
       //   · 出征战结束 → 这场出征结束（打赢可再次出征；输了未被击毁的舰带回），**不动掠夺状态**
-      //   · 掠夺战结束 → 收掉掠夺倒计时并给免疫，**不动在途的出征**
+      //   · 掠夺战结束 → 收掉掠夺倒计时并给免疫（打赢还给随机奖励），**不动在途的出征**
       //     （V1.5 §10.1：出征期间殖民地被掠夺，只能靠留守的防守舰队接战）
       const isRaid = battle.bossId === 'raid';
+      const raidWin = isRaid && battle.winner === 'player';
+      // 第一场的参战编制：**必须在移除永久损失之前**取 —— 2 支掠夺队连打第二场时用它筛出幸存舰
+      const raidPoolBefore = raidWin ? raidDefensePool(state) : [];
       // 永久损失写回：**无论胜负**，被击毁的舰都从卡库与所有舰队一并移除；未被击毁的一律带回
       // （V1.5 §1.1 / §11 第 6 条）。
       const { cardLibrary, fleets } = removeLostShips(state.cardLibrary, state.fleets, battle.player.lost);
-      // 战利品（**P5 落地**）：唯一真值 lib/battle/rewards.ts。
-      //   · 出征战打赢老巢 → 金币 100000 + 星尘 40（V1.5 §〇 / §10.2）；金币过 famineHalveGold（饥荒减半）
-      //     并按 AGENTS 第三节写 pushGoldLog（rewards 内部先改金币再记账）。
-      //   · 掠夺战（bossId 'raid'）本阶段不发奖励 —— §10.2 的随机奖励属 P7，接入点在 rewards.battleRewards。
-      //   · 打输一律无奖励（永久损失照上面的 removeLostShips 写回，仍按 P3 规则）。
+      const base: GameState = { ...state, cardLibrary, fleets };
+
+      // ---------------- 掠夺战收尾（V1.5 §10.2） ----------------
+      if (isRaid) {
+        // 掠夺结束（打赢 / 打输 / 掠夺成功）：§10.2 之后 20 回合内不再被掠夺
+        const raidOver = { ...state.raid, inTurns: null, raiders: 0, immuneTurns: RAID_IMMUNE_TURNS };
+
+        // ① 2 支掠夺队 = **连续打两场**：赢下第一场后**立刻**进入第二场，第一场未被击毁的舰带进第二场。
+        // ⚠ 本体"一条血，不重置"（§10.2）→ 第二场的玩家本体血量直接抄第一场结束时的
+        //   `battle.player.body`，**绝不回满 15**；文档明说"1 号旗舰被打败就换 2 号旗舰、血量回满"
+        //   的旧机制**已取消**，别实现它。
+        // ⚠ seed 用 Date.now()：与 START_BATTLE 的口径一致（战斗不进存档，读档回到战斗前）。
+        if (raidWin && state.raid.raiders > 1) {
+          const nextFleet = raidBattleFleet(base, raidPoolBefore);
+          if (nextFleet.length > 0) {
+            const created = createBattle({ seed: Date.now(), bossId: 'raid' });
+            const nextBattle: BattleState = {
+              ...created,
+              player: { ...created.player, pool: nextFleet, body: battle.player.body },
+            };
+            return {
+              ...base,
+              battle: nextBattle,
+              raid: { ...state.raid, inTurns: null, raiders: state.raid.raiders - 1 },
+            };
+          }
+        }
+
+        // ② 掠夺损失：**防守战打输** 与 **没有防守舰队** 走同一条路（§10.2 原话"完全一样"）。
+        //    还有一种同形的情形：第一场赢了、但幸存舰为 0（全灭在场上）→ 第二支掠夺队无人可挡，
+        //    按"没有防守舰队"处理（不能因为赢了第一场就发奖励，那等于用空池白拿战利品）。
+        const noDefenderLeft = raidWin && state.raid.raiders > 1;
+        if (!raidWin || noDefenderLeft) {
+          const { ships, detail } = settleRaidLoot(base);
+          const prefix = noDefenderLeft ? '第一场打赢了，但没有幸存舰拦第二支掠夺队：' : '防守战失利，';
+          return {
+            ...base,
+            ships,
+            battle: null,
+            raid: raidOver,
+            eventLog: [
+              { id: createUid('raid'), turn: state.turn, event: '殖民地被掠夺', detail: `${prefix}${detail}` },
+              ...state.eventLog,
+            ].slice(0, EVENT_LOG_LIMIT),
+          };
+        }
+
+        // ③ 打赢（单支，或 2 支都打完）→ §10.2「打败海盗后：随机获得星尘 / 原料 / 金币 / 某势力声望」
+        //    随机数由这里取（与 SELECT_SHIP 的 rollMarketBuyStock 同一口径：reducer 内取随机数）
+        const lead = base.ships[0];
+        if (!lead) return { ...base, battle: null, raid: raidOver };
+        const reward = rollRaidReward(lead, Math.random(), Math.random());
+        const { ships, factionReputation } = applyRaidReward(base, reward);
+        return {
+          ...base,
+          ships,
+          factionReputation,
+          battle: null,
+          raid: raidOver,
+          eventLog: [
+            { id: createUid('raid'), turn: state.turn, event: '击退海盗', detail: reward.text },
+            ...state.eventLog,
+          ].slice(0, EVENT_LOG_LIMIT),
+        };
+      }
+
+      // ---------------- 出征战收尾（V1.5 §10.1） ----------------
+      // 战利品：唯一真值 lib/battle/rewards.ts。出征战打赢老巢 → 金币 100000 + 星尘 40（V1.5 §〇 / §10.2）；
+      // 金币过 famineHalveGold（饥荒减半）并按 AGENTS 第三节写 pushGoldLog（rewards 内部先改金币再记账）。
+      // 掠夺战（bossId 'raid'）的随机奖励走上面那一段（rollRaidReward），battleRewards 对 raid 恒 0/0。
+      // 打输一律无奖励（永久损失照上面的 removeLostShips 写回，仍按 P3 规则）。
       // 写回仓位的口径：**只影响首个母舰**（金币/星尘/流水都挂在 ships[0]，单舰队）；
       // 奖励为 0 时 ships 原样返回（不打了一场空仗也照样换对象）。
       const lead = state.ships[0];
       const rewarded = lead ? grantBattleRewards(lead, battle, state.turn) : null;
       const ships = rewarded && rewarded !== lead ? [rewarded, ...state.ships.slice(1)] : state.ships;
       return {
+        ...base,
+        ships,
+        battle: null,
+        expedition: null,
+      };
+    }
+
+    case 'START_RAID': {
+      // 掠夺触发（§10.2）：登记"RAID_WARNING_TURNS 回合后到场" + 本次来了几支掠夺队
+      // （1-2 支按 50/50 掷，随机数由调用方 useTurn 取；判定在 lib/battle/raid.shouldStartRaid）。
+      // 幂等：已有在途掠夺时原样返回，不覆盖正在走的倒计时。
+      if (state.raid.inTurns !== null) return state;
+      return { ...state, raid: { ...state.raid, inTurns: RAID_WARNING_TURNS, raiders: action.raiders } };
+    }
+
+    case 'APPLY_RAID_LOOT': {
+      // 掠夺成功（倒计时归零且**没有防守舰队**）：结算资源损失并进入免疫期（§10.2）。
+      // 损失 = 金币 + 原料 + 星尘，各项以当前持有量为上限（实扣值来自 raid.raidLootLoss，唯一真值）；
+      // 与"防守战打输"共用 settleRaidLoot，两条路的损失口径必须完全一致（§10.2 原话）。
+      const { ships, detail } = settleRaidLoot(state);
+      return {
         ...state,
         ships,
-        cardLibrary,
-        fleets,
-        battle: null,
-        expedition: isRaid ? state.expedition : null,
-        // §10.2：掠夺结束（无论打赢还是打输）之后 20 回合内不再被掠夺；
-        // 而"没防守、5 回合后被掠夺成功"那条路（不进战斗）的免疫由 P7 的掠夺循环负责。
-        raid: isRaid
-          ? { ...state.raid, inTurns: null, immuneTurns: RAID_IMMUNE_TURNS }
-          : state.raid,
+        raid: { ...state.raid, inTurns: null, raiders: 0, immuneTurns: RAID_IMMUNE_TURNS },
+        eventLog: [
+          { id: createUid('raid'), turn: state.turn, event: '殖民地被掠夺', detail },
+          ...state.eventLog,
+        ].slice(0, EVENT_LOG_LIMIT),
       };
     }
 
     case 'TICK_BATTLE_STATE': {
       // 每个游戏回合调用一次（useTurn）：出征倒计时与掠夺倒计时各减 1，下限 0（到 0 就停在 0）。
-      // 「归零即开战」的判定留给调用方：开战需要 seed / 参战舰队等只有调用方才知道的信息。
+      // 「归零即开战 / 归零即掠夺」的判定留给调用方：开战需要 seed / 参战舰队等只有调用方才知道的信息。
+      // 掠夺那一段的算式是 lib/battle/raid.tickRaid（唯一真值：useTurn 判"本次 TICK 后是否归零"
+      // 也读它，若在这里就地再写一遍会出现显示与结算分叉）。
       const expedition = state.expedition
         ? { ...state.expedition, turnsRemaining: Math.max(0, state.expedition.turnsRemaining - 1) }
         : null;
-      const raid = {
-        ...state.raid,
-        immuneTurns: Math.max(0, state.raid.immuneTurns - 1),
-        inTurns: state.raid.inTurns === null ? null : Math.max(0, state.raid.inTurns - 1),
-      };
-      return { ...state, expedition, raid };
+      return { ...state, expedition, raid: tickRaid(state.raid) };
     }
 
-    case 'DEBUG_FILL_SAMPLE_LIBRARY': {
-      // ⚠ P4 临时调试入口（P8 船坞上线后**连同 types/game.ts 的这个 action 一起删除**）：
-      // 卡库初始为空（战舰只能靠船坞建造，V1.5 §8），而船坞是 P8 —— 没有这条就没法试玩战斗。
-      // 语义：把 FLEET_STARTER（26 艘）填成「已经编好队」的样子 —— **先满足各舰队已有的编制，
-      // 剩下的进卡库**。这样 ADD_SHIP_TO_FLEET 的「编入份数 ≤ 卡库持有份数」不会被误拦
-      // （例：某队已编 10 艘但卡库只有 10 艘，再补 16 艘进卡库才能把剩下 16 艘编进去）。
-        const need: Record<string, number> = {};
-        for (const f of state.fleets) for (const id of f.shipIds) need[id] = (need[id] || 0) + 1;
-        const shortfall: string[] = [];
-        for (const id of FLEET_STARTER) {
-          const n = need[id] || 0;
-          if (n > 0) { need[id] = n - 1; continue; }
-          shortfall.push(id);
-        }
-        const cardLibrary = [...state.cardLibrary, ...shortfall];
-        // 没有舰队就顺手建一支并编满（最多 30 艘）—— 否则玩家点完仍然"没有可出征的舰队"，试玩不了。
-        if (state.fleets.length > 0) return { ...state, cardLibrary };
-        return {
-          ...state,
-          cardLibrary,
-          fleets: [{
-            id: createUid('fleet'),
-            name: '示例舰队',
-            shipIds: FLEET_STARTER.slice(0, BATTLE_TUNING.fleetSize),
-            defending: false,
-          }],
-        };
+    // ==================== 船坞与造舰（V1.5 §8.2 / §8.3） ====================
+    // ⚠ 队列推进（完工写进卡库）**不在这里**：由 useTurn 每回合调 advanceQueue 编排
+    //   （与 colonyTurn / 考古推进同一个位置），故没有"完工"相关的 action。
+
+    case 'ENQUEUE_BUILD': {
+      const ship = state.ships[0];
+      if (!ship) return state;
+      // ① 门槛（船坞等级 / 科技 / 资源）的唯一真值 = lib/battle/shipyard.canEnqueue（内部即 canBuild）。
+      //    ⚠ 队列长度**不在它里面**：§11 #5「排队无限」，同时建造数只限制"开工"（见 advanceQueue）。
+      if (!canEnqueue(state, action.cardId).ok) return state;
+      // ② 扣费走 lib/turn/resourceCost 那一套（clone 母舰 → payCost → pushGoldLog），
+      //    **不在 reducer 里自己写扣资源**（AGENTS 第三节）。
+      const next: Mothership = { ...ship, materials: { ...(ship.materials || {}) } };
+      const cost = flattenCost(buildCost(action.cardId));
+      payCost(next, ship.colony, cost);
+      if (cost.gold) pushGoldLog(next, state.turn, -cost.gold, `建造战舰（${action.cardId}）`);
+      // ③ 入队：同时建造位有空则直接开工，否则排队（enqueueBuild 决定，判定不在这里重算）
+      const { queue } = enqueueBuild(state, state.buildQueue, action.cardId);
+      return { ...state, ships: [next, ...state.ships.slice(1)], buildQueue: queue };
+    }
+
+    case 'CANCEL_BUILD': {
+      // 取消**未开工**的排队项；已开工的一律挡（V1.5 §8 没有中途终止生产的规则）。
+      // 判据的唯一真值是 lib/battle/shipyard.canCancelBuild（面板的禁用原因读的也是它）。
+      if (!canCancelBuild(state.buildQueue, action.index).ok) return state;
+      const item = state.buildQueue[action.index];
+      const refund = buildRefund(item);
+      const buildQueue = state.buildQueue.filter((_x, i) => i !== action.index);
+      const ship = state.ships[0];
+      if (!ship) return { ...state, buildQueue };
+      // 返还按**实付成本**（item.cost）算：金币 ×0.4、合金与原料 ×0.7，与殖民地取消建造同口径
+      const next: Mothership = { ...ship, materials: { ...(ship.materials || {}) } };
+      for (const [matId, amount] of Object.entries(refund.materials)) {
+        next.materials[matId] = (next.materials[matId] || 0) + amount;
+      }
+      next.alloy += refund.alloy;
+      next.gold += refund.gold;
+      // ⚠ pushGoldLog 必须在金币改完之后调（它读当前金币当 balanceAfter，AGENTS 第十节）
+      if (refund.gold) pushGoldLog(next, state.turn, refund.gold, '取消造舰返还');
+      return { ...state, ships: [next, ...state.ships.slice(1)], buildQueue };
     }
 
     default:

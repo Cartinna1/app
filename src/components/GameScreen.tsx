@@ -26,6 +26,7 @@ import {
   Swords,
   Home,
   Landmark,
+  Warehouse,
   Volume2,
   VolumeX,
 } from 'lucide-react';
@@ -48,6 +49,7 @@ import GoldLogViewer from './GoldLogViewer';
 import ModulePanel from './ModulePanel';
 import ColonyPanel from './colony/ColonyPanel';
 import BattleTab from './battle/BattleTab';
+import HangarTab from './hangar/HangarTab';
 import { computeColonyEconomy, getBuildingSourceBreakdown } from '@/lib/colony/economy';
 import { computeCrewFoodCost, famineHalveGold } from '@/lib/turn/shipTurn';
 import { getNextTurnHints } from '@/lib/turn/nextTurnHints';
@@ -137,10 +139,21 @@ interface GameScreenProps {
   onBattleAction: (action: BattleAction) => void;
   onEndBattle: () => void;
   onCreateBattleFleet: (name?: string) => void;
-  onDebugFillSampleLibrary: () => void;
+  // ===== 船坞与造舰（V1.5 §8.2 / §8.3）：只接「机库」页签的船坞面板 =====
+  /** 下单建造一艘战舰（ENQUEUE_BUILD；门槛与扣费走 shipyard.canEnqueue + resourceCost.payCost） */
+  onEnqueueBuild: (cardId: ShipCardId) => void;
+  /** 取消未开工的排队项（CANCEL_BUILD，入参是队列下标） */
+  onCancelBuild: (index: number) => void;
+  // ===== 机库（V1.5 §10.1：卡库 / 舰队 / 编成）只接「机库」页签 =====
+  /** 删除一支舰队（DELETE_BATTLE_FLEET；出征中的舰队由 reducer 守卫拦住） */
+  onDeleteBattleFleet: (fleetId: string) => void;
+  onRenameBattleFleet: (fleetId: string, name: string) => void;
+  onAddShipToFleet: (fleetId: string, shipId: ShipCardId) => void;
+  onRemoveShipFromFleet: (fleetId: string, shipId: ShipCardId) => void;
+  onToggleFleetDefending: (fleetId: string) => void;
 }
 
-type TabId = 'overview' | 'stocks' | 'materials' | 'production' | 'products' | 'events' | 'loan' | 'trade' | 'galaxy' | 'battle' | 'archaeology' | 'colony' | 'module' | 'redeem' | 'goldlog' | 'save';
+type TabId = 'overview' | 'stocks' | 'materials' | 'production' | 'products' | 'events' | 'loan' | 'trade' | 'galaxy' | 'battle' | 'hangar' | 'archaeology' | 'colony' | 'module' | 'redeem' | 'goldlog' | 'save';
 
 // 空引用常量：避免每次渲染新建 {} / [] 击穿内嵌面板的 memo
 const EMPTY_REPUTATION: Record<string, number> = {};
@@ -157,6 +170,7 @@ const tabs: { id: TabId; label: string; shortLabel: string; icon: React.ElementT
   { id: 'loan', label: '贷款', shortLabel: '贷款', icon: Banknote },
   { id: 'trade', label: '贸易', shortLabel: '贸易', icon: Coins },
   { id: 'battle', label: '战斗', shortLabel: '战斗', icon: Swords },
+  { id: 'hangar', label: '机库', shortLabel: '机库', icon: Warehouse },
   { id: 'archaeology', label: '考古', shortLabel: '考古', icon: Landmark },
   { id: 'colony', label: '殖民', shortLabel: '殖民', icon: Home },
   { id: 'module', label: '改造', shortLabel: '改造', icon: Wrench },
@@ -241,7 +255,13 @@ export default function GameScreen({
   onBattleAction,
   onEndBattle,
   onCreateBattleFleet,
-  onDebugFillSampleLibrary,
+  onEnqueueBuild,
+  onCancelBuild,
+  onDeleteBattleFleet,
+  onRenameBattleFleet,
+  onAddShipToFleet,
+  onRemoveShipFromFleet,
+  onToggleFleetDefending,
 }: GameScreenProps) {
   const [activeTab, setActiveTab] = useState<TabId>('overview');
   const [showConfirmNext, setShowConfirmNext] = useState(false);
@@ -649,7 +669,25 @@ export default function GameScreen({
               onAction={onBattleAction}
               onEndBattle={onEndBattle}
               onCreateFleet={onCreateBattleFleet}
-              onDebugFillSampleLibrary={onDebugFillSampleLibrary}
+            />
+          </div>
+          {/* ===== 机库页签（V1.5 §10.1）=====
+               卡库（卡面网格 + 总览 + 技能详情固定区域）/ 舰队列表（编成·改名·删除·防守标签·出征中标记）
+               / 选中舰队的编成界面。回调全部来自 useStableActions 的稳定引用（AGENTS 第五节）。 */}
+          <div className={activeTab === 'hangar' ? '' : 'hidden'}>
+            <HangarTab
+              state={gameState}
+              fleets={fleets}
+              cardLibrary={cardLibrary}
+              expedition={fleetExpedition}
+              onCreateFleet={onCreateBattleFleet}
+              onDeleteFleet={onDeleteBattleFleet}
+              onRenameFleet={onRenameBattleFleet}
+              onAddShip={onAddShipToFleet}
+              onRemoveShip={onRemoveShipFromFleet}
+              onToggleDefending={onToggleFleetDefending}
+              onEnqueueBuild={onEnqueueBuild}
+              onCancelBuild={onCancelBuild}
             />
           </div>
           {currentShip && (

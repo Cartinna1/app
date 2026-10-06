@@ -62,6 +62,7 @@ export type BuildingCategory =
   | 'trade'      // 贸易/金币
   | 'material'   // 原料生产
   | 'functional' // 功能类
+  | 'shipyard'   // 船坞（造舰建筑 B32/B33/B34，V1.5 §8.2）
   | 'power';     // 电能生产
 
 export interface BuildingDef {

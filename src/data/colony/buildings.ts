@@ -5,6 +5,19 @@ import { MATERIAL_NAME_MAP } from '@/data/materialNames';
 export const BUILDING_QUANTUM_LAB = 'B26';  // 量子实验室（研究产出翻倍）
 export const BUILDING_SOLAR_ARRAY = 'B29';  // 太阳能阵列
 export const BUILDING_FUSION_PLANT = 'B30'; // 聚变电站
+// 船坞（V1.5 §8.2；可产稀有度与船坞等级的对应关系唯一真值 = lib/battle/shipyard.RARITY_DOCK_LEVEL）
+export const BUILDING_DOCK_1 = 'B32';       // 一级船坞（白）
+export const BUILDING_DOCK_2 = 'B33';       // 二级船坞（蓝）
+export const BUILDING_DOCK_3 = 'B34';       // 三级船坞（紫、橙）
+
+/** 船坞等级 → 可产稀有度文案。⚠ 这里**故意不 import lib/battle/shipyard**：
+ *  shipyard.ts 需要 getBuildingDef（船坞等级从建筑列表读），若此处反向 import 就成环。
+ *  口径的唯一真值是 shipyard.RARITY_DOCK_LEVEL（1=白 / 2=蓝 / 3=紫与橙），改它要同步改这一行。 */
+function dockRarityText(level: 1 | 2 | 3): string {
+  if (level === 1) return '白';
+  if (level === 2) return '蓝';
+  return '紫、橙';
+}
 
 /** 全部建筑定义（含科技要求） */
 export const FULL_BUILDINGS: BuildingDef[] = [
@@ -54,6 +67,13 @@ export const FULL_BUILDINGS: BuildingDef[] = [
   { id: BUILDING_SOLAR_ARRAY, name: '太阳能阵列', description: '铺设在殖民地外围的巨型光伏矩阵，利用恒星辐射为基地提供基础电力。转化效率不高，但建造简单、无需原料。电能产出 = 5 + 3×人口。', category: 'power', costGold: 10000, costMaterials: { silicon: 300 }, buildTurns: 2, minPop: 1, maxPop: 3, outputType: 'power', baseOutput: 5, popFactor: 3, powerConsumption: 0 },
   { id: BUILDING_FUSION_PLANT, name: '聚变电站', description: '磁约束等离子体核心反应炉，将轻元素直接转化为巨量热能发电。殖民地从矿石社会迈向工业文明的真正标志。电能产出 = 10 + 10×人口。', category: 'power', costGold: 25000, costMaterials: { quantum: 150 }, buildTurns: 4, maxCount: 3, minPop: 2, maxPop: 5, outputType: 'power', baseOutput: 10, popFactor: 10, requiresTech: 'T26', powerConsumption: 0 },
   { id: 'B31', name: '反物质反应堆', description: '悬浮在真空舱内的反质子环——每一毫克反物质湮灭释放的能量足以驱动整座城市。建造代价极高，但让电能不再成为制约。电能产出 = 20 + 16×人口。', category: 'power', costGold: 80000, costMaterials: { dark_matter: 300 }, buildTurns: 6, maxCount: 2, minPop: 3, maxPop: 8, outputType: 'power', baseOutput: 20, popFactor: 16, requiresTech: 'T27', powerConsumption: 0 },
+
+  // ===== 船坞（V1.5 §8.2 / §11 #16：电力 6 / 10 / 18；造价、工期、入驻人口逐条取 §8.2 的表）=====
+  // 可产稀有度由船坞等级决定（白 / 蓝 / 紫+橙），能造哪个系列由**科技**决定（§9），
+  // 所以三座船坞本身都不写 requiresTech：白卡默认可造，蓝/紫/橙卡的门槛在科技树上。
+  { id: BUILDING_DOCK_1, name: '一级船坞', description: '最简的轨道装配台，桁架吊臂沿龙骨移动，把标准舰体一节节焊接成型。能造出白卡战舰。', category: 'shipyard', costGold: 8000, costAlloy: 100, buildTurns: 2, maxCount: 1, minPop: 2, maxPop: 2, powerConsumption: 6 },
+  { id: BUILDING_DOCK_2, name: '二级船坞', description: '封闭式装配车间，恒温无尘，晶格焊接机在舰体上织出精良的装甲层。能造出蓝卡战舰。', category: 'shipyard', costGold: 20000, costAlloy: 200, costMaterials: { silicon: 50 }, buildTurns: 3, maxCount: 1, minPop: 3, maxPop: 3, powerConsumption: 10 },
+  { id: BUILDING_DOCK_3, name: '三级船坞', description: '环绕行星的巨型船台，暗物质约束环与量子晶格炉同时点火，只为打造一支舰队的旗舰。能造出紫卡与橙卡战舰。', category: 'shipyard', costGold: 60000, costAlloy: 300, costMaterials: { dark_matter: 10, quantum: 10 }, buildTurns: 4, maxCount: 1, minPop: 4, maxPop: 4, powerConsumption: 18 },
 ];
 
 /** 根据ID获取建筑定义 */
@@ -79,6 +99,11 @@ export function getBuildingEffect(bd: BuildingDef): string {
   if (bd.id === BUILDING_QUANTUM_LAB) return '使所有研究实验室产出 +50%（领袖的量子实验室加成可再提高）';
   if (bd.id === 'B27') return '解锁领袖招募功能';
   if (bd.id === 'B28') return `每${bd.cloneInterval ?? 2}回合免费+1人口（需1人入驻）`;
+  // 船坞：可产稀有度读本文件的 dockRarityText（口径与 lib/battle/shipyard.RARITY_DOCK_LEVEL 一致）
+  if (bd.category === 'shipyard') {
+    const lv = bd.id === BUILDING_DOCK_3 ? 3 : bd.id === BUILDING_DOCK_2 ? 2 : 1;
+    return `可建造${dockRarityText(lv)}卡战舰（造舰在机库页签的船坞面板，V1.5 §8）`;
+  }
   if (bd.category === 'power') {
     const lo = (bd.baseOutput || 0) + (bd.popFactor || 0) * bd.minPop;
     const hi = (bd.baseOutput || 0) + (bd.popFactor || 0) * bd.maxPop;

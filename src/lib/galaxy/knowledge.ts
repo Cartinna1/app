@@ -14,15 +14,26 @@ export function getKnownFactionIds(ship: Mothership): Set<string> {
   return new Set(visited.filter((id) => getGalaxyNode(id)?.type === 'faction'));
 }
 
+/** 某节点是否已探明（= 在 `ship.galaxy.visitedNodes` 里；写入点只有 shipTurn 的"到达即探明"）。
+ *  **迷雾的唯一判据**：星图节点配图（lib/galaxy/nodeImage）、节点显示名、势力可见性都从这里取，
+ *  勿在别处另写一套 `visitedNodes.includes(...)`（AGENTS 第九节：规则要落到函数上，写在注释里不算）。
+ *  未知节点 id 恒返回 false（保守方向：不泄露不存在的东西）。ship 不传 = 按"都没探明"处理。 */
+export function isNodeDiscovered(ship: Mothership | undefined, nodeId: string | null | undefined): boolean {
+  if (!nodeId) return false;
+  if (!getGalaxyNode(nodeId)) return false;
+  const visited = ship?.galaxy?.visitedNodes || [];
+  return visited.includes(nodeId);
+}
+
 /** 节点显示名（迷雾）：只对**已到访**的节点返回真名，否则返回「未探测星系」。
  *  唯一真值：星图信息卡、星图"途经/跃迁中"提示、贸易面板的目的地、**下一回合预告**共用，
- *  勿再各写一份内联判断（曾出现"下回合抵达「光语者宁静域」"这种提前泄露星系名的分叉）。 */
+ *  勿再各写一份内联判断（曾出现"下回合抵达「光语者宁静域」"这种提前泄露星系名的分叉）。
+ *  探明判据走 isNodeDiscovered（本文件唯一）。 */
 export function getNodeDisplayName(ship: Mothership | undefined, nodeId: string | null | undefined): string {
   if (!nodeId) return '未知星系';
   const node = getGalaxyNode(nodeId);
   if (!node) return '未知星系';
-  const visited = ship?.galaxy?.visitedNodes || [];
-  return visited.includes(node.id) ? node.name : '未探测星系';
+  return isNodeDiscovered(ship, node.id) ? node.name : '未探测星系';
 }
 
 /** 关系探明结果：只保留"我已到访过"的相关势力，其余计入 hiddenCount（显示为"N 条关系未知"） */

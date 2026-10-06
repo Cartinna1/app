@@ -110,6 +110,41 @@ export const ALL_TECHS: ResearchTech[] = [
   { id: 'T27', name: '反物质约束理论',
     description: '"反物质不是燃料……它是纯能量凝固成的晶体。困难不在于制造它，而在于说服它安静地待在容器里。"',
     costRP: 10000, researchTurns: 5, prerequisites: ['T26'], unlocksBuilding: 'B31' },
+  // ===== 战舰科技树（V1.5 §9.1，T28–T36 共 9 个 / §11 #17）=====
+  // 口径（逐条取 §9.1 的表）：
+  //   · 链式前置：白卡默认可造（一级船坞）→ 本系「蓝图解析」（二级船坞，产蓝卡）
+  //     → 本系「精锐改装」（三级船坞，产紫与橙，前置 = 本系蓝图解析）；
+  //   · 飞船坞与科技的对应关系由 lib/battle/shipyard.TECH_BY_SERIES 持有（唯一真值），
+  //     这里的 id / costRP / researchTurns / prerequisites 必须与它一一对上；
+  //   · 通用系只有白与蓝，故只有 T36 一个（§9.1 末尾）；海盗系没有科技（不可生产）。
+  //   · 科技描述只保留引号台词（AGENTS 第八节）。
+  { id: 'T28', name: '圣辉蓝图解析',
+    description: '"圣辉的龙骨不是焊出来的，是祈祷出来的。"',
+    costRP: 400, researchTurns: 2, prerequisites: [] },
+  { id: 'T29', name: '圣辉精锐改装',
+    description: '"把圣坛搬上战舰，让每一发炮弹都算一次布道。"',
+    costRP: 1200, researchTurns: 3, prerequisites: ['T28'] },
+  { id: 'T30', name: '军工蓝图解析',
+    description: '"铁血的图纸上只写一句话：火力不足就是设计缺陷。"',
+    costRP: 400, researchTurns: 2, prerequisites: [] },
+  { id: 'T31', name: '军工精锐改装',
+    description: '"精锐不是活下来的那些，是被造得更硬的那些。"',
+    costRP: 1200, researchTurns: 3, prerequisites: ['T30'] },
+  { id: 'T32', name: '灵能蓝图解析',
+    description: '"先造出船壳，再让它在出坞前学会思考。"',
+    costRP: 400, researchTurns: 2, prerequisites: [] },
+  { id: 'T33', name: '灵能精锐改装',
+    description: '"它不需要舵手，它只需要一个愿意被听见的声音。"',
+    costRP: 1200, researchTurns: 3, prerequisites: ['T32'] },
+  { id: 'T34', name: '金融蓝图解析',
+    description: '"财团的军舰先过审计，再过船台。"',
+    costRP: 400, researchTurns: 2, prerequisites: [] },
+  { id: 'T35', name: '金融精锐改装',
+    description: '"贵的那一档从来不问价格，只问交付日期。"',
+    costRP: 1200, researchTurns: 3, prerequisites: ['T34'] },
+  { id: 'T36', name: '舰船工程解析',
+    description: '"最不起眼的那些船，才是把整支舰队撑起来的东西。"',
+    costRP: 400, researchTurns: 2, prerequisites: [] },
 ];
 
 export function getTechById(id: string): ResearchTech | undefined {

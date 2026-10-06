@@ -53,8 +53,11 @@ function BattleScreenBase({ battle, seed, onAction, onEnd }: BattleScreenProps) 
   /** 已经为哪一场（seed）初始化过选择态 */
   const [initSeed, setInitSeed] = useState(seed);
 
-  // 新开一场（seed 变了）：把上一场的「已选卡 / 已选舰 / 临时提示 / 自动战斗」清掉，
+  // 新开一场：把上一场的「已选卡 / 已选舰 / 临时提示 / 自动战斗」清掉，
   // 等价 DEMO newBattle 里的 selCard = selUnit = flash = null。
+  // ⚠ 判据是 seed，**不能**改成"battle 对象身份变了"：每次 BATTLE_ACTION 都会克隆出新对象，
+  //   那样会把玩家每次操作的选择态都清掉。2 支掠夺队"连打两场"的第二场由父组件换个 key 重挂载
+  //   （见 BattleTab 的 battleSeq），所以这里不需要再认 battle。
   if (initSeed !== seed) {
     setInitSeed(seed);
     if (selCard !== null) setSelCard(null);

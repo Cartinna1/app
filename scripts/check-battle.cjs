@@ -1,4 +1,4 @@
-'use strict';
+﻿'use strict';
 /* ============================================================================
    舰船卡牌战斗 · 一键复验（改规则/改数据后都跑它）
    用法：node scripts/check-battle.cjs
@@ -26,6 +26,9 @@ const STEPS = [
   ['战斗状态与存档（版本 / 默认值一致 / 往返 / 旧档 / 舰队不变量 / 不改 prev / 损失写回）', ['scripts/check-battle-state.cjs'], true],
   ['战斗界面展示逻辑（信息条 / 攻击状态三重区分 / 待选择只有候选可点 / 费用 / 墓地）', ['scripts/check-battle-view.cjs'], true],
   ['出征闭环（五个老巢节点 / 出征耗时 / 探明门槛 / 全流程 / 战利品与饥荒减半 / 回合守卫）', ['scripts/check-battle-expedition.cjs'], true],
+  ['机库（卡库聚合 / 舰队视图 / 编成守卫 / 出征舰队不许动）', ['scripts/check-battle-hangar.cjs'], true],
+  ['掠夺循环（触发前提 / 8% / 防守池合并 / 损失不为负 / 20 回合免疫 / 可预告）', ['scripts/check-battle-raid.cjs'], true],
+  ['船坞与科技（造价 / 船坞等级 / 门槛 / 同时 2 艘+无限排队 / 取消返还 / 电力 6-10-18 / T28-T36）', ['scripts/check-battle-shipyard.cjs'], true],
 ];
 
 let bad = 0;

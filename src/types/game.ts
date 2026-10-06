@@ -1,6 +1,7 @@
 // ==================== 星际贸易 ====================
 
 import type { GalaxyState } from './galaxy';
+import type { BuildQueueItem } from '@/lib/battle/shipyard';
 import type {
   BattleAction,
   BattleExpedition,
@@ -333,6 +334,11 @@ export interface GameState {
   expedition: BattleExpedition | null;    // 进行中的出征（同时只能 1 个）
   raid: BattleRaidState;                  // 掠夺状态
   battle: BattleState | null;             // 进行中的战斗。⚠ **不进存档**（读档一律为 null）
+  // ===== 船坞与科技（V1.5 §8.2 造船建筑 / §8.3 生产规则 / §9 科技树）=====
+  /** 造船队列（同时建造 2 艘 + 排队无限，§11 #5）。完工由 useTurn 每回合调
+   *  lib/battle/shipyard.advanceQueue 推进，卡 id 写进 `cardLibrary`（"拥有什么"的唯一真值）。
+   *  ⚠ 存档字段（SAVE_VERSION 4），加/改它照 AGENTS 第四节四处同步。 */
+  buildQueue: BuildQueueItem[];
 }
 
 export type GameAction =
@@ -354,9 +360,15 @@ export type GameAction =
   | { type: 'BATTLE_ACTION'; action: BattleAction }
   | { type: 'END_BATTLE' }
   | { type: 'TICK_BATTLE_STATE' }
-  // ⚠ 临时调试入口（P4）：把示例舰队填进卡库，好让战斗页签在 P8 船坞上线前能直接试玩。
-  //    P8 船坞上线后**连同 BattleTab 里那个「测试用」按钮一起删除**。
-  | { type: 'DEBUG_FILL_SAMPLE_LIBRARY' };
+  // 掠夺循环（V1.5 §10.2）：触发时登记倒计时与掠夺队支数；掠夺成功时按实扣值结算资源损失。
+  // 派发方只有 useTurn（每回合编排），UI 不直接派发。
+  | { type: 'START_RAID'; raiders: number }
+  | { type: 'APPLY_RAID_LOOT' }
+  // ===== 船坞与造舰（V1.5 §8.2 / §8.3：同时建造 2 艘 + 排队无限）=====
+  // 校验走 lib/battle/shipyard.canEnqueue（内部即 canBuild），扣费走 lib/turn/resourceCost.payCost。
+  // 完工由 useTurn 每回合调 advanceQueue 写进 cardLibrary，**没有 REMOVE_BUILT 这类 action**。
+  | { type: 'ENQUEUE_BUILD'; cardId: ShipCardId }
+  | { type: 'CANCEL_BUILD'; index: number };
 
 /**
  * 存档数据形状：与 GameState 持久化字段保持一致（Pick 自 GameState，字段增减自动同步类型）。
@@ -372,4 +384,6 @@ export type SaveData = Pick<
   | 'factionReputation' | 'factionContracts'
   // 卡牌战斗：battle（进行中的战斗）**故意不进存档**
   | 'cardLibrary' | 'fleets' | 'expedition' | 'raid'
+  // 船坞与科技：造船队列（v4 新增）
+  | 'buildQueue'
 > & { saveVersion: number };

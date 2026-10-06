@@ -94,10 +94,10 @@ const CAT_COLORS: Record<string, string> = {
   housing: 'bg-blue-900/30 text-blue-400', food: 'bg-green-900/30 text-green-400',
   alloy: 'bg-slate-700/50 text-slate-300', stardust: 'bg-purple-900/30 text-purple-400',
   trade: 'bg-yellow-900/30 text-yellow-400', material: 'bg-amber-900/30 text-amber-400',
-  functional: 'bg-cyan-900/30 text-cyan-400',
+  functional: 'bg-cyan-900/30 text-cyan-400', shipyard: 'bg-teal-900/30 text-teal-300',
 };
 const CAT_LABELS: Record<string, string> = {
-  housing: '居住', food: '食物', alloy: '合金', stardust: '星尘', trade: '贸易', material: '原料', functional: '功能', power: '电能',
+  housing: '居住', food: '食物', alloy: '合金', stardust: '星尘', trade: '贸易', material: '原料', functional: '功能', shipyard: '船坞', power: '电能',
 };
 
 // ==================== 组件 ====================
@@ -549,7 +549,7 @@ function ColonyPanel(props: ColonyPanelProps) {
           <div>
             <h4 className="text-sm font-bold text-cyan-400 mb-2">建造新建筑</h4>
             <div className="flex flex-wrap gap-1 mb-3">
-              {['housing','food','alloy','stardust','trade','material','functional','power'].map((cat) => (
+              {['housing','food','alloy','stardust','trade','material','functional','shipyard','power'].map((cat) => (
                 <button key={cat} onClick={() => setBuildCatFilter(cat)}
                   className={`px-2.5 py-1 rounded-lg text-sm font-bold transition-colors ${buildCatFilter === cat ? 'bg-cyan-600 text-white' : 'bg-slate-700/80 text-slate-400 hover:bg-slate-600'}`}>
                   {cat === 'all' ? '全部' : (CAT_LABELS[cat] || cat)}
@@ -647,7 +647,7 @@ function ColonyPanel(props: ColonyPanelProps) {
             {/* 类型筛选标签（可点击，角标为类型数） */}
             {liveBuildings.length > 0 && (
               <div className="flex flex-wrap gap-1 mb-3">
-                {['housing','food','alloy','stardust','trade','material','functional','power'].map((cat) => (
+                {['housing','food','alloy','stardust','trade','material','functional','shipyard','power'].map((cat) => (
                   <button key={cat} onClick={() => setLiveBuildFilter(cat)}
                     className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-colors ${liveBuildFilter === cat ? 'bg-green-600 text-white' : 'bg-slate-700/80 text-slate-400 hover:bg-slate-600'}`}>
                     {CAT_LABELS[cat] || cat}
@@ -740,7 +740,7 @@ function ColonyPanel(props: ColonyPanelProps) {
             <p className="text-sm text-slate-400 mb-2">空闲人口: <span className="text-cyan-400 font-bold">{colony.population.available}</span></p>
             {/* 分类过滤 */}
             <div className="flex flex-wrap gap-1 mb-3">
-              {['all','housing','food','alloy','stardust','trade','material','functional','power'].map((cat) => (
+              {['all','housing','food','alloy','stardust','trade','material','functional','shipyard','power'].map((cat) => (
                 <button key={cat} onClick={() => setPopCatFilter(cat)}
                   className={`px-2.5 py-1 rounded-lg text-sm font-bold transition-colors ${popCatFilter === cat ? 'bg-cyan-600 text-white' : 'bg-slate-700/80 text-slate-400 hover:bg-slate-600'}`}>
                   {cat === 'all' ? '全部' : (CAT_LABELS[cat] || cat)}

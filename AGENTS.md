@@ -73,7 +73,7 @@ src/
 | 宿敌过路费（星图连通性兜底） | `lib/galaxy/access.ts` → `HOSTILE_TOLL_GOLD=20000`（每途经一处宿敌节点）/ `HOSTILE_TOLL_REP=1`（付费给该势力 +1 声望）。**规则**：仅当**不存在免费路线**时提供（星图按钮变琥珀色「付费途经（N 回合 · 过路费 X 金币）」）；**宿敌节点永远不能作为目的地**（`useTrade` 目标节点的 `checkRepBlock` 仍拦），付费只买到**途经**；每势力每回合声望上限 `applyRepChange` 的 `caps.toll=1`——否则孤立的星图与遗物永久不可达 |
 | 买卖 buff 剩余回合 | `lib/turn/factionTurn.ts` → `getBuffRemainingTurns(buff, turn)`（= `expiresTurn − 当前回合`，与结算"保留 `expiresTurn >= 下一回合`"同口径）/ `summarizeBuffs(list, turn)`（连乘倍率 + 最晚到期剩余回合）/ `isBuffExpiringSoon(turnsLeft)`（≤3 回合高亮）——贸易面板「势力列表」徽章与特产区逐条显示共用，勿再写 `expiresTurn - currentTurn` |
 | 星图通行与"当前势力" | `lib/galaxy/access.ts` → `HOSTILE_REP_THRESHOLD`（宿敌 −91，`useTrade.checkRepBlock` 同源）/ `getBlockedNodeIds` / `getCurrentFactionId(ship)`（停在非势力节点返回 null）/ `canEnterNode` |
-| 势力信息可见性（迷雾） | `lib/galaxy/knowledge.ts` → `getKnownFactionIds(ship)`（已探明势力 = `visitedNodes` 里的势力节点）/ `isFactionKnown` / `getKnownRelation(factionId, knownIds)`（只保留已到访的相关势力 + `hiddenCount`）/ **`getNodeDisplayName(ship, nodeId)`**（未到访 → 「未探测星系」；星图信息卡、途经/跃迁中提示、贸易面板目的地、**下一回合预告**共用）——星图信息卡与贸易面板「**势力列表**」共用，**勿再各写内联过滤** |
+| 势力信息可见性（迷雾） | `lib/galaxy/knowledge.ts` → **`isNodeDiscovered(ship, nodeId)`（"某节点是否已探明"的唯一判据；节点配图的迷雾守卫也走它）** / `getKnownFactionIds(ship)`（已探明势力 = `visitedNodes` 里的势力节点）/ `isFactionKnown` / `getKnownRelation(factionId, knownIds)`（只保留已到访的相关势力 + `hiddenCount`）/ **`getNodeDisplayName(ship, nodeId)`**（未到访 → 「未探测星系」；星图信息卡、途经/跃迁中提示、贸易面板目的地、**下一回合预告**共用）——星图信息卡与贸易面板「**势力列表**」共用，**勿再各写内联过滤** |
 | 资源成本校验与扣减（远征 + 考古 + 领袖升级共用） | `lib/turn/resourceCost.ts` → `resourceAmount` / `deductResource` / `canAfford` / `firstMissing` / `payCost` / `flattenCost` / `formatCost`——科研点扣殖民地、其余扣母舰，hook 勿再各写一份 |
 | 考古成功率与阶段推进 | `lib/galaxy/archaeologyTurn.ts` → `excavationSuccessRate`（唯一公式）/ `resolveStage`（阶段成败·危险·保底·**永久中止**·**抉择折扣**）/ `leaderChangeTurns`（**换驻守领袖耗时**：剩余回合 +1 但不超过「阶段基础耗时 + `FAIL_EXTRA_TURNS`」，防反复更换无限叠加）/ `processArchaeologyTurn`（由 `useTurn` 每回合调用）/ `grantReward`（遗物·永久加成·称号·资源；无殖民地时科研点按 1:10 折金币）。状态四态：`idle` / `digging` / `done` / `collapsed`（**永久封闭**，剧情与配图取 `data` 里的 `haltText`/`haltImage`，守卫在 `canOpenExcavation` + `useGalaxy` 的 4 个动作里）。**阶段小奖励折扣只在本文件算**：`抉择（稳妥 SAFE_BONUS_MULT=0.5 / 冒险 RISKY_BONUS_MULT=2）× 稳妥推进（0.5）`，**最终奖励永不折扣** |
 | 殖民地建立初始化 | `lib/colony/colonySetup.ts` → `applyColonyFounding`（星球类型·初始人口·遗落星球赠送 B7/B20/B21）；由殖民面板"建立殖民地"（`foundColony`，星球类型取母舰当前所在的星图节点）触发后**立即建成**；`colonyTurn` 的 `scouting` 分支仅作**旧存档兜底**，勿在新流程里再写等待回合 |
@@ -93,9 +93,11 @@ src/
 | 卡牌战斗**数据**（卡牌/海盗首领/编制/数值锚点） | `data/battle/*` —— **由 `scripts/export-battle-data.cjs` 从 DEMO 生成，勿手改** |
 | 卡牌战斗**展示逻辑**（信息条 / 攻击状态三重区分 / 待选择时只有候选可点） | `lib/battle/view.ts`（纯函数，**不依赖 React/DOM**；组件只做渲染） |
 | 出征可用性 / 出征耗时（殖民地→老巢）/ 老巢是否探明 / 战斗期间能否结束回合 | `lib/battle/expedition.ts` —— 耗时**必须**走 `lib/galaxy/graph.ts` 的 `getGalaxyTurns`（同跃迁与贸易折价，含 `MAX_ROUTE_TURNS=9` 钳制），勿自己写距离或另开不封顶的算法 |
-| 卡牌战斗战利品（老巢 100000 金币 + 40 星尘） | `lib/battle/rewards.ts`（金币收益**必须过 `famineHalveGold`** 并 `pushGoldLog`） |
+| 卡牌战斗战利品（老巢 100000 金币 + 40 星尘 / 掠夺胜利的随机四类奖励） | `lib/battle/rewards.ts`（金币收益**必须过 `famineHalveGold`** 并 `pushGoldLog`）。老巢用 `battleRewards` / `grantBattleRewards`（语义与签名冻结，掠夺队恒 0/0）；掠夺胜利的随机奖励用 **`rollRaidReward` / `grantRaidReward`**（声望由 reducer 写回，数值是 §10.2 未给的占位，见 10.3） |
+| 掠夺循环（触发前提「卡库 ≥10 舰 + 有殖民地」/ 8% / 5 回合预警 / 20 回合免疫 / 防守合并池与池上限 / 掠夺损失 / 掠夺战编制 / 可预告 / TICK 算式） | `lib/battle/raid.ts` → `tickRaid` / `shouldStartRaid` / `raidSquadCount` / `raidResolution` / `raidDefensePool` / `raidBattleFleet` / `raidLootLoss` / `raidLootText` / `raidHintLines`——**reducer、`useTurn`、`BattleTab`、`nextTurnHints` 都只调它**，判定与数值不许在别处再写一份（`RAID_IMMUNE_TURNS` 也已从 reducer 迁到这里成为唯一真值） |
 | 战斗状态字段与动作（cardLibrary / fleets / expedition / raid / battle） | `hooks/gameReducer.ts` —— 「一船同一时间只能编入一个舰队」按**份数**表达（某 cardId 已编入份数 ≤ 卡库持有份数）；永久损失也按**份**写回 |
-| 战斗规则一键复验 | `scripts/check-battle.cjs`（数据校验 / 类型风险 / 未使用参数 / 静态审计 / DEMO 96 条定点断言 / 同 seed 行为对拍含完整日志 / 状态与存档 / 展示逻辑 / **出征闭环**）—— **改战斗任何东西都要跑它** |
+| 机库（卡库聚合 / 舰队视图 / 编成守卫「能不能做 + 中文原因」） | `lib/battle/hangar.ts`（`libraryRows` / `fleetRows` / `fleetEditorRows` / `canAddShip` / `canRemoveShip` / `canDeleteFleet` / `canToggleDefending` / `canRenameFleet` / `hangarSummary`，纯函数、不依赖 React/DOM）。**编成份数、每队 `fleetSize` 上限、出征中的舰队不许动、`onExpedition`/`canEdit` 判定都只在这一份**：reducer 守卫与 `components/hangar/*` 的禁用提示都调它，**不许再写第二份判定**。互斥两个方向都要挡：出征中打不了防守标签（`canToggleDefending`）、带防守标签的出征不了（`expedition.canStartExpedition`） |
+| 战斗规则一键复验 | `scripts/check-battle.cjs`（数据校验 / 类型风险 / 未使用参数 / 静态审计 / DEMO 96 条定点断言 / 同 seed 行为对拍含完整日志 / 状态与存档 / 展示逻辑 / **出征闭环** / **机库**）—— **改战斗任何东西都要跑它** |
 | 列表/网格缩略图路径 | `lib/assetThumb.ts` → `getThumbPath`（`/<dir>/<rest>/<name>.<ext>` → `/<dir>/thumbs/<rest>/<name>.webp`）——缩略图由脚本生成到 `public/<dir>/thumbs/`，**别在别处手写第二套命名** |
 
 ## 四、改 GameState 字段：存档三处同步
@@ -149,7 +151,7 @@ src/
 - 真值函数命名 `getXxx` / `computeXxx`；避免 `import { x as y }` 别名（现存一例 `useGameState.ts` 的 `getShipTotalAssets as computeShipTotalAssets`，待清理，勿新增）。
 - 原料译名一律走 `getMaterialName()`（事件/建筑的 flavor 文学描述除外）。
 - **领袖显示一律用名字**：`getLeaderDef(leaderInstance.id)?.name`（如「诺娃·永昼」）。`LeaderInstance.id` 是内部编号（L1…L22），任何时候都不要直接渲染给玩家。
-- **星图节点配图**（唯一真值：`lib/galaxy/nodeImage.ts` → `getNodeLandscapeImage`）：可殖民星球 `/planet-landscape/<星球类型id>.webp`（10 个类型：desert/ocean/polar/arid/terran/alpine/savannah/tropical/tundra/ruin，1424×800）；遗迹**复用图鉴封面** `/archaeology/<遗迹id>/cover.webp`（不另做一套图）；势力 `/faction-landscape/<势力id>.webp`（f01~f10，**待补**，缺图由 `onError` 自动隐藏）——**三档统一为 WebP**；星球图还有第二个出口：`ColonyPanel` 头像用 `public/planets/<类型>.webp`（**128×128 列表缩略图**，与 `planet-landscape` 大图是两套文件，别混用）；改格式只改本文件那一行；未开发（empty）节点无图；**未探测节点一律不返回图片**（迷雾）。信息卡配图**宽度跟卡片走、按 16:9 完整显示**：用 `block w-full aspect-video object-cover`（高度=宽度×9/16，手机 ≈342×192、桌面 ≈1360×765；不裁切也不缩成小块）。**不要用固定 `max-h`**（图变扁带、16:9 素材被裁），也别用 `max-w` + `max-h` 成对锁比例（宽屏上只剩 462px 宽）。
+- **星图节点配图**（唯一真值：`lib/galaxy/nodeImage.ts` → `getNodeLandscapeImage(node, ship)`；**四类图位都要先过 `knowledge.isNodeDiscovered`**）：可殖民星球 `/planet-landscape/<星球类型id>.webp`（10 个类型：desert/ocean/polar/arid/terran/alpine/savannah/tropical/tundra/ruin，1424×800）；遗迹**复用图鉴封面** `/archaeology/<遗迹id>/cover.webp`（不另做一套图）；势力 `/faction-landscape/<势力id>.webp`（f01~f10，**已在位**，共 10 张）；海盗老巢 `/battle/lairs/<bossId>.webp`（b1~b5，**待出图**，1424×800）——**四档统一为 WebP**；星球图还有第二个出口：`ColonyPanel` 头像用 `public/planets/<类型>.webp`（**128×128 列表缩略图**，与 `planet-landscape` 大图是两套文件，别混用）；改格式只改本文件那一行；未开发（empty，且非老巢）节点无图；**未探测节点一律不返回图片**（迷雾，见第九节同名坑）。信息卡配图**宽度跟卡片走、按 16:9 完整显示**：用 `block w-full aspect-video object-cover`（高度=宽度×9/16，手机 ≈342×192、桌面 ≈1360×765；不裁切也不缩成小块）。**不要用固定 `max-h`**（图变扁带、16:9 素材被裁），也别用 `max-w` + `max-h` 成对锁比例（宽屏上只剩 462px 宽）。
 - **遗迹封面（cover.webp）的三处出口**：① 考古页签·遗迹列表行左缩略图（移动端 64px / 桌面 96px 宽，16:9，缺图**整块不渲染**，用 `failedCovers` 按 siteId 记失败）；② 考古页签·选中遗迹的详情大图（`max-h-[140px] md:max-h-[220px]`，缺图按本面板约定露出占位框）；③ 考古图鉴卡片（**仅收录已全部完成**的遗迹，图鉴默认收起）。**加新图时先确认它在玩法里真的有出口**。
 - **费用文案与按钮行为：现状是有意保留的，别"顺手统一"**——① 领袖页签里招募用原生数字（`{n}星尘/次`）、升级与远征用共用的 `formatCost`（渲染成 `金币×50000`，**不带千分位**；它是考古/远征节点花费共用的函数，改它会连带影响那些地方）；② 升级按钮按 `canAfford` 置灰，**远征按钮不预置灰**（只在进行中禁用，买不起时点一下由 `firstMissing` 给出"资源不足：金币不足（需要 20000）"）。差异只在风格，不影响数值与扣费正确性。
 - **图鉴用「手风琴」：同一时刻只展开一位领袖**（`GalleryPanel` 的 `expandedId: string | null`）。一位领袖最多展开 **46 张图**（1 降落 + 12 结局 + ≤12 CG + 21 阶段），解码内存 **宽×高×4 字节 ≈ 3.2 MB/张（1200×675）**、与文件大小无关；改用 `Record<string, boolean>` 允许多位同时展开时，10 位全开约 460 个 `<img>`（≈56 MB 流量），低内存手机会被回收标签页。**别改回多开**。仍卡再叠加：图鉴 `<img>` 加 `loading="lazy" decoding="async"`（7 处），或网格单独出 320×180 缩略图。
@@ -176,11 +178,12 @@ src/
 - 位置真值：位置与跃迁**只**存 `ship.galaxy`（`tradeStatus` 已删这三个字段）；"当前势力"一律走 `lib/galaxy/access.getCurrentFactionId(ship)`（停在非势力节点返回 null；贸易动作先过 `requireFactionHere` 守卫，跃迁中禁止交易）。
 - 跨分支入口：跨分支共用的操作抽成**一个函数**由两处调用（`GalaxyMapPanel.renderTravelAction`）；删改 JSX 分支后确认没有操作入口只活在一个分支里。
 - 列表渲染：页签/入口一律遍历**完整数组**，需要分组就用显式清单，**不许 `slice(`/`filter` 静默截断**。
-- 移动端底栏（结构上固定行数，别靠换行）：单行 = 左侧**钉住**「结束回合 / 音乐」（各 52px，不参与滚动）+ 右侧 16 个页签**横向滚动**（`w-14` = 56px/个，全部渲染、不许 slice）；滚动条可见（`[&::-webkit-scrollbar]:h-1.5` + track/thumb + `[scrollbar-width:thin]`）、切页签用 `scrollIntoView({inline:'center'})`、右缘渐隐仅在有内容时显示（`tabStripMoreRight`，带 2px 容差防亚像素误判）；栏高 ≈64px → 根容器 `pb-[68px] md:pb-0`，nav 自身带 `pb-[env(safe-area-inset-bottom)]` 避开 iPhone 横条。**栏高与根容器留位是配对的，改任一边都要重算**。
+- 移动端底栏（结构上固定行数，别靠换行）：单行 = 左侧**钉住**「结束回合 / 音乐」（各 52px，不参与滚动）+ 右侧 17 个页签**横向滚动**（`w-14` = 56px/个，全部渲染、不许 slice）；滚动条可见（`[&::-webkit-scrollbar]:h-1.5` + track/thumb + `[scrollbar-width:thin]`）、切页签用 `scrollIntoView({inline:'center'})`、右缘渐隐仅在有内容时显示（`tabStripMoreRight`，带 2px 容差防亚像素误判）；栏高 ≈64px → 根容器 `pb-[68px] md:pb-0`，nav 自身带 `pb-[env(safe-area-inset-bottom)]` 避开 iPhone 横条。**栏高与根容器留位是配对的，改任一边都要重算**。
 - 事件与股票双向隔绝（既定规划，勿再接通）：事件侧不读 `stocks`/股价、不写任何价格字段，股票侧不读事件字段与情报字段；新增市场影响一律走独立的态势/消息面机制（股票因子的唯一接入点在 `priceFluctuation` 的 `totalChange` 处）。**事件文案也不得承诺市场影响**（别写"股价将暴涨""买入后被套牢"；改写法见 `choiceEvents.ts` 的"把情报转手变现"）。
 - 引号：远征/剧情等数据文本一律用模板字符串（反引号）或转义 `\'`（**ASCII 引号会截断字符串**）；录入新文本后 grep `[\u4e00-\u9fff]'[\u4e00-\u9fff]` 自检。
 - import：**加 import 前先 grep 该文件是否已有同一模块的 import**；改完遍历 import 绑定检出同一文件的重复绑定（TS2300）。
 - 「还剩几回合」：先问结算那边算的是哪个函数——科研统一读 `colonyTurn.getResearchTargetTurns`（含极地 −1）；**"有没有保护"和"还剩几次"是两件事**，停电判定统一走 `colonyTurn.resolveBlackout`（结算与预告共用同一次调用）。
+- 迷雾必须落到函数上：`lib/galaxy/nodeImage.ts` 的 `getNodeLandscapeImage` **四类图位（星球/势力/遗迹/老巢）** 都必须先过 `lib/galaxy/knowledge.ts` 的 `isNodeDiscovered(ship, nodeId)`，未探测一律返回 `null`。**曾经四类都无条件返回路径**（星球给 `/planet-landscape/<planetId>.webp`、势力给 factionId、遗迹给 siteId）→ 未探测节点的信息卡照样渲染图片，直接泄露"这是哪类星球/哪个势力/哪处遗迹"。**判据：名字不泄露 ≠ 图片不泄露**（`getNodeDisplayName` 显示「未探测星系」的同时，配图仍把内容说了出来）。**文档里写过不等于代码里有**——本条以前只写在注释里，属"文档撒谎"；新写任何可见性规则时，先确认它有一个**被调用的函数**，再写注释。
 
 ---
 
@@ -230,6 +233,7 @@ src/
 
 ### 10.2 口径补充
 
+- **机库（P6）的四条铁律**：① **技能不上卡面**，机库在卡库顶部留**技能详情固定区域**（点选一张卡读全文与数值）——手机端没有 hover，这是机库看技能的唯一出口；② **动作不可用必须写明原因**（文案来自 `lib/battle/hangar` 的 `reason`，不是只置灰，也不能只有 `title`）；③ **出征中的舰队要有明显标记**，且该队编成/改名/打标签/删除**全部禁用并给出同一条原因**（`canEdit=false`）；④ **卡库网格与编成清单都遍历完整数组**，不许 `slice`/`filter` 静默截断（机库最容易犯：只渲染"可编的"等于把信息藏起来）。**"测试用：填入示例舰队"按钮属卡库，在机库页签**（P8 船坞上线后连同 `DEBUG_FILL_SAMPLE_LIBRARY` 一起删）。
 - **卡牌战斗的三条铁律**（都是 DEMO 踩坑换来的，改动前先读 `carddemo/README.md`）：① **信息条是手机端看技能的唯一出口**（卡面只放名字/系列·稀有度/攻盾体与费用，**技能不上卡面**）；② **攻击状态必须三重区分**（可攻击 / 已攻击 / 不能攻击+原因），且**不是这一方的回合时不显示状态**；③ **待选择时只有候选可点**（点本体无效）。
 
 - **黑市受迷雾约束**（`TradePanel` 黑市势力选择器）：未探明势力只显示 `?` 锁定占位，不露名称/特产/市场价——与「势力列表」同口径（`lib/galaxy/knowledge.getKnownFactionIds`）。这是第三节迷雾条目的适用面，不是例外。
@@ -240,8 +244,17 @@ src/
 
 政策时长 3~5 回合（`factionTurn`）、合同档位表 `[16, 26, 30000, 40000]`（`contracts.ts`）、声望阈值表（`factions.REPUTATION_TIERS`）、`RECRUIT_BASE_COST=2000`、`BLACKOUT_GUARD_TURNS=10`、`PRODUCT_SHELF_LIFE=3`、市场区间 500~800 / 500~700、股票费率 3%（万众一心 1.5%、黄金集团 0）、`EXPEDITION_UNLOCK_COUNT=12`、`GOLD_LOG_LIMIT=200` / `EVENT_LOG_LIMIT=100`、考古成功率常数（第七节）。
 
+**掠夺循环（P7，全部在 `lib/battle/raid.ts`）**：触发概率 `RAID_CHANCE=0.08`、预警/无防守窗口 `RAID_WARNING_TURNS=5`、免疫 `RAID_IMMUNE_TURNS=20`、触发门槛 `RAID_MIN_SHIPS=10`（卡库战舰数）、1-2 支的 `RAID_SQUAD_SPLIT=0.5`、防守合并池上限 `RAID_POOL_CAP = BATTLE_TUNING.fleetSize(30)`（§10.2 未给上限，取 §10.1 编制上限锚点）。
+**掠夺损失口径（2026-08 用户裁定，优先于 §10.2 原文）**：只扣 **金币 = 持有量 20%** 与 **原料 = 各自持有 1/3（四舍五入）**，**不动星尘**（§10.2 原文含星尘，已被用户覆盖）。常量：`RAID_LOOT_GOLD_RATIO=0.2` / `RAID_LOOT_MATERIAL_RATIO=1/3`，都在 `lib/battle/raid.ts`，各自一行可改。
+**船坞与科技（P8）**：三级船坞 B32/B33/B34 电力 **6 / 10 / 18**（§11 #16，从 `def.powerConsumption` 真进 `computeColonyPower`）；单舰造价基准 白 2000+20+5硅片 / 蓝 6000+100+20硅片 / 紫 15000+300+5量子簇 / 橙 50000+800+10暗物质+10量子簇；基础工期 1/2/3/4 回合；**同时建造 2 艘 + 排队无限**（§11 #5）；稀有度→船坞等级 白1/蓝2/紫3/橙3；科技 T28–T36 共 9 个（科研点 400/1200、2/3 回合）。新增存档字段 `buildQueue`（`SAVE_VERSION 3→4`）。
+⚠ **「卡牌系数」是"文档无值"的占位**：V1.5 全文**没有**这一列（grep「系数」零命中）。现取 `max(0.7, round2(1 + (cost − 3) × 0.1))`，锚点是"3 费 = 1.00，正好等于 §8.3 的稀有度基准表"。要改只改这一个函数。
+⚠ **每级船坞 `maxCount: 1` 也是文档没写的判断**（三级覆盖低级产出，重复建造无意义）；文档未给船坞的殖民地等级/科技前置 → 未加额外门槛。
+
+⚠ **掠夺胜利的随机奖励数值（`lib/battle/rewards.ts`：`RAID_REWARD_GOLD=20000` / `RAID_REWARD_STARDUST=10` / `RAID_REWARD_MATERIAL_AMOUNT=5` / `RAID_REWARD_REPUTATION=5`）同样是"文档无值"的占位**（§10.2 只写"随机获得星尘 / 原料 / 金币 / 某势力声望"），占位口径写得比老巢固定战利品（100000 金币 + 40 星尘）低一档。
+
 ### 10.4 已知未做项（有意留待）
 
+- **掠夺队的卡池来源（P7 留待 P8/P10）**：§10.2 写"掠夺队从尚未被打败的海盗星系里取（全部打败后不再有掠夺）"，但 `GameState` **没有"已打败的老巢"账本**（P5 起没建）→ 现在掠夺战与老巢共用 `PIRATE_POOL`（30 张海盗池），"所有老巢被打败后不再被掠夺"这条**尚未实现**。要落地需新增一个"已打败老巢 id"集合字段（存档三处同步），或与 P8 的船坞/科技一起做。**不要绕过 engine.ts 硬做**。
 - `hasSave()` 仍每次渲染读一次 localStorage（改动会影响"导入存档后按钮是否立刻刷新"的交互）。
 - 星球特性文案（`ColonyPanel.getBuffList`）仍是手写 14 组，与 `planets.buffs` 逐条核对一致但未数据化——**改星球数值时要同步改文案**。
 - `TradePanel` 逐条 buff 行未用 `isBuffExpiringSoon` 高亮（只有势力列表徽章有）。
