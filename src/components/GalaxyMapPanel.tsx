@@ -53,6 +53,15 @@ const TYPE_LABEL: Record<GalaxyNode['type'], string> = {
   empty: '空星系',
 };
 
+/** 信息卡的类型标签。`empty` 里混着 5 个海盗老巢（data/galaxy/nodes.ts 的 `pirateLair`）：
+ *  它们**不是空星系**（有 BOSS、有战利品、可出征），标签必须写「海盗老巢」；
+ *  其余 empty 节点确实没有内容，保持「空星系」（用户 2026-08 两轮裁定）。
+ *  ⚠ 本标签只在**已探明**的信息卡里渲染（未探明走迷雾分支、不渲染标签）→ 不泄露老巢身份。
+ *  判据：对 5 个老巢节点，玩家可见处不出现「空星系」四个字（名字 + 这个标签一起算）。 */
+function nodeLabel(node: GalaxyNode): string {
+  return node.pirateLair ? '海盗老巢' : TYPE_LABEL[node.type];
+}
+
 /** 缩放范围与平移边界（viewBox 为 1000×700） */
 const MIN_SCALE = 0.6;
 const MAX_SCALE = 4;
@@ -325,7 +334,7 @@ function GalaxyMapPanel({ ship, factionReputation, onTravelToNode }: GalaxyMapPa
         <div className="flex items-center gap-2 mb-2 flex-wrap">
           <MapPin size={16} className="text-cyan-400" />
           <h3 className="font-bold text-slate-100">{node.name}</h3>
-          <span className="text-[10px] px-1.5 py-0.5 rounded bg-slate-800 text-slate-300 border border-slate-700">{TYPE_LABEL[node.type]}</span>
+          <span className="text-[10px] px-1.5 py-0.5 rounded bg-slate-800 text-slate-300 border border-slate-700">{nodeLabel(node)}</span>
           {isCurrent && <span className="text-[10px] px-1.5 py-0.5 rounded bg-cyan-600 text-white">母舰所在</span>}
         </div>
 

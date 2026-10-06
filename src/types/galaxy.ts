@@ -22,7 +22,10 @@ export interface GalaxyNode {
   /** type='ruin' 时为遗迹 id（→ data/galaxy/archaeology.ts） */
   siteId?: string;
   /** 海盗老巢 BOSS id（→ types/battle.ts 的 PirateBossId / data/battle/pirates.ts）。
-   *  只有 5 个空星系带此字段（V1.5 §7.1）；出征的耗时与可出兵判定见 lib/battle/expedition.ts。 */
+   *  只有 5 个空星系节点带此字段（V1.5 §7.1）；出征的耗时与可出兵判定见 lib/battle/expedition.ts。
+   *  ⚠ 这 5 个节点的 `name` 是**玩家可见的展示名**（统一写「海盗老巢·<BOSS 简称>」，让星图信息卡也能说明是谁的老巢），
+   *     不许再写回「空星系·NN」；信息卡的类型标签另按本字段取「海盗老巢」四个字（GalaxyMapPanel.nodeLabel）。
+   *     未探明时可见名仍由 lib/galaxy/knowledge.getNodeDisplayName 压成「未探测星系」（迷雾）。 */
   pirateLair?: PirateBossId;
 }
 

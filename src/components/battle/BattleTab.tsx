@@ -6,7 +6,13 @@ import { BATTLE_CARDS } from '@/data/battle/cards';
 import { PIRATE_BOSSES } from '@/data/battle/pirates';
 import { getThumbPath } from '@/lib/assetThumb';
 import { bossArtSrc } from '@/lib/battle/view';
-import { canStartExpedition, discoveredLairs, lairNodeId } from '@/lib/battle/expedition';
+import {
+  canStartExpedition,
+  discoveredLairs,
+  expeditionEtaText,
+  lairDisplayName,
+  travelTurnsText,
+} from '@/lib/battle/expedition';
 import { RAID_CHANCE, RAID_IMMUNE_TURNS, RAID_WARNING_TURNS, raidStatus } from '@/lib/battle/raid';
 import { LAIR_REWARD_GOLD, LAIR_REWARD_STARDUST } from '@/lib/battle/rewards';
 import BattleScreen from './BattleScreen';
@@ -182,9 +188,12 @@ function BattleTabBase({
         {expedition ? (
           <div>
             <p className="text-[12.5px] font-bold text-amber-300">
-              还有 {expedition.turnsRemaining} 回合抵达{PIRATE_BOSSES[expedition.bossId]?.name || '未知老巢'}
+              {expeditionEtaText(expedition.turnsRemaining)}
+              <span className="ml-1 font-normal text-slate-300">
+                {PIRATE_BOSSES[expedition.bossId]?.name || '未知老巢'}
+              </span>
               <span className="ml-1 text-[11px] font-normal text-slate-500">
-                （目标 {lairNodeId(expedition.bossId) ?? '未知'}）
+                （目标 {lairDisplayName(expedition.bossId)}）
               </span>
             </p>
             <p className="mt-1 text-[11px] text-slate-500">
@@ -226,7 +235,7 @@ function BattleTabBase({
                         </span>
                       </span>
                       <span className="mt-0.5 block text-[11px] leading-snug text-slate-500">
-                        还有 {l.turns} 回合抵达 · 战利品 {LAIR_REWARD_GOLD} 金币 + {LAIR_REWARD_STARDUST} 星尘
+                        {travelTurnsText(state, l.bossId)} · 战利品 {LAIR_REWARD_GOLD} 金币 + {LAIR_REWARD_STARDUST} 星尘
                       </span>
                     </span>
                   </button>

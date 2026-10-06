@@ -46,33 +46,49 @@ export const GALAXY_NODES: GalaxyNode[] = [
   { id: 'ruin_idols', type: 'ruin', name: '空白神像厅', x: 30, y: 180, siteId: 'idols' },
 
   // ==================== 20 空星系（深空；可进入，内容待更新） ====================
-  // ⚠ 其中 5 个带 `pirateLair`（海盗老巢，V1.5 §7.1）。**只复用空星系挂标记**：
-  //   节点 id / 坐标 / 航道 / 类型 / 名字一律没动（动了星图校验与贸易距离折价都会变），
+  // ⚠ 其中 5 个带 `pirateLair`（海盗老巢，V1.5 §7.1）。**只复用空星系节点挂标记**：
+  //   节点 id / 坐标 / 航道 / 类型一律没动（动了星图校验与贸易距离折价都会变），
   //   故 validateGalaxy() 的结果与本次改动前逐字一致。
+  //   ⚠ **只有 `name` 改过**（用户 2026-08 裁定）：这 5 个节点的 `name` 是**玩家可见的展示名**
+  //     （出征卡片走 lib/battle/expedition.discoveredLairs → node.name；星图信息卡、下一回合预告、
+  //     贸易目的地走 lib/galaxy/knowledge.getNodeDisplayName → node.name），
+  //     仍叫「空星系·NN」会让玩家看到"黑寡妇玛拉的老巢 = 空星系·12"（截图实证 ✗）。
+  //     故老巢节点的 name 写成 **`海盗老巢·<BOSS 简称>`**（**带 BOSS 名**：星图信息卡只有标题位能说明
+  //     "这是谁的老巢"，别处不显示，用户最终裁定；代价是出征卡片上 BOSS 名出现两次，**用户知情并接受**），
+  //     `pirateLair` 标记与坐标保持不变。
+  //   ⚠ **类型标签另算**：星图信息卡的 `TYPE_LABEL[node.type]` 对 empty 节点是「空星系」，
+  //     套到老巢头上同样是错的 → components/GalaxyMapPanel 的 `nodeLabel()` 按 `node.pirateLair` 取「海盗老巢」。
+  //     标签恒为「海盗老巢」四个字（**不带 BOSS 名**，名字已经在标题位了，别在标签里再说一遍）。
+  //     判据（有断言脚本核）：**5 个老巢节点在任何玩家可见处都不出现「空星系」**。
+  //   ⚠ 迷雾不受影响：未探明的老巢，getNodeDisplayName 仍返回「未探测星系」、星图节点不画名字、
+  //     getNodeLandscapeImage 仍返回 null、信息卡走迷雾分支（**不渲染类型标签**）—— name 与标签只在探明后可见。
+  //   ⚠ 除这 5 个老巢外，其余 15 个空星系的 name **保持**「空星系·NN」（那里确实没有内容）。
   //   对照表（V1.5 §7.1 的星图位置 → 对应 BOSS）：
   //     e20 → b4（锈钩·卡尔戈）  e11 → b3（深海阎王·巴罗萨）  e06 → b1（快刀·红胡子）
   //     e16 → b5（苍白歌者·塞壬） e12 → b2（黑寡妇·玛拉）
-  //   BOSS 名与血量见 data/battle/pirates.ts（本文件不重复维护）；出征耗时由坐标推导，见 lib/battle/expedition.ts。
+  //   BOSS 全名与血量见 data/battle/pirates.ts（本文件仍**不重复维护** BOSS 全名：节点名只写简称，
+  //   出征卡片上的 BOSS 名走 PIRATE_BOSSES；坏 id 由 expedition 的 DEV 自检兜底）；
+  //   出征耗时由坐标推导，见 lib/battle/expedition.ts。
   { id: 'e01', type: 'empty', name: '空星系·01', x: 520, y: 340 },
   { id: 'e02', type: 'empty', name: '空星系·02', x: 250, y: 250 },
   { id: 'e03', type: 'empty', name: '空星系·03', x: 620, y: 430 },
   { id: 'e04', type: 'empty', name: '空星系·04', x: 470, y: 270 },
   { id: 'e05', type: 'empty', name: '空星系·05', x: 790, y: 60 },
-  { id: 'e06', type: 'empty', name: '空星系·06', x: 120, y: 520, pirateLair: 'b1' },
+  { id: 'e06', type: 'empty', name: '海盗老巢·红胡子', x: 120, y: 520, pirateLair: 'b1' },
   { id: 'e07', type: 'empty', name: '空星系·07', x: 300, y: 600 },
   { id: 'e08', type: 'empty', name: '空星系·08', x: 520, y: 520 },
   { id: 'e09', type: 'empty', name: '空星系·09', x: 820, y: 300 },
   { id: 'e10', type: 'empty', name: '空星系·10', x: 700, y: 240 },
-  { id: 'e11', type: 'empty', name: '空星系·11', x: 240, y: 120, pirateLair: 'b3' },
-  { id: 'e12', type: 'empty', name: '空星系·12', x: 900, y: 80, pirateLair: 'b2' },
+  { id: 'e11', type: 'empty', name: '海盗老巢·巴罗萨', x: 240, y: 120, pirateLair: 'b3' },
+  { id: 'e12', type: 'empty', name: '海盗老巢·玛拉', x: 900, y: 80, pirateLair: 'b2' },
   { id: 'e13', type: 'empty', name: '空星系·13', x: 80, y: 250 },
   { id: 'e14', type: 'empty', name: '空星系·14', x: 600, y: 540 },
   { id: 'e15', type: 'empty', name: '空星系·15', x: 330, y: 240 },
-  { id: 'e16', type: 'empty', name: '空星系·16', x: 760, y: 560, pirateLair: 'b5' },
+  { id: 'e16', type: 'empty', name: '海盗老巢·塞壬', x: 760, y: 560, pirateLair: 'b5' },
   { id: 'e17', type: 'empty', name: '空星系·17', x: 180, y: 420 },
   { id: 'e18', type: 'empty', name: '空星系·18', x: 500, y: 600 },
   { id: 'e19', type: 'empty', name: '空星系·19', x: 860, y: 200 },
-  { id: 'e20', type: 'empty', name: '空星系·20', x: 420, y: 460, pirateLair: 'b4' },
+  { id: 'e20', type: 'empty', name: '海盗老巢·卡尔戈', x: 420, y: 460, pirateLair: 'b4' },
 ];
 
 /** 节点 id → 定义（星图渲染与状态查询共用） */

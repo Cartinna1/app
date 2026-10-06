@@ -29,9 +29,41 @@ export function lairNodeId(bossId: PirateBossId): string | null {
   return LAIR_NODE_BY_BOSS[bossId] ?? null;
 }
 
-/** 老巢的展示名（就是所在星系的节点名，如「空星系·06」；查不到时空串） */
+/** 老巢的展示名（就是所在星系的节点名，如「海盗老巢·玛拉」；查不到时空串） */
 function lairNodeName(bossId: PirateBossId): string {
   return getGalaxyNode(lairNodeId(bossId))?.name ?? '';
+}
+
+/**
+ * 老巢展示名（**UI 唯一出口**：出征卡片里的节点位）。
+ * 老巢节点的 `name` 就是玩家可见的展示名（data/galaxy/nodes.ts 写成「海盗老巢·<BOSS 简称>」），
+ * 这里给出玩家可读的兜底 —— UI 不许自己写 '未知星系' 或去猜节点名（`discoveredLairs` 也读它，两处同源）。
+ * 迷雾不受影响：未探明的老巢节点一律不被 discoveredLairs 列出，其可见名走
+ * lib/galaxy/knowledge.getNodeDisplayName（→「未探测星系」），本函数不参与那条路径。
+ */
+export function lairDisplayName(bossId: PirateBossId): string {
+  return lairNodeName(bossId) || '未知海盗老巢';
+}
+
+/**
+ * 「航行 N 回合」文案（**未出发**时的预览口径，唯一真值）。
+ * ⚠ 只有出征列表（舰队还没出发）用它；在途时读 `state.expedition.turnsRemaining`，见 expeditionEtaText。
+ * 耗时走 expeditionTurns（= getGalaxyTurns，与跃迁/贸易同源，含 MAX_ROUTE_TURNS 钳制），UI 不许自己算。
+ * 没有殖民地 / 航线被封锁（turns 为 null）时返回「航线不通」。
+ */
+export function travelTurnsText(state: GameState, bossId: PirateBossId): string {
+  const turns = expeditionTurns(state, bossId);
+  return turns === null ? '航线不通' : `航行 ${turns} 回合`;
+}
+
+/**
+ * 「还有 N 回合抵达」文案（**在途**时，唯一真值）。
+ * `turnsRemaining` 来自 `state.expedition.turnsRemaining`（TICK_BATTLE_STATE 推进，见 hooks/gameReducer），
+ * 调用方把 `expedition.turnsRemaining` 原样传进来，别在 UI 里自己算 ——
+ * 未出发时**不要**用本函数（那时写「还有 N 回合抵达」是错的：舰队还在港里，见 travelTurnsText）。
+ */
+export function expeditionEtaText(turnsRemaining: number): string {
+  return `还有 ${turnsRemaining} 回合抵达`;
 }
 
 /** 殖民地是否已建立（`scouting` 是旧存档的建设期，母舰已在场，也算已建立） */
@@ -85,7 +117,7 @@ export function isLairDiscovered(state: GameState, bossId: PirateBossId): boolea
   return (state.ships[0]?.galaxy?.visitedNodes ?? []).includes(nodeId);
 }
 
-/** 已探明的老巢列表（供战斗页签展示：目标 BOSS、所在节点名、还有 N 回合） */
+/** 已探明的老巢列表（供战斗页签展示：目标 BOSS、老巢节点名 lairDisplayName、未出发的航行回合数） */
 export function discoveredLairs(
   state: GameState
 ): { bossId: PirateBossId; nodeId: string; name: string; turns: number }[] {
@@ -97,7 +129,7 @@ export function discoveredLairs(
     const bossId = node.pirateLair;
     const turns = expeditionTurns(state, bossId);
     if (turns === null) continue;             // 没有殖民地 / 路线被封锁 → 这次出不征
-    out.push({ bossId, nodeId: node.id, name: lairNodeName(bossId), turns });
+    out.push({ bossId, nodeId: node.id, name: lairDisplayName(bossId), turns });
   }
   return out;
 }

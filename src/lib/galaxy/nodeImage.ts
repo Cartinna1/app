@@ -4,7 +4,7 @@
 //   可殖民星球  /planet-landscape/<星球类型id>.webp   **已在位**（10 个类型：desert/ocean/polar/arid/terran/alpine/savannah/tropical/tundra/ruin）
 //   遗迹        /archaeology/<遗迹id>/cover.webp      **已在位**（直接复用该遗迹的图鉴封面，避免两套图分叉）
 //   势力        /faction-landscape/<势力id>.webp     **已在位**（f01~f10，共 10 张；2026-08 实测：文件都在，非"待补"）
-//   海盗老巢    /battle/lairs/<bossId>.webp          **待出图**（5 张：b1~b5；老巢 = 挂了 pirateLair 的空星系，见 data/galaxy/nodes.ts）
+//   海盗老巢    /battle/lairs/<bossId>.webp          **待出图**（5 张：b1~b5；老巢 = 挂了 pirateLair 的空星系节点，见 data/galaxy/nodes.ts）
 //   未开发(empty，且非老巢) 无图
 // 尺寸口径：本图位是**详情大图**（宽度跟卡片走、`w-full aspect-video`，桌面最宽可达 1360px），
 //   故与 planet-landscape / faction-landscape 同档出 **1424×800（16:9）**，**不需要缩略图**
@@ -42,7 +42,7 @@ export function getNodeLandscapeImage(node: GalaxyNode, ship?: Mothership): stri
     return site?.galleryImage || null; // 形如 /archaeology/<siteId>/cover.webp
   }
   if (node.type === 'faction') return node.factionId ? `${NODE_IMAGE_DIR.faction}/${node.factionId}.webp` : null;
-  // 海盗老巢（V1.5 §7.1：5 个老巢复用空星系挂 pirateLair）
+  // 海盗老巢（V1.5 §7.1：5 个老巢复用空星系节点，节点上挂 pirateLair）
   if (node.pirateLair) return `${NODE_IMAGE_DIR.lair}/${node.pirateLair}.webp`;
   return null;
 }
