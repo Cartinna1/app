@@ -3,11 +3,15 @@
    P3 验收：卡牌战斗状态 + 存档三处同步
    用法：node --import ./scripts/register-ts.mjs scripts/check-battle-state.cjs
    覆盖：
-     ① SAVE_VERSION=4 ② 新开局默认值 ③ **新开局与读档默认值必须一致**（AGENTS 反复踩的坑）
+     ① SAVE_VERSION=5 ② 新开局默认值 ③ **新开局与读档默认值必须一致**（AGENTS 反复踩的坑）
      ④ `battle` 不进存档 ⑤ 存档往返一致 ⑥ v2/v3 旧档能读入且拿到默认值（含 v4 的造船队列）
      ⑦ 舰队不变量（**按份数**：编入份数≤卡库份数 / 每队 30 / 同型可拆分 / 出征队不能打防守标签 / 同时只能 1 个出征）
      ⑧ reducer 不 mutate prev（快照比对）  ⑨ cloneBattleState 深拷贝
      ⑩ END_BATTLE 写回永久损失（**按份**），且**掠夺战与出征战收尾不同**（§10.1 vs §10.2）
+   构造改动（v5 掠夺两段窗口，**断言逐条等价、只跟着新字段走**）：
+     · EMPTY_RAID / 各处手写的 raid 字面量补上 `arrivedTurns: 0, arrived: false`（否则读数会带上 undefined）；
+     · `SAVE_VERSION = 4` → `5`（唯一真值就是 lib/save.ts 的常量，期望值必须跟着版本走）；
+     · 顶部覆盖清单里 ① 的说明同步改成 5。
    口径说明（踩过的坑）：
      · 损失是**按份**的：同型 2 份损失 1 份 → 卡库与舰队各少 1 份，幸存的那份留在舰队里。
        所以不能断言"舰队里不再出现该 cardId"（那是按卡 id 整类清除，会多删）。
@@ -29,7 +33,7 @@ const eq = (a, b) => J(a) === J(b);
   const fleetsMod = await import('@/data/battle/fleets');
 
   const DISPATCH = (st, action) => gameReducer(st, action);
-  const EMPTY_RAID = { inTurns: null, immuneTurns: 0, raiders: 0 };
+  const EMPTY_RAID = { inTurns: null, arrivedTurns: 0, immuneTurns: 0, raiders: 0, arrived: false };
   /** 把一场战斗用 autoTurn 打到结束（走 reducer 的 BATTLE_ACTION，全程 clone） */
   const fight = (st) => {
     let s = st, n = 0;
@@ -45,7 +49,7 @@ const eq = (a, b) => J(a) === J(b);
 
   // ---------- ① 版本 ----------
   console.log('\n[1] 存档版本与新开局默认值');
-  check(SAVE_VERSION === 4, 'SAVE_VERSION = 4', '实际 ' + SAVE_VERSION);
+  check(SAVE_VERSION === 5, 'SAVE_VERSION = 5', '实际 ' + SAVE_VERSION);
 
   const init = createInitialGameState();
   check(Array.isArray(init.cardLibrary) && init.cardLibrary.length === 0, '新开局卡库为空（不赠送战舰）');
@@ -57,7 +61,7 @@ const eq = (a, b) => J(a) === J(b);
 
   // ---------- ③ 新开局 ↔ 读档默认值一致 ----------
   console.log('\n[2] 新开局 与 读档默认值 必须一致（AGENTS 的坑）');
-  const minimal = { saveVersion: 4, phase: 'playing', turn: 1, ships: init.ships };
+  const minimal = { saveVersion: 5, phase: 'playing', turn: 1, ships: init.ships };
   const fromSave = stateFromSave(minimal);
   for (const f of ['cardLibrary', 'fleets', 'expedition', 'raid', 'battle', 'buildQueue']) {
     check(eq(fromSave[f], init[f]), `stateFromSave 的 ${f} 与新开局一致`, J(fromSave[f]) + ' vs ' + J(init[f]));
@@ -78,7 +82,8 @@ const eq = (a, b) => J(a) === J(b);
   check(st.fleets[0].shipIds.length === lib.length, '卡库里的舰都编入了（' + st.fleets[0].shipIds.length + '/' + lib.length + '）');
   st = DISPATCH(st, { type: 'START_EXPEDITION', bossId: 'b1', fleetId: st.fleets[0].id, turns: 5 });
   check(!!st.expedition, '出征已登记（往返才有意义）');
-  st = { ...st, raid: { inTurns: 3, immuneTurns: 7, raiders: 2 } };
+  // 掠夺状态往返：用**阶段 A**（预警中）的形状 —— 五个字段全给满，往返才能验到新字段
+  st = { ...st, raid: { inTurns: 3, arrivedTurns: 0, immuneTurns: 7, raiders: 2, arrived: false } };
   // 造船队列：手写两项（不靠 ENQUEUE_BUILD，避免把"资源/船坞门槛"混进存档往返这一条）
   st = {
     ...st,
@@ -197,7 +202,7 @@ const eq = (a, b) => J(a) === J(b);
 
   // ---------- ⑩ END_BATTLE：掠夺战 vs 出征战 ----------
   console.log('\n[9a] 掠夺防守战（bossId=raid）：只收掠夺，不动在途出征');
-  let r = { ...createInitialGameState(), cardLibrary: fleetsMod.FLEET_STARTER.slice(), raid: { inTurns: 2, immuneTurns: 0, raiders: 1 } };
+  let r = { ...createInitialGameState(), cardLibrary: fleetsMod.FLEET_STARTER.slice(), raid: { inTurns: 2, arrivedTurns: 0, immuneTurns: 0, raiders: 1, arrived: false } };
   r = fleetOfLibrary(r, '防守队');
   r = { ...r, expedition: { bossId: 'b3', fleetId: '在外舰队', turnsRemaining: 4 } };
   const libBefore = r.cardLibrary.length, fleetBefore = r.fleets[0].shipIds.length;
@@ -215,7 +220,7 @@ const eq = (a, b) => J(a) === J(b);
   check(r2.raid.immuneTurns === 20, '掠夺战结束给 20 回合免疫（§10.2：打赢打输都免疫）', String(r2.raid.immuneTurns));
 
   console.log('\n[9b] 出征战（bossId=b1）：结束出征，不动掠夺');
-  let x = { ...createInitialGameState(), cardLibrary: fleetsMod.FLEET_STARTER.slice(), raid: { inTurns: 3, immuneTurns: 2, raiders: 1 } };
+  let x = { ...createInitialGameState(), cardLibrary: fleetsMod.FLEET_STARTER.slice(), raid: { inTurns: 3, arrivedTurns: 0, immuneTurns: 2, raiders: 1, arrived: false } };
   x = fleetOfLibrary(x, '出征队');
   x = DISPATCH(x, { type: 'START_EXPEDITION', bossId: 'b1', fleetId: x.fleets[0].id, turns: 0 });
   check(!!x.expedition, '出征已登记');

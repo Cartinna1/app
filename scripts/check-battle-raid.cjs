@@ -5,9 +5,13 @@
    期望值一律取自 §10.2 原文（不是我的记忆）：
      · 触发条件 = 卡库战舰总数 **≥10 艘** + **存在殖民地**（两者缺一不可）
      · 每回合 **8%**；冷却 **20 回合**；无防守 → **5 回合后**掠夺成功
-     · 损失 = 金币+原料+星尘，**各项以当前持有量为上限、绝不为负**
+     · 损失 = 金币 20% + 原料各自 1/3（**不动星尘**，用户 2026-08 裁定），各项以当前持有量为上限、绝不为负
      · 防守池 = 所有带 defending 标签舰队的舰船**合并**（顺序=舰队顺序→队内顺序）
      · 掠夺队 = 无头目技能/无护盾/**20 结构值**的海盗旗舰
+   ⚠ **两段窗口**（用户 2026-08 裁定的流程，取代旧的"归零即自动开战"）：
+     阶段 A（预警 5 回合）→ 归零只**转入阶段 B**（不自动开战）→ 阶段 B 再给 5 回合，
+     玩家点「开战」才打（`readyRaidBattle`），一直不点则**自动失败 = 掠夺成功**。
+     本脚本 [4]/[2]/[7]/[8] 的构造与期望已按新流程改写，逐条见交付报告。
    ============================================================================ */
 const fails = [];
 const check = (ok, label, detail) => {
@@ -25,11 +29,22 @@ const J = (v) => JSON.stringify(v);
   const { createMotherships } = await import('@/data/gameData');
   const { applyColonyFounding } = await import('@/lib/colony/colonySetup');
 
-  const need = ['RAID_CHANCE', 'RAID_WARNING_TURNS', 'RAID_IMMUNE_TURNS', 'shouldStartRaid', 'raidResolution', 'raidDefensePool', 'raidLootLoss', 'raidBattleFleet', 'raidHintLines'];
+  const need = ['RAID_CHANCE', 'RAID_WARNING_TURNS', 'RAID_ARRIVED_TURNS', 'RAID_IMMUNE_TURNS', 'idleRaidState', 'raidPhase', 'raidStatus', 'shouldStartRaid', 'raidResolution', 'readyRaidBattle', 'raidDefensePool', 'raidLootLoss', 'raidBattleFleet', 'raidHintLines'];
   const missing = need.filter((k) => R[k] === undefined);
   if (missing.length) { console.error('raid.ts 缺少导出：' + missing.join(', ') + '（现有：' + Object.keys(R).join(', ') + '）'); process.exit(2); }
 
   const D = (st, a) => gameReducer(st, a);
+  /** raid 状态构造器（**两段窗口**：warning 用 inTurns，arrived 用 arrivedTurns；键序与 idleRaidState 一致） */
+  const raidState = (o) => {
+    const x = o || {};
+    return {
+      inTurns: x.inTurns === undefined ? null : x.inTurns,
+      arrivedTurns: x.arrivedTurns || 0,
+      immuneTurns: x.immuneTurns || 0,
+      raiders: x.raiders || 0,
+      arrived: !!x.arrived,
+    };
+  };
   const LIB10 = fleetsMod.FLEET_STARTER.slice(0, 10);   // §10.2：≥10 艘才触发
   /** 有殖民地 + 有卡库（可指定舰队与防守标签） */
   const setup = (opts) => {
@@ -76,9 +91,11 @@ const J = (v) => JSON.stringify(v);
     const nineOrMore = setup({ lib: fleetsMod.FLEET_STARTER.slice(0, 10) });
     check(R.shouldStartRaid(0, nineOrMore) === true, '刚好 10 艘 → 触发');
     // 已在途 / 免疫中
-    const raiding = { ...withColony, raid: { inTurns: 3, immuneTurns: 0, raiders: 1 } };
-    check(R.shouldStartRaid(0, raiding) === false, '已有掠夺在途 → 不重复触发');
-    const immune = { ...withColony, raid: { inTurns: null, immuneTurns: 7, raiders: 0 } };
+    const raiding = { ...withColony, raid: raidState({ inTurns: 3 }) };
+    check(R.shouldStartRaid(0, raiding) === false, '已有掠夺在途（阶段 A）→ 不重复触发');
+    const arrived = { ...withColony, raid: raidState({ arrivedTurns: 5, arrived: true, raiders: 1 }) };
+    check(R.shouldStartRaid(0, arrived) === false, '掠夺已抵达（阶段 B 待战）→ 也不重复触发');
+    const immune = { ...withColony, raid: raidState({ immuneTurns: 7 }) };
     check(R.shouldStartRaid(0, immune) === false, '免疫期内 → 不触发');
     const inBattle = { ...withColony, battle: E.createBattle({ seed: 1, bossId: 'raid' }) };
     check(R.shouldStartRaid(0, inBattle) === false, '战斗中 → 不触发');
@@ -103,19 +120,54 @@ const J = (v) => JSON.stringify(v);
     check(capped.length <= 30, '防守池不超过 30 艘（编队上限）', String(capped.length));
   }
 
-  // ---------- ④ 归零时的走向 ----------
-  console.log('\n[4] 倒计时归零：有防守 → 战斗；没防守 → 掠夺成功');
+  // ---------- ④ 两段窗口：阶段 A 归零只转段；阶段 B 等玩家开战 / 超时自动失败 ----------
+  console.log('\n[4] 两段窗口：预警归零 → 转入阶段 B（不自动开战）→ 迎战或超时掠夺成功');
   {
-    const def = { ...setup({ fleets: [['h1']], defending: [0] }), raid: { inTurns: 0, immuneTurns: 0, raiders: 1 } };
-    check(R.raidResolution(def) === 'defense', '有防守舰队 → defense');
-    const none = { ...setup({ fleets: [['h1']], defending: [] }), raid: { inTurns: 0, immuneTurns: 0, raiders: 1 } };
-    check(R.raidResolution(none) === 'looted', '无防守舰队 → looted');
-    const waiting = { ...def, raid: { inTurns: 3, immuneTurns: 0, raiders: 1 } };
-    check(R.raidResolution(waiting) === 'none', '还在倒计时 → none');
-    const idle = { ...def, raid: { inTurns: null, immuneTurns: 0, raiders: 0 } };
-    check(R.raidResolution(idle) === 'none', '没有掠夺在途 → none');
-    const inBattle = { ...def, battle: E.createBattle({ seed: 1, bossId: 'raid' }) };
-    check(R.raidResolution(inBattle) === 'none', '战斗中 → none');
+    const withDef = setup({ fleets: [['h1']], defending: [0] });
+    const noDef = setup({ fleets: [['h1']], defending: [] });
+
+    // --- 阶段 A（warning）：只在倒计时，绝不产出"该开战/该掠夺"的结论 ---
+    const warning = { ...withDef, raid: raidState({ inTurns: 3 }) };
+    check(R.raidPhase(warning.raid) === 'warning', '阶段 A：raidPhase = warning', R.raidPhase(warning.raid));
+    check(R.raidResolution(warning) === 'none' && R.raidResolution(warning, true) === 'none', '阶段 A 还剩 3 回合：都不动');
+    // 阶段 A 归零（useTurn 读到的是 TICK 之前的状态 → afterTick=true，等价"本次 TICK 后归零"）
+    const lastWarning = { ...withDef, raid: raidState({ inTurns: 1 }) };
+    check(R.raidResolution(lastWarning, true) === 'arrived', '阶段 A 倒计时归零（TICK 后）→ **arrived（转入阶段 B）**');
+    check(R.raidResolution(lastWarning) === 'none', '同一状态按 TICK 前判：还没到（off-by-one 防线）');
+    // tickRaid 把 inTurns 减到 0 后停在 0（不自己跨段）
+    check(R.tickRaid(raidState({ inTurns: 1 })).inTurns === 0, 'tickRaid：阶段 A 减到 0 就停在 0（跨段由调用方按 arrived 处理）');
+
+    // --- 阶段 B（arrived）：等玩家点「开战」；不点则到期 looted ---
+    const arrived = { ...withDef, raid: raidState({ arrivedTurns: 5, arrived: true, raiders: 1 }) };
+    check(R.raidPhase(arrived.raid) === 'arrived', '阶段 B：raidPhase = arrived', R.raidPhase(arrived.raid));
+    check(R.raidResolution(arrived) === 'none' && R.raidResolution(arrived, true) === 'none', '阶段 B 还在 5 回合窗口内：**不自动开战、也不结算掠夺**');
+    const arrivedLast = { ...withDef, raid: raidState({ arrivedTurns: 1, arrived: true, raiders: 1 }) };
+    check(R.raidResolution(arrivedLast, true) === 'looted', '阶段 B 倒计时归零（TICK 后）→ **自动失败 = looted**');
+    check(R.raidResolution(arrivedLast) === 'none', '同一状态按 TICK 前判：还有 1 回合（off-by-one 防线）');
+    check(R.tickRaid(raidState({ arrivedTurns: 1, arrived: true })).arrivedTurns === 0, 'tickRaid：阶段 B 减到 0 就停在 0');
+
+    // 有防守 / 没防守在阶段 B 都不改"要不要自动开战"的结论（玩家不点就都是 looted）
+    const arrivedNoDef = { ...noDef, raid: raidState({ arrivedTurns: 1, arrived: true, raiders: 1 }) };
+    check(R.raidResolution(arrivedNoDef, true) === 'looted', '阶段 B 超时：有没有防守舰队都是 looted（空池 = 必输，等价）');
+
+    // --- 玩家点「开战」才走 readyRaidBattle（唯一由玩家主动点开的战斗入口） ---
+    const ready = R.readyRaidBattle(arrived);
+    check(!!ready && ready.fleet.length === R.raidDefensePool(arrived).length, '阶段 B 有防守池 → readyRaidBattle 给出合并池', J(ready));
+    check(R.readyRaidBattle(arrivedNoDef) === null, '阶段 B 空防守池 → 不给开战（按钮禁用，等超时掠夺成功）');
+    check(R.readyRaidBattle(warning) === null, '**阶段 A 不给开战入口**（还没到）');
+    check(R.readyRaidBattle({ ...arrived, battle: E.createBattle({ seed: 1, bossId: 'raid' }) }) === null, '战斗进行中 → 不给开战');
+    const idle = { ...withDef, raid: R.idleRaidState() };
+    check(R.raidResolution(idle) === 'none' && R.raidPhase(idle.raid) === 'idle', '没有掠夺在途 → idle / none');
+    const inBattle = { ...arrived, battle: E.createBattle({ seed: 1, bossId: 'raid' }) };
+    check(R.raidResolution(inBattle) === 'none', '战斗中 → none（掠夺窗口冻结，等战斗结束）');
+
+    // --- raidStatus：UI 与预告共用的那一份视图 ---
+    const vs = R.raidStatus(arrived);
+    check(vs.phase === 'arrived' && vs.turnsToAutoLoot === 5 && vs.canFight === true, 'raidStatus（阶段 B 有防守）：可开战', J(vs));
+    const vs2 = R.raidStatus(arrivedNoDef);
+    check(vs2.phase === 'arrived' && vs2.canFight === false, 'raidStatus（阶段 B 空池）：canFight = false', J(vs2));
+    const vs3 = R.raidStatus(warning);
+    check(vs3.phase === 'warning' && vs3.turnsToArrival === 3 && vs3.turnsToAutoLoot === 0, 'raidStatus（阶段 A）：只有抵达倒计时', J(vs3));
   }
 
   // ---------- ⑤ 损失：各项以持有量为上限、绝不为负 ----------
@@ -150,20 +202,41 @@ const J = (v) => JSON.stringify(v);
     check(one.battle.boss.body === 20, '掠夺队本体 = 20 结构值（§10.2：无头目技能、无护盾）', String(one.battle.boss.body));
     check(one.battle.player.body === 15, '玩家本体 15 血（BODY_HP）', String(one.battle.player.body));
     check(one.battle.player.pool.length === pool.length, '参战池 = 防守池', J(one.battle.player.pool));
-    // 连打两场：第二场的编制由 raidBattleFleet 决定
-    const two = R.raidBattleFleet({ ...st, raid: { inTurns: 0, immuneTurns: 0, raiders: 2 } }, pool);
+    // 连打两场：第二场的编制由 raidBattleFleet 决定（阶段 B = arrivedTurns>0）
+    const two = R.raidBattleFleet({ ...st, raid: raidState({ arrivedTurns: 5, arrived: true, raiders: 2 }) }, pool);
     check(Array.isArray(two) && two.length === pool.length, '连打两场的参战编制 = 第一场幸存舰（长度不少于池）', J(two));
   }
 
-  // ---------- ⑦ reducer：开始掠夺 / 结算损失 ----------
-  console.log('\n[7] reducer：START_RAID / APPLY_RAID_LOOT');
+  // ---------- ⑦ reducer：START_RAID / ARRIVE_RAID / APPLY_RAID_LOOT / START_RAID_BATTLE ----------
+  console.log('\n[7] reducer：START_RAID → ARRIVE_RAID（转段）→ 开战或 APPLY_RAID_LOOT');
   {
-    const st = setup({});
+    const st = setup({ fleets: [['h1']], defending: [0] });
     const started = D(st, { type: 'START_RAID', raiders: 2 });
-    check(started.raid.inTurns === R.RAID_WARNING_TURNS, `START_RAID → inTurns = ${R.RAID_WARNING_TURNS}`, String(started.raid.inTurns));
+    check(started.raid.inTurns === R.RAID_WARNING_TURNS, `START_RAID → 阶段 A inTurns = ${R.RAID_WARNING_TURNS}`, String(started.raid.inTurns));
     check(started.raid.raiders === 2, 'raiders 记下 2 支');
-    // 结算
-    const rich = { ...started, ships: started.ships.map((s, i) => i === 0 ? { ...s, gold: 100000, food: 300, alloy: 300, stardust: 100, materials: { gold_ore: 50 } } : s) };
+    check(started.raid.arrivedTurns === 0, 'START_RAID 时阶段 B 倒计时为 0（还没抵达）', String(started.raid.arrivedTurns));
+    check(D(started, { type: 'START_RAID', raiders: 1 }) === started, '已有在途掠夺 → START_RAID 原样返回（幂等）');
+
+    // 阶段 A → 阶段 B：只转段，**不建战斗**
+    const arrived = D(started, { type: 'ARRIVE_RAID' });
+    check(arrived.raid.inTurns === null && arrived.raid.arrivedTurns === R.RAID_ARRIVED_TURNS, `ARRIVE_RAID → 阶段 B arrivedTurns = ${R.RAID_ARRIVED_TURNS}`, J(arrived.raid));
+    check(arrived.battle === null, '**ARRIVE_RAID 绝不自动开战**（battle 仍为 null）');
+    check(arrived.raid.raiders === 2, '转段保留掠夺队支数');
+    check(D(arrived, { type: 'ARRIVE_RAID' }) === arrived, '不在阶段 A 时 ARRIVE_RAID 原样返回（幂等）');
+
+    // 阶段 B 的「开战」：唯一由玩家主动点开的战斗入口
+    const fought = D(arrived, { type: 'START_RAID_BATTLE' });
+    check(!!fought.battle && fought.battle.bossId === 'raid', 'START_RAID_BATTLE 建起掠夺防守战');
+    check(fought.battle.player.pool.length === R.raidDefensePool(arrived).length, '参战池 = 防守合并池', J(fought.battle.player.pool));
+    check(fought.raid.arrivedTurns === 0, '开战即离开待战窗口（arrivedTurns = 0）', String(fought.raid.arrivedTurns));
+    // 阶段 A / 空池 / 战斗中都不许开战（reducer 守卫 = readyRaidBattle）
+    const noDefSt = setup({ fleets: [['h1']], defending: [] });
+    const arrivedNoDef = D(D(noDefSt, { type: 'START_RAID', raiders: 1 }), { type: 'ARRIVE_RAID' });
+    check(D(arrivedNoDef, { type: 'START_RAID_BATTLE' }) === arrivedNoDef, '**空防守池 → 不给开战**（原样返回，等超时掠夺成功）');
+    check(D(started, { type: 'START_RAID_BATTLE' }) === started, '阶段 A → 不给开战（原样返回）');
+
+    // 结算（自动失败 / 打输 / 打赢的收尾都走这一步）
+    const rich = { ...arrived, ships: arrived.ships.map((s, i) => i === 0 ? { ...s, gold: 100000, food: 300, alloy: 300, stardust: 100, materials: { gold_ore: 50 } } : s) };
     const loss = R.raidLootLoss(rich);
     const before = rich.ships[0];
     const after = D(rich, { type: 'APPLY_RAID_LOOT' });
@@ -171,27 +244,41 @@ const J = (v) => JSON.stringify(v);
     check(s0.gold === before.gold - (loss.gold || 0), '金币按实扣值减少', `${before.gold} → ${s0.gold}`);
     check((s0.materials.gold_ore || 0) === (before.materials.gold_ore || 0) - ((loss.materials || {}).gold_ore || 0), '原料按实扣值减少');
     check(s0.food >= 0 && s0.alloy >= 0 && s0.stardust >= 0, '扣完后都不为负（§10.2 硬要求）', J({ f: s0.food, a: s0.alloy, sd: s0.stardust }));
-    check(after.raid.inTurns === null, '结算后清掉倒计时');
+    check(after.raid.inTurns === null && after.raid.arrivedTurns === 0, '结算后两个倒计时都清空', J(after.raid));
     check(after.raid.immuneTurns === R.RAID_IMMUNE_TURNS, `结算后免疫 ${R.RAID_IMMUNE_TURNS} 回合`, String(after.raid.immuneTurns));
     check(after.battle === null, '结算不凭空造一场战斗');
   }
 
-  // ---------- ⑧ 可预告（§10.2 明确要求） ----------
-  console.log('\n[8] 必须可预告（§10.2【补完·实现要求】）');
+  // ---------- ⑧ 可预告（§10.2 明确要求）· 两段窗口各自一句 ----------
+  console.log('\n[8] 必须可预告（§10.2【补完·实现要求】）：阶段 A 与阶段 B 的文案必须能区分');
   {
     const st = setup({ fleets: [['h1']], defending: [0] });
-    const raiding = { ...st, raid: { inTurns: 3, immuneTurns: 0, raiders: 1 } };
+    const raiding = { ...st, raid: raidState({ inTurns: 3 }) };
     const lines = R.raidHintLines(raiding);
-    check(Array.isArray(lines) && lines.length > 0, '有掠夺在途 → 有预告行', J(lines));
-    check(lines.some((l) => /3|三/.test(l.text)), '预告里写明还有几回合', J(lines.map((l) => l.text)));
+    check(Array.isArray(lines) && lines.length > 0, '阶段 A → 有预告行', J(lines));
+    check(lines.some((l) => /3|三/.test(l.text)), '阶段 A 预告里写明还有几回合抵达', J(lines.map((l) => l.text)));
+    check(lines.some((l) => l.id === 'raid_incoming'), '阶段 A 的行 id = raid_incoming');
     check(lines.some((l) => l.severity === 'danger' || l.severity === 'warn' || l.severity === 'info'), 'severity 属既有三档');
     const noDef = { ...raiding, fleets: raiding.fleets.map((f) => ({ ...f, defending: false })) };
     const lines2 = R.raidHintLines(noDef);
-    check(lines2.some((l) => /防守|掠夺/.test(l.text)), '没有防守舰队时预告要提醒会被掠夺', J(lines2.map((l) => l.text)));
+    check(lines2.some((l) => /防守|掠夺/.test(l.text)), '阶段 A 没有防守舰队时预告要提醒会被掠夺', J(lines2.map((l) => l.text)));
+
+    // 阶段 B：文案必须说"已抵达 + 还有 N 回合不迎战就掠夺成功"，且 id 与阶段 A 不同
+    const arrivedSt = { ...st, raid: raidState({ arrivedTurns: 4, arrived: true, raiders: 1 }) };
+    const lines3 = R.raidHintLines(arrivedSt);
+    check(lines3.some((l) => l.id === 'raid_arrived'), '阶段 B 的行 id = raid_arrived（与阶段 A 区分）', J(lines3.map((l) => l.id)));
+    check(lines3.some((l) => /已抵达/.test(l.text) && /4/.test(l.text) && /掠夺成功/.test(l.text)), '阶段 B 文案：已抵达 + 还有 4 回合 + 不迎战就掠夺成功', J(lines3.map((l) => l.text)));
+    const arrivedNoDefSt = { ...noDef, raid: raidState({ arrivedTurns: 4, arrived: true, raiders: 1 }) };
+    const lines4 = R.raidHintLines(arrivedNoDefSt);
+    check(lines4.some((l) => /防守/.test(l.text) && /掠夺成功/.test(l.text)), '阶段 B 空池 → danger：会被掠夺成功', J(lines4.map((l) => l.text)));
+
     check(R.raidHintLines(setup({})).length === 0, '没有掠夺在途 → 不加噪音');
+    check(R.raidHintLines({ ...st, raid: raidState({ arrivedTurns: 3, arrived: true, immuneTurns: 6 }) }).length === 2, '阶段 B + 免疫期 → 两行（抵达 + 免疫）');
     // 并进下一回合预告
     const all = hints.getNextTurnHints(raiding);
     check(Array.isArray(all) && all.length > 0, 'getNextTurnHints 能算出来（含掠夺提示）', J(all.map((h) => h.id)));
+    const allB = hints.getNextTurnHints(arrivedSt);
+    check(allB.some((h) => h.id === 'raid_arrived'), 'getNextTurnHints 在阶段 B 也带上抵达提示', J(allB.map((h) => h.id)));
   }
 
   console.log('\n=== P7 验收结果 ===');

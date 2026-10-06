@@ -11,12 +11,16 @@ import { createBattle, cloneBattleState, deploy, attack, endTurn, resolvePending
 import { grantBattleRewards, grantRaidReward, rollRaidReward } from '@/lib/battle/rewards';
 import type { RaidReward } from '@/lib/battle/rewards';
 import {
+  RAID_ARRIVED_TURNS,
   RAID_IMMUNE_TURNS,
   RAID_WARNING_TURNS,
+  idleRaidState,
   raidBattleFleet,
   raidDefensePool,
   raidLootLoss,
   raidLootText,
+  raidPhase,
+  readyRaidBattle,
   tickRaid,
 } from '@/lib/battle/raid';
 import { flattenCost, payCost } from '@/lib/turn/resourceCost';
@@ -63,7 +67,9 @@ export function createInitialGameState(): GameState {
     cardLibrary: [],
     fleets: [],
     expedition: null,
-    raid: { inTurns: null, immuneTurns: 0, raiders: 0 },
+    // 掠夺初值 = lib/battle/raid.idleRaidState()（**唯一真值**，存档兜底 / 各处收尾都从它派生）：
+    // 阶段 A 倒计时 null、阶段 B 倒计时 0、无免疫、无掠夺队
+    raid: idleRaidState(),
     battle: null,
     // 船坞与科技（V1.5 §8.2 / §8.3）：造船队列初始为空。
     // ⚠ 这个初值必须与 lib/save.ts 的 stateFromSave 兜底**逐一一致**（都是 []）。
@@ -309,12 +315,26 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
       // `createBattle` 的编制入参只支持内置的 'starter' / 'all'（见 types/battle.ts 的 CreateBattleOptions），
       // 而参战舰船由主游戏决定（出征 = 该舰队；防守 = 所有防守舰队的合并池）→ 建场后替换玩家侧卡池。
       // 除此之外（掷骰先后手 / 指挥度 / BOSS 与头目技能 / 日志）与 createBattle 逐字一致，引擎逻辑零改动。
+      // ⚠ 本 action 的派发方：`useTurn`（出征倒计时归零自动开战）。玩家主动开的掠夺战走
+      //   `START_RAID_BATTLE`（阶段 B 的「开战」按钮，见下面那个 case）。
       const created = createBattle({ seed: action.seed, bossId: action.bossId });
       const battle: BattleState = { ...created, player: { ...created.player, pool: action.fleet.slice() } };
-      // 防守战（kind='defense'，目标恒为掠夺队 'raid'）开打即"掠夺已经到场"：把倒计时收掉
+      // 防守战（kind='defense'，目标恒为掠夺队 'raid'）开打即"阶段 B 已处理"：把待战倒计时收掉
       // （END_BATTLE 还会再收一次，两处幂等）。出征战不动 raid 字段。
-      const raid = action.kind === 'defense' ? { ...state.raid, inTurns: null } : state.raid;
+      const raid = action.kind === 'defense' ? { ...state.raid, arrivedTurns: 0, arrived: true } : state.raid;
       return { ...state, battle, raid };
+    }
+
+    case 'START_RAID_BATTLE': {
+      // **阶段 B 的「开战」**（用户 2026-08 裁定的流程）：这是**全场唯一由玩家主动点开的战斗入口**。
+      // 能不能开战由 lib/battle/raid.readyRaidBattle 判（必须在阶段 B、战斗未进行、防守池非空），
+      // 参战池 = raidDefensePool（合并池，与 §10.2 / END_BATTLE 的第二场同源）——reducer 不重写判定。
+      const ready = readyRaidBattle(state);
+      if (!ready) return state;
+      const created = createBattle({ seed: Date.now(), bossId: 'raid' });
+      const battle: BattleState = { ...created, player: { ...created.player, pool: ready.fleet.slice() } };
+      // 开战即离开待战窗口（免疫期在 END_BATTLE 收尾时给：打赢 / 打输 / 自动失败三条路都一样）
+      return { ...state, battle, raid: { ...state.raid, arrivedTurns: 0, arrived: true } };
     }
 
     case 'BATTLE_ACTION': {
@@ -344,8 +364,9 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
 
       // ---------------- 掠夺战收尾（V1.5 §10.2） ----------------
       if (isRaid) {
-        // 掠夺结束（打赢 / 打输 / 掠夺成功）：§10.2 之后 20 回合内不再被掠夺
-        const raidOver = { ...state.raid, inTurns: null, raiders: 0, immuneTurns: RAID_IMMUNE_TURNS };
+        // 掠夺结束（打赢 / 打输 / 掠夺成功）：§10.2 之后 20 回合内不再被掠夺。
+        // 两段窗口一起收（阶段 A 的 inTurns 与阶段 B 的 arrivedTurns），并把 arrived 标记复位。
+        const raidOver = { ...idleRaidState(), immuneTurns: RAID_IMMUNE_TURNS };
 
         // ① 2 支掠夺队 = **连续打两场**：赢下第一场后**立刻**进入第二场，第一场未被击毁的舰带进第二场。
         // ⚠ 本体"一条血，不重置"（§10.2）→ 第二场的玩家本体血量直接抄第一场结束时的
@@ -363,7 +384,7 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
             return {
               ...base,
               battle: nextBattle,
-              raid: { ...state.raid, inTurns: null, raiders: state.raid.raiders - 1 },
+              raid: { ...idleRaidState(), raiders: state.raid.raiders - 1 },
             };
           }
         }
@@ -425,22 +446,37 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
     }
 
     case 'START_RAID': {
-      // 掠夺触发（§10.2）：登记"RAID_WARNING_TURNS 回合后到场" + 本次来了几支掠夺队
+      // 掠夺触发（§10.2）：登记**阶段 A**"RAID_WARNING_TURNS 回合后抵达" + 本次来了几支掠夺队
       // （1-2 支按 50/50 掷，随机数由调用方 useTurn 取；判定在 lib/battle/raid.shouldStartRaid）。
-      // 幂等：已有在途掠夺时原样返回，不覆盖正在走的倒计时。
-      if (state.raid.inTurns !== null) return state;
-      return { ...state, raid: { ...state.raid, inTurns: RAID_WARNING_TURNS, raiders: action.raiders } };
+      // 幂等：已有在途掠夺（阶段 A 或阶段 B）时原样返回，不覆盖正在走的倒计时。
+      if (raidPhase(state.raid) !== 'idle') return state;
+      return {
+        ...state,
+        raid: { ...idleRaidState(), inTurns: RAID_WARNING_TURNS, raiders: action.raiders },
+      };
+    }
+
+    case 'ARRIVE_RAID': {
+      // 阶段 A 归零 → **转入阶段 B**（不自动开战）：海盗抵达、停在战斗页签等玩家点「开战」，
+      // 同时开始 RAID_ARRIVED_TURNS 回合的"不打就自动失败"倒计时。
+      // 幂等：不在阶段 A（inTurns 已是 null）时原样返回。
+      if (state.raid.inTurns === null) return state;
+      return {
+        ...state,
+        raid: { ...state.raid, inTurns: null, arrivedTurns: RAID_ARRIVED_TURNS, arrived: true },
+      };
     }
 
     case 'APPLY_RAID_LOOT': {
-      // 掠夺成功（倒计时归零且**没有防守舰队**）：结算资源损失并进入免疫期（§10.2）。
-      // 损失 = 金币 + 原料 + 星尘，各项以当前持有量为上限（实扣值来自 raid.raidLootLoss，唯一真值）；
+      // 掠夺成功（**自动失败**：阶段 B 的倒计时耗尽仍未迎战；或没有防守舰队时的既有路径）：
+      // 结算资源损失并进入免疫期（§10.2）。
+      // 损失 = 金币 20% + 原料各自 1/3，各项以当前持有量为上限（实扣值来自 raid.raidLootLoss，唯一真值）；
       // 与"防守战打输"共用 settleRaidLoot，两条路的损失口径必须完全一致（§10.2 原话）。
       const { ships, detail } = settleRaidLoot(state);
       return {
         ...state,
         ships,
-        raid: { ...state.raid, inTurns: null, raiders: 0, immuneTurns: RAID_IMMUNE_TURNS },
+        raid: { ...idleRaidState(), immuneTurns: RAID_IMMUNE_TURNS },
         eventLog: [
           { id: createUid('raid'), turn: state.turn, event: '殖民地被掠夺', detail },
           ...state.eventLog,

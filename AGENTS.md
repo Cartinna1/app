@@ -94,7 +94,7 @@ src/
 | 卡牌战斗**展示逻辑**（信息条 / 攻击状态三重区分 / 待选择时只有候选可点） | `lib/battle/view.ts`（纯函数，**不依赖 React/DOM**；组件只做渲染） |
 | 出征可用性 / 出征耗时（殖民地→老巢）/ 老巢是否探明 / 战斗期间能否结束回合 | `lib/battle/expedition.ts` —— 耗时**必须**走 `lib/galaxy/graph.ts` 的 `getGalaxyTurns`（同跃迁与贸易折价，含 `MAX_ROUTE_TURNS=9` 钳制），勿自己写距离或另开不封顶的算法 |
 | 卡牌战斗战利品（老巢 100000 金币 + 40 星尘 / 掠夺胜利的随机四类奖励） | `lib/battle/rewards.ts`（金币收益**必须过 `famineHalveGold`** 并 `pushGoldLog`）。老巢用 `battleRewards` / `grantBattleRewards`（语义与签名冻结，掠夺队恒 0/0）；掠夺胜利的随机奖励用 **`rollRaidReward` / `grantRaidReward`**（声望由 reducer 写回，数值是 §10.2 未给的占位，见 10.3） |
-| 掠夺循环（触发前提「卡库 ≥10 舰 + 有殖民地」/ 8% / 5 回合预警 / 20 回合免疫 / 防守合并池与池上限 / 掠夺损失 / 掠夺战编制 / 可预告 / TICK 算式） | `lib/battle/raid.ts` → `tickRaid` / `shouldStartRaid` / `raidSquadCount` / `raidResolution` / `raidDefensePool` / `raidBattleFleet` / `raidLootLoss` / `raidLootText` / `raidHintLines`——**reducer、`useTurn`、`BattleTab`、`nextTurnHints` 都只调它**，判定与数值不许在别处再写一份（`RAID_IMMUNE_TURNS` 也已从 reducer 迁到这里成为唯一真值） |
+| 掠夺循环（触发前提「卡库 ≥10 舰 + 有殖民地」/ 8% / **两段窗口** / 20 回合免疫 / 防守合并池与池上限 / 掠夺损失 / 掠夺战编制 / 可预告 / TICK 算式） | `lib/battle/raid.ts` → `tickRaid` / `shouldStartRaid` / `raidSquadCount` / `raidPhase` / `raidStatus` / `raidResolution` / `readyRaidBattle` / `idleRaidState` / `raidDefensePool` / `raidBattleFleet` / `raidLootLoss` / `raidLootText` / `raidHintLines`（**两段窗口：A 预警 5 回合 → B 已抵达再 5 回合，B 期间玩家点「开战」才打；B 超时 = 自动失败（掠夺成功）**；A 归零**不**自动开战）——**reducer、`useTurn`、`BattleTab`、`nextTurnHints` 都只调它**，判定与数值不许在别处再写一份（`RAID_IMMUNE_TURNS` 也已从 reducer 迁到这里成为唯一真值） |
 | 战斗状态字段与动作（cardLibrary / fleets / expedition / raid / battle） | `hooks/gameReducer.ts` —— 「一船同一时间只能编入一个舰队」按**份数**表达（某 cardId 已编入份数 ≤ 卡库持有份数）；永久损失也按**份**写回 |
 | 机库（卡库聚合 / 舰队视图 / 编成守卫「能不能做 + 中文原因」） | `lib/battle/hangar.ts`（`libraryRows` / `fleetRows` / `fleetEditorRows` / `canAddShip` / `canRemoveShip` / `canDeleteFleet` / `canToggleDefending` / `canRenameFleet` / `hangarSummary`，纯函数、不依赖 React/DOM）。**编成份数、每队 `fleetSize` 上限、出征中的舰队不许动、`onExpedition`/`canEdit` 判定都只在这一份**：reducer 守卫与 `components/hangar/*` 的禁用提示都调它，**不许再写第二份判定**。互斥两个方向都要挡：出征中打不了防守标签（`canToggleDefending`）、带防守标签的出征不了（`expedition.canStartExpedition`） |
 | 战斗规则一键复验 | `scripts/check-battle.cjs`（数据校验 / 类型风险 / 未使用参数 / 静态审计 / DEMO 96 条定点断言 / 同 seed 行为对拍含完整日志 / 状态与存档 / 展示逻辑 / **出征闭环** / **机库**）—— **改战斗任何东西都要跑它** |
@@ -107,7 +107,7 @@ src/
 1. `types/game.ts` 加声明；
 2. `lib/save.ts` 的 `buildSaveData` 写入（`SaveData` 是 `Pick<GameState,…>`，漏字段会编译报错——以构建报错为兜底，但别依赖它）；
 3. `lib/save.ts` 的 `stateFromSave` 加读档兜底默认值；
-4. 字段结构变化时在 `migrateSave` 写迁移分支（存档带 `saveVersion`，**当前为 3**：v2 把位置/跃迁从 `tradeStatus` 迁入 `ship.galaxy`；v3 加入卡牌战斗状态 `cardLibrary`/`fleets`/`expedition`/`raid`（**卡库初始为空，不赠送战舰**），`battle` **不入档**（战斗可从倒计时推导 → 读档回到战斗前）。旧档不做星图进度迁移，只补一份全新星图与 `titles`）。
+4. 字段结构变化时在 `migrateSave` 写迁移分支（存档带 `saveVersion`，**当前为 5**：v2 把位置/跃迁从 `tradeStatus` 迁入 `ship.galaxy`；v3 加入卡牌战斗状态 `cardLibrary`/`fleets`/`expedition`/`raid`（**卡库初始为空，不赠送战舰**），`battle` **不入档**（战斗可从倒计时推导 → 读档回到战斗前）；v4 加造船队列 `buildQueue`；v5 给 `raid` 加 `arrivedTurns` / `arrived`（掠夺两段窗口，旧档兜底 = 没有掠夺在途）。旧档不做星图进度迁移，只补一份全新星图与 `titles`）。
 
 只影响运行时、不需持久化的字段（如 `factionRepLog`）不进存档清单，但也必须在 `stateFromSave` 里给出初始值。
 
@@ -244,7 +244,7 @@ src/
 
 政策时长 3~5 回合（`factionTurn`）、合同档位表 `[16, 26, 30000, 40000]`（`contracts.ts`）、声望阈值表（`factions.REPUTATION_TIERS`）、`RECRUIT_BASE_COST=2000`、`BLACKOUT_GUARD_TURNS=10`、`PRODUCT_SHELF_LIFE=3`、市场区间 500~800 / 500~700、股票费率 3%（万众一心 1.5%、黄金集团 0）、`EXPEDITION_UNLOCK_COUNT=12`、`GOLD_LOG_LIMIT=200` / `EVENT_LOG_LIMIT=100`、考古成功率常数（第七节）。
 
-**掠夺循环（P7，全部在 `lib/battle/raid.ts`）**：触发概率 `RAID_CHANCE=0.08`、预警/无防守窗口 `RAID_WARNING_TURNS=5`、免疫 `RAID_IMMUNE_TURNS=20`、触发门槛 `RAID_MIN_SHIPS=10`（卡库战舰数）、1-2 支的 `RAID_SQUAD_SPLIT=0.5`、防守合并池上限 `RAID_POOL_CAP = BATTLE_TUNING.fleetSize(30)`（§10.2 未给上限，取 §10.1 编制上限锚点）。
+**掠夺循环（P7，全部在 `lib/battle/raid.ts`）**：触发概率 `RAID_CHANCE=0.08`、预警窗口 `RAID_WARNING_TURNS=5`（§10.2 原文「5 回合后掠夺成功」）、**抵达后待战窗口 `RAID_ARRIVED_TURNS=5`（2026-08 用户口径；与前者语义不同、故意分成两个常量）**、免疫 `RAID_IMMUNE_TURNS=20`、触发门槛 `RAID_MIN_SHIPS=10`（卡库战舰数）、1-2 支的 `RAID_SQUAD_SPLIT=0.5`、防守合并池上限 `RAID_POOL_CAP = BATTLE_TUNING.fleetSize(30)`（§10.2 未给上限，取 §10.1 编制上限锚点）。
 **掠夺损失口径（2026-08 用户裁定，优先于 §10.2 原文）**：只扣 **金币 = 持有量 20%** 与 **原料 = 各自持有 1/3（四舍五入）**，**不动星尘**（§10.2 原文含星尘，已被用户覆盖）。常量：`RAID_LOOT_GOLD_RATIO=0.2` / `RAID_LOOT_MATERIAL_RATIO=1/3`，都在 `lib/battle/raid.ts`，各自一行可改。
 **船坞与科技（P8）**：三级船坞 B32/B33/B34 电力 **6 / 10 / 18**（§11 #16，从 `def.powerConsumption` 真进 `computeColonyPower`）；单舰造价基准 白 2000+20+5硅片 / 蓝 6000+100+20硅片 / 紫 15000+300+5量子簇 / 橙 50000+800+10暗物质+10量子簇；基础工期 1/2/3/4 回合；**同时建造 2 艘 + 排队无限**（§11 #5）；稀有度→船坞等级 白1/蓝2/紫3/橙3；科技 T28–T36 共 9 个（科研点 400/1200、2/3 回合）。新增存档字段 `buildQueue`（`SAVE_VERSION 3→4`）。
 ⚠ **「卡牌系数」是"文档无值"的占位**：V1.5 全文**没有**这一列（grep「系数」零命中）。现取 `max(0.7, round2(1 + (cost − 3) × 0.1))`，锚点是"3 费 = 1.00，正好等于 §8.3 的稀有度基准表"。要改只改这一个函数。

@@ -332,12 +332,13 @@ export interface GameState {
   cardLibrary: ShipCardId[];              // 卡库：拥有的战舰（无上限；被击毁即永久移除）。初始为空（战舰全靠玩家在船坞建造）
   fleets: BattleFleet[];                  // 舰队：数量不限；一船只能编入一队；每队 ≤ 30 艘
   expedition: BattleExpedition | null;    // 进行中的出征（同时只能 1 个）
-  raid: BattleRaidState;                  // 掠夺状态
+  raid: BattleRaidState;                  // 掠夺状态（两段窗口：预警 CD → 已抵达待战；见 types/battle.ts）
   battle: BattleState | null;             // 进行中的战斗。⚠ **不进存档**（读档一律为 null）
   // ===== 船坞与科技（V1.5 §8.2 造船建筑 / §8.3 生产规则 / §9 科技树）=====
   /** 造船队列（同时建造 2 艘 + 排队无限，§11 #5）。完工由 useTurn 每回合调
    *  lib/battle/shipyard.advanceQueue 推进，卡 id 写进 `cardLibrary`（"拥有什么"的唯一真值）。
-   *  ⚠ 存档字段（SAVE_VERSION 4），加/改它照 AGENTS 第四节四处同步。 */
+   *  ⚠ 存档字段（v4 引入；当前存档版本号见 lib/save.ts 的 SAVE_VERSION —— 掠夺两段窗口把它抬到 5），
+   *  加/改它照 AGENTS 第四节四处同步。 */
   buildQueue: BuildQueueItem[];
 }
 
@@ -361,9 +362,14 @@ export type GameAction =
   | { type: 'END_BATTLE' }
   | { type: 'TICK_BATTLE_STATE' }
   // 掠夺循环（V1.5 §10.2）：触发时登记倒计时与掠夺队支数；掠夺成功时按实扣值结算资源损失。
-  // 派发方只有 useTurn（每回合编排），UI 不直接派发。
+  //   · START_RAID / ARRIVE_RAID / APPLY_RAID_LOOT 的派发方只有 useTurn（每回合编排），UI 不直接派发；
+  //   · **START_RAID_BATTLE 是全场唯一由玩家主动点开的战斗入口**（阶段 B 的「开战」）：
+  //     载荷由 useStableActions 侧组装（bossId 'raid' / kind 'defense' / 防守合并池 / seed），
+  //     UI 不持有"随便开一场战斗"的能力（它只调一个无参回调）。
   | { type: 'START_RAID'; raiders: number }
+  | { type: 'ARRIVE_RAID' }
   | { type: 'APPLY_RAID_LOOT' }
+  | { type: 'START_RAID_BATTLE' }
   // ===== 船坞与造舰（V1.5 §8.2 / §8.3：同时建造 2 艘 + 排队无限）=====
   // 校验走 lib/battle/shipyard.canEnqueue（内部即 canBuild），扣费走 lib/turn/resourceCost.payCost。
   // 完工由 useTurn 每回合调 advanceQueue 写进 cardLibrary，**没有 REMOVE_BUILT 这类 action**。

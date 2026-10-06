@@ -11,7 +11,7 @@ import { processArchaeologyTurn } from '@/lib/galaxy/archaeologyTurn';
 import { EVENT_LOG_LIMIT } from '@/data/gameData';
 import { createUid } from '@/lib/id';
 import { canEndGameTurn, readyExpedition } from '@/lib/battle/expedition';
-import { raidDefensePool, raidResolution, raidSquadCount, shouldStartRaid } from '@/lib/battle/raid';
+import { raidResolution, raidSquadCount, shouldStartRaid } from '@/lib/battle/raid';
 import { advanceQueue, dockLevel } from '@/lib/battle/shipyard';
 import { BATTLE_CARDS } from '@/data/battle/cards';
 
@@ -35,6 +35,7 @@ export function useTurn(
     | Extract<GameAction, { type: 'TICK_BATTLE_STATE' }>
     | Extract<GameAction, { type: 'START_BATTLE' }>
     | Extract<GameAction, { type: 'START_RAID' }>
+    | Extract<GameAction, { type: 'ARRIVE_RAID' }>
     | Extract<GameAction, { type: 'APPLY_RAID_LOOT' }>
   >,
   autoSave: () => void
@@ -58,9 +59,10 @@ export function useTurn(
     //   所以判定必须传 afterTick=true（等价于 turnsRemaining <= 1）；否则会 off-by-one：
     //   玩家要多点一次结束回合才开战，中间那回合界面还显示「还有 0 回合」。
     // 这些 dispatch 都排在本函数返回前，与 nextTurn 那条 FUNCTIONAL_UPDATE、fluctuatePrices
-    // 同批处理，键互不重叠（TICK 写 expedition/raid，START_BATTLE 写 battle/raid，
-    // START_RAID 写 raid，APPLY_RAID_LOOT 写 ships/raid/eventLog）——且都排在回合结算那条之前，
-    // 故掠夺扣掉的资源会被本回合结算读到（而非被覆盖）。
+    // 同批处理，且都排在回合结算那条之前 —— 故掠夺扣掉的资源会被本回合结算读到（而非被覆盖）。
+    // 同批的 action 各写各的键：TICK 写 expedition/raid；START_BATTLE（出征）写 battle；
+    // START_RAID / ARRIVE_RAID 写 raid；APPLY_RAID_LOOT 写 ships/raid/eventLog。
+    // ⚠ 掠夺**不再**在归零时派发 START_BATTLE（旧口径已作废）：它只转段或结算损失。
     dispatch({ type: 'TICK_BATTLE_STATE' });
 
     // 倒计时归零 → 自动开战（参战舰船 = 该舰队当前编制）。
@@ -76,35 +78,31 @@ export function useTurn(
       });
     }
 
-    // ==================== 掠夺循环（V1.5 §10.2）：插在 TICK 与出征开战之后，回合结算之前 ====================
+    // ==================== 掠夺循环（V1.5 §10.2，两段窗口）====================
     // 顺序（TICK 已在上方，战斗守卫是 nextTurn 开头那条 canEndGameTurn）：
     //   ① 战斗进行中 → 什么都不做（canEndGameTurn 已挡住整个结束回合）
-    //   ② 出征倒计时归零 → 开战（上方，已有）
-    //   ③ 掠夺倒计时归零 → raidResolution：有防守舰队开防守战 / 没有防守则掠夺成功
-    //   ④ 本回合开始新的掠夺掷骰（仅当 shouldStartRaid 的四个条件都满足）
-    // ⚠ 与出征同时归零时：两次 START_BATTLE 排在同一批里，**后派发的（防守战）胜出**，
-    //   出征倒计时停在 0 不清空 → 那场防守战打完后的下一回合由 readyExpedition 再开。这是有意的：
-    //   殖民地被打时先守家（§10.1：出征舰队在外，只能靠留守舰队接战）。
+    //   ② 出征倒计时归零 → 自动开战（上方，已有：这是**自动**的那条路）
+    //   ③ 掠夺阶段 A 倒计时归零 → **转入阶段 B**（arrived：海盗抵达、停在战斗页签等玩家点「开战」）
+    //   ④ 掠夺阶段 B 倒计时归零（玩家一直没迎战）→ **自动失败 = 掠夺成功**（扣资源 + 20 回合免疫）
+    //   ⑤ 本回合开始新的掠夺掷骰（仅当 shouldStartRaid 的四个条件都满足）
+    // ⚠ **掠夺不自动作战**（用户 2026-08 裁定）：唯一由玩家点开的战斗入口是战斗页签的
+    //   「开战」（那里 dispatch START_RAID_BATTLE），本 hook 只在阶段 B 超时后结算掠夺成功。
+    // ⚠ 与出征同时归零时：TICK 与 START_BATTLE（出征）排在同一批里 —— 出征照旧自动开战；
+    //   掠夺只转入阶段 B，等这场仗打完再让玩家决定要不要打掠夺（守家顺序不受影响）。
     const raidNow = raidResolution(_gameState, true);
-    if (raidNow === 'defense') {
-      // 参战编制 = 所有带防守标签舰队的合并池（唯一真值 lib/battle/raid.raidDefensePool）
-      dispatch({
-        type: 'START_BATTLE',
-        bossId: 'raid',
-        fleet: raidDefensePool(_gameState),
-        kind: 'defense',
-        seed: Date.now(),
-      });
+    if (raidNow === 'arrived') {
+      // 阶段 A → 阶段 B（登记"已抵达 + 再 N 回合不迎战就自动失败"）
+      dispatch({ type: 'ARRIVE_RAID' });
     } else if (raidNow === 'looted') {
-      // 没有防守舰队 → 掠夺成功，直接结算资源损失（实扣值在 reducer 里按 raidLootLoss 走 resourceCost）
+      // 阶段 B 超时仍未迎战 → 掠夺成功，直接结算资源损失（实扣值在 reducer 里按 raidLootLoss 走 resourceCost）
       dispatch({ type: 'APPLY_RAID_LOOT' });
     } else {
-      // 本回合掷一次骰：**只有满足"卡库战舰 ≥10 艘 + 已建立殖民地 + 没有在途掠夺 + 不在免疫期"
-      // 才可能命中**（四个条件全在 lib/battle/raid.shouldStartRaid 里判，勿在这里重写）。
+      // 本回合掷一次骰：**只有满足"卡库战舰 ≥10 艘 + 已建立殖民地 + 没有在途掠夺（阶段 A/B 都没有）
+      // + 不在免疫期"才可能命中**（四个条件全在 lib/battle/raid.shouldStartRaid 里判，勿在这里重写）。
       // ⚠ 没有殖民地时永远不掷：V1.5 §10.2"掠夺以存在殖民地为前提"（用户已确认）。
       const roll = Math.random();
       if (shouldStartRaid(roll, _gameState)) {
-        // "1-2 支"按 50/50 掷（§10.2）；命中后登记 RAID_WARNING_TURNS 回合后到场
+        // "1-2 支"按 50/50 掷（§10.2）；命中后登记 RAID_WARNING_TURNS 回合的预警（阶段 A）
         dispatch({ type: 'START_RAID', raiders: raidSquadCount(Math.random()) });
       }
     }

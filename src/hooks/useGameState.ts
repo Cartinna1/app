@@ -374,12 +374,14 @@ export function useGameState() {
     dispatch({ type: 'CANCEL_EXPEDITION' });
   }, []);
 
-  const startBattle = useCallback(
-    (bossId: PirateBossId, fleet: ShipCardId[], kind: 'expedition' | 'defense', seed: number) => {
-      dispatch({ type: 'START_BATTLE', bossId, fleet, kind, seed });
-    },
-    []
-  );
+  // ⚠ 这里**故意没有**通用的 startBattle（不把"随便开一场战斗"的能力交给 UI）：
+  //   出征战由 useTurn 在出征倒计时归零时自动派发 START_BATTLE（P5）。
+  //   玩家唯一能主动点开的战斗是**阶段 B 的掠夺防守战** —— 走下面这个**窄回调**：
+  //   它没有参数，bossId 'raid' / kind 'defense' / 参战池 / seed 全部由 reducer 侧的
+  //   lib/battle/raid.readyRaidBattle 组装（UI 无从指定目标或编制）。
+  const startRaidBattle = useCallback(() => {
+    dispatch({ type: 'START_RAID_BATTLE' });
+  }, []);
 
   const battleAction = useCallback((action: BattleAction) => {
     dispatch({ type: 'BATTLE_ACTION', action });
@@ -502,7 +504,7 @@ export function useGameState() {
     toggleFleetDefending,
     startBattleExpedition,
     cancelBattleExpedition,
-    startBattle,
+    startRaidBattle,
     battleAction,
     endBattle,
     tickBattleState,

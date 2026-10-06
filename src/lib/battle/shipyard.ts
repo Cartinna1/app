@@ -101,11 +101,16 @@ const TECH_BY_SERIES: Record<string, { blue: string | null; elite: string | null
   海盗: { blue: null, elite: null }, // 海盗不可生产（§3：PvE 专属，不进入卡库）
 };
 
-/** 卡牌 → 需要的科技（返回科技定义；不需要科技时返回 null） */
-function requiredTech(card: ShipCardDef): { id: string; name: string; costRP: number } | null {
+/** 卡牌 → 需要的科技 id（不需要科技时 null）。稀有度→档位只在这里写一次。 */
+export function requiredTechId(card: ShipCardDef): string | null {
   const map = TECH_BY_SERIES[card.series];
   if (!map) return null;
-  const id = card.rarity === '蓝' ? map.blue : card.rarity === '紫' || card.rarity === '橙' ? map.elite : null;
+  return card.rarity === '蓝' ? map.blue : card.rarity === '紫' || card.rarity === '橙' ? map.elite : null;
+}
+
+/** 卡牌 → 需要的科技（返回科技定义；不需要科技时返回 null） */
+function requiredTech(card: ShipCardDef): { id: string; name: string; costRP: number } | null {
+  const id = requiredTechId(card);
   if (!id) return null;
   const tech = getTechById(id);
   return { id, name: tech ? tech.name : id, costRP: tech ? tech.costRP : 0 };
@@ -156,6 +161,33 @@ export interface BuildQueueRow {
   tone: 'building' | 'waiting';
 }
 
+/**
+ * 船坞里"还没解锁"的一档（同"需要几级船坞 + 需要哪些科技"归成一档）。
+ * 数字与科技 id 全部从卡牌数据算出来，**没有任何硬编码**。
+ */
+export interface ShipyardLockedTier {
+  /** 这一档对应几级船坞 */
+  dockLevel: 1 | 2 | 3;
+  /** 这一档里的稀有度（按 白 → 蓝 → 紫 → 橙 顺序），如 ['紫','橙'] */
+  rarities: BattleRarity[];
+  /** 这一档有几种卡（型数，不是张数） */
+  cardCount: number;
+  /** 这一档需要的科技 id（按数据顺序去重，如 ['T29','T31']）；白卡档为空数组 */
+  techIds: string[];
+  /** 要求的中文一行（**判定文案的唯一来源**）：`二级船坞 + T28/T30/T32/T34/T36` */
+  requirement: string;
+}
+
+/** 未解锁卡的一行汇总（AGENTS 第九节：不许静默隐藏） */
+export interface ShipyardLockedSummary {
+  /** 未解锁共几种（型数） */
+  total: number;
+  /** 按"船坞等级 + 科技"分档（已解锁的档不出现） */
+  tiers: ShipyardLockedTier[];
+  /** 中文一行：`还有 22 种未解锁 · 蓝卡 7 种（需二级船坞 + T28/…）· 紫橙 15 种（需三级船坞 + …）` */
+  text: string;
+}
+
 /** 船坞面板的整份渲染模型 */
 export interface ShipyardView {
   /** 殖民地是否存在（不存在时整块给"先建立殖民地"的指引） */
@@ -164,8 +196,16 @@ export interface ShipyardView {
   dockLevel: 0 | 1 | 2 | 3;
   /** 三级船坞各自"已建成几座"（0/1；上限 1 座） */
   built: Array<{ id: string; name: string; level: 1 | 2 | 3; count: number }>;
-  /** 可造卡列表：**遍历完整数组**（不 filter 静默截断），逐张给出 ok 与中文原因 */
+  /** **主列表**：只含已解锁的卡（白卡默认解锁；蓝/紫/橙要对应船坞 + 科技）。
+   *  ⚠ 未解锁的卡不在这里，但绝**不静默隐藏** —— 见 `locked` 汇总行与 `allCards`。 */
+  unlockedCards: ShipyardCardRow[];
+  /** 全部可造卡（含未解锁的）：**遍历完整数组**，不 slice / 不 filter 静默截断。
+   *  逐张给出 `unlocked` / `ok` / `reason` / `lockReason`；未解锁的卡不在主列表里，但总数与要求由 `locked` 汇总 */
   cards: ShipyardCardRow[];
+  /** 未解锁卡的一行汇总（数量与要求都从数据算） */
+  locked: ShipyardLockedSummary;
+  /** 下一步解锁指引的一句中文（已全解锁 / 没有殖民地时为 null）——门槛文案只在 shipyard.ts 里写 */
+  lockHint: string | null;
   /** 建造队列 */
   queue: BuildQueueView;
 }
@@ -194,8 +234,12 @@ export interface ShipyardCardRow {
   turns: number;
   /** 现在能不能造 */
   ok: boolean;
-  /** 不能造的中文原因（能造则 undefined） */
+  /** 不能造的中文原因（能造则 undefined）——含"还没解锁"，也含"资源不足" */
   reason?: string;
+  /** 是否已解锁（门槛 = 船坞等级 + 科技；**资源够不够不算解锁门槛**，买不起也要看得见） */
+  unlocked: boolean;
+  /** 还没解锁时的中文原因（已解锁则 undefined）；与 `reason` 同源（都是 lockGate 的那句话） */
+  lockReason?: string;
 }
 
 // ---------------- 基础取值 ----------------
@@ -287,42 +331,6 @@ export function activeBuildCount(queue: BuildQueueItem[]): number {
 
 // ---------------- 能不能造 ----------------
 
-/**
- * 某张卡现在能不能造 + 不能造的中文原因。
- * 判定顺序：卡牌存在 → 可建造（非海盗/衍生） → 已建殖民地 → 船坞等级 → 科技 → 资源。
- * ⚠ "队列"这一条**故意不拦**：§11 #5「排队无限」，同时建造数只限制"开工"，见 advanceQueue。
- */
-export function canBuild(state: GameState, cardId: ShipCardId): { ok: boolean; reason?: string } {
-  const card = defOf(cardId);
-  if (!card) return { ok: false, reason: '数据里找不到这张卡' };
-  if (card.token) return { ok: false, reason: '衍生单位不能建造' };
-  if (card.series === '海盗') return { ok: false, reason: '海盗舰船是 PvE 专属，玩家不能建造（V1.5 §3）' };
-  const ship = leadShip(state);
-  const colony = ship?.colony;
-  if (!ship || !colony || colony.phase !== 'active') {
-    return { ok: false, reason: '还没有殖民地 —— 先在星图的星球上建立殖民地，再建造船坞（V1.5 §8）' };
-  }
-
-  const need = requiredDockLevel(cardId);
-  const level = dockLevel(state);
-  const tech = requiredTech(card);
-  if (level < need) {
-    const techHint = tech ? `并研发科技「${tech.name}」（科研点 ${tech.costRP}）` : '';
-    return {
-      ok: false,
-      reason: `需要${dockLevelText(need)}${techHint}（当前${level === 0 ? '还没有船坞' : `只有${dockLevelText(level)}`}）`,
-    };
-  }
-  if (tech && !(colony.techState?.researched || []).includes(tech.id)) {
-    return { ok: false, reason: `需要科技「${tech.name}」（科研点 ${tech.costRP}，在殖民地页签研究）` };
-  }
-
-  const cost = flattenCost(buildCost(cardId));
-  const missing = firstMissing(ship, colony, cost);
-  if (missing) return { ok: false, reason: missing };
-  return { ok: true };
-}
-
 /** 船坞等级的中文名（判定文案与 UI 共用） */
 export function dockLevelText(level: 0 | 1 | 2 | 3): string {
   if (level === 1) return '一级船坞';
@@ -332,8 +340,92 @@ export function dockLevelText(level: 0 | 1 | 2 | 3): string {
 }
 
 /**
+ * **解锁门槛的唯一判定**（船坞等级 + 科技），返回"能不能造"与"还差什么"的中文一句话。
+ * 供 `canBuild`（再加资源一道）与 `shipyardView`（主列表 / 汇总行 / 下一档指引）共用，
+ * UI 不许再写第二份等级/科技比较。
+ *
+ * ⚠ 口径（用户 2026-08 裁定）：**资源够不够不算解锁门槛** —— 买不起也要在列表里看得见，
+ *   只是按钮禁用并给中文原因。故资源那道门只在 `canBuild` 里加，不在本函数里。
+ */
+export function lockGate(
+  state: GameState,
+  cardId: ShipCardId
+): { unlocked: boolean; reason?: string; dockLevel: 1 | 2 | 3; techId: string | null } {
+  const card = defOf(cardId);
+  const dockNeed: 1 | 2 | 3 = card ? requiredDockLevel(cardId) : 1;
+  const techId = card ? requiredTechId(card) : null;
+  if (!card) return { unlocked: false, reason: '数据里找不到这张卡', dockLevel: dockNeed, techId };
+  if (card.token) return { unlocked: false, reason: '衍生单位不能建造', dockLevel: dockNeed, techId };
+  if (card.series === '海盗') {
+    return {
+      unlocked: false,
+      reason: '海盗舰船是 PvE 专属，玩家不能建造（V1.5 §3）',
+      dockLevel: dockNeed,
+      techId,
+    };
+  }
+
+  const ship = leadShip(state);
+  const colony = ship?.colony;
+  if (!ship || !colony || colony.phase !== 'active') {
+    return {
+      unlocked: false,
+      reason: '还没有殖民地 —— 先在星图的星球上建立殖民地，再建造船坞（V1.5 §8）',
+      dockLevel: dockNeed,
+      techId,
+    };
+  }
+
+  const level = dockLevel(state);
+  const tech = requiredTech(card);
+  if (level < dockNeed) {
+    const techHint = tech ? `并研发科技「${tech.name}」（科研点 ${tech.costRP}）` : '';
+    return {
+      unlocked: false,
+      reason: `需要${dockLevelText(dockNeed)}${techHint}（当前${level === 0 ? '还没有船坞' : `只有${dockLevelText(level)}`}）`,
+      dockLevel: dockNeed,
+      techId,
+    };
+  }
+  if (tech && !(colony.techState?.researched || []).includes(tech.id)) {
+    return {
+      unlocked: false,
+      reason: `需要科技「${tech.name}」（科研点 ${tech.costRP}，在殖民地页签研究）`,
+      dockLevel: dockNeed,
+      techId,
+    };
+  }
+  return { unlocked: true, dockLevel: dockNeed, techId };
+}
+
+/** 某张卡是否**已解锁**（只判船坞等级 + 科技；资源不算门槛）。列表取舍与汇总行共用这一份。 */
+export function cardUnlocked(state: GameState, cardId: ShipCardId): boolean {
+  return lockGate(state, cardId).unlocked;
+}
+
+/**
+ * 某张卡现在能不能造 + 不能造的中文原因。
+ * 判定顺序：卡牌存在 → 可建造（非海盗/衍生） → 已建殖民地 → 船坞等级 → 科技 → 资源。
+ * ⚠ 前三段与"船坞等级/科技"这两道门**全部来自 `lockGate`**（唯一真值），本函数只补最后一道资源门。
+ * ⚠ "队列"这一条**故意不拦**：§11 #5「排队无限」，同时建造数只限制"开工"，见 advanceQueue。
+ */
+export function canBuild(state: GameState, cardId: ShipCardId): { ok: boolean; reason?: string } {
+  const gate = lockGate(state, cardId);
+  if (!gate.unlocked) return { ok: false, reason: gate.reason };
+
+  const ship = leadShip(state);
+  const colony = ship?.colony;
+  if (!ship || !colony) return { ok: false, reason: '还没有殖民地 —— 先在星图的星球上建立殖民地，再建造船坞（V1.5 §8）' };
+  const cost = flattenCost(buildCost(cardId));
+  const missing = firstMissing(ship, colony, cost);
+  if (missing) return { ok: false, reason: missing };
+  return { ok: true };
+}
+
+/**
  * 能否把该卡加入造船队列。分工：
- *   · 门槛（船坞/科技/资源）全部来自 `canBuild` —— 本函数只加"下单"这一层，不重写门槛；
+ *   · 门槛（**解锁**：船坞/科技 → `lockGate`；资源 → `firstMissing`）全部来自 `canBuild` ——
+ *     本函数只加"下单"这一层，不重写门槛；
  *   · **队列长度不设上限**（§11 #5 排队无限），故这里不判队列；
  *   · `slots` 只用来决定新项是"开局即开工"还是"排队"。省略时按 state 现算。
  */
@@ -483,7 +575,90 @@ export function queueView(state: GameState): BuildQueueView {
   };
 }
 
-/** 船坞面板的整份渲染模型（三级船坞状态 + 可造卡列表 + 队列） */
+/** 未解锁档的稀有度标签：「蓝卡」/「紫卡」/「紫橙卡」（与既有文案同一套说法） */
+function lockedRarityLabel(rarities: BattleRarity[]): string {
+  const rank: BattleRarity[] = ['白', '蓝', '紫', '橙'];
+  const sorted = rank.filter((r) => rarities.includes(r));
+  return `${sorted.join('')}卡`;
+}
+
+/**
+ * 未解锁卡的一行汇总：**按「船坞等级 + 科技」分档**，各档的型数与要求全部从卡牌数据算出来
+ * （不硬编码数字，也不硬编码科技 id）。
+ * 例：`还有 22 种未解锁 · 蓝卡 7 种（需二级船坞 + T28/T30/T32/T34/T36）· 紫橙 15 种（需三级船坞 + …）`
+ */
+function lockedSummary(lockedRows: ShipyardCardRow[]): ShipyardLockedSummary {
+  const byLevel = new Map<1 | 2 | 3, ShipyardCardRow[]>();
+  for (const row of lockedRows) {
+    const list = byLevel.get(row.dockLevel);
+    if (list) list.push(row);
+    else byLevel.set(row.dockLevel, [row]);
+  }
+  const order: Array<1 | 2 | 3> = [1, 2, 3];
+  const tiers: ShipyardLockedTier[] = [];
+  for (const dockNeed of order) {
+    const rows = byLevel.get(dockNeed);
+    if (!rows || rows.length === 0) continue;
+    const rarities: BattleRarity[] = [];
+    for (const r of ['白', '蓝', '紫', '橙'] as BattleRarity[]) {
+      if (rows.some((row) => row.rarity === r)) rarities.push(r);
+    }
+    const techIds: string[] = [];
+    for (const row of rows) {
+      const rowCard = defOf(row.id);
+      const id = rowCard ? requiredTechId(rowCard) : null;
+      if (id && !techIds.includes(id)) techIds.push(id);
+    }
+    const requirement =
+      `${dockLevelText(dockNeed)}${techIds.length > 0 ? ` + ${techIds.join('/')}` : ''}`;
+    tiers.push({ dockLevel: dockNeed, rarities, cardCount: rows.length, techIds, requirement });
+  }
+
+  const parts = tiers.map((t) => `${lockedRarityLabel(t.rarities)} ${t.cardCount} 种（需${t.requirement}）`);
+  const head = `还有 ${lockedRows.length} 种未解锁`;
+  return { total: lockedRows.length, tiers, text: parts.length > 0 ? `${head} · ${parts.join(' · ')}` : head };
+}
+
+/** 下一步解锁指引的一句中文（已全部解锁 / 没有殖民地时 null）。
+ *  ⚠ 门槛文案（几级船坞 + 哪些科技 + 哪些系列）只在 shipyard.ts 里生成，UI 不写第二份判断。 */
+function lockHintText(view: {
+  hasColony: boolean;
+  locked: ShipyardLockedSummary;
+  allCards: ShipyardCardRow[];
+  dockLevel: 0 | 1 | 2 | 3;
+}): string | null {
+  if (!view.hasColony) return null;
+  // 取**第一档还有没解锁卡的**档：不按"当前船坞等级 + 1"取 —— 三级船坞也可能还缺二级档的科技
+  // （蓝卡要 T28/T30/T32/T34/T36），那时该提示的是那批科技，不是紫橙档。
+  const next = view.locked.tiers[0];
+  if (!next) return null;
+  const names: string[] = [];
+  for (const id of next.techIds) {
+    const tech = getTechById(id);
+    if (tech) names.push(`「${tech.name}」`);
+  }
+  // 本档涉及哪些系列（由卡牌数据反查，避免 UI 自己判断"哪个系列要哪个科技"）
+  const series: string[] = [];
+  for (const row of view.allCards) {
+    if (row.dockLevel !== next.dockLevel) continue;
+    const rowCard = defOf(row.id);
+    const id = rowCard ? requiredTechId(rowCard) : null;
+    if (id && next.techIds.includes(id) && !series.includes(row.series)) series.push(row.series);
+  }
+  const who = next.rarities.join('、');
+  const ofSeries = series.length > 0 ? `，能造哪个系列由该系列的科技决定（对应 ${series.join(' / ')} 系）` : '';
+  // 船坞已经够了（三级船坞还缺二级档的科技）时不要再让玩家"造一座他已有的船坞"
+  const dockPart =
+    view.dockLevel >= next.dockLevel
+      ? `${dockLevelText(next.dockLevel)}已建成`
+      : `先造「${dockLevelText(next.dockLevel)}」`;
+  if (names.length > 0) {
+    return `想造${who}卡：${dockPart}，再研发 ${names.join('、')}（V1.5 §9.1）${ofSeries}。`;
+  }
+  return `想造${who}卡：${dockPart}（这一档不需要科技）${ofSeries}。`;
+}
+
+/** 船坞面板的整份渲染模型（三级船坞状态 + **已解锁**可造卡列表 + 未解锁汇总 + 队列） */
 export function shipyardView(state: GameState): ShipyardView {
   const ship = leadShip(state);
   const colony = ship?.colony;
@@ -499,13 +674,15 @@ export function shipyardView(state: GameState): ShipyardView {
     };
   });
 
-  // ⚠ **遍历完整数组**（BATTLE_CARD_IDS），逐张给出 ok / reason，不 slice / 不 filter 静默截断
+  // ⚠ **遍历完整数组**（BATTLE_CARD_IDS），逐张开出 unlocked / ok / reason，不 slice / 不 filter 静默截断
   //   （AGENTS 第九节）。海盗系与衍生单位不是"玩家能造的卡"，显示出来只会是永久禁用的噪音，
   //   故用 isBuildableCard 显式排除（这是**显式清单**，不是按能力过滤）。
   const cards: ShipyardCardRow[] = [];
   for (const id of BATTLE_CARD_IDS) {
     const card = defOf(id);
     if (!card || !isBuildableCard(card)) continue;
+    // 门槛判定只有一份：解锁 = lockGate，能不能下单 = canBuild（= lockGate + 资源）
+    const gate = lockGate(state, id);
     const check = canBuild(state, id);
     const tech = requiredTech(card);
     cards.push({
@@ -525,14 +702,24 @@ export function shipyardView(state: GameState): ShipyardView {
       turns: buildTurns(id),
       ok: check.ok,
       reason: check.reason,
+      unlocked: gate.unlocked,
+      lockReason: gate.unlocked ? undefined : gate.reason,
     });
   }
 
+  const unlockedCards = cards.filter((c) => c.unlocked);
+  const lockedCards = cards.filter((c) => !c.unlocked);
+  const locked = lockedSummary(lockedCards);
+  const hasColony = !!colony && colony.phase === 'active';
+
   return {
-    hasColony: !!colony && colony.phase === 'active',
+    hasColony,
     dockLevel: level,
     built,
+    unlockedCards,
     cards,
+    locked,
+    lockHint: lockHintText({ hasColony, locked, allCards: cards, dockLevel: level }),
     queue: queueView(state),
   };
 }

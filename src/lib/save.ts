@@ -19,8 +19,13 @@ export const BGM_MUTED_KEY = 'bgm_muted';
  *     `buildQueue`。⚠ 同样**只新增字段、不改既有字段的结构与语义** → **无需 v3→v4 结构迁移**：
  *       老档缺 `buildQueue` 由 stateFromSave 兜底成 `[]`（队列为空 = 什么都没有在造，语义正确）。
  *     ⚠ 建筑（船坞 B32/B33/B34）与科技（T28–T36）都是纯数据追加，存量存档里的
- *       `colony.buildings` / `colony.techState.researched` 照常读，不需要迁移。 */
-export const SAVE_VERSION = 4;
+ *       `colony.buildings` / `colony.techState.researched` 照常读，不需要迁移。
+ *  5：掠夺改成**两段窗口**（用户 2026-08 裁定：预警 CD → 抵达后待战再 5 回合 → 玩家点「开战」，
+ *     不点则自动失败）→ `raid` 内**新增** `arrivedTurns`（阶段 B 倒计时）与 `arrived`（阶段 B 标记）。
+ *     ⚠ 只新增字段、不改既有字段的结构与语义 → **无需 v4→v5 结构迁移**：
+ *       老档缺这两项由 stateFromSave 兜底成 `arrivedTurns: 0` / `arrived: false`，
+ *       **读出来就是"没有掠夺在途"（idle）**，与"旧存档不该凭空多一场掠夺"一致。 */
+export const SAVE_VERSION = 5;
 
 /** 存档结构校验（防止损坏/恶意存档导致崩溃） */
 export function validateSaveData(data: unknown): data is Record<string, unknown> {
@@ -140,8 +145,11 @@ export function stateFromSave(d: Record<string, any>): GameState {
     fleets: d.fleets || [],
     expedition: d.expedition || null,
     // 缺 raid 整键时给一份全新对象（不用模块级常量：避免和别处共享同一个可变对象）；
-    // 键序保持 inTurns / immuneTurns / raiders，便于与 createInitialGameState 做值比较
-    raid: { inTurns: null, immuneTurns: 0, raiders: 0, ...(d.raid || {}) },
+    // 键序保持 inTurns / arrivedTurns / immuneTurns / raiders / arrived，
+    // 便于与 createInitialGameState 的 idleRaidState() 做值比较。
+    // v5：新增 arrivedTurns（阶段 B 待战倒计时）与 arrived（阶段 B 标记）——
+    //   v4 及更早的存档没有这两项 → 兜底成 0 / false，即"没有掠夺在途"（idle）。
+    raid: { inTurns: null, arrivedTurns: 0, immuneTurns: 0, raiders: 0, arrived: false, ...(d.raid || {}) },
     // 进行中的战斗**不进存档**：即使存档里混入了 battle 也一律丢弃（V1.5 §〇「战斗中不能保存」）
     battle: null,
     // ===== 船坞与科技（V1.5 §8，v4 新增）=====
@@ -160,7 +168,10 @@ export function stateFromSave(d: Record<string, any>): GameState {
  *  v4：只**新增**造船队列字段（buildQueue），不改任何既有字段的结构与语义
  *  → **同样无需 v3→v4 结构迁移**：老档缺该字段由 stateFromSave 补 `[]`（队列为空 = 没有在造，
  *    与"新开局还没有船坞"的语义一致）。船坞建筑（B32–B34）与科技（T28–T36）是纯数据追加，
- *    存量的 `colony.buildings` / `colony.techState.researched` 原样可读。 */
+ *    存量的 `colony.buildings` / `colony.techState.researched` 原样可读。
+ *  v5：掠夺改成两段窗口（用户 2026-08 裁定），`raid` 只**新增** arrivedTurns / arrived 两个字段
+ *  → **同样无需 v4→v5 结构迁移**：老档缺这两项由 stateFromSave 兜底成 0 / false，
+ *    读出来即"没有掠夺在途"（idle），不会给旧档凭空补一场掠夺。 */
 export function migrateSave(loaded: GameState): GameState {
   // 兼容旧存档：补充破产/饥荒/叛乱字段（这几个字段不在 stateFromSave 的清单里，故仍需在此兜底）
   if (loaded.ships) {

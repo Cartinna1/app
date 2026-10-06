@@ -399,12 +399,24 @@ export interface BattleExpedition {
   turnsRemaining: number;
 }
 
-/** 掠夺：inTurns 归零即进入防守战；immuneTurns>0 表示本次免疫期内不再被掠夺；raiders = 1 或 2（2 = 连打两场）【V1.5 §10.2】 */
+/**
+ * 掠夺状态（V1.5 §10.2 ＋ 用户 2026-08 裁定的两段窗口）。
+ * · **阶段 A（warning）**：预警倒计时 `inTurns` 从 5 倒数 —— 玩家可以趁这段编/改防守队；
+ * · **阶段 B（arrived）**：`inTurns` 归零后**不自动开战** —— 掠夺舰队停在战斗页签等玩家点「开战」，
+ *   同时再给 `arrivedTurns`（5 回合）的倒计时，到时仍未迎战即**自动失败 = 掠夺成功**（扣资源 + 免疫）。
+ * `raidPhase(raid)` / `raidStatus(state)` / `raidResolution()`（lib/battle/raid.ts）是
+ * "现在处在哪一段、接下来该做什么"的唯一判定入口，UI 与 useTurn 都只调它们。
+ */
 export interface BattleRaidState {
-  /** 距掠夺到账还剩几个游戏回合；null = 当前没有掠夺在途（归零即进入防守战） */
+  /** 阶段 A：距海盗抵达还剩几个游戏回合；null = 当前没有掠夺在途（= 阶段 B 或 idle，看法见 arrivedTurns） */
   inTurns: number | null;
-  /** 免疫期剩余回合数（打赢或掠夺成功后置 20）【V1.5 §10.2】 */
+  /** 阶段 B：海盗已抵达、正在等玩家迎战 —— 距"自动失败（掠夺成功）"还剩几个游戏回合；0 = 不在阶段 B */
+  arrivedTurns: number;
+  /** 免疫期剩余回合数（打赢 / 打输 / 被掠夺成功后置 20）【V1.5 §10.2】 */
   immuneTurns: number;
   /** 本次掠夺来了几支掠夺队：1 或 2（2 = 赢下第一场后立刻连打第二场）【V1.5 §10.2】 */
   raiders: number;
+  /** 阶段 B 是否已经有**结算过**（自动失败 / 手动开战 / 打赢连打的第二场）：写入端保留，判定一律读 `arrivedTurns`。
+   *  ⚠ 目前没有任何判定读它（阶段 B 的判据是 `arrivedTurns > 0`）；它是给 UI/日志做"这一波是否已处理过"的显式标记。 */
+  arrived: boolean;
 }

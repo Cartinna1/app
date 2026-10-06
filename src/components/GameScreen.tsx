@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
 import type { GameState, EventOption, ResourceChange, ChoiceEvent } from '@/types/game';
-import type { BattleAction, BattleExpedition, BattleFleet, BattleRaidState, BattleState, PirateBossId, ShipCardId } from '@/types/battle';
+import type { BattleAction, BattleExpedition, BattleFleet, BattleState, PirateBossId, ShipCardId } from '@/types/battle';
 import type { DodgeReason } from '@/hooks/useEvent';
 import {
   LayoutDashboard,
@@ -128,14 +128,16 @@ interface GameScreenProps {
   battle: BattleState | null;
   /** 进行中的出征（先用 fleetExpedition 命名，避免与殖民地领袖远征混淆） */
   fleetExpedition: BattleExpedition | null;
-  raid: BattleRaidState;
   fleets: BattleFleet[];
   cardLibrary: ShipCardId[];
-  onStartBattle: (bossId: PirateBossId, fleet: ShipCardId[], kind: 'expedition' | 'defense', seed: number) => void;
   /** 发起舰队出征（START_EXPEDITION）；与殖民地领袖远征的 onStartExpedition 是两回事（V1.5 §10.1） */
   onStartBattleExpedition: (bossId: PirateBossId, fleetId: string, turns: number) => void;
   /** 取消在途的舰队出征（CANCEL_EXPEDITION） */
   onCancelBattleExpedition: () => void;
+  /** **阶段 B 的「开战」**（START_RAID_BATTLE）：全场唯一由玩家主动点开的战斗入口。
+   *  ⚠ 故意做成**无参窄回调** —— 目标（'raid'）/ 编制（防守合并池）/ seed 全由 reducer 侧的
+   *  lib/battle/raid.readyRaidBattle 组装，UI 不持有"随便开一场战斗"的能力。 */
+  onStartRaidBattle: () => void;
   onBattleAction: (action: BattleAction) => void;
   onEndBattle: () => void;
   onCreateBattleFleet: (name?: string) => void;
@@ -246,12 +248,11 @@ export default function GameScreen({
   getShipTotalAssets,
   battle,
   fleetExpedition,
-  raid,
   fleets,
   cardLibrary,
-  onStartBattle,
   onStartBattleExpedition,
   onCancelBattleExpedition,
+  onStartRaidBattle,
   onBattleAction,
   onEndBattle,
   onCreateBattleFleet,
@@ -653,18 +654,20 @@ export default function GameScreen({
           </div>
           )}
           {/* ===== 战斗页签（V1.5 §10）=====
-               没有进行中的战斗 → 选敌人 + 选参战舰队；有战斗 → 整屏战斗界面（照搬卡牌 DEMO）。
+               没有进行中的战斗 → 「出征」（只列已探明的老巢）+ 选出征舰队；掠夺**阶段 B** 时另有
+               一个「开战」入口（迎战已抵达的掠夺队，唯一由玩家主动点开的战斗）；
+               有战斗 → 整屏战斗界面（照搬卡牌 DEMO）。
+               ⚠ 没有"直接开战"这种凭空开一场的入口：出征战由 useTurn 在倒计时归零时自动开。
                所有回调都来自 useStableActions 的稳定引用（AGENTS 第五节），不在 JSX 里写 inline 箭头。 */}
           <div className={activeTab === 'battle' ? '' : 'hidden'}>
             <BattleTab
               battle={battle}
               expedition={fleetExpedition}
-              raid={raid}
               fleets={fleets}
               cardLibrary={cardLibrary}
               state={gameState}
-              onStartBattle={onStartBattle}
               onStartExpedition={onStartBattleExpedition}
+              onStartRaidBattle={onStartRaidBattle}
               onCancelExpedition={onCancelBattleExpedition}
               onAction={onBattleAction}
               onEndBattle={onEndBattle}
