@@ -1,5 +1,5 @@
 import { useCallback } from 'react';
-import type { GameState } from '@/types/game';
+import type { GameAction, GameState } from '@/types/game';
 import { FACTIONS } from '@/data/factions';
 import { processColonyTurn } from '@/lib/colony/colonyTurn';
 import { computePriceFluctuation } from '@/lib/turn/priceFluctuation';
@@ -10,6 +10,7 @@ import { getCurrentFactionId } from '@/lib/galaxy/access';
 import { processArchaeologyTurn } from '@/lib/galaxy/archaeologyTurn';
 import { EVENT_LOG_LIMIT } from '@/data/gameData';
 import { createUid } from '@/lib/id';
+import { canEndGameTurn, readyExpedition } from '@/lib/battle/expedition';
 
 /**
  * 回合推进 hook（编排器）。
@@ -18,8 +19,12 @@ import { createUid } from '@/lib/id';
  */
 export function useTurn(
   _gameState: GameState,
+  // dispatch 的类型只列本 hook 允许派发的 action（窄联合是一种设计守卫）。
+  // 卡牌战斗的两个 action 用 Extract 从 GameAction 派生，避免把载荷类型再抄一份（AGENTS 第三节）。
   dispatch: React.Dispatch<
-    { type: 'FUNCTIONAL_UPDATE'; updater: (state: GameState) => GameState }
+    | { type: 'FUNCTIONAL_UPDATE'; updater: (state: GameState) => GameState }
+    | Extract<GameAction, { type: 'TICK_BATTLE_STATE' }>
+    | Extract<GameAction, { type: 'START_BATTLE' }>
   >,
   autoSave: () => void
 ) {
@@ -30,6 +35,34 @@ export function useTurn(
 
   // 回合推进
   const nextTurn = useCallback(() => {
+    // ⚠ 战斗期间不允许结束游戏回合（V1.5 §〇「战斗中不能保存」、§1.1）。
+    //   同步可判的拦截必须放在 dispatch **之前**（AGENTS 第九节），判据的唯一真值在
+    //   lib/battle/expedition.canEndGameTurn（只判 state.battle；出征倒计时在途时仍可正常结束回合）。
+    //   战斗页签同时占满整屏，所以这条守卫是兜底而不是玩家的常规路径。
+    if (!canEndGameTurn(_gameState)) return;
+
+    // 出征倒计时：每个游戏回合先 TICK 一次（出征 / 掠夺倒计时各减 1，下限 0），
+    // 归零则本回合就开战 —— TICK_BATTLE_STATE 的注释把「归零即开战」的判定留给调用方。
+    // ⚠ `_gameState` 是这次渲染的最新状态，也就是 **TICK 之前**的状态（dispatch 不同步回读），
+    //   所以判定必须传 afterTick=true（等价于 turnsRemaining <= 1）；否则会 off-by-one：
+    //   玩家要多点一次结束回合才开战，中间那回合界面还显示「还有 0 回合」。
+    // 两次 dispatch 都排在本函数返回前，与 nextTurn 那条 FUNCTIONAL_UPDATE、fluctuatePrices
+    // 同批处理，键互不重叠（TICK 写 expedition/raid，START_BATTLE 写 battle/raid）。
+    dispatch({ type: 'TICK_BATTLE_STATE' });
+
+    // 倒计时归零 → 自动开战（参战舰船 = 该舰队当前编制）。
+    // seed 用 Date.now()：战斗**不进存档**（V1.5 §〇），读档会回到战斗前、可以重来，属既定口径。
+    const ready = readyExpedition(_gameState, true);
+    if (ready) {
+      dispatch({
+        type: 'START_BATTLE',
+        bossId: ready.bossId,
+        fleet: ready.fleet,
+        kind: 'expedition',
+        seed: Date.now(),
+      });
+    }
+
     dispatch({
       type: 'FUNCTIONAL_UPDATE',
       updater: (prev) => {

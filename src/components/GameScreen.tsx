@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
 import type { GameState, EventOption, ResourceChange, ChoiceEvent } from '@/types/game';
+import type { BattleAction, BattleExpedition, BattleFleet, BattleRaidState, BattleState, PirateBossId, ShipCardId } from '@/types/battle';
 import type { DodgeReason } from '@/hooks/useEvent';
 import {
   LayoutDashboard,
@@ -46,6 +47,7 @@ import { BGM_MUTED_KEY } from '@/lib/save';
 import GoldLogViewer from './GoldLogViewer';
 import ModulePanel from './ModulePanel';
 import ColonyPanel from './colony/ColonyPanel';
+import BattleTab from './battle/BattleTab';
 import { computeColonyEconomy, getBuildingSourceBreakdown } from '@/lib/colony/economy';
 import { computeCrewFoodCost, famineHalveGold } from '@/lib/turn/shipTurn';
 import { getNextTurnHints } from '@/lib/turn/nextTurnHints';
@@ -120,9 +122,25 @@ interface GameScreenProps {
   onImportSave: (file: File) => Promise<boolean>;
   onResetGame: () => void;
   getShipTotalAssets: (ship: GameState['ships'][0]) => number;
+  // ===== 舰船卡牌战斗（V1.5 §10）：只接「战斗」页签用 =====
+  battle: BattleState | null;
+  /** 进行中的出征（先用 fleetExpedition 命名，避免与殖民地领袖远征混淆） */
+  fleetExpedition: BattleExpedition | null;
+  raid: BattleRaidState;
+  fleets: BattleFleet[];
+  cardLibrary: ShipCardId[];
+  onStartBattle: (bossId: PirateBossId, fleet: ShipCardId[], kind: 'expedition' | 'defense', seed: number) => void;
+  /** 发起舰队出征（START_EXPEDITION）；与殖民地领袖远征的 onStartExpedition 是两回事（V1.5 §10.1） */
+  onStartBattleExpedition: (bossId: PirateBossId, fleetId: string, turns: number) => void;
+  /** 取消在途的舰队出征（CANCEL_EXPEDITION） */
+  onCancelBattleExpedition: () => void;
+  onBattleAction: (action: BattleAction) => void;
+  onEndBattle: () => void;
+  onCreateBattleFleet: (name?: string) => void;
+  onDebugFillSampleLibrary: () => void;
 }
 
-type TabId = 'overview' | 'stocks' | 'materials' | 'production' | 'products' | 'events' | 'loan' | 'trade' | 'galaxy' | 'archaeology' | 'colony' | 'module' | 'redeem' | 'goldlog' | 'save';
+type TabId = 'overview' | 'stocks' | 'materials' | 'production' | 'products' | 'events' | 'loan' | 'trade' | 'galaxy' | 'battle' | 'archaeology' | 'colony' | 'module' | 'redeem' | 'goldlog' | 'save';
 
 // 空引用常量：避免每次渲染新建 {} / [] 击穿内嵌面板的 memo
 const EMPTY_REPUTATION: Record<string, number> = {};
@@ -138,6 +156,7 @@ const tabs: { id: TabId; label: string; shortLabel: string; icon: React.ElementT
   { id: 'events', label: '事件', shortLabel: '事件', icon: Sparkles },
   { id: 'loan', label: '贷款', shortLabel: '贷款', icon: Banknote },
   { id: 'trade', label: '贸易', shortLabel: '贸易', icon: Coins },
+  { id: 'battle', label: '战斗', shortLabel: '战斗', icon: Swords },
   { id: 'archaeology', label: '考古', shortLabel: '考古', icon: Landmark },
   { id: 'colony', label: '殖民', shortLabel: '殖民', icon: Home },
   { id: 'module', label: '改造', shortLabel: '改造', icon: Wrench },
@@ -211,6 +230,18 @@ export default function GameScreen({
   onImportSave,
   onResetGame,
   getShipTotalAssets,
+  battle,
+  fleetExpedition,
+  raid,
+  fleets,
+  cardLibrary,
+  onStartBattle,
+  onStartBattleExpedition,
+  onCancelBattleExpedition,
+  onBattleAction,
+  onEndBattle,
+  onCreateBattleFleet,
+  onDebugFillSampleLibrary,
 }: GameScreenProps) {
   const [activeTab, setActiveTab] = useState<TabId>('overview');
   const [showConfirmNext, setShowConfirmNext] = useState(false);
@@ -601,6 +632,26 @@ export default function GameScreen({
             />
           </div>
           )}
+          {/* ===== 战斗页签（V1.5 §10）=====
+               没有进行中的战斗 → 选敌人 + 选参战舰队；有战斗 → 整屏战斗界面（照搬卡牌 DEMO）。
+               所有回调都来自 useStableActions 的稳定引用（AGENTS 第五节），不在 JSX 里写 inline 箭头。 */}
+          <div className={activeTab === 'battle' ? '' : 'hidden'}>
+            <BattleTab
+              battle={battle}
+              expedition={fleetExpedition}
+              raid={raid}
+              fleets={fleets}
+              cardLibrary={cardLibrary}
+              state={gameState}
+              onStartBattle={onStartBattle}
+              onStartExpedition={onStartBattleExpedition}
+              onCancelExpedition={onCancelBattleExpedition}
+              onAction={onBattleAction}
+              onEndBattle={onEndBattle}
+              onCreateFleet={onCreateBattleFleet}
+              onDebugFillSampleLibrary={onDebugFillSampleLibrary}
+            />
+          </div>
           {currentShip && (
           <div className={activeTab === 'colony' ? '' : 'hidden'}>
             <ColonyPanel

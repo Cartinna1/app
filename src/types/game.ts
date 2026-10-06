@@ -1,6 +1,15 @@
 // ==================== 星际贸易 ====================
 
 import type { GalaxyState } from './galaxy';
+import type {
+  BattleAction,
+  BattleExpedition,
+  BattleFleet,
+  BattleRaidState,
+  BattleState,
+  PirateBossId,
+  ShipCardId,
+} from './battle';
 
 export interface Faction {
   id: string;
@@ -318,6 +327,12 @@ export interface GameState {
   factionReputation: Record<string, number>; // 各势力声望(-100~100)
   factionRepLog: Record<string, number>;     // 本回合各势力声望变化（用于上限管控，回合结算清空）
   factionContracts: FactionContract[];       // 活跃合同列表
+  // ===== 舰船卡牌战斗（V1.5 §10.1 机库/编队/防守标签/出征、§10.2 掠夺）=====
+  cardLibrary: ShipCardId[];              // 卡库：拥有的战舰（无上限；被击毁即永久移除）。初始为空（战舰全靠玩家在船坞建造）
+  fleets: BattleFleet[];                  // 舰队：数量不限；一船只能编入一队；每队 ≤ 30 艘
+  expedition: BattleExpedition | null;    // 进行中的出征（同时只能 1 个）
+  raid: BattleRaidState;                  // 掠夺状态
+  battle: BattleState | null;             // 进行中的战斗。⚠ **不进存档**（读档一律为 null）
 }
 
 export type GameAction =
@@ -325,7 +340,23 @@ export type GameAction =
   | { type: 'FUNCTIONAL_UPDATE'; updater: (state: GameState) => GameState }
   | { type: 'LOAD_SAVE'; state: GameState }
   | { type: 'RESET_GAME' }
-  | { type: 'ADD_EVENT_LOG'; entry: EventLogEntry };
+  | { type: 'ADD_EVENT_LOG'; entry: EventLogEntry }
+  // ===== 舰船卡牌战斗（V1.5 §10）=====
+  | { type: 'CREATE_BATTLE_FLEET'; name?: string }
+  | { type: 'DELETE_BATTLE_FLEET'; fleetId: string }
+  | { type: 'RENAME_BATTLE_FLEET'; fleetId: string; name: string }
+  | { type: 'ADD_SHIP_TO_FLEET'; fleetId: string; shipId: ShipCardId }
+  | { type: 'REMOVE_SHIP_FROM_FLEET'; fleetId: string; shipId: ShipCardId }
+  | { type: 'TOGGLE_FLEET_DEFENDING'; fleetId: string }
+  | { type: 'START_EXPEDITION'; bossId: PirateBossId; fleetId: string; turns: number }
+  | { type: 'CANCEL_EXPEDITION' }
+  | { type: 'START_BATTLE'; bossId: PirateBossId; fleet: ShipCardId[]; kind: 'expedition' | 'defense'; seed: number }
+  | { type: 'BATTLE_ACTION'; action: BattleAction }
+  | { type: 'END_BATTLE' }
+  | { type: 'TICK_BATTLE_STATE' }
+  // ⚠ 临时调试入口（P4）：把示例舰队填进卡库，好让战斗页签在 P8 船坞上线前能直接试玩。
+  //    P8 船坞上线后**连同 BattleTab 里那个「测试用」按钮一起删除**。
+  | { type: 'DEBUG_FILL_SAMPLE_LIBRARY' };
 
 /**
  * 存档数据形状：与 GameState 持久化字段保持一致（Pick 自 GameState，字段增减自动同步类型）。
@@ -339,4 +370,6 @@ export type SaveData = Pick<
   | 'buyTriggered' | 'sellTriggered' | 'buyBuffs' | 'sellBuffs'
   | 'factionPolicy' | 'policyRemainingTurns' | 'stardustMarket' | 'gameWon' | 'wonWonderName'
   | 'factionReputation' | 'factionContracts'
+  // 卡牌战斗：battle（进行中的战斗）**故意不进存档**
+  | 'cardLibrary' | 'fleets' | 'expedition' | 'raid'
 > & { saveVersion: number };

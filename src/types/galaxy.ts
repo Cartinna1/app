@@ -3,6 +3,7 @@
 // 考古：10 处遗迹，每处 3~5 个阶段，需 1 名领袖驻守；阶段与奖励数据在 data/galaxy/archaeology.ts。
 
 import type { PlanetTypeId } from './colony';
+import type { PirateBossId } from './battle';
 
 export type GalaxyNodeType = 'faction' | 'colony' | 'ruin' | 'empty';
 
@@ -20,6 +21,9 @@ export interface GalaxyNode {
   planetId?: PlanetTypeId;
   /** type='ruin' 时为遗迹 id（→ data/galaxy/archaeology.ts） */
   siteId?: string;
+  /** 海盗老巢 BOSS id（→ types/battle.ts 的 PirateBossId / data/battle/pirates.ts）。
+   *  只有 5 个空星系带此字段（V1.5 §7.1）；出征的耗时与可出兵判定见 lib/battle/expedition.ts。 */
+  pirateLair?: PirateBossId;
 }
 
 /** 航道（无向）；跃迁回合数由两端坐标距离推导，见 lib/galaxy/graph.ts 的 TURN_UNIT */

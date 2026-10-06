@@ -46,26 +46,33 @@ export const GALAXY_NODES: GalaxyNode[] = [
   { id: 'ruin_idols', type: 'ruin', name: '空白神像厅', x: 30, y: 180, siteId: 'idols' },
 
   // ==================== 20 空星系（深空；可进入，内容待更新） ====================
+  // ⚠ 其中 5 个带 `pirateLair`（海盗老巢，V1.5 §7.1）。**只复用空星系挂标记**：
+  //   节点 id / 坐标 / 航道 / 类型 / 名字一律没动（动了星图校验与贸易距离折价都会变），
+  //   故 validateGalaxy() 的结果与本次改动前逐字一致。
+  //   对照表（V1.5 §7.1 的星图位置 → 对应 BOSS）：
+  //     e20 → b4（锈钩·卡尔戈）  e11 → b3（深海阎王·巴罗萨）  e06 → b1（快刀·红胡子）
+  //     e16 → b5（苍白歌者·塞壬） e12 → b2（黑寡妇·玛拉）
+  //   BOSS 名与血量见 data/battle/pirates.ts（本文件不重复维护）；出征耗时由坐标推导，见 lib/battle/expedition.ts。
   { id: 'e01', type: 'empty', name: '空星系·01', x: 520, y: 340 },
   { id: 'e02', type: 'empty', name: '空星系·02', x: 250, y: 250 },
   { id: 'e03', type: 'empty', name: '空星系·03', x: 620, y: 430 },
   { id: 'e04', type: 'empty', name: '空星系·04', x: 470, y: 270 },
   { id: 'e05', type: 'empty', name: '空星系·05', x: 790, y: 60 },
-  { id: 'e06', type: 'empty', name: '空星系·06', x: 120, y: 520 },
+  { id: 'e06', type: 'empty', name: '空星系·06', x: 120, y: 520, pirateLair: 'b1' },
   { id: 'e07', type: 'empty', name: '空星系·07', x: 300, y: 600 },
   { id: 'e08', type: 'empty', name: '空星系·08', x: 520, y: 520 },
   { id: 'e09', type: 'empty', name: '空星系·09', x: 820, y: 300 },
   { id: 'e10', type: 'empty', name: '空星系·10', x: 700, y: 240 },
-  { id: 'e11', type: 'empty', name: '空星系·11', x: 240, y: 120 },
-  { id: 'e12', type: 'empty', name: '空星系·12', x: 900, y: 80 },
+  { id: 'e11', type: 'empty', name: '空星系·11', x: 240, y: 120, pirateLair: 'b3' },
+  { id: 'e12', type: 'empty', name: '空星系·12', x: 900, y: 80, pirateLair: 'b2' },
   { id: 'e13', type: 'empty', name: '空星系·13', x: 80, y: 250 },
   { id: 'e14', type: 'empty', name: '空星系·14', x: 600, y: 540 },
   { id: 'e15', type: 'empty', name: '空星系·15', x: 330, y: 240 },
-  { id: 'e16', type: 'empty', name: '空星系·16', x: 760, y: 560 },
+  { id: 'e16', type: 'empty', name: '空星系·16', x: 760, y: 560, pirateLair: 'b5' },
   { id: 'e17', type: 'empty', name: '空星系·17', x: 180, y: 420 },
   { id: 'e18', type: 'empty', name: '空星系·18', x: 500, y: 600 },
   { id: 'e19', type: 'empty', name: '空星系·19', x: 860, y: 200 },
-  { id: 'e20', type: 'empty', name: '空星系·20', x: 420, y: 460 },
+  { id: 'e20', type: 'empty', name: '空星系·20', x: 420, y: 460, pirateLair: 'b4' },
 ];
 
 /** 节点 id → 定义（星图渲染与状态查询共用） */

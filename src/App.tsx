@@ -67,6 +67,14 @@ function App() {
     rerollPolicy,
     buyFoodWithStardust,
     redeemCode,
+    // 舰船卡牌战斗（V1.5 §10）：战斗页签用
+    createBattleFleet,
+    startBattle,
+    startBattleExpedition,
+    cancelBattleExpedition,
+    battleAction,
+    endBattle,
+    debugFillSampleLibrary,
     hasSave,
     loadSave,
     exportSave,
@@ -173,6 +181,18 @@ function App() {
       onImportSave={importSave}
       onResetGame={resetGame}
       getShipTotalAssets={getShipTotalAssets}
+      battle={gameState.battle}
+      fleetExpedition={gameState.expedition}
+      raid={gameState.raid}
+      fleets={gameState.fleets}
+      cardLibrary={gameState.cardLibrary}
+      onStartBattle={startBattle}
+      onStartBattleExpedition={startBattleExpedition}
+      onCancelBattleExpedition={cancelBattleExpedition}
+      onBattleAction={battleAction}
+      onEndBattle={endBattle}
+      onCreateBattleFleet={createBattleFleet}
+      onDebugFillSampleLibrary={debugFillSampleLibrary}
     />
   );
 }

@@ -10,8 +10,12 @@ import { BLACK_MARKET_DEFAULT } from '@/data/exchangeRates';
 export const SAVE_KEY = 'aviation_career_save';
 /** 音乐静音开关的 localStorage key（与存档同处声明，避免组件里写裸字符串） */
 export const BGM_MUTED_KEY = 'bgm_muted';
-/** 2：位置与跃迁迁入 ship.galaxy（星图）；旧档不做星图进度迁移，只补一份全新星图 */
-export const SAVE_VERSION = 2;
+/** 2：位置与跃迁迁入 ship.galaxy（星图）；旧档不做星图进度迁移，只补一份全新星图。
+ *  3：卡牌战斗（V1.5 §10）新增 cardLibrary / fleets / expedition / raid 四个存档字段；
+ *     **只新增字段、不改任何既有字段的结构与语义**，故没有结构迁移（老档缺字段一律由 stateFromSave 兜底）。
+ *     ⚠ 卡库初始为空，**不赠送战舰**（战舰只能靠船坞建造，V1.5 §8）。
+ *     ⚠ `battle`（进行中的战斗）**故意不进存档**：读档一律为 null（V1.5 §〇「战斗中不能保存」）。 */
+export const SAVE_VERSION = 3;
 
 /** 存档结构校验（防止损坏/恶意存档导致崩溃） */
 export function validateSaveData(data: unknown): data is Record<string, unknown> {
@@ -54,6 +58,11 @@ export function buildSaveData(prev: GameState): SaveData {
     wonWonderName: prev.wonWonderName,
     factionReputation: prev.factionReputation,
     factionContracts: prev.factionContracts,
+    // 卡牌战斗（V1.5 §10）：battle（进行中的战斗）**故意不写入**（读档一律为 null）
+    cardLibrary: prev.cardLibrary,
+    fleets: prev.fleets,
+    expedition: prev.expedition,
+    raid: prev.raid,
   };
 }
 
@@ -116,12 +125,27 @@ export function stateFromSave(d: Record<string, any>): GameState {
     factionReputation: d.factionReputation || reputationFromLegacyInvestments(d.ships),
     factionRepLog: {},
     factionContracts: d.factionContracts || [],
+    // ===== 卡牌战斗（V1.5 §10）=====
+    // v3 新增字段的**唯一兜底点**（旧档没有这些字段，一律在这里补默认值）。
+    // ⚠ 这里的 5 个默认值必须与 gameReducer.createInitialGameState 的初值**逐一一致**（尤其 battle: null）。
+    // ⚠ v3 的卡库**初始为空、不赠送战舰**（V1.5 §8：战舰只能靠船坞建造）。
+    cardLibrary: d.cardLibrary || [],
+    fleets: d.fleets || [],
+    expedition: d.expedition || null,
+    // 缺 raid 整键时给一份全新对象（不用模块级常量：避免和别处共享同一个可变对象）；
+    // 键序保持 inTurns / immuneTurns / raiders，便于与 createInitialGameState 做值比较
+    raid: { inTurns: null, immuneTurns: 0, raiders: 0, ...(d.raid || {}) },
+    // 进行中的战斗**不进存档**：即使存档里混入了 battle 也一律丢弃（V1.5 §〇「战斗中不能保存」）
+    battle: null,
   };
 }
 
 /** 旧存档兼容补丁（由 gameReducer 的 LOAD_SAVE 统一调用）。
  *  ⚠ 职责分工：**字段级默认值一律由 stateFromSave 负责**（它是唯一兜底点，LOAD_SAVE 的两个入口
- *  都先过它），本函数只做「结构/语义改写」——旧字段缺失的补写在这里属于死代码（判空永不成立）。 */
+ *  都先过它），本函数只做「结构/语义改写」——旧字段缺失的补写在这里属于死代码（判空永不成立）。
+ *  v3：只**新增**卡牌战斗字段（cardLibrary / fleets / expedition / raid），不改任何既有字段的结构与语义
+ *  → **无需 v2→v3 结构迁移**（故这里没有对应分支）：老档缺这四个字段由 stateFromSave 补默认值，
+ *    `battle`（进行中的战斗）读档一律为 null。 */
 export function migrateSave(loaded: GameState): GameState {
   // 兼容旧存档：补充破产/饥荒/叛乱字段（这几个字段不在 stateFromSave 的清单里，故仍需在此兜底）
   if (loaded.ships) {

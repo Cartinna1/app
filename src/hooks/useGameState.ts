@@ -1,5 +1,6 @@
 import { useReducer, useCallback, useRef } from 'react';
 import type { Mothership, GameState } from '@/types/game';
+import type { BattleAction, PirateBossId, ShipCardId } from '@/types/battle';
 import { gameReducer, createInitialGameState } from './gameReducer';
 import { useStock } from './useStock';
 import { useProduction } from './useProduction';
@@ -37,8 +38,11 @@ type Tail<T extends unknown[]> = T extends [unknown, ...infer R] ? R : never;
  * 每次渲染更新内部 ref，调用时始终执行最新闭包。
  * 这样子 hook 里依赖 gameState 的 useCallback 即使每次渲染都重建，
  * 透传到组件层的函数引用也保持不变，不会击穿面板组件的 React.memo。
+ *
+ * 也用于**组件内部**：把依赖当前 props（每次渲染都会变）的处理器包成稳定引用，
+ * 再传给已经 memo 的子组件（战斗界面 BattleScreen 就是这么做的）。
  */
-function useStableActions<T extends Record<string, (...args: never[]) => unknown>>(actions: T): T {
+export function useStableActions<T extends Record<string, (...args: never[]) => unknown>>(actions: T): T {
   const ref = useRef(actions);
   ref.current = actions;
   const stableRef = useRef<T | null>(null);
@@ -334,6 +338,70 @@ export function useGameState() {
     [gameState.stocks, gameState.materials, gameState.products]
   );
 
+  // ==================== 舰船卡牌战斗（V1.5 §10） ====================
+  // P3 只提供「状态 + 动作」（UI 在 P4/P6 接：战斗页签 / 机库页签）。
+  // ⚠ 命名提醒：这里是**舰队出征**（START_EXPEDITION），与殖民地领袖远征的 startExpedition（useColony）是两回事，
+  //   故出征/取消两个动作用 startBattleExpedition / cancelBattleExpedition 以示区分，勿与殖民地那个混用。
+  const createBattleFleet = useCallback((name?: string) => {
+    dispatch({ type: 'CREATE_BATTLE_FLEET', name });
+  }, []);
+
+  const deleteBattleFleet = useCallback((fleetId: string) => {
+    dispatch({ type: 'DELETE_BATTLE_FLEET', fleetId });
+  }, []);
+
+  const renameBattleFleet = useCallback((fleetId: string, name: string) => {
+    dispatch({ type: 'RENAME_BATTLE_FLEET', fleetId, name });
+  }, []);
+
+  const addShipToFleet = useCallback((fleetId: string, shipId: ShipCardId) => {
+    dispatch({ type: 'ADD_SHIP_TO_FLEET', fleetId, shipId });
+  }, []);
+
+  const removeShipFromFleet = useCallback((fleetId: string, shipId: ShipCardId) => {
+    dispatch({ type: 'REMOVE_SHIP_FROM_FLEET', fleetId, shipId });
+  }, []);
+
+  const toggleFleetDefending = useCallback((fleetId: string) => {
+    dispatch({ type: 'TOGGLE_FLEET_DEFENDING', fleetId });
+  }, []);
+
+  const startBattleExpedition = useCallback((bossId: PirateBossId, fleetId: string, turns: number) => {
+    dispatch({ type: 'START_EXPEDITION', bossId, fleetId, turns });
+  }, []);
+
+  const cancelBattleExpedition = useCallback(() => {
+    dispatch({ type: 'CANCEL_EXPEDITION' });
+  }, []);
+
+  const startBattle = useCallback(
+    (bossId: PirateBossId, fleet: ShipCardId[], kind: 'expedition' | 'defense', seed: number) => {
+      dispatch({ type: 'START_BATTLE', bossId, fleet, kind, seed });
+    },
+    []
+  );
+
+  const battleAction = useCallback((action: BattleAction) => {
+    dispatch({ type: 'BATTLE_ACTION', action });
+  }, []);
+
+  const endBattle = useCallback(() => {
+    dispatch({ type: 'END_BATTLE' });
+  }, []);
+
+  /**
+   * ⚠ P4 临时调试入口：把示例舰队（FLEET_STARTER，26 艘）填进卡库，好让战斗页签在 P8 船坞上线前能试玩。
+   * P8 船坞上线后**连同这个 action 与 BattleTab 里的「测试用」按钮一起删除**。
+   */
+  const debugFillSampleLibrary = useCallback(() => {
+    dispatch({ type: 'DEBUG_FILL_SAMPLE_LIBRARY' });
+  }, []);
+
+  /** 每个游戏回合调用一次（useTurn 编排）：出征 / 掠夺倒计时各减 1；归零后开战由调用方判断 */
+  const tickBattleState = useCallback(() => {
+    dispatch({ type: 'TICK_BATTLE_STATE' });
+  }, []);
+
   // 所有对外 action 包成引用稳定的函数（见 useStableActions）。
   // shipIndex 恒为 0 的单舰队接口在此收敛，组件层不再感知 shipIndex 参数。
   const actions = useStableActions({
@@ -418,6 +486,21 @@ export function useGameState() {
     demolishBuilding,
     selectWonder, submitWonderResources, canStartWonder, completeWonder,
     startExpedition, payExpeditionNode, unlockUltimate,
+
+    // 舰船卡牌战斗（V1.5 §10：机库编队 / 防守标签 / 出征 / 战斗 / 回合推进）
+    createBattleFleet,
+    deleteBattleFleet,
+    renameBattleFleet,
+    addShipToFleet,
+    removeShipFromFleet,
+    toggleFleetDefending,
+    startBattleExpedition,
+    cancelBattleExpedition,
+    startBattle,
+    battleAction,
+    endBattle,
+    tickBattleState,
+    debugFillSampleLibrary,
 
     // 存档
     autoSave,

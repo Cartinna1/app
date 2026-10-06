@@ -105,7 +105,7 @@ export const ALL_TECHS: ResearchTech[] = [
   // ===== T26 聚变能源原理 =====
   { id: 'T26', name: '聚变能源原理',
     description: '"当温度和压力达到临界点，恒星的核心反应可以被囚禁在一枚磁场之茧中。"',
-    costRP: 6000, researchTurns: 4, prerequisites: [], minResearchedCount: 15, unlocksBuilding: BUILDING_FUSION_PLANT },
+    costRP: 6000, researchTurns: 4, prerequisites: [], minResearchedCount: 7, unlocksBuilding: BUILDING_FUSION_PLANT },
   // ===== T27 反物质约束理论 =====
   { id: 'T27', name: '反物质约束理论',
     description: '"反物质不是燃料……它是纯能量凝固成的晶体。困难不在于制造它，而在于说服它安静地待在容器里。"',

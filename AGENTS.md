@@ -21,6 +21,7 @@
 ```
 src/
 ├── components/     # UI：13 个面板（全部 memo）+ GameScreen/GameOverScreen/ShipSelection
+│   ├── battle/     # 卡牌战斗 UI（BattleTab/BattleScreen/BossPanel/BoardSide/FleetPool/BattleInfoBar/GraveBar/parts，全部 memo）
 │   ├── colony/     # ColonyPanel、WonderPanel
 │   ├── GalaxyMapPanel.tsx    # 星图（SVG 50 节点 / 迷雾 / 缩放平移 / 只负责跃迁）
 │   └── ArchaeologyPanel.tsx  # 考古（独立页签 / 阶段图片位 / 图鉴）
@@ -88,6 +89,13 @@ src/
 | 生产上限加成 | `data/modules.ts` → `getProductionLimitBonus` |
 | 殖民地建筑「实际成本与上限」 | `lib/colony/costs.ts` → `getEffectiveMaxCount`（数量上限 = 基础 `maxCount` + 领袖 `levelExtras.buildingMaxCountBonus[建筑id]`，全数据驱动）/ `getEffectiveMaxPop`（含 popCapBonus 覆盖）/ `getBuildingCostProfile`（金币·合金·原料·工期，含星球倍率+领袖减免）/ `getRecruitCostPerPop`（招募单价）/ `RECRUIT_BASE_COST`（2000 基础价锚点）/ `getBuildingRefundProfile`（取消/拆除返还 = 实付 ×0.4 金币、×0.7 合金与原料）；人口上限唯一真值是 `BuildingDef.popCapBonus`（B1=5 / B2=20）+ `planets.buffs.housingCapDelta`（遗落星球 B1 +3）——hook 结算与 UI 显示必须同源，勿就地重算 |
 | 产品卖出价加成 | `data/modules.ts` → `getSellPriceBreakdown`（母舰技能+事件套装+联盟，逻辑层与显示层共用；含 multiplier/eventPercent/skillPercent/alliancePercent） |
+| 卡牌战斗**规则引擎**（逐字搬移自 `carddemo/engine.js`） | `lib/battle/engine.ts` —— **不许"顺手优化"判定顺序 / 数值 / 随机数消耗次数**；`carddemo/` 是参照实现，改战斗规则先改 DEMO 再搬 |
+| 卡牌战斗**数据**（卡牌/海盗首领/编制/数值锚点） | `data/battle/*` —— **由 `scripts/export-battle-data.cjs` 从 DEMO 生成，勿手改** |
+| 卡牌战斗**展示逻辑**（信息条 / 攻击状态三重区分 / 待选择时只有候选可点） | `lib/battle/view.ts`（纯函数，**不依赖 React/DOM**；组件只做渲染） |
+| 出征可用性 / 出征耗时（殖民地→老巢）/ 老巢是否探明 / 战斗期间能否结束回合 | `lib/battle/expedition.ts` —— 耗时**必须**走 `lib/galaxy/graph.ts` 的 `getGalaxyTurns`（同跃迁与贸易折价，含 `MAX_ROUTE_TURNS=9` 钳制），勿自己写距离或另开不封顶的算法 |
+| 卡牌战斗战利品（老巢 100000 金币 + 40 星尘） | `lib/battle/rewards.ts`（金币收益**必须过 `famineHalveGold`** 并 `pushGoldLog`） |
+| 战斗状态字段与动作（cardLibrary / fleets / expedition / raid / battle） | `hooks/gameReducer.ts` —— 「一船同一时间只能编入一个舰队」按**份数**表达（某 cardId 已编入份数 ≤ 卡库持有份数）；永久损失也按**份**写回 |
+| 战斗规则一键复验 | `scripts/check-battle.cjs`（数据校验 / 类型风险 / 未使用参数 / 静态审计 / DEMO 96 条定点断言 / 同 seed 行为对拍含完整日志 / 状态与存档 / 展示逻辑 / **出征闭环**）—— **改战斗任何东西都要跑它** |
 | 列表/网格缩略图路径 | `lib/assetThumb.ts` → `getThumbPath`（`/<dir>/<rest>/<name>.<ext>` → `/<dir>/thumbs/<rest>/<name>.webp`）——缩略图由脚本生成到 `public/<dir>/thumbs/`，**别在别处手写第二套命名** |
 
 ## 四、改 GameState 字段：存档三处同步
@@ -97,7 +105,7 @@ src/
 1. `types/game.ts` 加声明；
 2. `lib/save.ts` 的 `buildSaveData` 写入（`SaveData` 是 `Pick<GameState,…>`，漏字段会编译报错——以构建报错为兜底，但别依赖它）；
 3. `lib/save.ts` 的 `stateFromSave` 加读档兜底默认值；
-4. 字段结构变化时在 `migrateSave` 写迁移分支（存档带 `saveVersion`，**当前为 2**：v2 把位置/跃迁从 `tradeStatus` 迁入 `ship.galaxy`；旧档不做星图进度迁移，只补一份全新星图与 `titles`）。
+4. 字段结构变化时在 `migrateSave` 写迁移分支（存档带 `saveVersion`，**当前为 3**：v2 把位置/跃迁从 `tradeStatus` 迁入 `ship.galaxy`；v3 加入卡牌战斗状态 `cardLibrary`/`fleets`/`expedition`/`raid`（**卡库初始为空，不赠送战舰**），`battle` **不入档**（战斗可从倒计时推导 → 读档回到战斗前）。旧档不做星图进度迁移，只补一份全新星图与 `titles`）。
 
 只影响运行时、不需持久化的字段（如 `factionRepLog`）不进存档清单，但也必须在 `stateFromSave` 里给出初始值。
 
@@ -125,6 +133,7 @@ src/
 - **特产卖出乘数**（`data/factions.ts`）：`DIST_SLOPE=0.05` + `DIST_QUADRATIC=0.015`（距离折价 `1+0.05d+0.015d²`）+ `MAX_SELL_MULTIPLIER=4.0`（距离×政策×波动的上限）。**必须带二次项**：纯线性会让"每回合利润"随距离单调下降（实测 dist9 只有近程的 19%）；改这两个系数前重跑"按距离分桶的每回合利润对比表"（样本 = 90 个势力对 × 10 档政策）。改动**下个回合生效**（乘数每回合算好存入 `factionSellMultipliers`），旧档自愈，无需存档迁移
 - `0.4` / `0.7` 建筑取消/拆除返还：**按实付成本算**（唯一真值 `lib/colony/costs.ts` → `getBuildingRefundProfile`：金币 ×0.4、合金与原料 ×0.7；实扣走 `getBuildingCostProfile`），调用点在 `hooks/colony/useColonyBuildings.ts`。**勿按基础价算**——低造价倍率下曾可"建了立刻取消"无限套利
 - **星图节点坐标**（`data/galaxy/nodes.ts`）：坐标同时决定跃迁回合数与贸易距离折价，属数值锚点。当前势力间最短路 **2~9 回合、均值 ≈5.87**（`validateGalaxy()` 的断言上限是 `MAX_ROUTE_TURNS=9`）。改坐标前先出"候选位置对比表"，候选必须核四项：与目标节点的新回合数、到最近邻居的距离、势力对 min/max/均值、**该节点其它航道回合数是否被连带改变**（只改目标航道的候选优先）；改完重跑 `validateGalaxy()` + 势力对区间 + 全图最小间距。注意四舍五入边界：`f03–f04` 曾因 119.97/80 = 1.4996 被判成 **1 回合**
+  - **出征耗时也吃这条锚点（2026-08 已定口径）**：殖民地 → 海盗老巢的耗时走 `getGalaxyTurns` 的**钳制后**值（上限 9），实测 10 个殖民地取平均 = b4 6.6 / b3 6.9 / b1 6.8 / b5 8.2 / b2 8.2 回合。⚠ V1.5 §7.1 那张表登记的 7.4 / 8.0 / 9.0 / 11.4 / 11.6 是**未钳制的原始最短路**均值（已用独立算法逐位复现；b5/b2 有 8/10 个殖民地的原始距离 > 9）——**文档那两个 11.x 在游戏里不会出现，这是有意接受的**：出征是真实跃迁，若另开一套不封顶的算法就会出现"星图说 9 回合、出征说 16 回合"。**不要再为了对齐文档去改这张图、`MAX_ROUTE_TURNS` 或 `pirateLair` 的挂点。**
 - **领袖升级费用**（唯一真值：`data/colony/leaders.ts` 的 `LEADER_UPGRADE_COST` / `getLeaderUpgradeCost`，是 **cost 对象**：**Lv1→2 = 50,000 金币，Lv2→3 = 150 合金**；UI 与 hook 均从该处取，校验/扣减走 `lib/turn/resourceCost` 的 `firstMissing`/`canAfford`/`payCost`，勿就地硬编码数字或另写扣费）
 - **开启远征费用**（`data/colony/expeditions.ts` 的 `EXPEDITION_COST`，cost 对象：**20,000 金币 + 50 合金**；同样走 `firstMissing`/`payCost`；`startExpedition` **没有领袖等级门槛**，Lv3 只跟终极技能解锁有关）
 - 招募领袖星尘费（基础 10，减领袖 `leaderCostReduction`，下限 1；唯一真值：`data/colony/leaders.ts` 的 `getRecruitRollCost`；UI 与 `useColonyLeaders` 均从该处取，勿就地硬编码）
@@ -167,7 +176,7 @@ src/
 - 位置真值：位置与跃迁**只**存 `ship.galaxy`（`tradeStatus` 已删这三个字段）；"当前势力"一律走 `lib/galaxy/access.getCurrentFactionId(ship)`（停在非势力节点返回 null；贸易动作先过 `requireFactionHere` 守卫，跃迁中禁止交易）。
 - 跨分支入口：跨分支共用的操作抽成**一个函数**由两处调用（`GalaxyMapPanel.renderTravelAction`）；删改 JSX 分支后确认没有操作入口只活在一个分支里。
 - 列表渲染：页签/入口一律遍历**完整数组**，需要分组就用显式清单，**不许 `slice(`/`filter` 静默截断**。
-- 移动端底栏（结构上固定行数，别靠换行）：单行 = 左侧**钉住**「结束回合 / 音乐」（各 52px，不参与滚动）+ 右侧 15 个页签**横向滚动**（`w-14` = 56px/个，全部渲染、不许 slice）；滚动条可见（`[&::-webkit-scrollbar]:h-1.5` + track/thumb + `[scrollbar-width:thin]`）、切页签用 `scrollIntoView({inline:'center'})`、右缘渐隐仅在有内容时显示（`tabStripMoreRight`，带 2px 容差防亚像素误判）；栏高 ≈64px → 根容器 `pb-[68px] md:pb-0`，nav 自身带 `pb-[env(safe-area-inset-bottom)]` 避开 iPhone 横条。**栏高与根容器留位是配对的，改任一边都要重算**。
+- 移动端底栏（结构上固定行数，别靠换行）：单行 = 左侧**钉住**「结束回合 / 音乐」（各 52px，不参与滚动）+ 右侧 16 个页签**横向滚动**（`w-14` = 56px/个，全部渲染、不许 slice）；滚动条可见（`[&::-webkit-scrollbar]:h-1.5` + track/thumb + `[scrollbar-width:thin]`）、切页签用 `scrollIntoView({inline:'center'})`、右缘渐隐仅在有内容时显示（`tabStripMoreRight`，带 2px 容差防亚像素误判）；栏高 ≈64px → 根容器 `pb-[68px] md:pb-0`，nav 自身带 `pb-[env(safe-area-inset-bottom)]` 避开 iPhone 横条。**栏高与根容器留位是配对的，改任一边都要重算**。
 - 事件与股票双向隔绝（既定规划，勿再接通）：事件侧不读 `stocks`/股价、不写任何价格字段，股票侧不读事件字段与情报字段；新增市场影响一律走独立的态势/消息面机制（股票因子的唯一接入点在 `priceFluctuation` 的 `totalChange` 处）。**事件文案也不得承诺市场影响**（别写"股价将暴涨""买入后被套牢"；改写法见 `choiceEvents.ts` 的"把情报转手变现"）。
 - 引号：远征/剧情等数据文本一律用模板字符串（反引号）或转义 `\'`（**ASCII 引号会截断字符串**）；录入新文本后 grep `[\u4e00-\u9fff]'[\u4e00-\u9fff]` 自检。
 - import：**加 import 前先 grep 该文件是否已有同一模块的 import**；改完遍历 import 绑定检出同一文件的重复绑定（TS2300）。
@@ -220,6 +229,8 @@ src/
 | 加 import 时重复 import 同一符号（TS2300 构建失败） | 追加符号时文件下方原本已有一行等价 import（不在替换块内） | 加 import 前先 grep 该文件是否已有同一模块的 import；改完遍历 import 绑定检出重复绑定 |
 
 ### 10.2 口径补充
+
+- **卡牌战斗的三条铁律**（都是 DEMO 踩坑换来的，改动前先读 `carddemo/README.md`）：① **信息条是手机端看技能的唯一出口**（卡面只放名字/系列·稀有度/攻盾体与费用，**技能不上卡面**）；② **攻击状态必须三重区分**（可攻击 / 已攻击 / 不能攻击+原因），且**不是这一方的回合时不显示状态**；③ **待选择时只有候选可点**（点本体无效）。
 
 - **黑市受迷雾约束**（`TradePanel` 黑市势力选择器）：未探明势力只显示 `?` 锁定占位，不露名称/特产/市场价——与「势力列表」同口径（`lib/galaxy/knowledge.getKnownFactionIds`）。这是第三节迷雾条目的适用面，不是例外。
 - **饥荒减半（`famineHalveGold`）消费点补齐**：除股息/誊录仪/招财猫/投资收益/打探/事件外，还有**声望被动收入**（`factionTurn.applyPassiveIncome`）与**量子生物反应器转化**（`useModule`，文案标注"（饥荒减半）"）。**新增任何金币收益都要问一句"饥荒时该不该减半"**。

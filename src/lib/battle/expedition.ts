@@ -1,0 +1,165 @@
+// ==================== 出征（V1.5 §10.1 / §10.2）纯逻辑 ====================
+// 主游戏侧的「出征可行性 / 出征耗时 / 老巢探明 / 战斗期间能否结束回合」唯一真值。
+// 规则出处：《舰队卡牌游戏设计方案 V1.5》§7.1（五个老巢的星图位置）、§10.1（出征）、§10.2（掠夺）。
+// ⚠ 这里**不重算任何距离**：耗时一律走 lib/galaxy/graph.ts 的 getGalaxyTurns（星图距离唯一真值，
+//   与跃迁回合数、贸易折价同源），被封锁的宿敌节点与贸易同口径（getBlockedNodeIds）。
+// ⚠ 不依赖 React/DOM，可独立测试；本文件不做任何副作用。
+
+import type { GameState } from '@/types/game';
+import type { PirateBossId, ShipCardId } from '@/types/battle';
+import { GALAXY_NODES, getGalaxyNode } from '@/data/galaxy/nodes';
+import { PIRATE_BOSSES } from '@/data/battle/pirates';
+import { getGalaxyTurns } from '@/lib/galaxy/graph';
+import { getBlockedNodeIds } from '@/lib/galaxy/access';
+
+// ==================== 节点查询（数据层只列一次，勿在别处再扫一遍 GALAXY_NODES） ====================
+
+/** 老巢 BOSS id → 星图节点 id（V1.5 §7.1；标记写在 data/galaxy/nodes.ts 的 `pirateLair` 上） */
+const LAIR_NODE_BY_BOSS: Record<string, string> = Object.fromEntries(
+  GALAXY_NODES.filter((n) => n.pirateLair).map((n) => [n.pirateLair as string, n.id])
+);
+
+/** 殖民地星球类型 → 节点 id（10 个殖民地节点的 planetId 唯一，与 data/galaxy/nodes.ts 一一对应） */
+const COLONY_NODE_BY_PLANET: Record<string, string> = Object.fromEntries(
+  GALAXY_NODES.filter((n) => n.type === 'colony' && n.planetId).map((n) => [n.planetId as string, n.id])
+);
+
+/** 老巢所在的星图节点（未标记 / 未知 bossId 时返回 null） */
+export function lairNodeId(bossId: PirateBossId): string | null {
+  return LAIR_NODE_BY_BOSS[bossId] ?? null;
+}
+
+/** 老巢的展示名（就是所在星系的节点名，如「空星系·06」；查不到时空串） */
+function lairNodeName(bossId: PirateBossId): string {
+  return getGalaxyNode(lairNodeId(bossId))?.name ?? '';
+}
+
+/** 殖民地是否已建立（`scouting` 是旧存档的建设期，母舰已在场，也算已建立） */
+function hasColony(state: GameState): boolean {
+  const colony = state.ships[0]?.colony;
+  if (!colony) return false;
+  // ColonyPhase 只有 'inactive' | 'scouting' | 'active'（'selecting' 是**奇观**阶段，不是殖民地的）：
+  // 非 inactive 即已建立（'scouting' 仅旧存档会处于，建立后立即建成）。
+  return colony.phase !== 'inactive';
+}
+
+/**
+ * 殖民地所在节点。
+ * 口径：殖民地的 `planetType` 是**建殖民地时按母舰所在节点**定的（useColonyBase.foundColony），
+ * 而 10 个殖民地节点的 planetId 唯一 → 反查即可，**不需要新字段**。
+ * 还没建殖民地（含没有 planetType、没有对应节点）时返回 null → 出征不可用（§10.2 掠夺以存在殖民地为前提）。
+ */
+export function colonyNodeId(state: GameState): string | null {
+  const colony = state.ships[0]?.colony;
+  if (!colony || !hasColony(state)) return null;
+  if (!colony.planetType) return null;
+  return COLONY_NODE_BY_PLANET[colony.planetType] ?? null;
+}
+
+/**
+ * 出征耗时 = 殖民地节点 → 老巢节点的星图跃迁回合数（复用 getGalaxyTurns，被封锁势力影响，与贸易同源）。
+ * 没有殖民地 / 该 bossId 不是老巢 / 路线不可达（宿敌封锁）时返回 null（调用方据此禁用出征）。
+ *
+ * ⚠ 口径已定（2026-08）：出征耗时就用 `getGalaxyTurns` 的**钳制后**值（上限 `MAX_ROUTE_TURNS=9`），
+ *   与跃迁回合数、贸易距离折价同源 —— 出征本来就是一次真实跃迁，不另开一套不封顶的算法。
+ *   实测（10 个殖民地取平均）：b4 6.6 / b3 6.9 / b1 6.8 / b5 8.2 / b2 8.2 回合。
+ *   注意 V1.5 §7.1 那张表登记的 7.4 / 8.0 / 9.0 / 11.4 / 11.6 是**未钳制的原始最短路**均值
+ *   （已用独立算法逐位复现）：b5/b2 有 8/10 个殖民地到老巢的原始距离 > 9，钳成 9 之后
+ *   文档那两个 11.x 在游戏里不会出现。**这是有意的**（否则会出现"星图说 9 回合、出征说 16 回合"），
+ *   不要再为了对齐文档去改这张图或 `MAX_ROUTE_TURNS`。
+ */
+export function expeditionTurns(state: GameState, bossId: PirateBossId): number | null {
+  const from = colonyNodeId(state);
+  const to = lairNodeId(bossId);
+  if (!from || !to) return null;
+  return getGalaxyTurns(from, to, getBlockedNodeIds(state.factionReputation));
+}
+
+/**
+ * 老巢是否已探明（= 该节点在 `visitedNodes` 里，沿用星图迷雾口径：到达即探明）。
+ * 未探明不给出征列表（V1.5 §10.1），且**不做占位提示** —— 星图里自己探索出来。
+ */
+export function isLairDiscovered(state: GameState, bossId: PirateBossId): boolean {
+  const nodeId = lairNodeId(bossId);
+  if (!nodeId) return false;
+  return (state.ships[0]?.galaxy?.visitedNodes ?? []).includes(nodeId);
+}
+
+/** 已探明的老巢列表（供战斗页签展示：目标 BOSS、所在节点名、还有 N 回合） */
+export function discoveredLairs(
+  state: GameState
+): { bossId: PirateBossId; nodeId: string; name: string; turns: number }[] {
+  const visited = new Set(state.ships[0]?.galaxy?.visitedNodes ?? []);
+  const out: { bossId: PirateBossId; nodeId: string; name: string; turns: number }[] = [];
+  for (const node of GALAXY_NODES) {
+    if (!node.pirateLair) continue;          // 只列 5 个老巢，其它空星系不参与
+    if (!visited.has(node.id)) continue;      // 未探明的一律不出现（不占位）
+    const bossId = node.pirateLair;
+    const turns = expeditionTurns(state, bossId);
+    if (turns === null) continue;             // 没有殖民地 / 路线被封锁 → 这次出不征
+    out.push({ bossId, nodeId: node.id, name: lairNodeName(bossId), turns });
+  }
+  return out;
+}
+
+/**
+ * 能否出征：**同步可判的拦截全部在这里**（UI 置灰提示与 useTurn 都读它，避免各写一份）。
+ * 不满足时 `reason` 是给玩家看的一句话。
+ */
+export function canStartExpedition(
+  state: GameState,
+  bossId: PirateBossId,
+  fleetId: string
+): { ok: boolean; reason?: string } {
+  const nodeId = lairNodeId(bossId);
+  if (!nodeId) return { ok: false, reason: '目标不是海盗老巢' };
+  if (!colonyNodeId(state)) return { ok: false, reason: '还没有殖民地 —— 先建立殖民地才能出征（V1.5 §10.2）' };
+  if (!isLairDiscovered(state, bossId)) return { ok: false, reason: '这个老巢还没探明 —— 先去星图探索' };
+  if (state.expedition) return { ok: false, reason: '已有出征在途，同时只能出征 1 个老巢（V1.5 §10.1）' };
+  if (state.battle) return { ok: false, reason: '战斗进行中，无法发起新的出征' };
+  const fleet = state.fleets.find((f) => f.id === fleetId);
+  if (!fleet) return { ok: false, reason: '请先选择出征舰队' };
+  if (fleet.defending) return { ok: false, reason: '带「防守」标签的舰队留守，不能出征' };
+  if (fleet.shipIds.length === 0) return { ok: false, reason: '这支舰队没有战舰，出征不能空手（V1.5 §10.1）' };
+  if (expeditionTurns(state, bossId) === null) return { ok: false, reason: '通往该老巢的航线被封锁，无法出征' };
+  return { ok: true };
+}
+
+/**
+ * 战斗期间不允许结束游戏回合（V1.5 §〇「战斗中不能保存」、§1.1）。
+ * 只判 `state.battle`：出征倒计时在途（还没开战）时仍可正常结束回合。
+ */
+export function canEndGameTurn(state: GameState): boolean {
+  return !state.battle;
+}
+
+/**
+ * 「本回合结束前该自动开战吗」——倒计时归零的出征 + 该出征的参战舰船。
+ * useTurn 每回合结束时的编排真值：先 TICK_BATTLE_STATE 让倒计时归零，再调用它。
+ * 返回 null = 什么都不做（没有出征 / 还在路上 / 战斗已在进行 / 出征舰队已不存在）。
+ * 注意：**开战的随机种子不在这里**（种子由调用方按现有口径取 Date.now()，战斗不进存档）。
+ */
+export function readyExpedition(
+  state: GameState,
+  /**
+   * true = 调用方**刚刚派发过 TICK**、读到的还是 TICK 之前的状态（useTurn 正是这种情形）。
+   * 此时「本次 TICK 后归零」等价于 `turnsRemaining <= 1`。
+   * ⚠ 少了这个选项就 off-by-one：玩家要多点一次结束回合才开战，中间那回合界面还显示「还有 0 回合」。
+   */
+  afterTick = false
+): { bossId: PirateBossId; fleetId: string; fleet: ShipCardId[] } | null {
+  if (state.battle) return null;                       // 战斗期间一切照旧（不推进、不开新战）
+  const ex = state.expedition;
+  if (!ex) return null;                                // 没有出征
+  if (ex.turnsRemaining > (afterTick ? 1 : 0)) return null;   // 还在路上（afterTick：本次 TICK 后仍 > 0）
+  const fleet = state.fleets.find((f) => f.id === ex.fleetId);
+  if (!fleet || fleet.shipIds.length === 0) return null; // 舰队被删/被掏空 → 不开战（不崩）
+  return { bossId: ex.bossId, fleetId: ex.fleetId, fleet: fleet.shipIds.slice() };
+}
+
+// 说明：PIRATE_BOSSES 的导入只用于「老巢 BOSS 必须存在」的数据自检（避免 nodes 标了不存在的 boss）。
+if (import.meta.env.DEV) {
+  for (const [bossId, nodeId] of Object.entries(LAIR_NODE_BY_BOSS)) {
+    if (!PIRATE_BOSSES[bossId]) console.warn(`[expedition] 老巢 ${nodeId} 指向不存在的 BOSS：${bossId}`);
+  }
+}
