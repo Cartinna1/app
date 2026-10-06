@@ -359,7 +359,7 @@ function ColonyPanel(props: ColonyPanelProps) {
                       ];
                       return (
                         <p key={b.uid} className="text-xs text-slate-500 flex flex-wrap items-baseline gap-x-1">
-                          <span>{bd?.name || b.defId}:</span>
+                          <span>{bd?.name || '未知建筑'}:</span>
                           <span className="text-cyan-400">+{b.value}</span>
                           <span className="text-slate-600">（{parts.join(' | ')}）</span>
                         </p>
@@ -666,7 +666,7 @@ function ColonyPanel(props: ColonyPanelProps) {
                 if (!def) {
                   return insts.map((inst: any) => (
                     <div key={inst.uid} className="bg-slate-900/60 border border-purple-700/40 rounded-lg p-3 mb-2 flex justify-between items-center">
-                      <span className="text-sm text-purple-300 font-bold">{inst.defId}</span>
+                      <span className="text-sm text-purple-300 font-bold">未知建筑</span>
                       <button onClick={() => { const r = onDemolishBuilding(inst.uid); showMsg(r.message, r.success ? 'success' : 'error'); }} className="px-2 py-1 bg-red-700 hover:bg-red-600 rounded text-xs font-bold">拆除</button>
                     </div>
                   ));

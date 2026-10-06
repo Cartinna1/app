@@ -35,8 +35,7 @@ function FleetEditorBase({ fleet, rows, onAdd, onRemove }: FleetEditorProps) {
         </p>
       ) : rows.length === 0 ? (
         <p className="mt-2 text-[11.5px] leading-relaxed text-amber-400">
-          卡库是空的，没有可编入的战舰 —— 战舰只能靠船坞建造（V1.5 §8）：去下面的船坞面板下单，
-          建好的舰当回合自动进卡库，再回来编队。
+          卡库是空的，没有可编入的战舰 —— 去下面的船坞面板下单，建好的舰当回合自动进卡库，再回来编队。
         </p>
       ) : (
         <div className="mt-2 space-y-1.5">

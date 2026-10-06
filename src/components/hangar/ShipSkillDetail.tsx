@@ -11,7 +11,7 @@ import { memo } from 'react';
 // ============================================================================
 
 export interface ShipSkillDetailProps {
-  /** 当前点选的卡（null = 未选，显示引导语） */
+  /** 当前点选的卡（null = 未选，只显示当前状态） */
   card: {
     name: string;
     series: string;
@@ -22,8 +22,6 @@ export interface ShipSkillDetailProps {
     structure: number;
     text: string;
   } | null;
-  /** 未选中时的引导语（卡库 / 船坞各给一句） */
-  emptyHint: string;
   /** 持有份数（卡库里没有这一型时传 0） */
   owned: number;
   /** 已编入各舰队的份数 */
@@ -32,9 +30,9 @@ export interface ShipSkillDetailProps {
   available: number;
 }
 
-function ShipSkillDetailBase({ card, emptyHint, owned, assigned, available }: ShipSkillDetailProps) {
+function ShipSkillDetailBase({ card, owned, assigned, available }: ShipSkillDetailProps) {
   if (!card) {
-    return <p className="text-[12.5px] leading-relaxed text-slate-500">{emptyHint}</p>;
+    return <p className="text-[12.5px] leading-relaxed text-slate-500">未选择战舰</p>;
   }
   return (
     <div className="text-[12.5px] leading-[1.55]">

@@ -1,6 +1,6 @@
 import { memo, useCallback, useMemo, useState } from 'react';
 import type { GameState } from '@/types/game';
-import type { BuildQueueRow, ShipyardCardRow, ShipyardView } from '@/lib/battle/shipyard';
+import type { BuildQueueRow, ShipyardCardRow, ShipyardLockedTier, ShipyardView } from '@/lib/battle/shipyard';
 import { canCancelBuild, formatBuildCost, dockLevelText, shipyardView } from '@/lib/battle/shipyard';
 import { getBuildingDef } from '@/data/colony/buildings';
 import { getEffectiveMaxCount, getBuildingCostProfile } from '@/lib/colony/costs';
@@ -15,8 +15,9 @@ import HangarCard from './HangarCard';
 //      （§11 #5 排队无限）+ 取消（**只有未开工的排队项可取消**，已开工的一律挡并写明原因）；
 //   ③ 可造卡列表：**只列已解锁的卡**（解锁门槛 = 船坞等级 + 科技，判定全在 lib/battle/shipyard.lockGate；
 //      **资源够不够不算门槛** —— 买不起也看得见，只是按钮禁用 + 行内中文原因）。
-//      ⚠ 未解锁的卡**绝不静默隐藏**（AGENTS 第九节）：列表末尾给一行汇总（`view.locked.text`，
-//        数字与各档要求由 lockedSummary 从卡牌数据算出），另给一句下一档解锁指引（`view.lockHint`）。
+//      ⚠ 未解锁的卡**绝不静默隐藏**（AGENTS 第九节）：列表末尾给一行汇总（数量与分档由
+//        shipyard.lockedSummary 从卡牌数据算出，本面板只把里面的科技 id 收成「相应科技」），
+//        另给一句下一档解锁指引（`view.lockHint`）。
 //
 // 判定与数值**一律来自 lib/battle/shipyard 的纯函数**（lockGate / canBuild / buildCost / buildTurns /
 // requiredDockLevel / dockLevel / advanceQueue / canCancelBuild），本组件只做渲染与转发，不写第二份门槛。
@@ -29,6 +30,27 @@ function rarityBorder(rarity: string): string {
   if (rarity === '紫') return 'border-l-[3px] border-l-violet-400';
   if (rarity === '橙') return 'border-l-[3px] border-l-amber-400';
   return 'border-l-[3px] border-l-slate-300';
+}
+
+/**
+ * 未解锁的一档：`蓝卡 9 种（需二级船坞 + 相应科技）`。
+ * 分档、型数、稀有度与"要不要科技"全部来自 shipyard.lockedSummary（判定不在这里），
+ * 本函数只把**科技 id 换成人话**：「相应科技」——内部编号不给玩家看，具体是哪个科技
+ * 由逐张卡的禁用原因写明（那一处仍写具体科技名，如「圣辉蓝图解析」）。
+ */
+function lockedTierText(tier: ShipyardLockedTier): string {
+  const label = `${tier.rarities.join('')}卡 ${tier.cardCount} 种`;
+  const dock = dockLevelText(tier.dockLevel);
+  return tier.techIds.length > 0
+    ? `${label}（需${dock} + 相应科技）`
+    : `${label}（需${dock}）`;
+}
+
+/** 未解锁汇总行：`还有 21 种未解锁 · 蓝卡 9 种（需二级船坞 + 相应科技）· 紫橙卡 12 种（需三级船坞 + 相应科技）` */
+function lockedSummaryLine(view: ShipyardView): string {
+  const parts = view.locked.tiers.map((tier) => lockedTierText(tier));
+  const head = `还有 ${view.locked.total} 种未解锁`;
+  return parts.length > 0 ? `${head} · ${parts.join(' · ')}` : head;
 }
 
 /** 队列一行的显示（在建 / 排队） */
@@ -85,7 +107,7 @@ function QueueRow({
         <p className="mt-1 text-[10.5px] leading-tight text-amber-400">{reason}</p>
       ) : null}
       {row.tone === 'building' ? (
-        <p className="mt-1 text-[10.5px] leading-tight text-slate-500">已开工的战舰不能取消（V1.5 §8 没有中途终止生产的规则）。</p>
+        <p className="mt-1 text-[10.5px] leading-tight text-slate-500">已开工的战舰不能取消。</p>
       ) : null}
     </div>
   );
@@ -177,7 +199,7 @@ function ShipyardPanelBase({ state, onSelect, onBuild, onCancelBuild }: Shipyard
         <p className="mt-2 rounded-lg border border-dashed border-[#33405f] px-2.5 py-2 text-[11.5px] leading-relaxed text-amber-400">
           {view.hasColony
             ? '还没有船坞 —— 去「殖民」页签的「建造新建筑」里造一座（一级船坞 8000 金币 + 100 合金，2 回合，用电 6）。船坞建成后的下一个回合就能在这里下单造舰。'
-            : '还没有殖民地 —— 先跃迁到一颗星球，在「殖民」页签建立殖民地，再建造船坞（V1.5 §8）。'}
+            : '还没有殖民地 —— 先跃迁到一颗星球，在「殖民」页签建立殖民地，再建造船坞。'}
         </p>
       ) : null}
       {/* 下一档解锁指引：门槛文案（几级船坞 + 哪些科技 + 哪些系列）全部由 shipyard.shipyardView 生成，
@@ -221,14 +243,14 @@ function ShipyardPanelBase({ state, onSelect, onBuild, onCancelBuild }: Shipyard
         <h4 className="text-[12.5px] font-bold text-slate-200">可造战舰</h4>
         <span className="text-[11px] text-slate-500">
           已解锁 {view.unlockedCards.length} 型（白卡默认可造；蓝/紫/橙要建成对应船坞并研发对应科技）
-          {view.unlockedCards.length > 0 ? ` · 现在能造 ${view.unlockedCards.filter((c) => c.ok).length} 型（其余缺资源，按钮禁用并写明原因）` : ''}
+          {view.unlockedCards.length > 0 ? ` · 现在能造 ${view.unlockedCards.filter((c) => c.ok).length} 型` : ''}
         </span>
       </div>
       {view.cards.length === 0 ? (
         <p className="mt-1.5 text-[11.5px] text-amber-400">卡牌数据为空（不该发生：检查 data/battle/cards.ts）。</p>
       ) : view.unlockedCards.length === 0 ? (
         <p className="mt-1.5 text-[11.5px] leading-relaxed text-amber-400">
-          还没有解锁任何战舰 —— 白卡默认解锁，先建成一级船坞（B32）就能造第一批。
+          还没有解锁任何战舰 —— 白卡默认解锁，先建成一级船坞就能造第一批。
         </p>
       ) : (
         <div className="mt-1.5 space-y-1.5">
@@ -237,23 +259,13 @@ function ShipyardPanelBase({ state, onSelect, onBuild, onCancelBuild }: Shipyard
           ))}
         </div>
       )}
-      {/* 未解锁的**一行汇总**（AGENTS 第九节：不许静默隐藏）——数量与各档要求全部由
-          shipyard.lockedSummary 从卡牌数据算出，本面板不硬编码任何数字或科技 id。 */}
+      {/* 未解锁的**一行汇总**（AGENTS 第九节：不许静默隐藏）——数量与分档全部由
+          shipyard.lockedSummary 从卡牌数据算出，本面板不硬编码任何数字，也不把科技 id 渲染给玩家。 */}
       {view.locked.total > 0 ? (
         <div className="mt-2 rounded-lg border border-dashed border-[#33405f] px-2.5 py-1.5">
-          <p className="text-[11px] leading-relaxed text-slate-400">{view.locked.text}</p>
-          <p className="mt-0.5 text-[10.5px] leading-relaxed text-slate-500">
-            这一行是全量口径：主列表只列已解锁的卡，未解锁的按「需要几级船坞 + 哪些科技」合并在这里；
-            解锁后该卡会自动出现在上面的列表里。
-          </p>
+          <p className="text-[11px] leading-relaxed text-slate-400">{lockedSummaryLine(view)}</p>
         </div>
       ) : null}
-
-      {/* 队列视图的完整文案出口：把"在建 2 格"的槽位也用文字说清楚（手机端不会漏读） */}
-      <p className="mt-2 text-[10.5px] leading-relaxed text-slate-500">
-        船坞每回合推进一次：已开工的每回合减 1，减到 0 即完工并自动进入卡库（卡库才是"拥有什么"的真值，
-        V1.5 §8.3）。同时只能造 {view.queue.maxConcurrent} 艘，其余按顺序排队（排队不限长度）。
-      </p>
     </div>
   );
 }

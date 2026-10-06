@@ -185,7 +185,7 @@ function FleetListBase({
               <p className="mt-1.5 text-[11px] leading-relaxed text-slate-500">
                 还能再编 {f.capacityLeft} 艘
                 {f.defending
-                  ? '；带防守标签的舰队不能出征（V1.5 §10.1）。'
+                  ? '；带防守标签的舰队不能出征。'
                   : f.total === 0
                     ? '；出征前至少要编入 1 艘。'
                     : '。'}

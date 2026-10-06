@@ -86,12 +86,12 @@ function LibraryPanelBase({
       {/* ==================== 卡面网格（全部渲染，不截断） ==================== */}
       <div className="mb-1.5 flex items-baseline gap-2">
         <h3 className="text-[13px] font-bold text-slate-200">卡库</h3>
-        <span className="text-[11px] text-slate-500">共 {rows.length} 型（按 系列 → 费用 排序）</span>
+        <span className="text-[11px] text-slate-500">共 {rows.length} 型</span>
       </div>
       {rows.length === 0 ? (
         <p className="rounded-lg border border-dashed border-[#33405f] px-3 py-4 text-xs leading-relaxed text-amber-400">
-          卡库是空的 —— 卡库里的战舰**只能靠船坞建造**（V1.5 §8）：先去下面的船坞面板造几艘，
-          完工的当回合会自动进入卡库，然后就能在这里编入舰队了。
+          卡库是空的 —— 先去下面的船坞面板造几艘，完工的当回合会自动进入卡库，
+          然后就能在这里编入舰队了。
         </p>
       ) : (
         <div className="flex flex-wrap gap-1.5">

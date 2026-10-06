@@ -2,6 +2,7 @@ import { memo, useCallback, useMemo, useRef, useState } from 'react';
 import type { GameState } from '@/types/game';
 import type { BattleAction, BattleExpedition, BattleFleet, BattleState, PirateBossId, ShipCardId } from '@/types/battle';
 import { BATTLE_TUNING } from '@/data/battle/tuning';
+import { BATTLE_CARDS } from '@/data/battle/cards';
 import { PIRATE_BOSSES } from '@/data/battle/pirates';
 import { getThumbPath } from '@/lib/assetThumb';
 import { bossArtSrc } from '@/lib/battle/view';
@@ -165,11 +166,7 @@ function BattleTabBase({
 
   return (
     <div className="mx-auto max-w-4xl">
-      <h2 className="mb-1 text-lg font-bold text-slate-100">出征 / 防守</h2>
-      <p className="mb-3 text-xs leading-relaxed text-slate-400">
-        战斗只由游戏进程产生：派 1 支舰队出征，抵达老巢时自动开战；殖民地被掠夺时，带「防守」标签的留守舰队自动接战。
-        战斗界面照搬舰队卡牌 DEMO：点卡牌看技能 → 点自己场上的空格部署 → 点己方战舰再点敌方目标攻击。
-      </p>
+      <h2 className="mb-1.5 text-lg font-bold text-slate-100">出征 / 防守</h2>
 
       {/* ==================== 出征（V1.5 §10.1：本页签唯一的发起入口） ====================
            目标只列**已探明**的老巢（discoveredLairs：未探明的一律不出现，也不做占位提示，
@@ -178,14 +175,14 @@ function BattleTabBase({
         <h3 className="mb-2 flex items-center gap-2 text-[13px] font-bold text-slate-200">
           出征
           <span className="text-[11px] font-normal text-slate-500">
-            探明老巢后派 1 支舰队出征，抵达即自动开战（V1.5 §10.1）
+            探明老巢后派 1 支舰队出征，抵达即自动开战
           </span>
         </h3>
 
         {expedition ? (
           <div>
             <p className="text-[12.5px] font-bold text-amber-300">
-              还有 {expedition.turnsRemaining} 回合抵达{PIRATE_BOSSES[expedition.bossId]?.name || expedition.bossId}
+              还有 {expedition.turnsRemaining} 回合抵达{PIRATE_BOSSES[expedition.bossId]?.name || '未知老巢'}
               <span className="ml-1 text-[11px] font-normal text-slate-500">
                 （目标 {lairNodeId(expedition.bossId) ?? '未知'}）
               </span>
@@ -223,7 +220,7 @@ function BattleTabBase({
                     <BossAvatar src={getThumbPath(bossArtSrc(l.bossId))} />
                     <span className="min-w-0 flex-1">
                       <span className="block text-[12.5px] font-bold text-slate-100">
-                        {PIRATE_BOSSES[l.bossId]?.name || l.bossId}
+                        {PIRATE_BOSSES[l.bossId]?.name || '未知老巢'}
                         <span className="ml-1 text-[11px] font-normal text-slate-500">
                           {l.name} · {PIRATE_BOSSES[l.bossId]?.hp ?? '?'} 血
                         </span>
@@ -247,9 +244,6 @@ function BattleTabBase({
             >
               出征
             </button>
-            <p className="mt-1 text-[11px] text-slate-500">
-              出征舰队用下面「选择出征舰队」里选中的那支。
-            </p>
           </div>
         )}
       </div>
@@ -263,7 +257,7 @@ function BattleTabBase({
           <h3 className="mb-2 flex items-center gap-2 text-[13px] font-bold text-slate-200">
             殖民地掠夺
             <span className="text-[11px] font-normal text-slate-500">
-              V1.5 §10.2：每回合 {RAID_CHANCE * 100}% 触发，{RAID_WARNING_TURNS} 回合预警，结束免疫 {RAID_IMMUNE_TURNS} 回合
+              每回合 {RAID_CHANCE * 100}% 触发，{RAID_WARNING_TURNS} 回合预警，结束免疫 {RAID_IMMUNE_TURNS} 回合
             </span>
           </h3>
 
@@ -274,7 +268,7 @@ function BattleTabBase({
                 {raidView.raiders > 1 ? `（本次 ${raidView.raiders} 支，赢下第一场要连打第二场）` : ''}
               </p>
               <p className="mt-1 text-[11px] leading-relaxed text-slate-400">
-                还没到，这一段只用来编防守队：{raidView.defenseCount > 0
+                {raidView.defenseCount > 0
                   ? `现在有 ${raidView.defenseCount} 艘带「防守」标签的舰队会在抵达时合并成一个部署池（到那时再点「开战」）。`
                   : '现在还没有带「防守」标签的舰队 —— 去机库给留守舰队打上防守标签（到达后不打会被掠夺成功）。'}
               </p>
@@ -317,13 +311,13 @@ function BattleTabBase({
       )}
 
       {/* ==================== 选择出征舰队 ====================
-           出征战：1 支舰队出征，带防守标签的舰队不能出征（V1.5 §10.1）。
+           出征战：1 支舰队出征，带防守标签的舰队不能出征。
            "不带防守标签""编制非空"这两条由 canStartExpedition 判（上面的按钮已置灰并给原因）。 */}
       <div className={cardBase}>
         <h3 className="mb-2 flex items-center gap-2 text-[13px] font-bold text-slate-200">
           选择出征舰队
           <span className="text-[11px] font-normal text-slate-500">
-            出征战：1 支舰队出征，带防守标签的舰队不能出征（V1.5 §10.1）
+            出征战：1 支舰队出征，带防守标签的舰队不能出征
           </span>
         </h3>
         {fleets.length === 0 ? (
@@ -374,7 +368,7 @@ function BattleTabBase({
                 key={s.id}
                 className="rounded-[5px] border border-[#2b3550] bg-[#161f36] px-1.5 py-px text-[10.5px] text-slate-400"
               >
-                {s.id}
+                {BATTLE_CARDS[s.id]?.name || '未知战舰'}
                 {s.n > 1 ? ` ×${s.n}` : ''}
               </span>
             ))}
@@ -383,20 +377,19 @@ function BattleTabBase({
 
         {expedition && (
           <p className="mt-2 text-[11px] leading-relaxed text-amber-400">
-            已有出征在途：{PIRATE_BOSSES[expedition.bossId]?.name || expedition.bossId}
+            已有出征在途：{PIRATE_BOSSES[expedition.bossId]?.name || '未知老巢'}
             （剩 {expedition.turnsRemaining} 回合开战）—— 同时只能出征 1 个老巢；先等它抵达开战，或在上面的「出征」里取消。
           </p>
         )}
 
         {cardLibrary.length === 0 && (
           <p className="mt-2 text-xs leading-relaxed text-slate-500">
-            卡库是空的：战舰只能靠船坞建造（V1.5 §8）—— 去机库页签的船坞面板建成船坞、下单造舰，完工后自动进卡库。
+            卡库是空的 —— 去机库页签的船坞面板建成船坞、下单造舰，完工后自动进卡库。
           </p>
         )}
 
         <p className="mt-2 text-[11px] leading-relaxed text-slate-500">
-          卡库共 {cardLibrary.length} 艘 · 留守（带「防守」标签）{defenders.length} 支。
-          本页签没有「直接开战」按钮：老巢靠出征打，掠夺队由掠夺事件自动触发。
+          卡库共 {cardLibrary.length} 艘 · 留守（带「防守」标签）{defenders.length} 支
         </p>
       </div>
     </div>

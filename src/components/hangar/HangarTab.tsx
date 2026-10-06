@@ -1,7 +1,6 @@
 import { memo, useCallback, useMemo, useState } from 'react';
 import type { GameState } from '@/types/game';
 import type { BattleExpedition, BattleFleet, ShipCardId } from '@/types/battle';
-import { BATTLE_TUNING } from '@/data/battle/tuning';
 import { BATTLE_CARDS } from '@/data/battle/cards';
 import {
   canAddShip,
@@ -248,13 +247,7 @@ function HangarTabBase({
 
   return (
     <div className="mx-auto max-w-4xl">
-      <h2 className="mb-1 text-lg font-bold text-slate-100">机库</h2>
-      <p className="mb-3 text-xs leading-relaxed text-slate-400">
-        战舰全部来自<strong className="text-slate-200">船坞建造</strong>（卡库初始为空，V1.5 §8）：
-        先建船坞（B32/B33/B34），再造舰 —— 建造完成的当回合自动进入卡库。
-        编成按<strong className="text-slate-200">份数</strong>算：同一型有几份就只能同时编进去几份。
-        每队编制上限 {BATTLE_TUNING.fleetSize} 艘；带防守标签的舰队留守、不能出征，出征中的舰队也不能打防守标签（V1.5 §10.1）。
-      </p>
+      <h2 className="mb-1.5 text-lg font-bold text-slate-100">机库</h2>
 
       {/* 出征提示（出征中的舰队在舰队列表里也有标记，这里给一句总览） */}
       <div className="mb-2.5 rounded-[10px] border border-cyan-800/60 bg-cyan-900/20 px-2.5 py-2">
@@ -268,7 +261,6 @@ function HangarTabBase({
       <div className="mb-2.5 rounded-[10px] border border-[#2b3550] bg-[#0f1729] px-2.5 py-2">
         <ShipSkillDetail
           card={detailCard}
-          emptyHint="点一张卡看它的技能全文与数值（卡面不放技能）。卡库与船坞共用这块区域：点卡库里的舰看它现在能编多少，点船坞里的舰看它要多少造价、还需哪个科技。"
           owned={detailRow ? detailRow.owned : 0}
           assigned={detailRow ? detailRow.assigned : 0}
           available={detailRow ? detailRow.available : 0}

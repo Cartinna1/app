@@ -174,18 +174,16 @@ export interface ShipyardLockedTier {
   cardCount: number;
   /** 这一档需要的科技 id（按数据顺序去重，如 ['T29','T31']）；白卡档为空数组 */
   techIds: string[];
-  /** 要求的中文一行（**判定文案的唯一来源**）：`二级船坞 + T28/T30/T32/T34/T36` */
-  requirement: string;
 }
 
-/** 未解锁卡的一行汇总（AGENTS 第九节：不许静默隐藏） */
+/** 未解锁卡的分档汇总（AGENTS 第九节：不许静默隐藏）。
+ *  ⚠ 一行中文由 UI（`components/hangar/ShipyardPanel`）按 `tiers` 自己组装 —— 科技 id 要收成
+ *    「相应科技」这类玩家话，**内部编号不渲染给玩家**；本文件不再拼那句话（原 `text` 字段已删）。 */
 export interface ShipyardLockedSummary {
   /** 未解锁共几种（型数） */
   total: number;
   /** 按"船坞等级 + 科技"分档（已解锁的档不出现） */
   tiers: ShipyardLockedTier[];
-  /** 中文一行：`还有 22 种未解锁 · 蓝卡 7 种（需二级船坞 + T28/…）· 紫橙 15 种（需三级船坞 + …）` */
-  text: string;
 }
 
 /** 船坞面板的整份渲染模型 */
@@ -202,7 +200,7 @@ export interface ShipyardView {
   /** 全部可造卡（含未解锁的）：**遍历完整数组**，不 slice / 不 filter 静默截断。
    *  逐张给出 `unlocked` / `ok` / `reason` / `lockReason`；未解锁的卡不在主列表里，但总数与要求由 `locked` 汇总 */
   cards: ShipyardCardRow[];
-  /** 未解锁卡的一行汇总（数量与要求都从数据算） */
+  /** 未解锁卡的分档（数量、稀有度与科技 id 都从数据算；一行中文由 UI 按它组装） */
   locked: ShipyardLockedSummary;
   /** 下一步解锁指引的一句中文（已全解锁 / 没有殖民地时为 null）——门槛文案只在 shipyard.ts 里写 */
   lockHint: string | null;
@@ -575,17 +573,11 @@ export function queueView(state: GameState): BuildQueueView {
   };
 }
 
-/** 未解锁档的稀有度标签：「蓝卡」/「紫卡」/「紫橙卡」（与既有文案同一套说法） */
-function lockedRarityLabel(rarities: BattleRarity[]): string {
-  const rank: BattleRarity[] = ['白', '蓝', '紫', '橙'];
-  const sorted = rank.filter((r) => rarities.includes(r));
-  return `${sorted.join('')}卡`;
-}
-
 /**
- * 未解锁卡的一行汇总：**按「船坞等级 + 科技」分档**，各档的型数与要求全部从卡牌数据算出来
+ * 未解锁卡的分档：**按「船坞等级 + 科技」分档**，各档的型数、稀有度与科技 id 全部从卡牌数据算出来
  * （不硬编码数字，也不硬编码科技 id）。
- * 例：`还有 22 种未解锁 · 蓝卡 7 种（需二级船坞 + T28/T30/T32/T34/T36）· 紫橙 15 种（需三级船坞 + …）`
+ * 一行中文**不在这里拼**：由 UI（`components/hangar/ShipyardPanel`）按 `tiers` 组装，好把科技 id
+ * 收成「相应科技」——`T28/T30/…` 这类内部编号不给玩家看。
  */
 function lockedSummary(lockedRows: ShipyardCardRow[]): ShipyardLockedSummary {
   const byLevel = new Map<1 | 2 | 3, ShipyardCardRow[]>();
@@ -609,14 +601,9 @@ function lockedSummary(lockedRows: ShipyardCardRow[]): ShipyardLockedSummary {
       const id = rowCard ? requiredTechId(rowCard) : null;
       if (id && !techIds.includes(id)) techIds.push(id);
     }
-    const requirement =
-      `${dockLevelText(dockNeed)}${techIds.length > 0 ? ` + ${techIds.join('/')}` : ''}`;
-    tiers.push({ dockLevel: dockNeed, rarities, cardCount: rows.length, techIds, requirement });
+    tiers.push({ dockLevel: dockNeed, rarities, cardCount: rows.length, techIds });
   }
-
-  const parts = tiers.map((t) => `${lockedRarityLabel(t.rarities)} ${t.cardCount} 种（需${t.requirement}）`);
-  const head = `还有 ${lockedRows.length} 种未解锁`;
-  return { total: lockedRows.length, tiers, text: parts.length > 0 ? `${head} · ${parts.join(' · ')}` : head };
+  return { total: lockedRows.length, tiers };
 }
 
 /** 下一步解锁指引的一句中文（已全部解锁 / 没有殖民地时 null）。
