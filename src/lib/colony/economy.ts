@@ -127,6 +127,10 @@ export interface BuildingEconomyEntry {
   repeatPct: number;
   /** 量子实验室加成（小数，仅科研） */
   b26Pct: number;
+  /** 考古永久加成（小数，如 0.15 表示 +15%：农业遗产→食物、循环理论→科研）。
+   *  ⚠ 与 PowerBuildingEntry 的同名字段口径一致（都是小数）；行数已与 `ECO_SOURCE_FIELDS` 对齐，
+   *  出现在 value 公式里的加成必须落成这里的字段，否则明细查不到（农业遗产/循环理论曾因此隐形）。 */
+  permPct: number;
   /** 最终产出（gold 在估算模式下取区间中值） */
   value: number;
   /** outputType === 'material' 时的原料 ID */
