@@ -65,7 +65,7 @@ DEFAULT_WIDTHS = {
     'expeditions': 480,
     'wonders': 256,
     'buildings': 160,
-    'battle': 192,  # 命中 battle/units；battle/bosses 由 TINY_SOURCE_MAX 兜住
+    'battle': 480,  # 命中 battle/units；battle/bosses 由 TINY_SOURCE_MAX 兜住
 }
 #: 明确不出缩略图的目录（相对 public/）：图本身就是最大出口，或最大出口远大于 192。
 #:   battle/bosses —— 112×112，代码直接给原图（`bossArtSrc`，BattleTab 已去掉 getThumbPath 那一层）

@@ -117,7 +117,7 @@ src/
 - 新增/修改 action：统一进 `hooks/useGameState.ts` 的 `useStableActions` 包装，再把稳定引用传给面板。**禁止**在 App/GameScreen 里写 inline 箭头函数传给已 memo 的面板——会让 memo 失效。
 - 新面板组件默认 `export default memo(...)`；props 里的空数组/空对象用模块级常量（参照 `EMPTY_REPUTATION` / `EMPTY_CONTRACTS`）。
 - `shipIndex` 恒为 0（单舰队），接口已收敛，组件层不感知该参数。
-- **列表/网格里的图一律走缩略图**（`lib/assetThumb.ts` → `getThumbPath`）：解码开销 = 宽×高×4 字节、**与文件大小无关**（1200×675 填 96px 格子每张白解 3 MB）。**只有「详情 / 全宽 / 大图鉴卡」位才用原图**。⚠ 缺缩略图时各面板的 `onError` 会把整块**静默隐藏**，所以**新增一类图片时先出缩略图，再改代码**；缩略图统一由 **`scripts/gen-thumbs.py`** 生成（`python scripts/gen-thumbs.py` 补缺 / `--force` 覆盖 / `--dir`、`--width`、`--exclude` 指定；默认目录 = archaeology / expeditions / wonders / buildings / battle/units，默认宽度 192 / 480 / 256 / 160 / 192）。判断标准是「**这张图在游戏里最大的那个出口是多大**」：只有 64px 级出口的图（BOSS 头像 112px、母舰、原料图标）直接用原图、**不生成缩略图**（脚本里叫 `NO_THUMBS_DIRS` + `TINY_SOURCE_MAX`）。
+- **列表/网格里的图一律走缩略图**（`lib/assetThumb.ts` → `getThumbPath`）：解码开销 = 宽×高×4 字节、**与文件大小无关**（1200×675 填 96px 格子每张白解 3 MB）。**只有「详情 / 全宽 / 大图鉴卡」位才用原图**。⚠ 缺缩略图时各面板的 `onError` 会把整块**静默隐藏**，所以**新增一类图片时先出缩略图，再改代码**；缩略图统一由 **`scripts/gen-thumbs.py`** 生成（`python scripts/gen-thumbs.py` 补缺 / `--force` 覆盖 / `--dir`、`--width`、`--exclude` 指定；默认目录 = archaeology / expeditions / wonders / buildings / battle/units，默认宽度 192 / 480 / 256 / 160 / 480）。判断标准是「**这张图在游戏里最大的那个出口是多大**」：只有 64px 级出口的图（BOSS 头像 112px、母舰、原料图标）直接用原图、**不生成缩略图**（脚本里叫 `NO_THUMBS_DIRS` + `TINY_SOURCE_MAX`）。
 
 ## 六、重构纪律（搬移代码时）
 

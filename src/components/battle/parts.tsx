@@ -34,21 +34,6 @@ function UnitArtBase({ src }: { src: string }) {
   );
 }
 
-/** 舰队池卡面图位（DEMO：右侧 42% 宽 · 高 96px · object-cover） */
-function CardArtBase({ src }: { src: string }) {
-  const [failed, setFailed] = useState(false);
-  if (failed) return <ArtPh text="舰船图 320×190" className="h-24 w-[42%] flex-none rounded-none border-y-0 border-r-0" />;
-  return (
-    <img
-      src={src}
-      alt=""
-      loading="lazy"
-      onError={() => setFailed(true)}
-      className="block h-24 w-[42%] flex-none border-l border-[#2b3550] object-cover"
-    />
-  );
-}
-
 /** BOSS 头像（DEMO：56×56 圆角 8） */
 function BossAvatarBase({ src }: { src: string }) {
   const [failed, setFailed] = useState(false);
@@ -63,6 +48,8 @@ function BossAvatarBase({ src }: { src: string }) {
   );
 }
 
+// ⚠ 这里曾导出 `CardArt`（舰船卡面图位，右侧 42% 宽 / 高 96px）——卡面改大后已搬到共用组件
+//   `components/ship/ShipCard.tsx`（那边自己渲染图位、比例不同），本文件里**零引用**，已删除
+//   （仓库硬规矩：不留死导出）。
 export const UnitArt = memo(UnitArtBase);
-export const CardArt = memo(CardArtBase);
 export const BossAvatar = memo(BossAvatarBase);
