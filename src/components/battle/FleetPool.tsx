@@ -1,28 +1,19 @@
 import { memo } from 'react';
 import type { CardView } from '@/lib/battle/view';
-import { CardArt } from './parts';
+import ShipCard, { SHIP_CARD_GRID_ITEM } from '@/components/ship/ShipCard';
 
 // ============================================================================
 // 舰队池（DEMO 的 .pool + .card）。
-// 卡面只放「名字 / 系列·稀有度 / 攻·盾·体」+ 费用徽章 —— 技能文字在信息条里看（不上卡面）。
-// ⚠ 这是列表位：图片必须走缩略图（lib/assetThumb.getThumbPath，AGENTS 第五节）。
-//   `CardView.artSrc` 已经是缩略图路径（由 lib/battle/view.unitArtSrc 拼好），**这里不要再套一层**。
+// ⚠ **卡面 = 与机库卡库/船坞共用的同一个组件**（`components/ship/ShipCard`，用户 2026-08 口径：
+//   「战斗也一样嘛」）：图位比例、网格列数、字号/内边距、徽章全在那一份里，这里只做"下发数据"。
+//   本文件不再自己写卡面样式（曾经与机库各写一套）。
 //
 // ⚠ **「能不能读」与「能不能出」是两个概念**（2026-08 用户报"灰卡的技能在手机上无处可看"）：
-//   · `selectable`（能不能读）= 手牌每一张都能点开看技能全文 → 决定 cursor / 是否响应点击；
+//   · `selectable`（能不能读）= 手牌每一张都能点开看技能全文 → 决定 cursor / 是否变暗；
 //   · `playable`（能不能出）= 指挥度/空位够不够 → **只影响视觉**（变暗），点击照样进处理器，
-//     出不去的时候由 BattleScreen 在**部署那一步**给出中文原因。
+//     出不去的时候由 BattleScreen 在**部署那一步**给出中文原因（`manualActionView` 闸门在那边）。
 //   注意 `title` 是桌面专属的悬浮提示（手机没有 hover），**它不是技能出口**，信息条才是（铁律①）。
 // ============================================================================
-
-/** 稀有度 → 左边条颜色（DEMO 的 .rare-白/蓝/紫/橙/衍） */
-function rarityClass(rarity: string): string {
-  if (rarity === '蓝') return 'border-l-[3px] border-l-sky-400';
-  if (rarity === '紫') return 'border-l-[3px] border-l-violet-400';
-  if (rarity === '橙') return 'border-l-[3px] border-l-amber-400';
-  if (rarity === '衍') return 'border-l-[3px] border-l-slate-500';
-  return 'border-l-[3px] border-l-slate-300';
-}
 
 interface FleetPoolProps {
   cards: CardView[];
@@ -39,43 +30,28 @@ function FleetPoolBase({ cards, selCard, onPoolClick }: FleetPoolProps) {
     );
   }
   return (
-    <div className="flex max-h-[290px] flex-wrap gap-1.5 overflow-auto p-0.5">
+    /* 加高滚动窗（原 290px）：卡面按新排版高 ≈2.5 倍，290px 只装得下 1 张卡，池子会没法用。
+       520px = 手机 2 张卡（246×2）或宽屏 2 列 2 行（≈250×2），仍是内部滚动、不吃战斗板高度。 */
+    <div className="flex max-h-[520px] flex-wrap gap-1.5 overflow-auto p-0.5">
       {cards.map((c) => (
-        <div
-          key={c.id}
-          title={`${c.name}（${c.series} · ${c.rarity}）\n${c.text}`}
-          onClick={() => onPoolClick(c.id)}
-          className={`relative flex h-24 w-full overflow-hidden rounded-lg border border-[#3a4767] bg-[#1b2438] sm:w-[calc(50%-3px)] xl:w-[calc(33.333%-4px)] ${
-            c.selectable ? 'cursor-pointer hover:bg-[#243052]' : 'cursor-not-allowed opacity-[0.38]'
-          } ${c.playable ? '' : 'opacity-[0.55]'} ${rarityClass(c.rarity)} ${selCard === c.id ? 'border-amber-400 ring-2 ring-amber-400/30' : ''}`}
-        >
-          {/* 费用徽章（右上角） */}
-          <div className="absolute right-[5px] top-1 z-[2] rounded-md border border-[#3a4767] bg-[#0b1020]/85 px-1 text-sm font-extrabold leading-[1.3] text-slate-200">
-            {c.cost}
-            {c.count > 1 ? <em className="text-[11px] font-semibold not-italic text-slate-400">×{c.count}</em> : null}
-          </div>
-          <div className="flex min-w-0 flex-1 flex-col justify-center px-2 py-1.5">
-            <div className="overflow-hidden text-ellipsis whitespace-nowrap text-[12.5px] font-bold">{c.name}</div>
-            <div className="mt-0.5 text-[10px] text-slate-500">
-              {c.series} · {c.rarity}
-            </div>
-            <div className="mt-1.5 flex items-baseline gap-3.5">
-              <span className="text-[#fca5a5]">
-                <i className="mr-px text-[11px] not-italic opacity-80">攻</i>
-                <b className="text-xl font-extrabold leading-none tracking-tight">{c.atk}</b>
-              </span>
-              <span className="text-[#7dd3fc]">
-                <i className="mr-px text-[11px] not-italic opacity-80">盾</i>
-                <b className="text-xl font-extrabold leading-none tracking-tight">{c.shield}</b>
-              </span>
-              <span className="text-[#fcd34d]">
-                <i className="mr-px text-[11px] not-italic opacity-80">体</i>
-                <b className="text-xl font-extrabold leading-none tracking-tight">{c.structure}</b>
-              </span>
-            </div>
-          </div>
-          {/* 列表位走缩略图（artSrc 已由 lib/battle/view.unitArtSrc 拼好，勿再套 getThumbPath） */}
-          <CardArt src={c.artSrc} />
+        <div key={c.id} className={SHIP_CARD_GRID_ITEM}>
+          <ShipCard
+            id={c.id}
+            name={c.name}
+            series={c.series}
+            rarity={c.rarity}
+            cost={c.cost}
+            costSuffix={c.count > 1 ? `×${c.count}` : ''}
+            atk={c.atk}
+            shield={c.shield}
+            structure={c.structure}
+            artSrc={c.artSrc}
+            selected={selCard === c.id}
+            selectable={c.selectable}
+            playable={c.playable}
+            title={`${c.name}（${c.series} · ${c.rarity}）\n${c.text}`}
+            onSelect={onPoolClick}
+          />
         </div>
       ))}
     </div>

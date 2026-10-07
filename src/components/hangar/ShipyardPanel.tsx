@@ -5,7 +5,7 @@ import { canCancelBuild, defaultSeriesFilter, filterBySeries, formatBuildCost, d
 import { getBuildingDef } from '@/data/colony/buildings';
 import { getEffectiveMaxCount, getBuildingCostProfile } from '@/lib/colony/costs';
 import { MATERIAL_NAME_MAP } from '@/data/materialNames';
-import HangarCard from './HangarCard';
+import ShipCard from '@/components/ship/ShipCard';
 import SeriesChipRow from './SeriesChipRow';
 
 // ============================================================================
@@ -36,7 +36,7 @@ import SeriesChipRow from './SeriesChipRow';
 //   故这里只有内容，没有 border/bg/px —— 免得出现"框里再套一层框"。
 // ============================================================================
 
-/** 稀有度 → 左边条配色（与 HangarCard 同一套语言，列表行用） */
+/** 稀有度 → 左边条配色（与共用卡面 ShipCard 同一套语言，列表行用） */
 function rarityBorder(rarity: string): string {
   if (rarity === '蓝') return 'border-l-[3px] border-l-sky-400';
   if (rarity === '紫') return 'border-l-[3px] border-l-violet-400';
@@ -352,9 +352,12 @@ function ShipyardCardLine({
         selected ? 'border-amber-400 ring-2 ring-amber-400/30' : 'border-[#2b3550]'
       }`}
     >
-      {/* 图位复用机库卡面（内部已走 getThumbPath 缩略图） */}
-      <div className="w-full max-w-[260px] flex-none">
-        <HangarCard
+      {/* 图位复用**共用卡面**（`components/ship/ShipCard`：卡库 / 船坞 / 战斗部署池同一个组件）；
+          这里用 `layout="row"`（文字在左、图在右）—— 船坞这行是"卡面 + 建造信息"并排，
+          换成卡库那种"图在上"会把每行撑高 ≈2.6 倍且信息列被挤窄；列宽 280 = 图位 162×81 时
+          「攻盾体」仍能一行放下（再窄就会换行）。 */}
+      <div className="w-full max-w-[280px] flex-none">
+        <ShipCard
           id={card.id}
           name={card.name}
           series={card.series}
@@ -365,6 +368,7 @@ function ShipyardCardLine({
           structure={card.structure}
           artSrc={card.artSrc}
           selected={selected}
+          layout="row"
           onSelect={onSelect}
         />
       </div>

@@ -18,6 +18,8 @@ const path = require('path');
 const DIRS = [
   path.resolve(__dirname, '../src/components/battle'),
   path.resolve(__dirname, '../src/components/hangar'),
+  // 共用卡面目录（卡库 / 船坞 / 战斗部署池共用）—— 新目录同样要被这套审计覆盖（memo / <img> onError）
+  path.resolve(__dirname, '../src/components/ship'),
 ];
 const VIEWS = [
   path.resolve(__dirname, '../src/lib/battle/view.ts'),
@@ -38,6 +40,7 @@ const COMPONENT_DIRS = [
   path.resolve(__dirname, '../src/components/battle'),
   path.resolve(__dirname, '../src/components/hangar'),
   path.resolve(__dirname, '../src/components/colony'),
+  path.resolve(__dirname, '../src/components/ship'),
 ];
 const TEXT_LIB_FILES = [
   path.resolve(__dirname, '../src/lib/battle/expedition.ts'),

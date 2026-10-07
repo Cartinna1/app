@@ -1,7 +1,7 @@
 import { memo, useCallback, useMemo, useState } from 'react';
 import type { LibraryRow } from '@/lib/battle/hangar';
 import { defaultSeriesFilter, filterBySeries, pickSeriesFilter, resolveSeriesFilter, seriesGroups } from '@/lib/battle/seriesFilter';
-import HangarCard from './HangarCard';
+import ShipCard, { SHIP_CARD_GRID_ITEM } from '@/components/ship/ShipCard';
 import SeriesChipRow from './SeriesChipRow';
 
 // ============================================================================
@@ -65,10 +65,14 @@ function LibraryPanelBase({ rows, selectedId, onSelect }: LibraryPanelProps) {
           然后就能在这里编入舰队了。
         </p>
       ) : (
+        /* 排版（用户 2026-08 口径）：**手机 1 列、sm 起 2 列**，不再有 3 列。
+           · 列宽常量 = `SHIP_CARD_GRID_ITEM`（与**战斗部署池读同一串**，上限就是 2）；
+           · 3 列已删：3 列时卡片 ≈325px、2.02:1 的素材被横裁 30% —— 那正是"图片被压缩"的来源。
+           卡面本身（图在上、占满卡宽、2:1）见 `components/ship/ShipCard`（卡库/船坞/战斗池共用那一个）。 */
         <div className="mt-1.5 flex flex-wrap gap-1.5">
           {visibleRows.map((r) => (
-            <div key={r.id} className="w-full sm:w-[calc(50%-3px)] xl:w-[calc(33.333%-4px)]">
-              <HangarCard
+            <div key={r.id} className={SHIP_CARD_GRID_ITEM}>
+              <ShipCard
                 id={r.id}
                 name={r.name}
                 series={r.series}

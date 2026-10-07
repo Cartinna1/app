@@ -8,6 +8,20 @@
    ＋ ④ 机库拆成四个内部标签后新加的派生模型（总览数字 / 船坞概况 / "下一步该去哪"的引导）
    ============================================================================ */
 const fails = [];
+/** 读 WebP 头拿真实像素尺寸（只支持 VP8X / VP8 / VP8L；Node 里没有图像库，故手解容器头）。
+ *  用来断言"图位框比例 ↔ 素材真实比例"，防素材换了尺寸而框没跟着换（那就会大面积裁切）。 */
+const webpDims = (buf) => {
+  if (buf.length < 32) return null;
+  if (buf.toString('latin1', 0, 4) !== 'RIFF' || buf.toString('latin1', 8, 12) !== 'WEBP') return null;
+  const chunk = buf.toString('latin1', 12, 16);
+  if (chunk === 'VP8X') return { w: buf.readUIntLE(24, 3) + 1, h: buf.readUIntLE(27, 3) + 1 };
+  if (chunk === 'VP8 ') return { w: buf.readUInt16LE(26) & 0x3fff, h: buf.readUInt16LE(28) & 0x3fff };
+  if (chunk === 'VP8L') {
+    const bits = buf.readUInt32LE(21);
+    return { w: (bits & 0x3fff) + 1, h: ((bits >> 14) & 0x3fff) + 1 };
+  }
+  return null;
+};
 const check = (ok, label, detail) => {
   if (ok) console.log('  ✓ ' + label);
   else { fails.push(label + (detail ? ' → ' + detail : '')); console.log('  ✗ ' + label + (detail ? '  → ' + detail : '')); }
@@ -319,6 +333,78 @@ const J = (v) => JSON.stringify(v);
     check(libPanel.indexOf('卡库是空的') >= 0, '空卡库的既有空态提示仍在（chip 行此时不渲染）');
     check(libPanel.indexOf('export default memo(') >= 0, '卡库组件仍是 memo(...)');
     check(libPanel.indexOf('useCallback(') >= 0, '卡库的点击处理走 useCallback（不往 memo 子组件传 inline 箭头）');
+  }
+
+  // ---------- ⑨ 卡面与网格排版（卡库 / 船坞 / 战斗部署池共用同一卡面） ----------
+  //  用户 2026-08 排版口径（四轮定案）：① 列数上限 2（手机仍 1 列）；② 图位 ≈2:1 贴合素材、
+  //  **不许大面积裁切**；③ 手机端「图在上、占满整卡宽、文字在下」；④ **战斗部署池也一样**，
+  //  且三处**不许各写一套卡面** —— 卡面与列宽都在 `components/ship/ShipCard` 那一份里。
+  console.log('\n[9] 卡面与网格排版（机库卡库 / 船坞 / 战斗部署池共用同一卡面）');
+  {
+    const fs = require('fs');
+    const path = require('path');
+    const read = (rel) => fs.readFileSync(path.resolve(__dirname, '..', rel), 'utf8');
+    /** 去注释（注释里会引用旧写法，如 "旧写法 h-24" —— 结构断言只看代码） */
+    const code = (src) => src.replace(/\/\*[\s\S]*?\*\//g, ' ').replace(/\/\/[^\n]*/g, '');
+    const cardSrc = read('src/components/ship/ShipCard.tsx');
+    const card = code(cardSrc);
+    const libPanelRaw = read('src/components/hangar/LibraryPanel.tsx');
+    const libPanel = code(libPanelRaw);
+    const shipPanel = code(read('src/components/hangar/ShipyardPanel.tsx'));
+    const poolRaw = read('src/components/battle/FleetPool.tsx');
+    const pool = code(poolRaw);
+
+    // ① 图位 = 2:1、随卡宽（不写死 px 宽、不写死高度）、object-cover 只裁 ~1%
+    check(card.indexOf('aspect-[2/1]') >= 0, '★ 图位框 = aspect-[2/1]（贴合 2.02:1 素材）');
+    check(card.indexOf('h-24') < 0, '★ 卡面不再写死 96px 高（旧框 h-24 在宽屏上既裁又小）');
+    check(card.indexOf('order-first') >= 0 && card.indexOf('w-full border-b') >= 0,
+      '★ 手机/卡库/战斗池是"图在上、占满整卡宽"（order-first + w-full）');
+    check(card.indexOf('object-cover') >= 0 && card.indexOf('object-contain') < 0,
+      '图位用 object-cover（框比例 = 素材比例，不需要 letterbox）');
+    // 素材真实比例（读真实缩略图头）↔ 框比例：裁切必须 < 3%
+    const thumbPath = path.resolve(__dirname, '../public/battle/thumbs/units/h1.webp');
+    const dims = fs.existsSync(thumbPath) ? webpDims(fs.readFileSync(thumbPath)) : null;
+    check(!!dims, '读到了真实缩略图尺寸（public/battle/thumbs/units/h1.webp）', J(dims));
+    if (dims) {
+      const assetAspect = dims.w / dims.h;
+      const crop = Math.abs(assetAspect - 2) / assetAspect;
+      check(crop < 0.03, '★ 素材比例 ≈ 图位比例 2:1（object-cover 裁切 < 3%）',
+        '素材 ' + dims.w + '×' + dims.h + ' = ' + assetAspect.toFixed(4) + ':1，裁 ' + (crop * 100).toFixed(2) + '%');
+    }
+
+    // ② 列数上限 2 且**只有一份**：卡库与战斗池读同一个常量；三处都不再有 3 列
+    check(/SHIP_CARD_GRID_ITEM = 'w-full sm:w-\[calc\(50%-3px\)\]'/.test(card),
+      '★ 列宽常量（唯一真值）= 手机 1 列 + sm 起 2 列（上限 2）', 'SHIP_CARD_GRID_ITEM');
+    check(libPanel.indexOf('SHIP_CARD_GRID_ITEM') >= 0 && pool.indexOf('SHIP_CARD_GRID_ITEM') >= 0,
+      '★ 卡库网格与战斗部署池的列宽**读同一常量**（引用相等，不是各写一串）');
+    check(libPanel.indexOf('33.333') < 0 && pool.indexOf('33.333') < 0 && card.indexOf('33.333') < 0,
+      '★ 三处都没有 3 列（旧 xl:w-[calc(33.333%-4px)] 已删）');
+    check(cardSrc.indexOf('SHIP_ART_ASPECT') >= 0, '★ 图位比例来自共用常量 SHIP_ART_ASPECT（战斗池同一份）');
+
+    // ③ 三处渲染同一个卡面组件
+    check(libPanel.indexOf('ShipCard') >= 0 && shipPanel.indexOf('ShipCard') >= 0 && pool.indexOf('ShipCard') >= 0,
+      '★ 卡库 / 船坞 / 战斗部署池渲染**同一个** ShipCard（样式只有一份实现）');
+    check(shipPanel.indexOf('layout="row"') >= 0 && shipPanel.indexOf('max-w-[280px]') >= 0,
+      '船坞列表用 row 排布 + 列宽 280（图位 162×81 时攻盾体仍一行放下）');
+
+    // ④ 保持：徽章 / 费用角标 / 长名截断 / onError / memo
+    check(card.indexOf('absolute left-[5px] top-1') >= 0, '数量徽章（持有/已编/可编）位置不变（stack 时压在图上、深色底可读）');
+    check(card.indexOf('absolute right-[5px] top-1') >= 0, '费用角标位置不变');
+    check(card.indexOf('text-ellipsis') >= 0 && card.indexOf('whitespace-nowrap') >= 0, '长舰名仍省略号截断（不溢出）');
+    check(card.indexOf('flex-wrap') >= 0, '攻盾体允许换行（窄卡不溢出到图位）');
+    check(card.indexOf('<img') >= 0 && card.indexOf('onError=') >= 0, '图位有 onError 兜底（缺图不留破图）');
+    check(card.indexOf('export default memo(') >= 0, '卡面仍 memo(...)');
+
+    // ⑤ 战斗池的交互一个都不许丢（源级：判定仍在 lib/battle/view + BattleScreen，卡面只转发）
+    check(pool.indexOf('selectable={c.selectable}') >= 0,
+      '★ 战斗池把 selectable 下发给卡面（**灰卡也能点开看技能**，与 playable 分开）');
+    check(pool.indexOf('playable={c.playable}') >= 0, '★ playable 仍下发（只影响视觉变暗）');
+    check(pool.indexOf('disabled') < 0, '★ 战斗池没有把卡面 disabled（绝不许按指挥度/空位拦点击）');
+    check(pool.indexOf('onSelect={onPoolClick}') >= 0, '★ 点卡仍走 onPoolClick（manualActionView 闸门在 BattleScreen）');
+    check(pool.indexOf('title=') >= 0 && pool.indexOf('c.text') >= 0, '桌面悬浮技能提示（title = 技能原文）仍在');
+    check(pool.indexOf('×${c.count}') >= 0 || pool.indexOf('×') >= 0, '同型份数「×N」仍在费用角标上');
+    check(pool.indexOf('selCard === c.id') >= 0, '选中态仍由 selCard 驱动（描边 + ring）');
+    check(pool.indexOf('export default memo(') >= 0, '战斗池仍 memo(...)');
   }
 
   console.log('\n=== P6 验收结果 ===');
