@@ -358,14 +358,20 @@ export type GameAction =
   | { type: 'START_EXPEDITION'; bossId: PirateBossId; fleetId: string; turns: number }
   | { type: 'CANCEL_EXPEDITION' }
   | { type: 'START_BATTLE'; bossId: PirateBossId; fleet: ShipCardId[]; kind: 'expedition' | 'defense'; seed: number }
+  // **出征「开战」**（用户 2026-08 裁定，与掠夺阶段 B 同款口径）：倒计时归零那一回合仍由 useTurn **自动**开战
+  //   （上面的 START_BATTLE）；但 `battle` 不进存档，读档/从老存档继续时"已抵达 + 没有战斗"是**死状态** ——
+  //   这个 action 给玩家一个入口（战斗页签的「开战」按钮），载荷由 useStableActions 侧组装成无参回调：
+  //   bossId / 编制 / seed 全在 reducer 里由 lib/battle/expedition.readyExpedition 组装
+  //   （与自动那条**同一份判据**，幂等：战斗进行中 / 没有出征 / 还在路上 / 舰队被删或被掏空都不开战）。
+  | { type: 'START_EXPEDITION_BATTLE' }
   | { type: 'BATTLE_ACTION'; action: BattleAction }
   | { type: 'END_BATTLE' }
   | { type: 'TICK_BATTLE_STATE' }
   // 掠夺循环（V1.5 §10.2）：触发时登记倒计时与掠夺队支数；掠夺成功时按实扣值结算资源损失。
   //   · START_RAID / ARRIVE_RAID / APPLY_RAID_LOOT 的派发方只有 useTurn（每回合编排），UI 不直接派发；
-  //   · **START_RAID_BATTLE 是全场唯一由玩家主动点开的战斗入口**（阶段 B 的「开战」）：
-  //     载荷由 useStableActions 侧组装（bossId 'raid' / kind 'defense' / 防守合并池 / seed），
-  //     UI 不持有"随便开一场战斗"的能力（它只调一个无参回调）。
+  //   · **由玩家主动点开的战斗入口只有两个**，都是无参 action（阶段 B 的掠夺「开战」= START_RAID_BATTLE，
+  //     已抵达的出征「开战」= 上面的 START_EXPEDITION_BATTLE）：
+  //     载荷由 useStableActions 侧组装（bossId / 编制 / seed），UI 不持有"随便开一场战斗"的能力。
   | { type: 'START_RAID'; raiders: number }
   | { type: 'ARRIVE_RAID' }
   | { type: 'APPLY_RAID_LOOT' }

@@ -1,4 +1,4 @@
-import { useCallback } from 'react';
+import { useCallback, useRef } from 'react';
 import type { GameAction, GameState } from '@/types/game';
 import { FACTIONS } from '@/data/factions';
 import { processColonyTurn } from '@/lib/colony/colonyTurn';
@@ -10,10 +10,11 @@ import { getCurrentFactionId } from '@/lib/galaxy/access';
 import { processArchaeologyTurn } from '@/lib/galaxy/archaeologyTurn';
 import { EVENT_LOG_LIMIT } from '@/data/gameData';
 import { createUid } from '@/lib/id';
-import { canEndGameTurn, readyExpedition, tickExpedition } from '@/lib/battle/expedition';
-import { raidResolution, raidSquadCount, shouldStartRaid, tickRaid } from '@/lib/battle/raid';
+import { canEndGameTurn } from '@/lib/battle/expedition';
+import { raidSquadCount, shouldStartRaid } from '@/lib/battle/raid';
 import { advanceQueue, dockLevel } from '@/lib/battle/shipyard';
 import { BATTLE_CARDS } from '@/data/battle/cards';
+import { planBattleTurn } from './battleTurnPlan';
 
 /** 造舰完工日志用的卡名（数据里找不到就退回 id，不抛） */
 function shipBuildName(cardId: string): string {
@@ -27,7 +28,7 @@ function shipBuildName(cardId: string): string {
  * 这里只保留 dispatch 编排和调用顺序。
  */
 export function useTurn(
-  _gameState: GameState,
+  gameState: GameState,
   // dispatch 的类型只列本 hook 允许派发的 action（窄联合是一种设计守卫）。
   // 卡牌战斗 / 掠夺的 action 用 Extract 从 GameAction 派生，避免把载荷类型再抄一份（AGENTS 第三节）。
   dispatch: React.Dispatch<
@@ -45,45 +46,54 @@ export function useTurn(
     dispatch({ type: 'FUNCTIONAL_UPDATE', updater: computePriceFluctuation });
   }, [dispatch]);
 
+  // ⚠ 读状态一律走这个 ref（每次渲染刷新）：**这是本次故障的结构性修复**。
+  //   2026-08 用户报"回合数字在加，出征/掠夺的倒计时却冻在『还有 1 回合抵达』、永远没有战斗"：
+  //   `nextTurn` 是 `useCallback`，而它的依赖 `[dispatch, fluctuatePrices, autoSave]` 三个引用都稳定
+  //   （dispatch 来自 useReducer；autoSave/fluctuatePrices 都是 `useCallback([dispatch])`），
+  //   于是 useCallback 永不重建 —— 闭包里读到的**永远是首帧状态**（createInitialGameState：
+  //   `expedition: null` / `cardLibrary: []`）：
+  //     · `readyExpedition(投影)` 恒为 null → 出征倒计时归零那一回合**永远不开战**；
+  //     · `shouldStartRaid(roll, …)` 恒为 false → **掠夺循环一次都没触发过**（同一根因的另一半）。
+  //   而 `TICK_BATTLE_STATE` 本身不读状态、照常派发 → 倒计时照样减到 0 并停在那里（界面下限显示成 1），
+  //   症状正是"回合在走、倒计时不动、战斗不出现"。
+  //   用 ref 之后"读到最新状态"是**结构性保证**（AGENTS 第五节 useStableActions 同一套做法），
+  //   不再依赖后人记得维护依赖数组；依赖数组里也保留 `gameState`，把"本函数依赖当前状态"写成显式契约。
+  const stateRef = useRef(gameState);
+  stateRef.current = gameState;
+
   // 回合推进
   const nextTurn = useCallback(() => {
-    // ⚠ 战斗期间不允许结束游戏回合（V1.5 §〇「战斗中不能保存」、§1.1）。
-    //   同步可判的拦截必须放在 dispatch **之前**（AGENTS 第九节），判据的唯一真值在
-    //   lib/battle/expedition.canEndGameTurn（只判 state.battle；出征倒计时在途时仍可正常结束回合）。
-    //   战斗页签同时占满整屏，所以这条守卫是兜底而不是玩家的常规路径。
-    if (!canEndGameTurn(_gameState)) return;
+    // ⚠ 本次调用用的状态 = 调用那一刻的最新状态（不是这次 useCallback 创建时的状态）。
+    const cur = stateRef.current;
+    if (!canEndGameTurn(cur)) return;
 
     // 出征倒计时：每个游戏回合先 TICK 一次（出征 / 掠夺倒计时各减 1，下限 0），
     // 归零则本回合就开战 —— TICK_BATTLE_STATE 的注释把「归零即开战」的判定留给调用方。
-    // ⚠ `_gameState` 是这次渲染的最新状态，也就是 **TICK 之前**的状态（dispatch 不同步回读），
-    //   所以判定必须读"本次 TICK 之后"的状态。**做法是先投影、再判**（把 TICK 用到的两个纯函数
-    //   tickExpedition / tickRaid 各跑一次），而不是传一个 afterTick=true 让判据去"猜一位"：
-    //   猜一位等于把"这一帧该不该开战"押在「TICK 与 START_BATTLE 必须同批、且真的被派发」上 ——
-    //   批边界一旦落在两者之间，状态就会停在 turnsRemaining: 0 而这一帧既不开战、界面也没有开战
-    //   入口（用户 2026-08 报的出征卡死；掠夺那条 P7 已用同一套写法修过，这里补齐出征）。
-    //   先投影后判之后，判定与最终落库的状态**逐值同源**，不存在 off-by-one 的窗口。
-    // 这些 dispatch 都排在本函数返回前，与 nextTurn 那条 FUNCTIONAL_UPDATE、fluctuatePrices
+    // ⚠ `cur` 是调用那一刻的最新状态，也就是 **TICK 之前**的状态（dispatch 不同步回读），
+    //   所以判定必须读"本次 TICK 之后"的状态。**做法是先投影、再判**，而不是传一个 afterTick=true
+    //   让判据去"猜一位"：猜一位等于把"这一帧该不该开战"押在「TICK 与 START_BATTLE 必须同批、
+    //   且真的被派发」上 —— 批边界一旦落在两者之间，状态就会停在 turnsRemaining: 0 而这一帧既不开战、
+    //   界面也没有开战入口（P5 踩过）。先投影后判之后，判定与最终落库的状态**逐值同源**。
+    // 这一整套判定抽成了 `battleTurnPlan.planBattleTurn`（纯函数、不吃随机数），
+    // 好处是 check-battle-expedition.cjs 能用**真实 reducer** 原样回放这几次派发 —— 本函数只执行计划。
+    // 这些 dispatch 都排在本函数返回前，与那条 FUNCTIONAL_UPDATE、fluctuatePrices
     // 同批处理，且都排在回合结算那条之前 —— 故掠夺扣掉的资源会被本回合结算读到（而非被覆盖）。
     // 同批的 action 各写各的键：TICK 写 expedition/raid；START_BATTLE（出征）写 battle；
     // START_RAID / ARRIVE_RAID 写 raid；APPLY_RAID_LOOT 写 ships/raid/eventLog。
     // ⚠ 掠夺**不再**在归零时派发 START_BATTLE（旧口径已作废）：它只转段或结算损失。
     dispatch({ type: 'TICK_BATTLE_STATE' });
 
-    // 「本次 TICK 之后」的状态投影（与 reducer 的 TICK_BATTLE_STATE **同一份算式**，各跑一次纯函数）
-    const afterTick: GameState = {
-      ..._gameState,
-      expedition: tickExpedition(_gameState.expedition),
-      raid: tickRaid(_gameState.raid),
-    };
+    // 「本次 TICK 之后」该做什么（唯一真值 hooks/battleTurnPlan.planBattleTurn：
+    //  出征自动开战 + 掠夺转段/结算，判定顺序与下面的派发顺序一一对应）
+    const plan = planBattleTurn(cur);
 
     // 倒计时归零 → 自动开战（参战舰船 = 该舰队当前编制）。
     // seed 用 Date.now()：战斗**不进存档**（V1.5 §〇），读档会回到战斗前、可以重来，属既定口径。
-    const ready = readyExpedition(afterTick);
-    if (ready) {
+    if (plan.startBattle) {
       dispatch({
         type: 'START_BATTLE',
-        bossId: ready.bossId,
-        fleet: ready.fleet,
+        bossId: plan.startBattle.bossId,
+        fleet: plan.startBattle.fleet,
         kind: 'expedition',
         seed: Date.now(),
       });
@@ -100,26 +110,23 @@ export function useTurn(
     //   「开战」（那里 dispatch START_RAID_BATTLE），本 hook 只在阶段 B 超时后结算掠夺成功。
     // ⚠ 与出征同时归零时：TICK 与 START_BATTLE（出征）排在同一批里 —— 出征照旧自动开战；
     //   掠夺只转入阶段 B，等这场仗打完再让玩家决定要不要打掠夺（守家顺序不受影响）。
-    // ⚠ **掠夺的判定要读"本次 TICK 之后"的掠夺状态**（唯一真值 tickRaid，与 reducer 的
-    //   TICK_BATTLE_STATE 同一份算式，投影见上方 afterTick）。为什么不像旧出征那样传
-    //   afterTick=true 让 raidResolution 去猜"减 1 之后会不会归零"：那种"读 TICK 前的状态 + 前瞻一位"
-    //   的写法，把转段的正确性押在了"这次 ARRIVE_RAID 必须与 TICK 同批、且必须真的被派发"上 ——
-    //   批边界一旦落在两者之间，状态就会停在 inTurns: 0 而永远不进阶段 B（界面卡在"还有 0 回合抵达"
-    //   且没有开战按钮）。先把 tick 投影出来再判，判定与最终落库的状态就**逐值同源**。
-    //   （出征那条 P5 的 off-by-one 已用完全相同的写法修掉，见上方 readyExpedition(afterTick)。）
-    const raidNow = raidResolution(afterTick);
-    if (raidNow === 'arrived') {
+    // ⚠ 转段的判据只看状态本身（`planBattleTurn` 内先投影 tickRaid、再 raidResolution），
+    //   与"这次 ARRIVE_RAID 是否与 TICK 同批、是否真的被派发"无关 —— 读 TICK 前的状态再"猜一位"
+    //   会让状态停在 inTurns: 0 而永远不进阶段 B（P7 踩过）。
+    if (plan.raidStep === 'arrived') {
       // 阶段 A → 阶段 B（登记"已抵达 + 再 N 回合不迎战就自动失败"）
       dispatch({ type: 'ARRIVE_RAID' });
-    } else if (raidNow === 'looted') {
+    } else if (plan.raidStep === 'looted') {
       // 阶段 B 超时仍未迎战 → 掠夺成功，直接结算资源损失（实扣值在 reducer 里按 raidLootLoss 走 resourceCost）
       dispatch({ type: 'APPLY_RAID_LOOT' });
     } else {
       // 本回合掷一次骰：**只有满足"卡库战舰 ≥10 艘 + 已建立殖民地 + 没有在途掠夺（阶段 A/B 都没有）
       // + 不在免疫期"才可能命中**（四个条件全在 lib/battle/raid.shouldStartRaid 里判，勿在这里重写）。
       // ⚠ 没有殖民地时永远不掷：V1.5 §10.2"掠夺以存在殖民地为前提"（用户已确认）。
+      // ⚠ 这里传的必须是**当前状态 cur**：曾因闭包陈旧而恒传首帧状态（cardLibrary 为空）
+      //   → `shouldStartRaid` 永远是 false，整条掠夺循环一次都没触发过（与出征不开战同一根因）。
       const roll = Math.random();
-      if (shouldStartRaid(roll, _gameState)) {
+      if (shouldStartRaid(roll, cur)) {
         // "1-2 支"按 50/50 掷（§10.2）；命中后登记 RAID_WARNING_TURNS 回合的预警（阶段 A）
         dispatch({ type: 'START_RAID', raiders: raidSquadCount(Math.random()) });
       }
@@ -203,7 +210,12 @@ export function useTurn(
 
     fluctuatePrices();
     setTimeout(() => autoSave(), 100);
-  }, [dispatch, fluctuatePrices, autoSave]);
+    // ⚠ 依赖里同时保留 `gameState`：真正保证"读到最新状态"的是上面的 `stateRef`（结构性），
+    //   而这一项把"本函数依赖当前状态"写成**显式契约** —— 万一有人把某处改回直接读参数，
+    //   少了它就会重演 2026-08 那次"闭包停在首帧、倒计时归零却永不推进"的静默故障。
+    //   本函数每次渲染都会重建，但对外暴露的引用仍由 useGameState 的 useStableActions 收敛成稳定引用，
+    //   不会击穿面板组件的 React.memo（AGENTS 第五节）。
+  }, [dispatch, fluctuatePrices, autoSave, gameState]);
 
   return { nextTurn, fluctuatePrices };
 }

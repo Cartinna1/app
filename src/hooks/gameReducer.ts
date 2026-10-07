@@ -25,7 +25,7 @@ import {
 } from '@/lib/battle/raid';
 import { flattenCost, payCost } from '@/lib/turn/resourceCost';
 import { pushGoldLog } from '@/lib/turn/goldLog';
-import { tickExpedition } from '@/lib/battle/expedition';
+import { readyExpedition, tickExpedition } from '@/lib/battle/expedition';
 import { canAddShip, canDeleteFleet, canRemoveShip, canRenameFleet, canToggleDefending, isFleetOnExpedition } from '@/lib/battle/hangar';
 import { buildRefund, buildCost, canCancelBuild, canEnqueue, enqueueBuild } from '@/lib/battle/shipyard';
 
@@ -329,6 +329,25 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
       return { ...state, battle, raid };
     }
 
+    case 'START_EXPEDITION_BATTLE': {
+      // **出征「开战」**（用户 2026-08 裁定，与掠夺阶段 B 的 `START_RAID_BATTLE` 同款口径）：
+      //   倒计时归零那一回合仍由 useTurn **自动**开战（START_BATTLE，上面那个 case）；但 `battle` **不进存档**，
+      //   于是读档 / 从老存档继续时"已抵达 + 没有战斗"这一帧**没有任何出路**（用户 2026-08 报的卡死）。
+      //   能不能开战由 lib/battle/expedition.readyExpedition 判（必须在已抵达、战斗未进行、出征舰队非空），
+      //   与自动那条**同一份判据**，故幂等；参战编制 = 该舰队的当前编制（seed 照旧 Date.now()，战斗不进存档）。
+      //   ⚠ 建场直接**复用 START_BATTLE 分支**（递归派发）：不在这里另写一份 createBattle 装配，
+      //     两条路的战斗形状（玩家卡池 = 出征编制）永远一致。
+      const ready = readyExpedition(state);
+      if (!ready) return state;
+      return gameReducer(state, {
+        type: 'START_BATTLE',
+        bossId: ready.bossId,
+        fleet: ready.fleet,
+        kind: 'expedition',
+        seed: Date.now(),
+      });
+    }
+
     case 'START_RAID_BATTLE': {
       // **阶段 B 的「开战」**（用户 2026-08 裁定的流程）：这是**全场唯一由玩家主动点开的战斗入口**。
       // 能不能开战由 lib/battle/raid.readyRaidBattle 判（必须在阶段 B、战斗未进行、防守池非空），
@@ -549,6 +568,13 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
     }
 
     default:
+      // 未处理的 action **不许静默消失**（用户 2026-08 排查"派了 action 却什么都没发生"，
+      // 一度怀疑是某个包装层把 TICK 丢掉了 —— 结论是没有，但这类"派了没人接"必须留下痕迹）。
+      // 只在 DEV 打一行警告：正常路径（type 已被上面的 case 穷尽）走不到这里；
+      // 走到这里 = 新增 action 忘了写 case，或者调用方拼错了 type。
+      if (import.meta.env.DEV) {
+        console.warn('[gameReducer] 未处理的 action（状态原样返回）：', (action as { type?: string }).type);
+      }
       return state;
   }
 }

@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
 import type { GameState, EventOption, ResourceChange, ChoiceEvent } from '@/types/game';
-import type { BattleAction, BattleFleet, BattleState, PirateBossId, ShipCardId } from '@/types/battle';
+import type { BattleAction, BattleFleet, PirateBossId, ShipCardId } from '@/types/battle';
 import type { DodgeReason } from '@/hooks/useEvent';
 import {
   LayoutDashboard,
@@ -53,6 +53,7 @@ import HangarTab from './hangar/HangarTab';
 import { computeColonyEconomy, getBuildingSourceBreakdown } from '@/lib/colony/economy';
 import { computeCrewFoodCost, famineHalveGold } from '@/lib/turn/shipTurn';
 import { getNextTurnHints } from '@/lib/turn/nextTurnHints';
+import { endTurnView } from '@/lib/battle/expedition';
 import { MATERIAL_NAME_MAP } from '@/data/materialNames';
 
 // 背景音乐曲目列表（放 public/ 目录下，按顺序自动循环播放）
@@ -125,16 +126,20 @@ interface GameScreenProps {
   onResetGame: () => void;
   getShipTotalAssets: (ship: GameState['ships'][0]) => number;
   // ===== 舰船卡牌战斗（V1.5 §10）：只接「战斗」页签用 =====
-  battle: BattleState | null;
+  // ⚠ 这里**故意不再有 `battle` prop**：战斗主板由战斗页签自己从 `state` 取
+  //   （唯一真值 lib/battle/expedition.battleBoard）—— prop 与 state 一旦不同源，
+  //   就会出现"战斗已经在进行、界面上却没有战斗"（2026-08 排查过的那一类）。
   fleets: BattleFleet[];
   cardLibrary: ShipCardId[];
   /** 发起舰队出征（START_EXPEDITION）；与殖民地领袖远征的 onStartExpedition 是两回事（V1.5 §10.1） */
   onStartBattleExpedition: (bossId: PirateBossId, fleetId: string, turns: number) => void;
   /** 取消在途的舰队出征（CANCEL_EXPEDITION） */
   onCancelBattleExpedition: () => void;
-  /** **阶段 B 的「开战」**（START_RAID_BATTLE）：全场唯一由玩家主动点开的战斗入口。
-   *  ⚠ 故意做成**无参窄回调** —— 目标（'raid'）/ 编制（防守合并池）/ seed 全由 reducer 侧的
-   *  lib/battle/raid.readyRaidBattle 组装，UI 不持有"随便开一场战斗"的能力。 */
+  /** **已抵达的出征「开战」**（START_EXPEDITION_BATTLE）：舰队已抵达（倒计时归零）但还没有战斗时的入口
+   *  （读档 / 从老存档继续时的唯一出路）。无参窄回调 —— 目标 / 编制 / seed 全由 reducer 侧的
+   *  lib/battle/expedition.readyExpedition 组装，UI 不持有"随便开一场战斗"的能力。 */
+  onStartExpeditionBattle: () => void;
+  /** **阶段 B 的「开战」**（START_RAID_BATTLE）：同样是无参窄回调（reducer 侧 readyRaidBattle 组装）。 */
   onStartRaidBattle: () => void;
   onBattleAction: (action: BattleAction) => void;
   onEndBattle: () => void;
@@ -244,11 +249,11 @@ export default function GameScreen({
   onImportSave,
   onResetGame,
   getShipTotalAssets,
-  battle,
   fleets,
   cardLibrary,
   onStartBattleExpedition,
   onCancelBattleExpedition,
+  onStartExpeditionBattle,
   onStartRaidBattle,
   onBattleAction,
   onEndBattle,
@@ -265,6 +270,15 @@ export default function GameScreen({
   const [showConfirmNext, setShowConfirmNext] = useState(false);
   // 下一回合预告（唯一真值 lib/turn/nextTurnHints；确认弹窗与总览共用同一份）
   const nextHints = useMemo(() => getNextTurnHints(gameState), [gameState]);
+  /** 「结束回合」按钮的渲染模型（唯一真值 lib/battle/expedition.endTurnView）：
+   *  战斗进行中时 useTurn 的守卫会**直接挡住**结束回合（回合数、倒计时、市场全都不动），
+   *  所以这里不让按钮变成"点了没反应"——改成「回到战斗」并给出可见原因（用户 2026-08 报的
+   *  "点了结束回合什么都没发生、战斗在哪里"必须有出口）。 */
+  const endTurn = useMemo(() => endTurnView(gameState), [gameState]);
+  /** 结束回合（先弹确认；能结束时才走这条路） */
+  const openEndTurnConfirm = () => setShowConfirmNext(true);
+  /** 战斗进行中：结束回合按钮此刻的替代动作 = 去战斗页签把这一场打完 */
+  const goBattleTab = () => setActiveTab('battle');
   const [bgmMuted, setBgmMuted] = useState(() => localStorage.getItem(BGM_MUTED_KEY) === 'true');
   const bgmRef = useRef<HTMLAudioElement | null>(null);
   const bgmIndexRef = useRef(0);
@@ -499,14 +513,21 @@ export default function GameScreen({
             )}
           </div>
 
-          {/* 结束回合 */}
+          {/* 结束回合（战斗进行中时换成「回到战斗」+ 原因：不许点了没反应） */}
           <div className="p-4 pb-2">
             <button
-              onClick={() => setShowConfirmNext(true)}
-              className="w-full py-2.5 bg-gradient-to-r from-red-600 to-orange-600 hover:from-red-500 hover:to-orange-500 rounded-lg font-bold text-white transition-all shadow-lg shadow-red-900/30"
+              onClick={endTurn.ok ? openEndTurnConfirm : goBattleTab}
+              className={`w-full py-2.5 rounded-lg font-bold text-white transition-all shadow-lg ${
+                endTurn.ok
+                  ? 'bg-gradient-to-r from-red-600 to-orange-600 hover:from-red-500 hover:to-orange-500 shadow-red-900/30'
+                  : 'bg-gradient-to-r from-amber-600 to-yellow-600 hover:from-amber-500 hover:to-yellow-500 shadow-amber-900/30'
+              }`}
             >
-              结束回合
+              {endTurn.ok ? '结束回合' : '回到战斗'}
             </button>
+            {!endTurn.ok && (
+              <p className="mt-2 text-[10px] leading-relaxed text-amber-300">{endTurn.reason}</p>
+            )}
           </div>
 
           {/* 标签页 */}
@@ -548,6 +569,20 @@ export default function GameScreen({
 
         {/* ===== 主内容区 ===== */}
         <main className="flex-1 p-3 md:p-6 overflow-auto min-h-[calc(100vh-120px)] md:min-h-[calc(100vh-60px)]">
+          {/* 战斗进行中：结束回合被 lib 守卫挡住（点了会什么都不发生）→ 给出一行可见原因 + 一步可走的路。
+              判据与文案都来自 lib/battle/expedition.endTurnView（UI 不自己判 state.battle）。 */}
+          {!endTurn.ok && (
+            <div className="mb-3 flex flex-wrap items-center gap-x-2 gap-y-1 rounded-lg border border-amber-700/70 bg-amber-900/30 px-3 py-2 text-[11.5px] leading-relaxed text-amber-200 md:text-xs">
+              <span>{endTurn.reason}</span>
+              <button
+                type="button"
+                onClick={goBattleTab}
+                className="font-bold text-amber-100 underline hover:text-white"
+              >
+                去战斗页签
+              </button>
+            </div>
+          )}
           <div className={activeTab === 'overview' ? '' : 'hidden'}>
             <OverviewTab gameState={gameState} ship={currentShip} getShipTotalAssets={getShipTotalAssets} nextHints={nextHints} />
           </div>
@@ -658,11 +693,11 @@ export default function GameScreen({
                所有回调都来自 useStableActions 的稳定引用（AGENTS 第五节），不在 JSX 里写 inline 箭头。 */}
           <div className={activeTab === 'battle' ? '' : 'hidden'}>
             <BattleTab
-              battle={battle}
               fleets={fleets}
               cardLibrary={cardLibrary}
               state={gameState}
               onStartExpedition={onStartBattleExpedition}
+              onStartExpeditionBattle={onStartExpeditionBattle}
               onStartRaidBattle={onStartRaidBattle}
               onCancelExpedition={onCancelBattleExpedition}
               onAction={onBattleAction}
@@ -758,11 +793,14 @@ export default function GameScreen({
           {/* 钉住区：结束回合 + 音乐（不参与横向滚动） */}
           <div className="flex shrink-0 gap-0.5 pr-1 mr-1 border-r border-slate-700/60">
             <button
-              onClick={() => setShowConfirmNext(true)}
-              className="w-[52px] flex flex-col items-center justify-center gap-0.5 py-1 rounded-md text-red-400 min-h-[44px]"
+              onClick={endTurn.ok ? openEndTurnConfirm : goBattleTab}
+              title={endTurn.reason || undefined}
+              className={`w-[52px] flex flex-col items-center justify-center gap-0.5 py-1 rounded-md min-h-[44px] ${
+                endTurn.ok ? 'text-red-400' : 'text-amber-400'
+              }`}
             >
               <Zap size={18} />
-              <span className="text-[10px] font-bold whitespace-nowrap">结束</span>
+              <span className="text-[10px] font-bold whitespace-nowrap">{endTurn.ok ? '结束' : '战斗'}</span>
             </button>
             <button
               onClick={toggleMute}

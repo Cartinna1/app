@@ -376,9 +376,15 @@ export function useGameState() {
 
   // ⚠ 这里**故意没有**通用的 startBattle（不把"随便开一场战斗"的能力交给 UI）：
   //   出征战由 useTurn 在出征倒计时归零时自动派发 START_BATTLE（P5）。
-  //   玩家唯一能主动点开的战斗是**阶段 B 的掠夺防守战** —— 走下面这个**窄回调**：
-  //   它没有参数，bossId 'raid' / kind 'defense' / 参战池 / seed 全部由 reducer 侧的
-  //   lib/battle/raid.readyRaidBattle 组装（UI 无从指定目标或编制）。
+  //   玩家能主动点开的战斗入口有两个，都是**无参窄回调**（bossId / 参战池 / seed 全部由 reducer 侧的
+  //   lib 判据组装，UI 无从指定目标或编制）：
+  //     ① 出征已抵达（倒计时归零但还没有战斗，读档回到这一帧时就是这种状态）→ startExpeditionBattle
+  //        （reducer 走 lib/battle/expedition.readyExpedition，与自动那条同一份判据，幂等）
+  //     ② 掠夺阶段 B（海盗已抵达待战）→ startRaidBattle（reducer 走 lib/battle/raid.readyRaidBattle）
+  const startExpeditionBattle = useCallback(() => {
+    dispatch({ type: 'START_EXPEDITION_BATTLE' });
+  }, []);
+
   const startRaidBattle = useCallback(() => {
     dispatch({ type: 'START_RAID_BATTLE' });
   }, []);
@@ -405,7 +411,11 @@ export function useGameState() {
     dispatch({ type: 'CANCEL_BUILD', index });
   }, []);
 
-  /** 每个游戏回合调用一次（useTurn 编排）：出征 / 掠夺倒计时各减 1；归零后开战由调用方判断 */
+  /** 每个游戏回合调用一次（出征 / 掠夺倒计时各减 1）。
+   *  ⚠ **真正的 TICK 派发在 `useTurn.nextTurn` 内部**（与 START_BATTLE / ARRIVE_RAID 同一批），
+   *    本回调**没有 UI 调用点** —— 保留它只为脚本/调试手动推进倒计时。
+   *    别因为"grep 不到有人调它"就以为 TICK 没人派发（2026-08 排查"倒计时冻住"时正是被它误导过：
+   *    当时真正的原因是 `useTurn` 的 useCallback 闭包陈旧，见 useTurn.ts 开头的根因记录）。 */
   const tickBattleState = useCallback(() => {
     dispatch({ type: 'TICK_BATTLE_STATE' });
   }, []);
@@ -504,6 +514,7 @@ export function useGameState() {
     toggleFleetDefending,
     startBattleExpedition,
     cancelBattleExpedition,
+    startExpeditionBattle,
     startRaidBattle,
     battleAction,
     endBattle,

@@ -6,6 +6,8 @@
         文档表是早先用独立算法算的 → 两条独立路径对上了才算真对。
    ============================================================================ */
 const fails = [];
+const fs = require('fs');
+const path = require('path');
 const check = (ok, label, detail) => {
   if (ok) console.log('  ✓ ' + label);
   else { fails.push(label + (detail ? ' → ' + detail : '')); console.log('  ✗ ' + label + (detail ? '  → ' + detail : '')); }
@@ -22,6 +24,9 @@ const check = (ok, label, detail) => {
   const E = await import('@/lib/battle/engine');
   // 掠夺的唯一真值（③d 要验"出征与掠夺同时归零"两条都对：出征自动开战 / 掠夺只转阶段 B）
   const RK = await import('@/lib/battle/raid');
+  // 结束回合的战斗派发计划（唯一真值，纯函数：④[3f] 用它 + 真实 reducer 原样回放一次"结束回合"）
+  const PLAN = await import('@/hooks/battleTurnPlan');
+  const SAVE = await import('@/lib/save');
 
   /** 逐字段比较用的紧凑打印（对象顺序在两侧同源，故可直接比字符串） */
   const J = (x) => JSON.stringify(x);
@@ -184,8 +189,8 @@ const check = (ok, label, detail) => {
     check(EXP.readyExpedition(eEmpty) === null, '出征舰队被掏空 → 不开战（不崩）');
   }
 
-  // ---------- ③c 界面：绝不出现「还有 0 回合抵达」 ----------
-  console.log('\n[3c] 界面模型：剩余回合显示下限 1（与掠夺 raidStatus.turnsToArrival 同口径）');
+  // ---------- ③c 界面：已抵达绝不许渲染「还有 N 回合抵达」 ----------
+  console.log('\n[3c] 界面模型：在途写「还有 N 回合抵达」、已抵达写「舰队已抵达」（两者不许混）');
   {
     let s = withColony('terran', ['e06']);
     s = { ...s, cardLibrary: fleetsMod.FLEET_STARTER.slice(0, 3) };
@@ -195,30 +200,41 @@ const check = (ok, label, detail) => {
     const at = (n) => D(s, { type: 'START_EXPEDITION', bossId: 'b1', fleetId: fid, turns: n });
 
     const none = EXP.expeditionView(s);
-    check(none.onExpedition === false && none.turnsRemaining === 0 && none.etaText === '', '没有出征：onExpedition=false、无文案', J(none));
+    check(none.onExpedition === false && none.turnsRemaining === 0 && none.etaText === '' && none.headline === '', '没有出征：onExpedition=false、无文案', J(none));
+    check(none.showFightButton === false, '没有出征：不给开战入口');
 
     const v3 = EXP.expeditionView(at(3));
     check(v3.turnsRemaining === 3 && v3.etaText === '还有 3 回合抵达', '在途 3 回合：显示 3', J(v3.etaText));
+    check(v3.headline === '还有 3 回合抵达' && v3.arrived === false, '**在途：主行仍是「还有 N 回合抵达」**（没把在途文案弄丢）', J(v3.headline));
+    check(v3.showFightButton === false, '在途（>0 回合）→ **不给开战入口**（还没到）');
     check(v3.bossId === 'b1' && v3.bossLabel.length > 0 && v3.fleetName === '界面队', '在途：目标名 / 舰队名来自 lib（UI 不查表）', J([v3.bossLabel, v3.fleetName]));
 
-    // 归零那一帧：显示下限 1，**不许**渲染「还有 0 回合抵达」
+    // 归零那一帧（= 已抵达）：主行必须换成「舰队已抵达」，etaText 必须为空
     const zeroSt = at(0);
     const v0 = EXP.expeditionView(zeroSt);
     check(v0.arrived === true, '归零：arrived = true（界面该等开战）');
-    check(v0.turnsRemaining === 1, '**归零时剩余回合的显示下限是 1**（不是 0）', String(v0.turnsRemaining));
-    check(!/0/.test(v0.etaText), '**归零时文案里没有 0**（不出现「还有 0 回合抵达」）', v0.etaText);
-    check(EXP.expeditionEtaText(0) === '还有 1 回合抵达', 'expeditionEtaText(0) 下限 1', EXP.expeditionEtaText(0));
+    check(v0.turnsRemaining === 1, '归零时剩余回合的显示仍是下限 1（不是 0；该字段只在途时有意义）', String(v0.turnsRemaining));
+    check(v0.etaText === '', '**已抵达：etaText（在途文案）必须为空**', J(v0.etaText));
+    check(v0.headline === '舰队已抵达', '**已抵达：主行写「舰队已抵达」**（用户 2026-08 截图：这里原来写「还有 1 回合抵达」）', J(v0.headline));
+    check(!/还有\s*\d+\s*回合抵达/.test(v0.headline + v0.etaText + v0.detailText), '**已抵达：整份模型里绝不出现「还有 N 回合抵达」**', J([v0.headline, v0.etaText, v0.detailText]));
+    check(EXP.expeditionEtaText(0) === '还有 1 回合抵达', 'expeditionEtaText(0) 下限 1（该函数仍是"在途"文案，由 expeditionView 决定用不用）', EXP.expeditionEtaText(0));
     check(EXP.expeditionEtaText(-2) === '还有 1 回合抵达', 'expeditionEtaText(负数) 也钳到 1（防御性下限）', EXP.expeditionEtaText(-2));
 
-    // 投影之后（= useTurn 判定用的那一帧）：仍然不出现 0
+    // 投影之后 / reducer 已 TICK 到 0 的那一帧：仍然不出现"还有 N 回合抵达"
     const projZero = { ...zeroSt, expedition: EXP.tickExpedition(zeroSt.expedition) };
-    check(EXP.expeditionView(projZero).turnsRemaining === 1, '投影后（已归零）显示仍是下限 1', String(EXP.expeditionView(projZero).turnsRemaining));
+    check(EXP.expeditionView(projZero).headline === '舰队已抵达', '投影后（已归零）：主行仍是「舰队已抵达」', J(EXP.expeditionView(projZero).headline));
     const afterTickSt = D(at(1), { type: 'TICK_BATTLE_STATE' });
     check(
-      EXP.expeditionView(afterTickSt).etaText === '还有 1 回合抵达',
-      'reducer 已 TICK 到 0 的那一帧：文案仍不是「还有 0 回合抵达」',
-      EXP.expeditionView(afterTickSt).etaText
+      EXP.expeditionView(afterTickSt).headline === '舰队已抵达' && EXP.expeditionView(afterTickSt).etaText === '',
+      'reducer 已 TICK 到 0 的那一帧：绝不渲染「还有 0 / 1 回合抵达」',
+      J([EXP.expeditionView(afterTickSt).headline, EXP.expeditionView(afterTickSt).etaText])
     );
+
+    // 静态钉死"界面看错字段"：BattleTab 必须渲染 headline（状态）/showFightButton，**不许**渲染 etaText / turnsRemaining
+    const tabSrc = fs.readFileSync(path.resolve(__dirname, '../src/components/battle/BattleTab.tsx'), 'utf8');
+    check(/expeditionCard\.headline/.test(tabSrc), '**BattleTab 渲染的是 expeditionCard.headline**（状态文案，唯一出口）');
+    check(!/expeditionCard\.(etaText|turnsRemaining)\b/.test(tabSrc), '**BattleTab 不许再读 expeditionCard.etaText / turnsRemaining**（"还有 N 回合抵达"那个 bug 的入口）');
+    check(/expeditionCard\.showFightButton/.test(tabSrc), 'BattleTab 的开战入口读的是 expeditionCard.showFightButton（判定在 lib）');
   }
 
   // ---------- ③d 与掠夺同时归零：两条都正确 ----------
@@ -252,6 +268,150 @@ const check = (ok, label, detail) => {
       J(liveArrived.raid)
     );
     check(liveArrived.expedition !== null && liveArrived.expedition.turnsRemaining === 0, '出征记录保留到战斗结束（END_BATTLE 才清空）', J(liveArrived.expedition));
+  }
+
+  // ---------- ③e 已抵达 + 没有战斗 → 开战入口（读档后也能打起来；与 readyExpedition 同源、幂等） ----------
+  console.log('\n[3e] 已抵达 + 没有战斗 → 开战入口（可点、幂等；读档后仍能打起来）');
+  {
+    let s = withColony('terran', ['e06']);
+    s = { ...s, cardLibrary: fleetsMod.FLEET_STARTER.slice(0, 6) };
+    s = D(s, { type: 'CREATE_BATTLE_FLEET', name: '开战队' });
+    for (const id of s.cardLibrary) s = D(s, { type: 'ADD_SHIP_TO_FLEET', fleetId: s.fleets[0].id, shipId: id });
+    const fid = s.fleets[0].id;
+    const fleetShips = () => loaded.fleets.find((f) => f.id === fid).shipIds;
+
+    // **走真实存档路径**造一份"已抵达"的档：buildSaveData（battle 不入档）→ JSON → stateFromSave → migrateSave
+    const arrivedLive = D(s, { type: 'START_EXPEDITION', bossId: 'b1', fleetId: fid, turns: 0 });
+    const loaded = SAVE.migrateSave(SAVE.stateFromSave(JSON.parse(JSON.stringify(SAVE.buildSaveData(arrivedLive)))));
+    check(loaded.battle === null && !!loaded.expedition && loaded.expedition.turnsRemaining === 0, '读档：battle 不入档（null）、出征停在"已抵达"', J(loaded.expedition));
+
+    const v = EXP.expeditionView(loaded);
+    check(v.arrived === true && v.showFightButton === true, '**读档后的"已抵达 + 无战斗"：给出开战入口**（此前是死状态）', J([v.arrived, v.showFightButton]));
+    check(v.headline === '舰队已抵达' && /参战/.test(v.fightHint), '入口旁写明"舰队已抵达，点开战"', J([v.headline, v.fightHint]));
+
+    const started = D(loaded, { type: 'START_EXPEDITION_BATTLE' });
+    check(!!started.battle && started.battle.bossId === 'b1', '**点「开战」→ battle 进行中**（走 reducer 的 START_EXPEDITION_BATTLE）', started.battle ? started.battle.bossId : 'null');
+    check(J(started.battle.player.pool) === J(fleetShips()), '参战编制 = 出征舰队的当前编制', J(started.battle.player.pool));
+    check(D(started, { type: 'START_EXPEDITION_BATTLE' }) === started, '幂等：战斗进行中再点 → 原样返回（不重开一场）');
+
+    // 战斗中 / 无出征 / 舰队没了 → **不给入口**（判据与 readyExpedition 同源，UI 里没有第二份判定）
+    check(EXP.expeditionView(started).showFightButton === false, '战斗进行中 → 无开战入口');
+    check(EXP.expeditionView({ ...loaded, expedition: null }).showFightButton === false, '没有出征 → 无开战入口');
+    const noFleet = { ...loaded, fleets: loaded.fleets.filter((f) => f.id !== fid) };
+    check(EXP.expeditionView(noFleet).showFightButton === false && EXP.readyExpedition(noFleet) === null, '舰队被删 → 无开战入口（fightHint 给原因）', EXP.expeditionView(noFleet).fightHint);
+    check(D(noFleet, { type: 'START_EXPEDITION_BATTLE' }) === noFleet, '舰队被删时派发 START_EXPEDITION_BATTLE → 原样返回（不崩、不开战）');
+    const emptyFleet = { ...loaded, fleets: loaded.fleets.map((f) => (f.id === fid ? { ...f, shipIds: [] } : f)) };
+    check(EXP.expeditionView(emptyFleet).showFightButton === false, '出征舰队被掏空 → 无开战入口');
+    check(D(emptyFleet, { type: 'START_EXPEDITION_BATTLE' }) === emptyFleet, '舰队被掏空时派发 → 原样返回');
+  }
+
+  // ---------- ③f 结束回合批次回放：TICK 真的落到状态上、转段真的发生（抓"只生效一次"） ----------
+  // 用户 2026-08 报"回合数字在加，但出征/掠夺永远停在『还有 1 回合抵达』、没有战斗"。
+  // 本节的 [1] 用**真实 reducer** 回放一次完整的"结束回合"（派发顺序 = useTurn.nextTurn：
+  // TICK → 计划里的 START_BATTLE / ARRIVE_RAID / APPLY_RAID_LOOT → 回合结算那条 FUNCTIONAL_UPDATE），
+  // [2] 复现旧故障：计划若读"陈旧的首帧状态"，倒计时照样归零却永远不转段 —— 界面（下限 1）看起来就是一格没动。
+  console.log('\n[3f] 结束回合批次回放：TICK 必须落到状态上、归零必须转段/开战（抓"只生效一次"）');
+  {
+    const turnSrc = fs.readFileSync(path.resolve(__dirname, '../src/hooks/useTurn.ts'), 'utf8');
+    const gsSrc = fs.readFileSync(path.resolve(__dirname, '../src/components/GameScreen.tsx'), 'utf8');
+    const usgSrc = fs.readFileSync(path.resolve(__dirname, '../src/hooks/useGameState.ts'), 'utf8');
+    const tabSrc = fs.readFileSync(path.resolve(__dirname, '../src/components/battle/BattleTab.tsx'), 'utf8');
+
+    // -------- 结构性守卫：dispatch 链与"读最新状态"（这两条正是本次故障的根因面） --------
+    check(/const \[gameState, dispatch\] = useReducer\(gameReducer/.test(usgSrc), 'dispatch 来自 useReducer（原生 dispatch，不是白名单包装）');
+    check(/useTurn\(gameState, dispatch, autoSave\)/.test(usgSrc), '**useTurn 拿到的就是那个原生 dispatch**（任何包装都会静默丢掉 TICK/START_BATTLE）');
+    check(!/_gameState\b/.test(turnSrc), 'useTurn 不再有 `_gameState`（那个名字让它看起来像"未使用参数"，正是故障温床）');
+    check(/const stateRef = useRef\(gameState\);/.test(turnSrc) && /stateRef\.current = gameState;/.test(turnSrc), 'useTurn 每次渲染刷新 stateRef（结构性保证读到最新状态）');
+    check(/const cur = stateRef\.current;/.test(turnSrc), 'nextTurn 读状态走 `cur`（= stateRef.current），不读闭包里的参数');
+    check(/\}, \[dispatch, fluctuatePrices, autoSave, gameState\]\)/.test(turnSrc), 'nextTurn 依赖数组含 gameState（把"依赖当前状态"写成显式契约）');
+    // "派了但没人处理"的 action 不许静默消失（2026-08 排查时一度怀疑 TICK 被包装层丢掉）
+    const reducerSrc = fs.readFileSync(path.resolve(__dirname, '../src/hooks/gameReducer.ts'), 'utf8');
+    check(/case 'TICK_BATTLE_STATE'/.test(reducerSrc) && /case 'START_BATTLE'/.test(reducerSrc) && /case 'ARRIVE_RAID'/.test(reducerSrc), 'reducer 确实处理 TICK_BATTLE_STATE / START_BATTLE / ARRIVE_RAID（不是"派了没人接"）');
+    check(/未处理的 action/.test(reducerSrc), '**未处理的 action 会在 DEV 留下警告**（reducer default 分支，不再静默消失）');
+    check(/真正的 TICK 派发在 `useTurn\.nextTurn` 内部/.test(usgSrc), 'useGameState 写明 tickBattleState 没有 UI 调用点、TICK 真正派发在 nextTurn 内部（防"grep 不到调用方"的误判）');
+    const turnBody = turnSrc.slice(turnSrc.indexOf('const nextTurn = useCallback'));
+    check(
+      turnBody.indexOf('canEndGameTurn(') > 0 && turnBody.indexOf('canEndGameTurn(') < turnBody.indexOf('dispatch('),
+      '**结束回合的守卫排在第一个 dispatch 之前**（战斗进行中 → 一个 action 都不派发 = 状态逐字段不变）'
+    );
+
+    // -------- 回放器：一次"结束回合"的战斗侧派发（顺序与 useTurn.nextTurn 逐条对应） --------
+    const settle = (state) => D(state, { type: 'FUNCTIONAL_UPDATE', updater: (prev) => ({ ...prev, turn: prev.turn + 1 }) });
+    /** ⚠ planOf 收一个"这个闭包读到的状态"：传当前状态 = 正确；传首帧状态 = 复现旧故障 */
+    const runTurn = (state, planOf, rnd) => {
+      const plan = PLAN.planBattleTurn(planOf);
+      let next = D(state, { type: 'TICK_BATTLE_STATE' });
+      const log = ['TICK'];
+      if (plan.startBattle) {
+        next = D(next, { type: 'START_BATTLE', bossId: plan.startBattle.bossId, fleet: plan.startBattle.fleet, kind: 'expedition', seed: 7 });
+        log.push('START_BATTLE');
+      }
+      if (plan.raidStep === 'arrived') { next = D(next, { type: 'ARRIVE_RAID' }); log.push('ARRIVE_RAID'); }
+      else if (plan.raidStep === 'looted') { next = D(next, { type: 'APPLY_RAID_LOOT' }); log.push('APPLY_RAID_LOOT'); }
+      else if (rnd !== undefined && RK.shouldStartRaid(rnd, planOf)) { next = D(next, { type: 'START_RAID', raiders: 1 }); log.push('START_RAID'); }
+      return { state: settle(next), log };
+    };
+
+    // -------- [1] 掠夺：阶段 A 倒计时 2 → 一次结束回合减 1 → 再一次转阶段 B --------
+    let r = withColony('terran', ['e06']);
+    r = { ...r, cardLibrary: fleetsMod.FLEET_STARTER.slice() };
+    r = D(r, { type: 'START_RAID', raiders: 1 });
+    r = { ...r, raid: { ...r.raid, inTurns: 2 } };
+    const raidStart = r.raid.inTurns;
+    const t1 = runTurn(r, r);
+    check(t1.state.raid.inTurns === raidStart - 1, '**一次完整"结束回合"批次后：掠夺倒计时真的减 1**', `${raidStart} → ${t1.state.raid.inTurns}（派发：${t1.log.join(' → ')}）`);
+    check(t1.state.turn === r.turn + 1, '同批次里回合数 +1（结算那条 FUNCTIONAL_UPDATE 生效）');
+    // TICK 落库后**不被回合结算覆盖**（结算只是 {...prev, ...}）
+    const tickedOnly = D(r, { type: 'TICK_BATTLE_STATE' });
+    check(settle(tickedOnly).raid.inTurns === tickedOnly.raid.inTurns && settle(tickedOnly).expedition === tickedOnly.expedition, '回合结算（{...prev}）不覆盖 TICK 写下的 expedition / raid');
+    const t2 = runTurn(t1.state, t1.state);
+    // ⚠ 第二次之后 inTurns 会归 null（转阶段 B 是设计如此）：用"累计推进了几格"表达"减 2"，
+    //   而不是直接比 inTurns 的值（那样会在转段时假失败）。
+    const consumed = raidStart - (t2.state.raid.inTurns === null ? 0 : t2.state.raid.inTurns);
+    check(consumed === 2, '**连续两次结束回合：掠夺倒计时累计推进 2 格**（不是只生效一次）', `${raidStart} → ${t2.state.raid.inTurns === null ? '0（已转阶段 B，inTurns 归 null）' : t2.state.raid.inTurns}，累计 -${consumed}`);
+    check(t2.log.includes('ARRIVE_RAID') && RK.raidPhase(t2.state.raid) === 'arrived' && t2.state.raid.arrivedTurns === RK.RAID_ARRIVED_TURNS, '**阶段 A 归零 → 转阶段 B（海盗已抵达待战）**', J(t2.state.raid));
+
+    // -------- [2] 复现旧故障：计划读"陈旧的首帧状态" → 倒计时归零却永不转段/开战 --------
+    const FIRST_RENDER = createInitialGameState();   // useTurn 闭包当年读到的那份（expedition: null / cardLibrary: []）
+    let frozen = r;
+    const frozenLog = [];
+    for (let i = 0; i < 3; i++) { const out = runTurn(frozen, FIRST_RENDER); frozen = out.state; frozenLog.push(out.log.join('/')); }
+    check(frozen.raid.inTurns === 0 && RK.raidPhase(frozen.raid) === 'warning', '**复现旧故障：倒计时被 TICK 到 0，却永远停在阶段 A（不转段）**', `${J(frozen.raid)}（派发：${frozenLog.join(' ')}）`);
+    check(RK.raidStatus(frozen).turnsToArrival === 1, '而界面按显示下限 1 渲染 → 看起来就是"还有 1 回合抵达、一格都没动"', String(RK.raidStatus(frozen).turnsToArrival));
+
+    // -------- [3] 出征：倒计时归零那一回合**仍然自动开战**（加了手动入口也不许丢这条） --------
+    let e = withColony('terran', ['e06']);
+    e = { ...e, cardLibrary: fleetsMod.FLEET_STARTER.slice(0, 4) };
+    e = D(e, { type: 'CREATE_BATTLE_FLEET', name: '批次队' });
+    for (const id of e.cardLibrary) e = D(e, { type: 'ADD_SHIP_TO_FLEET', fleetId: e.fleets[0].id, shipId: id });
+    const eFleet = e.fleets[0].id;
+    const e1 = D(e, { type: 'START_EXPEDITION', bossId: 'b1', fleetId: eFleet, turns: 1 });
+    const eT1 = runTurn(e1, e1);
+    check(eT1.log.includes('START_BATTLE') && !!eT1.state.battle && eT1.state.battle.bossId === 'b1', '**出征倒计时归零那一回合仍自动开战**（自动那条没被手动入口取代）', eT1.log.join(' → '));
+    check(J(eT1.state.battle.player.pool) === J(e1.fleets[0].shipIds), '自动开战的参战编制 = 该舰队编制', J(eT1.state.battle.player.pool));
+    check(EXP.canEndGameTurn(eT1.state) === false, '开战后：不能再结束游戏回合');
+
+    // 连续两次结束回合：出征倒计时 3 → 1（干净地减 2，抓"只生效一次"）
+    const e3 = D(e, { type: 'START_EXPEDITION', bossId: 'b1', fleetId: eFleet, turns: 3 });
+    const e3a = runTurn(e3, e3);
+    const e3b = runTurn(e3a.state, e3a.state);
+    check(e3b.state.expedition.turnsRemaining === 1, '**连续两次结束回合：出征倒计时 3 → 1（减 2）**', `3 → ${e3b.state.expedition.turnsRemaining}`);
+
+    // -------- [4] battle 非空 → 结束回合逐字段不变 + 有可见原因（且 UI 真的把它渲染出来） --------
+    const battleState = eT1.state;
+    const guarded = EXP.canEndGameTurn(battleState) ? runTurn(battleState, battleState).state : battleState;
+    check(guarded === battleState, '**battle 非空时点结束回合 → 状态逐字段不变（同一个对象，什么都没派发）**');
+    const etv = EXP.endTurnView(battleState);
+    check(etv.ok === false && etv.reason.length > 0, '并给出**可见原因**（lib/battle/expedition.endTurnView）', etv.reason);
+    check(EXP.endTurnView(e).ok === true && EXP.endTurnView(e).reason === '', '没有战斗时：可以结束回合、没有原因', J(EXP.endTurnView(e)));
+    check(/endTurnView\(gameState\)/.test(gsSrc) && /\{endTurn\.reason\}/.test(gsSrc), 'GameScreen 的结束回合可用性与原因都取自 lib，并把原因渲染出来');
+    check(/endTurn\.ok \? openEndTurnConfirm : goBattleTab/.test(gsSrc), '**战斗进行中：结束回合按钮改成「回到战斗」**（点了有反应，不静默）');
+
+    // -------- [5] 战斗主板的判据（battle 非空 → BattleTab 必须整屏渲染战斗界面） --------
+    check(EXP.battleBoard(e) === null && EXP.battleBoard(battleState) === battleState.battle, 'battleBoard：没有战斗 → null；有战斗 → 就是那份战斗（判据 = state.battle）');
+    check(/const board = battleBoard\(state\);/.test(tabSrc) && /if \(board\) \{/.test(tabSrc), '**BattleTab 渲染战斗主板的判据来自 lib（battleBoard(state)）**');
+    check(/battle=\{board\}/.test(tabSrc), 'BattleScreen 拿到的那份战斗 = lib 判据给出的那份（不再有第二个 battle prop 会分叉）');
+    check(!/battle=\{battle\}/.test(gsSrc) && !/battle=\{gameState\.battle\}/.test(fs.readFileSync(path.resolve(__dirname, '../src/App.tsx'), 'utf8')), 'App / GameScreen 不再各传一份 battle prop（分叉面已删除）');
   }
 
   // ---------- ④ 全流程 ----------

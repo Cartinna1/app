@@ -6,7 +6,7 @@
 // ⚠ 不依赖 React/DOM，可独立测试；本文件不做任何副作用。
 
 import type { GameState } from '@/types/game';
-import type { BattleExpedition, PirateBossId, ShipCardId } from '@/types/battle';
+import type { BattleExpedition, BattleState, PirateBossId, ShipCardId } from '@/types/battle';
 import { GALAXY_NODES, getGalaxyNode } from '@/data/galaxy/nodes';
 import { PIRATE_BOSSES } from '@/data/battle/pirates';
 import { getGalaxyTurns } from '@/lib/galaxy/graph';
@@ -168,6 +168,41 @@ export function canEndGameTurn(state: GameState): boolean {
   return !state.battle;
 }
 
+/** 「结束回合」按钮的渲染模型（能不能点 + 点不了时给玩家看哪句话） */
+export interface EndTurnView {
+  /** 现在能不能结束游戏回合（= canEndGameTurn，唯一判据） */
+  ok: boolean;
+  /** 不能结束时的原因（可以结束时空串）—— UI 必须显示它，不许自己拼文案 */
+  reason: string;
+}
+
+/**
+ * 「结束回合」按钮的唯一渲染模型。
+ * 为什么需要它（用户 2026-08 报"我已经推进了好几个回合了，还是这个界面、战斗在哪里"）：
+ *   结束回合的守卫（`canEndGameTurn`）原来在 UI 侧**没有任何出口** —— 战斗进行中时点「结束回合」，
+ *   `useTurn.nextTurn` 第一行直接 `return`：回合数不动、倒计时不动、界面一个字都不变（**静默失败**）。
+ *   现在 UI 读本模型：不能结束时按钮换成「回到战斗」（点了切到战斗页签去打完这一场），
+ *   并把 `reason` 显示出来 —— 点的下去、看得见原因、有下一步可走。
+ */
+export function endTurnView(state: GameState): EndTurnView {
+  if (canEndGameTurn(state)) return { ok: true, reason: '' };
+  return {
+    ok: false,
+    reason: '战斗进行中 —— 去「战斗」页签打完这一场（战斗中不能结束回合，V1.5 §〇）',
+  };
+}
+
+/**
+ * 战斗主板（`BattleScreen`）的**唯一判据与那份战斗**：`state.battle` 非空就必须整屏渲染战斗界面。
+ * ⚠ 为什么要有它：UI 不许自己判 `battle` prop / 自己再取一份状态（"战斗已经在内存里、界面却没显示"
+ *   这一整类分叉都从这里断掉 —— App→GameScreen→BattleTab 的 prop 链一旦不同源，玩家就会看到
+ *   "推进了好几个回合还是没有战斗"）。判据与那份战斗**同源**，不可能出现"说有战斗却拿不到对象"。
+ *   （放在本文件而不是 lib/battle/view.ts：view.ts 是战斗展示逻辑的冻结区，语义不许改。）
+ */
+export function battleBoard(state: GameState): BattleState | null {
+  return state.battle;
+}
+
 // ==================== TICK 与抵达判定（唯一真值；与派发时序无关） ====================
 
 /**
@@ -196,10 +231,16 @@ export function expeditionArrived(expedition: BattleExpedition | null): boolean 
 }
 
 /**
- * 「本回合结束前该自动开战吗」—— 舰队已抵达的出征 + 该出征的参战舰船。
- * ⚠ **入参必须是 TICK 之后的状态**（调用方先 `tickExpedition` 投影、或 reducer 已落库）；
- *   没有任何 off-by-one 的选项可传 —— 这正是修掉"猜一位"的地方（旧签名 `afterTick` 已删除）。
- * 返回 null = 什么都不做（没有出征 / 还在路上 / 战斗已在进行 / 出征舰队已不存在）。
+ * 「现在能不能开这场出征战」—— 舰队已抵达的出征 + 该出征的参战舰船。
+ * **两条路共用这一份判据**（AGENTS 第三节：同一判定只许存在一份）：
+ *   ① `useTurn` 的**自动**开战：入参是 TICK 之后的状态（先 `tickExpedition` 投影、或 reducer 已落库）
+ *      —— 倒计时归零那一回合自动打，这条**不许**因为加了手动入口就丢（用户 2026-08 裁定）；
+ *   ② 已抵达但没有战斗时玩家点「开战」（reducer 的 `START_EXPEDITION_BATTLE`，与掠夺阶段 B
+ *      `readyRaidBattle` 同款口径）—— **读档/从老存档继续**时 `battle` 不入档，这一帧是"已抵达 + 没有战斗"，
+ *      只靠自动那条就等于死状态，故必须由玩家主动点一下（见 expeditionView.showFightButton）。
+ * ⚠ 没有任何 off-by-one 的选项可传（旧签名 `afterTick` 已删除）：判据只看状态本身。
+ * 返回 null = 不能开（没有出征 / 还在路上 / 战斗已在进行 / 出征舰队已不存在或编制为空）——
+ * **幂等**：这两条路都靠它兜底，重复派发只会拿到 null。
  * 注意：**开战的随机种子不在这里**（种子由调用方按现有口径取 Date.now()，战斗不进存档）。
  */
 export function readyExpedition(
@@ -223,7 +264,10 @@ export function readyExpedition(
  * 这类死界面文案在全库**只有一个出口**（AGENTS 第三节：同一计算只许存在一份）。
  * ⚠ `turnsRemaining` 是**显示值**（下限 1，与掠夺 `raidStatus.turnsToArrival` 同口径）：
  *   界面不要再去读 `state.expedition.turnsRemaining` 原值（那是 0，会渲染出死界面文案）。
- * ⚠ 这里**不判** "该不该开战"：那是 `readyExpedition` 的事，本模型只描述"界面现在长什么样"。
+ *   **它的下限 1 只对"真的在途"有意义**：已抵达时界面渲染的是 `headline`（"舰队已抵达"），
+ *   绝不拿这个数字去写"还有 N 回合抵达"（用户 2026-08 截图：arrived=true 却渲染在途文案）。
+ * ⚠ 「该不该给开战入口」也在这里给出（`showFightButton` / `fightHint`），判据 = `readyExpedition`，
+ *   与 useTurn 的自动开战**同源**；UI 不许自己判 `turnsRemaining === 0`，也不许自己写原因。
  */
 export interface ExpeditionView {
   /** 是否有出征在途（等价 `!!state.expedition`） */
@@ -236,12 +280,20 @@ export interface ExpeditionView {
   lairName: string;
   /** 出征舰队的名字（舰队已不存在时为空串） */
   fleetName: string;
-  /** 剩余回合的**显示值**：下限 1，绝不出现 0 */
+  /** 剩余回合的**显示值**：下限 1，绝不出现 0（**只在途时有意义**，已抵达时读 headline） */
   turnsRemaining: number;
-  /** 「还有 N 回合抵达」文案（唯一出口，turnsRemaining >= 1） */
+  /** 「还有 N 回合抵达」文案（**在途文案**：已抵达时一律为空串，见下面的 headline） */
   etaText: string;
+  /** 卡片**主行**文案（唯一出口）：在途 = 「还有 N 回合抵达」；已抵达 = 「舰队已抵达」 */
+  headline: string;
+  /** 卡片正文一句话（在途 / 已抵达两套口径，都在这里定死） */
+  detailText: string;
   /** 是否已抵达（= expeditionArrived；抵达后界面就该等开战，而不是写"还有 0 回合"） */
   arrived: boolean;
+  /** 该不该给「开战」入口（= `readyExpedition(state) !== null`，即"点了真能打起来"才出按钮） */
+  showFightButton: boolean;
+  /** 入口旁的一句话；给不了入口但已抵达时是**不可用原因**（其余情形为空串） */
+  fightHint: string;
 }
 
 /** 出征卡片的整份渲染模型（唯一真值；BattleTab / 机库只渲染，不自己拼文案） */
@@ -256,20 +308,47 @@ export function expeditionView(state: GameState): ExpeditionView {
       fleetName: '',
       turnsRemaining: 0,
       etaText: '',
+      headline: '',
+      detailText: '',
       arrived: false,
+      showFightButton: false,
+      fightHint: '',
     };
   }
   // 显示下限 1：倒计时归零的那一帧起出征已经"到了"，界面不许写「还有 0 回合抵达」
   const turnsRemaining = Math.max(1, ex.turnsRemaining);
+  const arrived = expeditionArrived(ex);
+  const fleet = state.fleets.find((f) => f.id === ex.fleetId);
+  const fleetName = fleet?.name ?? '';
+  // 「开战」入口的**唯一判据** = readyExpedition（与 useTurn 的自动开战同一份判定）：
+  //   它已经覆盖"战斗进行中 / 没有出征 / 还在路上 / 舰队被删或被掏空"这四种给不了入口的情形，
+  //   所以这里只读它的结果 —— UI 不许自己判 turnsRemaining === 0（AGENTS 第三节）。
+  const ready = readyExpedition(state);
   return {
     onExpedition: true,
     bossId: ex.bossId,
     bossLabel: PIRATE_BOSSES[ex.bossId]?.name ?? '未知老巢',
     lairName: lairDisplayName(ex.bossId),
-    fleetName: state.fleets.find((f) => f.id === ex.fleetId)?.name ?? '',
+    fleetName,
     turnsRemaining,
-    etaText: expeditionEtaText(turnsRemaining),
-    arrived: expeditionArrived(ex),
+    // ⚠ 已抵达时 etaText **必须为空**：它是"在途文案"，任何读它的界面（含本页签之外的机库状态行）
+    //   都不许在已抵达时说出「还有 N 回合抵达」—— 用户 2026-08 截图里那个死界面正是这么来的。
+    etaText: arrived ? '' : expeditionEtaText(turnsRemaining),
+    headline: arrived ? '舰队已抵达' : expeditionEtaText(turnsRemaining),
+    detailText: arrived
+      ? '舰队已经抵达老巢，点下面的「开战」开始进攻（倒计时归零的那一回合本来会自动开战，读档回到这一帧时才需要手动点一次）。'
+      : '出征期间不能改这支舰队的防守标签；抵达后自动开战，战斗结束时这场出征收尾。',
+    arrived,
+    showFightButton: !!ready,
+    // 给不了入口时的原因：`!ready` 且已抵达、且没有战斗时，按 readyExpedition 的判定顺序，
+    // 唯一剩下的否决可能就是"出征舰队不存在 / 编制为空"（战斗进行中时整屏是战斗界面，这里给空串）。
+    fightHint: ready
+      ? `可以开战：参战 ${ready.fleet.length} 艘${fleetName ? `（${fleetName}）` : ''}`
+      : !arrived || state.battle
+        ? ''
+        : fleet
+          ? '出征舰队里已经没有战舰了，无法开战 —— 请取消这次出征'
+          : '出征舰队已不存在，无法开战 —— 请取消这次出征',
   };
 }
 

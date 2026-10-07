@@ -7,6 +7,7 @@ import { PIRATE_BOSSES } from '@/data/battle/pirates';
 import { getThumbPath } from '@/lib/assetThumb';
 import { bossArtSrc } from '@/lib/battle/view';
 import {
+  battleBoard,
   canStartExpedition,
   discoveredLairs,
   expeditionView,
@@ -19,17 +20,20 @@ import { BossAvatar } from './parts';
 
 // ============================================================================
 // 战斗页签
-//   没有进行中的战斗 → 出征入口（**已探明**的老巢 + 出征舰队 → START_EXPEDITION）
-//                        ＋ 掠夺**阶段 B**（海盗已抵达）时的「开战」入口 → onStartRaidBattle
-//   有战斗             → BattleScreen（整屏编排）
+//   有进行中的战斗（lib/battle/expedition.battleBoard 非空）→ BattleScreen（整屏编排）
+//   没有战斗 → 出征入口（**已探明**的老巢 + 出征舰队 → START_EXPEDITION）
+//               ＋ 出征**已抵达但没有战斗**时的「开战」入口 → onStartExpeditionBattle
+//               ＋ 掠夺**阶段 B**（海盗已抵达）时的「开战」入口 → onStartRaidBattle
 // 敌人选择与「怎么凑出参战舰队」是主游戏侧的规则（V1.5 §10.1 出征 / §10.2 掠夺防守），
 // 战斗内部的一切判定都在引擎与 lib/battle/view.ts，本文件不重算任何战斗规则。
 // 出征可用性 / 耗时 / 老巢探明 / 战利品预期金额一律读 lib/battle/expedition 与 lib/battle/rewards（唯一真值）。
 //
-// ⚠ **没有"直接开战"入口**（用户 2026-08 裁定），全场只有两条产生战斗的路：
-//     ① 出征倒计时归零 → `useTurn` 自动派发 START_BATTLE（P5，**自动**）；
-//     ② 掠夺**阶段 B** 的「开战」→ 本页签唯一的按钮，走 `START_RAID_BATTLE`（**玩家主动**但不带参数：
-//        目标 / 编制 / seed 全由 reducer 侧的 lib/battle/raid.readyRaidBattle 组装）。
+// ⚠ **没有"直接开战"入口**（用户 2026-08 裁定）：产生战斗的路只有三条，且目标 / 编制全由 reducer 侧的
+//   lib 判据组装（UI 只调无参窄回调）：
+//     ① 出征倒计时归零 → `useTurn` 自动派发 START_BATTLE（P5，**自动**，这条不许因为加了按钮就丢）；
+//     ② 出征**已抵达**（倒计时归零但还没有战斗）时的「开战」→ START_EXPEDITION_BATTLE
+//        （`battle` 不入档 → 读档 / 从老存档继续时这一帧没有它就是个死状态）；
+//     ③ 掠夺**阶段 B** 的「开战」→ START_RAID_BATTLE。
 //   "选择敌人"那份手动清单（5 个老巢 + 掠夺队）与旧的通用"开战"按钮**已删除**：
 //     · 老巢只能通过「出征」（本页签唯一的出征发起流程）打；
 //     · 掠夺队**只在掠夺事件把它送到门口时**出现（阶段 B），且阶段 A 只显示预警、不给开战入口。
@@ -37,18 +41,22 @@ import { BossAvatar } from './parts';
 // ============================================================================
 
 interface BattleTabProps {
-  battle: BattleState | null;
   fleets: BattleFleet[];
   cardLibrary: ShipCardId[];
-  /** 整份存档状态：出征的可用性 / 耗时 / 探明判定（lib/battle/expedition）与
-   *  掠夺卡片的全部内容（lib/battle/raid.raidCardView，读 state.raid）都从它推导 —— 故**不再单独收 raid prop**。 */
+  /** 整份存档状态：出征的可用性 / 耗时 / 探明判定（lib/battle/expedition）、
+   *  掠夺卡片的全部内容（lib/battle/raid.raidCardView，读 state.raid）
+   *  与**战斗主板本身**（lib/battle/expedition.battleBoard）都从它推导 ——
+   *  ⚠ 故意**不再单独收 battle prop**：prop 与 state 一旦不同源，就会出现"战斗已经在进行、
+   *  界面上却没有战斗"（玩家 2026-08 报的"推进了好几个回合，战斗在哪里"）。 */
   state: GameState;
   /** 发起出征（START_EXPEDITION：登记目标老巢 + 出征舰队 + 耗时回合数） */
   onStartExpedition: (bossId: PirateBossId, fleetId: string, turns: number) => void;
   /** 取消在途的出征 */
   onCancelExpedition: () => void;
-  /** **掠夺阶段 B 的「开战」**（START_RAID_BATTLE）：全场唯一由玩家主动点开的战斗入口。
-   *  无参窄回调 —— 目标 / 编制 / seed 全在 reducer 侧装配（UI 不能凭空开一场战斗）。 */
+  /** **已抵达的出征「开战」**（START_EXPEDITION_BATTLE）：无参窄回调 ——
+   *  目标 / 编制 / seed 全在 reducer 侧按 lib/battle/expedition.readyExpedition 装配。 */
+  onStartExpeditionBattle: () => void;
+  /** **掠夺阶段 B 的「开战」**（START_RAID_BATTLE）：同样是无参窄回调。 */
   onStartRaidBattle: () => void;
   onAction: (action: BattleAction) => void;
   onEndBattle: () => void;
@@ -67,12 +75,12 @@ function summarize(shipIds: ShipCardId[]): { id: string; n: number }[] {
 }
 
 function BattleTabBase({
-  battle,
   fleets,
   cardLibrary,
   state,
   onStartExpedition,
   onCancelExpedition,
+  onStartExpeditionBattle,
   onStartRaidBattle,
   onAction,
   onEndBattle,
@@ -132,31 +140,40 @@ function BattleTabBase({
     onStartRaidBattle();
   }, [onStartRaidBattle]);
 
-  // ---------------- 战斗实例序号（BattleScreen 的 key） ----------------
+  /** 已抵达的出征「开战」：只转发，判定（已抵达 / 战斗进行中 / 舰队健在）全在 reducer 侧的 readyExpedition */
+  const startExpeditionBattle = useCallback(() => {
+    onStartExpeditionBattle();
+  }, [onStartExpeditionBattle]);
+
+  // ---------------- 战斗主板（战斗实例序号 = BattleScreen 的 key） ----------------
+  // ⚠ **唯一判据**：lib/battle/expedition.battleBoard(state)（= `state.battle` 非空就必须整屏渲染战斗界面）。
+  //   本组件故意不接 `battle` prop —— prop 与 state 一旦不同源，玩家就会看到"战斗已经在进行、
+  //   界面上却没有战斗"（2026-08 排查过的整类分叉）。
+  const board = battleBoard(state);
   // 换**一场新的**战斗就整体重挂载 BattleScreen → 清掉上一场残留的「已选卡 / 已选舰 / 临时提示 /
   // 自动战斗」。为什么需要它：2 支海盗掠夺队"连打两场"时第二场由 reducer 的 END_BATTLE 直接接上，
   // 主游戏侧的 seed 不变（seed 由 useTurn 在开战时取 Date.now()），只靠 seed 会把第一场的选择态带进第二场。
   // ⚠ 判据不能用"battle 对象身份变了"：每次 BATTLE_ACTION 都会克隆出新对象，那会把玩家每次操作的
   //   选择态都清掉。只有「上一场已结束（或还没有过战斗）→ 现在这场没结束」才算新的一场；
   //   没有战斗时把记录清空，下一场必然算新的。
-  // ⚠ 战斗现在**只由 useTurn 自动开战**（出征 / 掠夺倒计时归零），本页签不再自己开战，
-  //   所以没有"本场 seed"这个本地状态了 —— 传下去的 seed 是常量（同样靠 battleSeq 重挂载切场）。
+  // ⚠ 开战有三条路（useTurn 自动 / 已抵达的出征按钮 / 掠夺阶段 B 按钮），传下去的 seed 是常量，
+  //   靠 battleSeq 重挂载切场。
   const battleSeq = useRef(0);
   const lastBattle = useRef<BattleState | null>(null);
-  if (battle) {
+  if (board) {
     const prev = lastBattle.current;
-    if (!prev || (prev.over && !battle.over)) battleSeq.current += 1;
-    lastBattle.current = battle;
+    if (!prev || (prev.over && !board.over)) battleSeq.current += 1;
+    lastBattle.current = board;
   } else {
     lastBattle.current = null;
   }
 
   // ---------------- 有战斗：整屏战斗界面 ----------------
-  if (battle) {
+  if (board) {
     return (
       <BattleScreen
         key={battleSeq.current}
-        battle={battle}
+        battle={board}
         seed={0}
         onAction={onAction}
         onEnd={onEndBattle}
@@ -188,16 +205,31 @@ function BattleTabBase({
 
         {expeditionCard.onExpedition ? (
           <div>
-            <p className="text-[12.5px] font-bold text-amber-300">
-              {expeditionCard.etaText}
+            <p className={`text-[12.5px] font-bold ${expeditionCard.arrived ? 'text-red-300' : 'text-amber-300'}`}>
+              {expeditionCard.headline}
               <span className="ml-1 font-normal text-slate-300">{expeditionCard.bossLabel}</span>
               <span className="ml-1 text-[11px] font-normal text-slate-500">
                 （目标 {expeditionCard.lairName}）
               </span>
             </p>
-            <p className="mt-1 text-[11px] text-slate-500">
-              出征期间不能改这支舰队的防守标签；抵达后自动开战，战斗结束时这场出征收尾。
-            </p>
+            <p className="mt-1 text-[11px] leading-relaxed text-slate-500">{expeditionCard.detailText}</p>
+            {/* 已抵达 + 没有战斗 → 开战入口（**唯一判据**在 lib：expeditionView.showFightButton
+                = readyExpedition 非空；倒计时归零那一回合本来会自动开战，读档回到这一帧才需要手动点）。
+                不可用时（出征舰队被删/被掏空）入口不渲染，改由 lib 给出原因 —— UI 不自己判 turnsRemaining。 */}
+            {expeditionCard.showFightButton ? (
+              <div className="mt-2 flex flex-wrap items-center gap-2">
+                <button
+                  type="button"
+                  onClick={startExpeditionBattle}
+                  className="rounded-[7px] border border-red-500 bg-red-700 px-3 py-1.5 text-[12.5px] font-bold text-white hover:bg-red-600"
+                >
+                  开战
+                </button>
+                <span className="text-[10.5px] leading-relaxed text-emerald-300">{expeditionCard.fightHint}</span>
+              </div>
+            ) : expeditionCard.fightHint ? (
+              <p className="mt-2 text-[11px] leading-relaxed text-amber-400">{expeditionCard.fightHint}</p>
+            ) : null}
             <button
               type="button"
               onClick={cancelExpedition}
@@ -376,8 +408,10 @@ function BattleTabBase({
 
         {expeditionCard.onExpedition && (
           <p className="mt-2 text-[11px] leading-relaxed text-amber-400">
+            {/* ⚠ 这里渲染 headline（状态文案），**不是** etaText（在途文案）：
+                已抵达时 etaText 为空、headline 写「舰队已抵达」—— 界面绝不许在已抵达时说「还有 N 回合抵达」。 */}
             已有出征在途：{expeditionCard.bossLabel}
-            （{expeditionCard.etaText}）—— 同时只能出征 1 个老巢；先等它抵达开战，或在上面的「出征」里取消。
+            （{expeditionCard.headline}）—— 同时只能出征 1 个老巢；先打完这一场，或在上面的「出征」里取消。
           </p>
         )}
 

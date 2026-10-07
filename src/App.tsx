@@ -68,10 +68,13 @@ function App() {
     buyFoodWithStardust,
     redeemCode,
     // 舰船卡牌战斗（V1.5 §10）：战斗页签用
-    // ⚠ 没有通用的 startBattle（UI 不能凭空开战）：出征战由 useTurn 自动开；
-    //   startRaidBattle 是**窄回调**（阶段 B 的掠夺防守战，目标/编制/seed 全由 reducer 组装）
+    // ⚠ 没有通用的 startBattle（UI 不能凭空开战）：出征战由 useTurn 在倒计时归零时自动开；
+    //   下面两个都是**窄回调**（目标 / 编制 / seed 全由 reducer 侧的 lib 判据组装）：
+    //     · startExpeditionBattle = 已抵达的出征「开战」（读档回到"已抵达 + 无战斗"时的唯一出路）
+    //     · startRaidBattle = 阶段 B 的掠夺防守战「开战」
     createBattleFleet,
     startBattleExpedition,
+    startExpeditionBattle,
     startRaidBattle,
     cancelBattleExpedition,
     battleAction,
@@ -191,10 +194,10 @@ function App() {
       onImportSave={importSave}
       onResetGame={resetGame}
       getShipTotalAssets={getShipTotalAssets}
-      battle={gameState.battle}
       fleets={gameState.fleets}
       cardLibrary={gameState.cardLibrary}
       onStartBattleExpedition={startBattleExpedition}
+      onStartExpeditionBattle={startExpeditionBattle}
       onStartRaidBattle={startRaidBattle}
       onCancelBattleExpedition={cancelBattleExpedition}
       onBattleAction={battleAction}
