@@ -30,9 +30,12 @@ function FleetPoolBase({ cards, selCard, onPoolClick }: FleetPoolProps) {
     );
   }
   return (
-    /* 加高滚动窗（原 290px）：卡面按新排版高 ≈2.5 倍，290px 只装得下 1 张卡，池子会没法用。
-       520px = 手机 2 张卡（246×2）或宽屏 2 列 2 行（≈250×2），仍是内部滚动、不吃战斗板高度。 */
-    <div className="flex max-h-[520px] flex-wrap gap-1.5 overflow-auto p-0.5">
+    /* 扁的横排 + 重调滚动窗（用户 2026-08 口径：「战斗太大了改成扁一点的吧」——
+       部署池是**选卡**的地方，得同时看到好几张）：
+       · 卡面 = `layout="flat"`（文字在左、图在右 48%，仍是 2:1 零裁切）→ 手机卡高 ≈85px（上一轮 ≈246px）；
+       · 滚动窗 400px ⇒ 手机约 4 张、宽屏 2 列约 3 行（**一屏 3 张以上**）；比上一轮为"图在上大卡"
+         临时设的 520px 矮，也不再是原先 290px 那种"只装得下 1 张"。 */
+    <div className="flex max-h-[400px] flex-wrap gap-1.5 overflow-auto p-0.5">
       {cards.map((c) => (
         <div key={c.id} className={SHIP_CARD_GRID_ITEM}>
           <ShipCard
@@ -50,6 +53,7 @@ function FleetPoolBase({ cards, selCard, onPoolClick }: FleetPoolProps) {
             selectable={c.selectable}
             playable={c.playable}
             title={`${c.name}（${c.series} · ${c.rarity}）\n${c.text}`}
+            layout="flat"
             onSelect={onPoolClick}
           />
         </div>

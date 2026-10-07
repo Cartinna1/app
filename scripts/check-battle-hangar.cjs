@@ -336,10 +336,11 @@ const J = (v) => JSON.stringify(v);
   }
 
   // ---------- ⑨ 卡面与网格排版（卡库 / 船坞 / 战斗部署池共用同一卡面） ----------
-  //  用户 2026-08 排版口径（四轮定案）：① 列数上限 2（手机仍 1 列）；② 图位 ≈2:1 贴合素材、
-  //  **不许大面积裁切**；③ 手机端「图在上、占满整卡宽、文字在下」；④ **战斗部署池也一样**，
-  //  且三处**不许各写一套卡面** —— 卡面与列宽都在 `components/ship/ShipCard` 那一份里。
-  console.log('\n[9] 卡面与网格排版（机库卡库 / 船坞 / 战斗部署池共用同一卡面）');
+  //  用户 2026-08 排版口径（五轮定案）：① 列数上限 2（手机仍 1 列）；② 图位 ≈2:1 贴合素材、
+  //  **不许大面积裁切**；③ 机库手机端「图在上、占满整卡宽、文字在下」（他说那版最好看，别动）；
+  //  ④ 卡面/列宽/图位比例**只有一份**（`components/ship/ShipCard`），三处（卡库/船坞/战斗池）都读它；
+  //  ⑤ **战斗部署池改扁**（那是选卡的地方，要一屏看 3 张以上）：文字在左、图在右 48%、2:1 零裁切。
+  console.log('\n[9] 卡面与网格排版（卡库 / 船坞 / 战斗部署池共用同一卡面）');
   {
     const fs = require('fs');
     const path = require('path');
@@ -358,9 +359,11 @@ const J = (v) => JSON.stringify(v);
     check(card.indexOf('aspect-[2/1]') >= 0, '★ 图位框 = aspect-[2/1]（贴合 2.02:1 素材）');
     check(card.indexOf('h-24') < 0, '★ 卡面不再写死 96px 高（旧框 h-24 在宽屏上既裁又小）');
     check(card.indexOf('order-first') >= 0 && card.indexOf('w-full border-b') >= 0,
-      '★ 手机/卡库/战斗池是"图在上、占满整卡宽"（order-first + w-full）');
+      '★ 机库卡库（stack）是"图在上、占满整卡宽"（order-first + w-full）');
     check(card.indexOf('object-cover') >= 0 && card.indexOf('object-contain') < 0,
       '图位用 object-cover（框比例 = 素材比例，不需要 letterbox）');
+    check(card.indexOf('self-center') >= 0,
+      '★ 横排图位带 self-center（文字块更高时图不被 stretch 拉高 → 2:1 不破、不裁切）');
     // 素材真实比例（读真实缩略图头）↔ 框比例：裁切必须 < 3%
     const thumbPath = path.resolve(__dirname, '../public/battle/thumbs/units/h1.webp');
     const dims = fs.existsSync(thumbPath) ? webpDims(fs.readFileSync(thumbPath)) : null;
@@ -379,13 +382,25 @@ const J = (v) => JSON.stringify(v);
       '★ 卡库网格与战斗部署池的列宽**读同一常量**（引用相等，不是各写一串）');
     check(libPanel.indexOf('33.333') < 0 && pool.indexOf('33.333') < 0 && card.indexOf('33.333') < 0,
       '★ 三处都没有 3 列（旧 xl:w-[calc(33.333%-4px)] 已删）');
-    check(cardSrc.indexOf('SHIP_ART_ASPECT') >= 0, '★ 图位比例来自共用常量 SHIP_ART_ASPECT（战斗池同一份）');
+    check(cardSrc.indexOf('SHIP_ART_ASPECT') >= 0, '★ 图位比例来自共用常量 SHIP_ART_ASPECT（三处同一份）');
 
     // ③ 三处渲染同一个卡面组件
     check(libPanel.indexOf('ShipCard') >= 0 && shipPanel.indexOf('ShipCard') >= 0 && pool.indexOf('ShipCard') >= 0,
       '★ 卡库 / 船坞 / 战斗部署池渲染**同一个** ShipCard（样式只有一份实现）');
     check(shipPanel.indexOf('layout="row"') >= 0 && shipPanel.indexOf('max-w-[280px]') >= 0,
       '船坞列表用 row 排布 + 列宽 280（图位 162×81 时攻盾体仍一行放下）');
+
+    // ③b 战斗部署池改扁（用户 2026-08：「战斗太大了改成扁一点的吧」）
+    check(pool.indexOf('layout="flat"') >= 0, '★ 战斗部署池用 flat 排布（文字在左、图在右，不再用 stack）');
+    check(pool.indexOf('layout="stack"') < 0, '★ 战斗部署池没有用 stack（不许把"图在上"的大卡塞回池子）');
+    check(/w-\[48%\]/.test(card), '★ flat 图位宽 = 卡宽 48%（变扁靠**缩窄图位**，不是裁切/拉伸）',
+      '48% 与 row 的 58% 都在同一处 shipArtClass 里');
+    check(pool.indexOf('max-h-[400px]') >= 0, '★ 部署池滚动窗按新卡高重调为 400px（一屏 ≥3 张）');
+
+    // ③c 机库**未被改扁**：卡库不传 layout ⇒ 走默认 stack；用户说过手机那版最好看
+    check(libPanel.indexOf('layout=') < 0, '★ 卡库不传 layout（默认 stack = 图在上大卡，机库保持现状）');
+    check(card.indexOf("layout === 'stack' ?") < 0 || /art === 'stack'/.test(card),
+      '卡面的默认排布仍是 stack（缺省不传 layout 就是图在上）');
 
     // ④ 保持：徽章 / 费用角标 / 长名截断 / onError / memo
     check(card.indexOf('absolute left-[5px] top-1') >= 0, '数量徽章（持有/已编/可编）位置不变（stack 时压在图上、深色底可读）');

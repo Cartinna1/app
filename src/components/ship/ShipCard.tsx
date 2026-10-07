@@ -25,20 +25,28 @@ import { memo } from 'react';
 //     用调用方给的**缩略图** artSrc（AGENTS 第五节），`onError` 隐藏、不留破图。
 // ============================================================================
 
-/** 卡面排布：`stack` = 图在上（手机 / 卡库 / 战斗池）；`row` = 文字在左、图在右（船坞列表行） */
-export type ShipCardLayout = 'stack' | 'row';
+/** 卡面排布：
+ *  · `stack`（默认）= 图在上、文字在下（**机库卡库**用；手机那版用户说最好看）
+ *  · `row`          = 文字在左、图在右 58%（**船坞列表行**用，宽松）
+ *  · `flat`         = 文字在左、图在右 **48%**、内边距略松（**战斗部署池**用 —— 那儿是"选卡"的地方，
+ *                     要一屏看到 3 张以上；"扁"靠**缩窄图位**实现，不是裁切/拉伸） */
+export type ShipCardLayout = 'stack' | 'row' | 'flat';
 
 /**
  * 图位比例（**唯一真值**）：素材实测 2.0253:1（原图 640×316）/ 2.0211:1（缩略图 192×95）
  * → 取 2:1，`object-cover` 裁切 ≈1.25%（可忽略）。**任何地方都不许再写第二份比例**。
+ * ⚠ 三种排布**共用这一个比例**：变扁只改图位**宽度**（`w-[58%]` / `w-[48%]`），
+ *   绝不改比例 —— 改比例就等于裁切/拉伸。
  */
 export const SHIP_ART_ASPECT = 'aspect-[2/1]';
 
-/** 卡面图位的整串 class（两态；图位比例 / 边框 / 排布**只有这一处**，页面不许自己拼） */
+/** 卡面图位的整串 class（三态；图位比例 / 边框 / 排布**只有这一处**，页面不许自己拼）
+ *  ⚠ `self-center`：横排时文字块可能比图高，若不加它，flex 默认的 `stretch` 会把图拉高、
+ *    2:1 比例被破坏（`object-cover` 就会开始裁切）。 */
 export function shipArtClass(layout: ShipCardLayout): string {
-  return `${SHIP_ART_ASPECT} flex-none object-cover ${
-    layout === 'stack' ? 'order-first w-full border-b border-[#2b3550]' : 'w-[58%] border-l border-[#2b3550]'
-  }`;
+  const base = `${SHIP_ART_ASPECT} flex-none object-cover`;
+  if (layout === 'stack') return `${base} order-first w-full border-b border-[#2b3550]`;
+  return `${base} self-center ${layout === 'flat' ? 'w-[48%]' : 'w-[58%]'} border-l border-[#2b3550]`;
 }
 
 /**
@@ -121,7 +129,14 @@ function ShipCardBase({
   onSelect,
 }: ShipCardProps) {
   const list = chips || [];
-  const stacked = layout !== 'row';
+  /** 实际排布：缺省 `stack`（图在上）；`row` / `flat` 都是横排（图在右），只是图位宽窄不同 */
+  const art: ShipCardLayout = layout === 'row' ? 'row' : layout === 'flat' ? 'flat' : 'stack';
+  const stacked = art === 'stack';
+  /** 文字区内边距：
+   *  · `stack`（机库大卡）= 手机紧凑、`lg` 再放大一圈；
+   *  · `flat`（战斗部署池）= 略松一点（`py-3.5`）把卡托到 ≈85~120px，**不跟 lg 放大**（那儿要"扁"）；
+   *  · `row`（船坞行）= 维持原样。 */
+  const pad = stacked ? 'px-2 py-1.5 lg:px-4 lg:py-3.5' : art === 'flat' ? 'px-2 py-3.5' : 'px-2 py-1.5';
   /** 能不能点：决定 cursor 与 hover；`playable` 只管变暗（两个概念绝不合成一个值） */
   const clickable = selectable !== false;
   const canPlay = playable !== false;
@@ -167,8 +182,8 @@ function ShipCardBase({
         ) : null}
       </div>
 
-      {/* 文字区：stack = 图下方整行（宽屏放大内边距与字号）；row = 左列 */}
-      <div className={`flex min-w-0 flex-1 flex-col justify-center px-2 py-1.5 ${stacked ? 'lg:px-4 lg:py-3.5' : ''}`}>
+      {/* 文字区：stack = 图下方整行（宽屏放大内边距与字号）；row / flat = 左侧列（紧凑） */}
+      <div className={`flex min-w-0 flex-1 flex-col justify-center ${pad}`}>
         <div className={`overflow-hidden text-ellipsis whitespace-nowrap text-[12.5px] font-bold ${stacked ? 'lg:text-[15px]' : ''}`}>
           {name}
         </div>
@@ -192,14 +207,15 @@ function ShipCardBase({
         </div>
       </div>
 
-      {/* 图位：`stack` = 图在上、占满卡宽；`row` = 右侧 58% 列。缺图隐藏，不留破图 */}
+      {/* 图位：`stack` = 图在上、占满卡宽；`row` = 右侧 58%；`flat` = 右侧 48%（更扁）。
+          三者共用同一个 2:1 比例 —— 变扁只缩窄图位。缺图隐藏，不留破图 */}
       <img
         src={artSrc}
         alt=""
         loading="lazy"
         decoding="async"
         onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
-        className={shipArtClass(stacked ? 'stack' : 'row')}
+        className={shipArtClass(art)}
       />
     </button>
   );
