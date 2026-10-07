@@ -1,6 +1,7 @@
 import { memo } from 'react';
+import type { GameState } from '@/types/game';
 import type { HangarOverview as HangarOverviewModel, FleetRow } from '@/lib/battle/hangar';
-import type { BattleExpedition } from '@/types/battle';
+import { expeditionView } from '@/lib/battle/expedition';
 
 // ============================================================================
 // 机库 · 总览标签（四个内部标签的第一个，**默认落在这里**）
@@ -19,18 +20,19 @@ import type { BattleExpedition } from '@/types/battle';
 interface HangarOverviewProps {
   /** 整份渲染模型（数字 / 船坞概况 / 引导都在里面，本组件只排版） */
   overview: HangarOverviewModel;
-  /** 出征（null = 没有舰队在出征中） */
-  expedition: BattleExpedition | null;
+  /** 整份存档状态：出征摘要（剩几回合抵达 / 哪支队）从 lib 的 expeditionView 推导 ——
+   *  组件**不再单独收 expedition prop**，也不再自己读 turnsRemaining（那会渲染出"剩 0 回合抵达"） */
+  state: GameState;
   /** 舰队视图（取名字与防守标签；判定全部来自 hangar.fleetRows） */
   fleets: FleetRow[];
 }
 
-function HangarOverviewBase({ overview, expedition, fleets }: HangarOverviewProps) {
+function HangarOverviewBase({ overview, state, fleets }: HangarOverviewProps) {
   const statBase = 'rounded-lg border border-[#2b3550] bg-[#0f1729] px-2 py-1.5';
   const boxBase = 'rounded-[10px] border border-[#2b3550] bg-[#141b2e] px-2.5 py-2';
 
-  // 出征中那支队（找不到就只说"剩 N 回合"——舰队被删的情况不会出现，但这里不假装知道名字）
-  const expeditionFleet = expedition ? fleets.find((f) => f.id === expedition.fleetId) || null : null;
+  /** 出征摘要（显示下限 1、文案与目标名都在 lib/battle/expedition.expeditionView 里定死） */
+  const expeditionTip = expeditionView(state);
   /** 打了防守标签的队（掠夺来临时会合并成同一个部署池，§10.2） */
   const defendingFleets = fleets.filter((f) => f.defending);
 
@@ -84,8 +86,8 @@ function HangarOverviewBase({ overview, expedition, fleets }: HangarOverviewProp
       <div className={boxBase}>
         <h3 className="text-[13px] font-bold text-slate-200">出征与防守</h3>
         <p className="mt-1 text-[11.5px] leading-relaxed text-cyan-200">
-          {expedition
-            ? `出征中：${expeditionFleet ? `${expeditionFleet.name} ` : ''}剩 ${expedition.turnsRemaining} 回合抵达 —— 抵达开战前这支队不能编成、改名、打标签或删除。`
+          {expeditionTip.onExpedition
+            ? `出征中：${expeditionTip.fleetName ? `${expeditionTip.fleetName} ` : ''}${expeditionTip.etaText} —— 抵达开战前这支队不能编成、改名、打标签或删除。`
             : '当前没有舰队在出征途中。'}
         </p>
         <p className="mt-0.5 text-[11.5px] leading-relaxed text-slate-500">

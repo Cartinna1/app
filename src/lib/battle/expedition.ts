@@ -6,7 +6,7 @@
 // ⚠ 不依赖 React/DOM，可独立测试；本文件不做任何副作用。
 
 import type { GameState } from '@/types/game';
-import type { PirateBossId, ShipCardId } from '@/types/battle';
+import type { BattleExpedition, PirateBossId, ShipCardId } from '@/types/battle';
 import { GALAXY_NODES, getGalaxyNode } from '@/data/galaxy/nodes';
 import { PIRATE_BOSSES } from '@/data/battle/pirates';
 import { getGalaxyTurns } from '@/lib/galaxy/graph';
@@ -61,9 +61,12 @@ export function travelTurnsText(state: GameState, bossId: PirateBossId): string 
  * `turnsRemaining` 来自 `state.expedition.turnsRemaining`（TICK_BATTLE_STATE 推进，见 hooks/gameReducer），
  * 调用方把 `expedition.turnsRemaining` 原样传进来，别在 UI 里自己算 ——
  * 未出发时**不要**用本函数（那时写「还有 N 回合抵达」是错的：舰队还在港里，见 travelTurnsText）。
+ * ⚠ **显示下限 1**（与掠夺 `raidStatus.turnsToArrival` 同口径）：归零的那一帧起出征已经"到了"
+ *   （见 expeditionArrived），界面绝不能再渲染出「还有 0 回合抵达」—— 那正是用户 2026-08 截图里
+ *   那个"既没倒计时可走、也没有开战入口"的死界面。所以下限与在途判定一起收在 expeditionView 里。
  */
 export function expeditionEtaText(turnsRemaining: number): string {
-  return `还有 ${turnsRemaining} 回合抵达`;
+  return `还有 ${Math.max(1, turnsRemaining)} 回合抵达`;
 }
 
 /** 殖民地是否已建立（`scouting` 是旧存档的建设期，母舰已在场，也算已建立） */
@@ -165,31 +168,113 @@ export function canEndGameTurn(state: GameState): boolean {
   return !state.battle;
 }
 
+// ==================== TICK 与抵达判定（唯一真值；与派发时序无关） ====================
+
 /**
- * 「本回合结束前该自动开战吗」——倒计时归零的出征 + 该出征的参战舰船。
- * useTurn 每回合结束时的编排真值：先 TICK_BATTLE_STATE 让倒计时归零，再调用它。
+ * 出征倒计时的一次推进（每游戏回合一次）：`turnsRemaining` 减 1，**下限 0**（到 0 就停在 0）。
+ * **唯一真值**：reducer 的 `TICK_BATTLE_STATE` 与 `useTurn` 的"本次 TICK 之后"投影共用这一份
+ * （useTurn 读到的是 dispatch 之前的状态，判定必须走这里，不能就地再减一次）。
+ * 归零之后由调用方按 `expeditionArrived` / `readyExpedition` 决定要不要开战 —— 本函数只推进倒计时。
+ */
+export function tickExpedition(expedition: BattleExpedition | null): BattleExpedition | null {
+  if (!expedition) return null;
+  return { ...expedition, turnsRemaining: Math.max(0, expedition.turnsRemaining - 1) };
+}
+
+/**
+ * 舰队已经抵达（倒计时归零）—— 「该不该开战」的**第一性判据**，只看状态本身。
+ * 为什么需要它：`tickExpedition` 把倒计时钳在 0，所以"抵达"会**先**以 `turnsRemaining: 0` 的形态
+ * 落在状态里；而界面里那一帧没有任何"可走的倒计时"，也（在旧写法里）没有开战入口。
+ * ⚠ 判据**不许**再写成"读 TICK 前的状态 + 猜一位"（旧 `readyExpedition(state, afterTick=true)`）：
+ *   那等于把"这一帧到底该不该开战"押在「TICK 与 START_BATTLE 必须同批、且真的被派发」这个隐含时序上
+ *   —— 批边界一旦落在两者之间，玩家就会看到"回合结束后既没开战、也没有开战入口"（用户 2026-08 报的
+ *   出征卡死；与 P7 掠夺 `raidWarningElapsed` 是**同一类根因、同一套写法**）。
+ *   现在：谁读都只读状态，与派发时序无关。
+ */
+export function expeditionArrived(expedition: BattleExpedition | null): boolean {
+  return !!expedition && expedition.turnsRemaining <= 0;
+}
+
+/**
+ * 「本回合结束前该自动开战吗」—— 舰队已抵达的出征 + 该出征的参战舰船。
+ * ⚠ **入参必须是 TICK 之后的状态**（调用方先 `tickExpedition` 投影、或 reducer 已落库）；
+ *   没有任何 off-by-one 的选项可传 —— 这正是修掉"猜一位"的地方（旧签名 `afterTick` 已删除）。
  * 返回 null = 什么都不做（没有出征 / 还在路上 / 战斗已在进行 / 出征舰队已不存在）。
  * 注意：**开战的随机种子不在这里**（种子由调用方按现有口径取 Date.now()，战斗不进存档）。
  */
 export function readyExpedition(
-  state: GameState,
-  /**
-   * true = 调用方**刚刚派发过 TICK**、读到的还是 TICK 之前的状态（useTurn 正是这种情形）。
-   * 此时「本次 TICK 后归零」等价于 `turnsRemaining <= 1`。
-   * ⚠ 少了这个选项就 off-by-one：玩家要多点一次结束回合才开战，中间那回合界面还显示「还有 0 回合」。
-   */
-  afterTick = false
+  state: GameState
 ): { bossId: PirateBossId; fleetId: string; fleet: ShipCardId[] } | null {
   if (state.battle) return null;                       // 战斗期间一切照旧（不推进、不开新战）
   const ex = state.expedition;
   if (!ex) return null;                                // 没有出征
-  if (ex.turnsRemaining > (afterTick ? 1 : 0)) return null;   // 还在路上（afterTick：本次 TICK 后仍 > 0）
+  if (!expeditionArrived(ex)) return null;             // 还在路上（turnsRemaining > 0）
   const fleet = state.fleets.find((f) => f.id === ex.fleetId);
   if (!fleet || fleet.shipIds.length === 0) return null; // 舰队被删/被掏空 → 不开战（不崩）
   return { bossId: ex.bossId, fleetId: ex.fleetId, fleet: fleet.shipIds.slice() };
 }
 
-// 说明：PIRATE_BOSSES 的导入只用于「老巢 BOSS 必须存在」的数据自检（避免 nodes 标了不存在的 boss）。
+// ==================== 出征卡片的渲染模型（界面唯一出口） ====================
+
+/**
+ * 出征卡片 / 机库状态行要渲染的**内容**（判定与文案口径都在 lib，组件只负责摆上去）。
+ * 抽出来的理由与 `raid.raidCardView` 完全相同：这些是**派生逻辑**而不是排版细节 ——
+ * 抽出来才能被 `check-battle-expedition.cjs` 的纯函数验收覆盖，也才能保证"还有 0 回合抵达"
+ * 这类死界面文案在全库**只有一个出口**（AGENTS 第三节：同一计算只许存在一份）。
+ * ⚠ `turnsRemaining` 是**显示值**（下限 1，与掠夺 `raidStatus.turnsToArrival` 同口径）：
+ *   界面不要再去读 `state.expedition.turnsRemaining` 原值（那是 0，会渲染出死界面文案）。
+ * ⚠ 这里**不判** "该不该开战"：那是 `readyExpedition` 的事，本模型只描述"界面现在长什么样"。
+ */
+export interface ExpeditionView {
+  /** 是否有出征在途（等价 `!!state.expedition`） */
+  onExpedition: boolean;
+  /** 出征的 BOSS id（没有出征时为 null） */
+  bossId: PirateBossId | null;
+  /** 目标展示名（= PIRATE_BOSSES 名字；没有出征时空串） */
+  bossLabel: string;
+  /** 老巢所在星系名（= lairDisplayName；没有出征时空串） */
+  lairName: string;
+  /** 出征舰队的名字（舰队已不存在时为空串） */
+  fleetName: string;
+  /** 剩余回合的**显示值**：下限 1，绝不出现 0 */
+  turnsRemaining: number;
+  /** 「还有 N 回合抵达」文案（唯一出口，turnsRemaining >= 1） */
+  etaText: string;
+  /** 是否已抵达（= expeditionArrived；抵达后界面就该等开战，而不是写"还有 0 回合"） */
+  arrived: boolean;
+}
+
+/** 出征卡片的整份渲染模型（唯一真值；BattleTab / 机库只渲染，不自己拼文案） */
+export function expeditionView(state: GameState): ExpeditionView {
+  const ex = state.expedition;
+  if (!ex) {
+    return {
+      onExpedition: false,
+      bossId: null,
+      bossLabel: '',
+      lairName: '',
+      fleetName: '',
+      turnsRemaining: 0,
+      etaText: '',
+      arrived: false,
+    };
+  }
+  // 显示下限 1：倒计时归零的那一帧起出征已经"到了"，界面不许写「还有 0 回合抵达」
+  const turnsRemaining = Math.max(1, ex.turnsRemaining);
+  return {
+    onExpedition: true,
+    bossId: ex.bossId,
+    bossLabel: PIRATE_BOSSES[ex.bossId]?.name ?? '未知老巢',
+    lairName: lairDisplayName(ex.bossId),
+    fleetName: state.fleets.find((f) => f.id === ex.fleetId)?.name ?? '',
+    turnsRemaining,
+    etaText: expeditionEtaText(turnsRemaining),
+    arrived: expeditionArrived(ex),
+  };
+}
+
+// 说明：PIRATE_BOSSES 的导入还用于「老巢 BOSS 必须存在」的数据自检（避免 nodes 标了不存在的 boss）。
+// 展示侧：expeditionView 的 bossLabel 也读它（目标名的唯一出口，UI 不再自己去查表）。
 if (import.meta.env.DEV) {
   for (const [bossId, nodeId] of Object.entries(LAIR_NODE_BY_BOSS)) {
     if (!PIRATE_BOSSES[bossId]) console.warn(`[expedition] 老巢 ${nodeId} 指向不存在的 BOSS：${bossId}`);

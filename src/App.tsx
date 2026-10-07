@@ -192,7 +192,6 @@ function App() {
       onResetGame={resetGame}
       getShipTotalAssets={getShipTotalAssets}
       battle={gameState.battle}
-      fleetExpedition={gameState.expedition}
       fleets={gameState.fleets}
       cardLibrary={gameState.cardLibrary}
       onStartBattleExpedition={startBattleExpedition}

@@ -2,7 +2,7 @@ import { memo, useCallback, useMemo, useState } from 'react';
 import { LayoutGrid, Layers, Hammer, Flag } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import type { GameState } from '@/types/game';
-import type { BattleExpedition, BattleFleet, ShipCardId } from '@/types/battle';
+import type { BattleFleet, ShipCardId } from '@/types/battle';
 import { BATTLE_CARDS } from '@/data/battle/cards';
 import {
   HANGAR_TAB_LABEL,
@@ -13,10 +13,10 @@ import {
   fleetEditorRows,
   fleetRows,
   hangarOverview,
-  isFleetOnExpedition,
   libraryRows,
 } from '@/lib/battle/hangar';
 import type { HangarTabId } from '@/lib/battle/hangar';
+import { expeditionView } from '@/lib/battle/expedition';
 import { dockLevel } from '@/lib/battle/shipyard';
 import HangarOverviewPanel from './HangarOverview';
 import LibraryPanel from './LibraryPanel';
@@ -59,7 +59,6 @@ interface HangarTabProps {
   state: GameState;
   fleets: BattleFleet[];
   cardLibrary: ShipCardId[];
-  expedition: BattleExpedition | null;
   onCreateFleet: (name?: string) => void;
   onDeleteFleet: (fleetId: string) => void;
   onRenameFleet: (fleetId: string, name: string) => void;
@@ -126,9 +125,8 @@ function HangarAssignBar({
 
 function HangarTabBase({
   state,
-  fleets,
+  // ⚠ 曾解构 leets 但组件内一律走 leetList（由 state 派生），该 prop 从未被读 →
   cardLibrary,
-  expedition,
   onCreateFleet,
   onDeleteFleet,
   onRenameFleet,
@@ -187,7 +185,9 @@ function HangarTabBase({
   );
   const deleteReason = useCallback((id: string) => reasonOf(id, canDeleteFleet), [reasonOf]);
   const toggleReason = useCallback((id: string) => reasonOf(id, canToggleDefending), [reasonOf]);
-  const renameReason = useCallback((id: string) => reasonOf(id, canRenameFleet), [reasonOf]);
+  // 改名可用性与原因**不在这里再算一遍**：fleetRows 已经把 canRenameFleet 的结果落在
+  // FleetRow.canRename / .renameReason 上（消除"同一判定两处派生"——用户 2026-08 报的
+  // "改名怎么点都没反应"就是这条链上的重复派生造成的）。
 
   // ---------------- 动作 ----------------
 
@@ -282,23 +282,25 @@ function HangarTabBase({
 
   const commitRename = useCallback(() => {
     if (renamingFleetId === null) return;
-    const fleet = fleets.find((f) => f.id === renamingFleetId);
-    if (!fleet) {
+    const row = fleetList.find((r) => r.id === renamingFleetId);
+    if (!row) {
       setRenamingFleetId(null);
       return;
     }
-    // 改名也归"操作"：出征中的舰队不许动（判据复用 hangar.ts 的纯函数）
-    if (isFleetOnExpedition(state, renamingFleetId)) return;
+    // 改名也归"操作"：出征中的舰队不许动。
+    // ⚠ 判据**只**读 FleetRow.canRename（= hangar.canRenameFleet 唯一真值）——
+    //   这里早先调 isFleetOnExpedition、与按钮的可用性各自算一次，属"同一判定两处派生"：
+    //   两处一旦分叉，就会出现"按钮能点、点下去被静默吞掉（名字不变）"即用户报的现象。
+    if (!row.canRename) return;
     const name = renameValue.trim();
-    if (name && name !== fleet.name) onRenameFleet(renamingFleetId, name);
+    if (name && name !== row.name) onRenameFleet(renamingFleetId, name);
     setRenamingFleetId(null);
-  }, [renamingFleetId, fleets, state, onRenameFleet]);
+  }, [renamingFleetId, fleetList, renameValue, onRenameFleet]);
 
-  /** 出征中的那支队（用于标签栏下方那句状态文案；找不到就当名字缺失） */
-  const expeditionFleet = expedition ? fleets.find((f) => f.id === expedition.fleetId) || null : null;
-  const expTip = expedition
-    ? `${expeditionFleet ? `${expeditionFleet.name} ` : ''}剩 ${expedition.turnsRemaining} 回合抵达`
-    : '';
+  /** 出征状态行的渲染模型（唯一真值在 lib/battle/expedition.expeditionView）：
+   *  「剩 N 回合抵达」的**显示下限 1** 与文案都从它取 —— 组件不读 `expedition.turnsRemaining` 原值
+   *  （原值归零时会渲染出"剩 0 回合抵达"那个死界面）。 */
+  const expeditionTip = useMemo(() => expeditionView(state), [state]);
 
   /** 能点卡的三个标签（技能详情区 + 操作条在这三个标签里都渲染） */
   const cardTab = tab === 'library' || tab === 'shipyard' || tab === 'fleet';
@@ -334,7 +336,9 @@ function HangarTabBase({
       {/* ==================== 出征状态文案（画红框的那句，照旧保留；舰队列表里另有逐队标记） ==================== */}
       <div className="mb-2.5 rounded-[10px] border border-cyan-800/60 bg-cyan-900/20 px-2.5 py-2">
         <p className="text-[12px] leading-relaxed text-cyan-200">
-          {expedition ? `出征中：${expTip} —— 这支队在抵达开战前不能编成、改名、打标签或删除。` : '当前没有舰队在出征途中。'}
+          {expeditionTip.onExpedition
+            ? `出征中：${expeditionTip.fleetName ? `${expeditionTip.fleetName} ` : ''}${expeditionTip.etaText} —— 这支队在抵达开战前不能编成、改名、打标签或删除。`
+            : '当前没有舰队在出征途中。'}
         </p>
       </div>
 
@@ -369,7 +373,7 @@ function HangarTabBase({
 
       {/* ==================== ① 总览 ==================== */}
       {tab === 'overview' ? (
-        <HangarOverviewPanel overview={overview} expedition={expedition} fleets={fleetList} />
+        <HangarOverviewPanel overview={overview} state={state} fleets={fleetList} />
       ) : null}
 
       {/* ==================== ② 卡库 ==================== */}
@@ -423,7 +427,6 @@ function HangarTabBase({
               onToggleDefending={toggleDefending}
               deleteReason={deleteReason}
               toggleReason={toggleReason}
-              renameReason={renameReason}
             />
           </div>
           {/* 编成界面：没有舰队时给一句可执行的话（不静默留白） */}

@@ -83,9 +83,7 @@ export interface RaidHintLine {
   id: string;
   severity: 'danger' | 'warn' | 'info';
   text: string;
-}
-
-/** 掠夺当前处在哪一段（UI / useTurn 都只读它，不自己判 inTurns 与 arrivedTurns） */
+}/** 掠夺当前处在哪一段（UI / useTurn 都只读它，不自己判 inTurns 与 arrivedTurns） */
 export type RaidPhase = 'idle' | 'warning' | 'arrived';
 
 /** 掠夺窗口的完整视图（战斗页签与"下一回合预告"共用同一份判定结果） */
@@ -110,6 +108,19 @@ export function idleRaidState(): BattleRaidState {
   return { inTurns: null, arrivedTurns: 0, immuneTurns: 0, raiders: 0, arrived: false };
 }
 
+/**
+ * 阶段 A 的倒计时**只剩 0 回合**（= 海盗已经到了，只差把状态改成阶段 B）。
+ * ⚠ 唯一真值：`raidStatus` 与 `raidResolution` 都读它，**UI 不许自己写 `inTurns === 0`**。
+ * 为什么需要它：`tickRaid` 把阶段 A 的倒计时钳在 0，于是"本次 TICK 后归零"会**先**以
+ * `inTurns: 0` 的形态落在状态里（阶段仍是 warning），必须等编排方派发 ARRIVE_RAID 才换段。
+ * 这段时间里若界面显示"还有 0 回合抵达"、而开战入口又只在阶段 B 渲染，玩家就会看到
+ * 一个**既没倒计时可走、也没有开战按钮**的死界面（用户 2026-08 截图实证）。
+ * 所以把"归零"收敛成一个判据，让显示与转段都基于它。
+ */
+export function raidWarningElapsed(raid: BattleRaidState): boolean {
+  return raid.inTurns !== null && raid.inTurns <= 0;
+}
+
 // ---------------- 阶段判定（两段窗口的唯一真值） ----------------
 
 /** 现在处在哪一段：idle（没掠夺）/ warning（阶段 A 预警中）/ arrived（阶段 B 已抵达待战） */
@@ -126,12 +137,114 @@ export function raidStatus(state: GameState): RaidStatusView {
   const defenseCount = raidDefensePool(state).length;
   return {
     phase,
-    turnsToArrival: phase === 'warning' ? (raid.inTurns as number) : 0,
+    // ⚠ 阶段 A 的剩余回合**最少显示 1**：inTurns 归零的那一帧起 `raidResolution` 已经会给 'arrived'，
+    //   界面绝不能再渲染出"还有 0 回合抵达"（那正是用户截图里那个死界面 —— 没倒计时可走、也没开战按钮）。
+    turnsToArrival: phase === 'warning' ? Math.max(1, raid.inTurns as number) : 0,
     turnsToAutoLoot: phase === 'arrived' ? raid.arrivedTurns : 0,
     raiders: phase === 'idle' ? 0 : raid.raiders,
     defenseCount,
     immuneTurns: raid.immuneTurns,
     canFight: phase === 'arrived' && defenseCount > 0,
+  };
+}
+
+// ---------------- 战斗页签「殖民地掠夺」卡片的整份渲染模型 ----------------
+
+/**
+ * 「殖民地掠夺」卡片要渲染的**全部内容**（判定、文案、开战按钮的可用性都在这里定死）。
+ * 为什么抽到 lib：卡片里"现在该显示哪一段、开战按钮长什么样"是**派生逻辑**而不是排版细节，
+ * 抽出来才能被 check-battle 的纯函数验收覆盖 —— `components/battle/BattleTab` 只负责把字段摆上去，
+ * **不许自己判 inTurns / arrivedTurns，也不许自己写"还有 0 回合抵达"这类文案**。
+ * ⚠ `showCard` 与 `showFightButton` 是**两个不同**的条件：前者 idle+免疫期也要显示（报免疫倒计时），
+ *   后者只在阶段 B 出现（阶段 A 不给开战入口，用户 2026-08 裁定）。
+ */
+export interface RaidCardView {
+  phase: RaidPhase;
+  /** 整张卡是否渲染（没在途掠夺且不在免疫期时不出现，避免噪音） */
+  showCard: boolean;
+  /** 卡片左边框配色档（warning = 琥珀 / arrived = 红 / idle = 中性） */
+  tone: 'warning' | 'arrived' | 'idle';
+  /** 标题行右侧那句说明（唯一真值：概率与两个窗口常数） */
+  subtitle: string;
+  /** 主标题行（阶段 A 写"海盗还有 N 回合抵达"、阶段 B 写"海盗已抵达，还有 N 回合"、idle 写"海盗已退"） */
+  headline: string;
+  /** 阶段 A / B 都有的"本次几支掠夺队"后缀（1 支时为空串） */
+  squadNote: string;
+  /** 正文一句话（有/没有防守池两套口径，都由这里给出） */
+  detail: string;
+  /** 是否渲染「开战」按钮（**只在阶段 B**） */
+  showFightButton: boolean;
+  /** 开战按钮能不能点（= 阶段 B 且防守池非空） */
+  canFight: boolean;
+  /** 开战按钮旁边那行说明（手机端没有 hover，永远有一句话） */
+  fightHint: string;
+  /** 底部"海盗已退"那句（仅 idle + 免疫期） */
+  idleText: string;
+  /** 原始视图（数字徽章 / 防守池条数等仍可读它，UI 不重算） */
+  status: RaidStatusView;
+}
+
+/** 掠夺卡的整份渲染模型（唯一真值；BattleTab 只渲染） */
+export function raidCardView(state: GameState): RaidCardView {
+  const status = raidStatus(state);
+  const squads = status.raiders > 1
+    ? `（本次 ${status.raiders} 支，赢下第一场要连打第二场）`
+    : '';
+  const subtitle = `每回合 ${RAID_CHANCE * 100}% 触发，${RAID_WARNING_TURNS} 回合预警，结束免疫 ${RAID_IMMUNE_TURNS} 回合`;
+
+  if (status.phase === 'warning') {
+    return {
+      phase: status.phase,
+      showCard: true,
+      tone: 'warning',
+      subtitle,
+      headline: `海盗还有 ${status.turnsToArrival} 回合抵达`,
+      squadNote: squads,
+      detail: status.defenseCount > 0
+        ? `现在有 ${status.defenseCount} 艘带「防守」标签的舰队会在抵达时合并成一个部署池（到那时再点「开战」）。`
+        : '现在还没有带「防守」标签的舰队 —— 去机库给留守舰队打上防守标签（到达后不打会被掠夺成功）。',
+      showFightButton: false,
+      canFight: false,
+      fightHint: '',
+      idleText: '',
+      status,
+    };
+  }
+
+  if (status.phase === 'arrived') {
+    return {
+      phase: status.phase,
+      showCard: true,
+      tone: 'arrived',
+      subtitle,
+      headline: `海盗已抵达，还有 ${status.turnsToAutoLoot} 回合`,
+      squadNote: squads,
+      detail: status.defenseCount > 0
+        ? `留守的 ${status.defenseCount} 艘带「防守」标签的舰队会合并成一个部署池接战；这 ${status.turnsToAutoLoot} 回合里还可以去机库调整编成与防守标签。`
+        : '还没有挂防守标签的舰队 —— 现在去机库给留守舰队打上防守标签，再回来点「开战」；不打就会在倒计时归零时被掠夺成功。',
+      showFightButton: true,
+      canFight: status.canFight,
+      fightHint: status.canFight
+        ? `可以迎战：${status.defenseCount} 艘防守舰队合并接战`
+        : '还没有挂防守标签的舰队',
+      idleText: '',
+      status,
+    };
+  }
+
+  return {
+    phase: status.phase,
+    showCard: status.immuneTurns > 0,
+    tone: 'idle',
+    subtitle,
+    headline: '',
+    squadNote: '',
+    detail: '',
+    showFightButton: false,
+    canFight: false,
+    fightHint: '',
+    idleText: `海盗已退（击退或已结算），${status.immuneTurns} 回合内不会再被掠夺。`,
+    status,
   };
 }
 
@@ -214,9 +327,10 @@ export function raidDefensePool(state: GameState): ShipCardId[] {
  *
  * ⚠ 参战/开战**不在这里**：玩家点「开战」才走 `readyRaidBattle`（唯一由玩家主动点开的战斗入口）。
  *
- * `afterTick` 的语义与 lib/battle/expedition.readyExpedition 完全一致：
- * true = 调用方**刚刚派发过 TICK**、读到的还是 TICK 之前的状态（useTurn 正是这种情形），
- * 此时"本次 TICK 后归零"等价于 `倒计时 <= 1`。少了它会 off-by-one（要玩家多点一次结束回合）。
+ * `afterTick` 是**兼容选项**（true = 调用方读到的是 TICK 之前的状态，"本次 TICK 后归零"等价于
+ * `倒计时 <= 1`）。⚠ 它只是给一次性调用方的兜底：**useTurn 已经不传它了** —— 编排方改成先 `tickRaid`
+ * 投影、再读投影后的状态（与出征 `readyExpedition` 现在的写法一致：那边连这个参数都删掉了）。
+ * 转段的真正判据是 `raidWarningElapsed`（只看状态本身），与派发时序无关。
  */
 export function raidResolution(state: GameState, afterTick = false): 'none' | 'arrived' | 'looted' {
   if (state.battle) return 'none';
@@ -224,7 +338,13 @@ export function raidResolution(state: GameState, afterTick = false): 'none' | 'a
   if (phase === 'idle') return 'none';
   const threshold = afterTick ? 1 : 0;
   if (phase === 'warning') {
-    return (state.raid.inTurns as number) <= threshold ? 'arrived' : 'none';
+    // ⚠ 两个判据缺一不可：
+    //   ① `raidWarningElapsed`（inTurns 已归零）—— 让"归零"本身就成为**与派发时序无关**的转段信号。
+    //      少了它，转段就完全依赖"TICK 与新状态必须同批"这个隐含前提，一旦批边界落在两者之间、
+    //      或这次 ARRIVE_RAID 被重放/丢弃，状态就会永久停在 `inTurns: 0 + arrivedTurns: 0`，
+    //      界面卡在"还有 0 回合抵达"且永远没有开战按钮（P5 出征踩过的同一类 off-by-one）。
+    //   ② `threshold`（afterTick 的前瞻）—— 保留原有的"本回合就该到"语义，不动既有行为。
+    return raidWarningElapsed(state.raid) || (state.raid.inTurns as number) <= threshold ? 'arrived' : 'none';
   }
   // 阶段 B：倒计时归零仍未迎战 → 掠夺成功
   return state.raid.arrivedTurns <= threshold ? 'looted' : 'none';

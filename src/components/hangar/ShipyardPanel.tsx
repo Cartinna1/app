@@ -21,7 +21,16 @@ import HangarCard from './HangarCard';
 //
 // 判定与数值**一律来自 lib/battle/shipyard 的纯函数**（lockGate / canBuild / buildCost / buildTurns /
 // requiredDockLevel / dockLevel / advanceQueue / canCancelBuild），本组件只做渲染与转发，不写第二份门槛。
-// 技能全文不在这里：点一张卡后由 HangarTab 的共用详情区（ShipSkillDetail）显示（铁律①）。
+//
+// ⚠ 技能文字（用户 2026-08 口径：可造战舰那一行的右侧文字区也要能直接读到技能）：
+//   · **唯一来源 = `ShipyardCardRow.text`**，它由 `lib/battle/shipyard.shipyardView` 从
+//     `data/battle/cards.ts` 的 `ShipCardDef.text` 逐字带出来（`shipyard.ts` 里 `text: card.text`）；
+//     机库顶部的技能详情固定区（`ShipSkillDetail`）读的是 `BATTLE_CARDS[id].text` —— **同一处字段**。
+//   · 本组件**不得**自己拼技能句子（不许写"攻+X/盾+Y"之类的转述），只渲染 `card.text`：
+//     两处措辞不可能漂移。
+//   · 位置：只加在**已解锁**的行（`view.unlockedCards` 才是主列表；未解锁的卡只有末尾汇总行），
+//     加在右侧文字区（说明文字的位置），**左侧卡面不加**（铁律①「技能不上卡面」）。
+//     卡库的紧凑网格与编队的编成清单都不加（没位置，技能详情区已覆盖）。
 // ⚠ 本组件**不带自己的外框**：它整块嵌在 HangarTab 的「船坞」标签容器里（外框与内边距由那一层给），
 //   故这里只有内容，没有 border/bg/px —— 免得出现"框里再套一层框"。
 // ============================================================================
@@ -334,6 +343,30 @@ function ShipyardPanelBase({ state, onSelect, onBuild, onCancelBuild }: Shipyard
   );
 }
 
+/**
+ * 可造战舰行里的**技能全文**（铁律①：技能不上卡面，但这一行的说明区要能直接读到它）。
+ *
+ * ⚠ 唯一真值：`text` **只能**是 `ShipyardCardRow.text`（来自 `ShipCardDef.text`，
+ *   `lib/battle/shipyard.shipyardView` 的 `text: card.text`），与机库顶部技能详情区
+ *   （`ShipSkillDetail` 读 `BATTLE_CARDS[id].text`）是**同一处**。这里不拼任何技能句子。
+ *
+ * ⚠ 不许省略号截断 —— 截断的技能等于没有：盒子取整行全宽 + `line-clamp-3` 兜底
+ *   （`line-clamp` 只 clip、不加省略号；最长的一条技能 39 字，10.5px 下全宽也就 1~2 行，
+ *   钳 3 行等于留了一行余量 —— 将来真出了超长技能，行高也不会被撑破）
+ *   ＋ `title` 兜底（桌面端悬停可直接看全文）。
+ */
+function ShipyardSkillLine({ text }: { text: string }) {
+  return (
+    <p
+      title={text}
+      className="mt-0.5 line-clamp-3 text-[10.5px] leading-relaxed text-slate-400"
+    >
+      <span className="text-slate-500">技能：</span>
+      {text}
+    </p>
+  );
+}
+
 /** 可造卡的一行（**不与卡库卡片共用**：这里要显示造价、所需船坞、所需科技与不能造的原因） */
 function ShipyardCardLine({
   card,
@@ -378,6 +411,10 @@ function ShipyardCardLine({
           需要 {dockLevelText(card.dockLevel)}
           {card.techName ? ` + 科技「${card.techName}」` : '（白卡默认可造，无需科技）'}
         </p>
+        {/* ⚠ 技能全文放**这一行的全宽**（不在右侧窄列里）：右侧文字区右边还挨着卡面，
+            手机上只剩两三百像素，最长的那条技能（39 字）挤进去会被折成 4~5 行、把整行撑高；
+            全宽一行才装得下（10.5px 下 39 字 ≈1~2 行），行高不变。 */}
+        <ShipyardSkillLine text={card.text} />
         <div className="mt-1 flex flex-wrap items-center gap-2">
           <button
             type="button"

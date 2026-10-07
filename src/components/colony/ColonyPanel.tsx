@@ -8,6 +8,9 @@ import { getArchaeologySite } from '@/data/galaxy/archaeology';
 import { findStationedSite } from '@/lib/galaxy/archaeologyTurn';
 import { getTechById, getAvailableTechs, REPEATABLE_TECHS, getRepeatableCost } from '@/data/colony/techs';
 import { techUnlockText } from '@/lib/battle/techUnlocks';
+// 船坞入驻（造舰的开工前提）：判定与文案的唯一真值都在 lib/battle/shipyard，UI 只渲染
+// （「船坞有人才开工」= dockStaffStatuses / dockStaffText，见该文件「船坞入驻」一节）
+import { dockStaffStatuses, dockStaffText } from '@/lib/battle/shipyard';
 import { getLeaderDef, getLeaderUpgradeCost, getRecruitRollCost } from '@/data/colony/leaders';
 import { computeColonyEconomy, computeColonyPower, getBuildingSourceBreakdown } from '@/lib/colony/economy';
 import { getRecruitCapPerTurn, hasBlackoutImmunity, getResearchTargetTurns } from '@/lib/colony/colonyTurn';
@@ -493,6 +496,8 @@ function ColonyPanel(props: ColonyPanelProps) {
         // 每回合产出（统一走 economy 模块估算，金币取区间中值）
         const liveEco = computeColonyEconomy(colony, { relics: ship.relics, permaBonuses: ship.galaxy?.permaBonuses || [] });
         const ecoByUid = new Map(liveEco.buildings.map((e) => [e.uid, e]));
+        // 船坞入驻状态（唯一真值 dockStaffStatuses，按 uid 取；非船坞建筑查不到 = undefined）
+        const dockStaffByUid = new Map(dockStaffStatuses(colony).map((s) => [s.uid, s]));
         const OUT_UN: Record<string, string> = { food: '食物', alloy: '合金', stardust: '星尘', gold: '金币', research: '科研' };
         const MAT_UN: Record<string, string> = MATERIAL_NAME_MAP;
         // 计算单个建筑实例产出（返回 {v, un, detail}，未达标返回 null）
@@ -519,6 +524,10 @@ function ColonyPanel(props: ColonyPanelProps) {
           const catTag = <span className={`text-xs ${CAT_COLORS[def.category] || 'bg-slate-600 text-white'} px-1.5 py-0.5 rounded mr-1`}>{CAT_LABELS[def.category] || def.category}</span>;
           const lo = calcLiveOut(inst, def);
           const liveOut = lo ? `产出: ${lo.v} ${lo.un}/回合 (${lo.detail})` : '';
+          // 船坞未入驻（或入驻不足）时的中文告警：文案与判据来自 lib/battle/shipyard.dockStaffText，
+          // 本组件不重算（船坞没入驻 → 机库的「下单建造」会被 canBuild 挡住，这里给出同一句话的出处）
+          const dockStatus = def.category === 'shipyard' ? dockStaffByUid.get(inst.uid) : undefined;
+          const dockStaffWarn = dockStatus && !dockStatus.staffed ? dockStaffText(dockStatus) : '';
           return (
             <div key={inst.uid} className="bg-slate-900/60 border border-green-700/40 rounded-lg p-3 mb-2 flex justify-between items-center gap-3">
               <img
@@ -532,10 +541,13 @@ function ColonyPanel(props: ColonyPanelProps) {
                 <span className="text-sm text-green-300 font-bold">{def.name}{num ? <span className="text-slate-500 ml-1">{num}</span> : ''}</span>
                 <span className="text-sm text-slate-500 ml-2">{maxLabel}</span>
                 {liveOut && <span className="text-sm text-cyan-400 ml-2">{liveOut}</span>}
-                {!liveOut && def.minPop > 0 && inst.assignedPop > 0 && inst.assignedPop < def.minPop && (
+                {!liveOut && dockStaffWarn && (
+                  <span className="text-sm text-red-400 ml-2">⚠ {dockStaffWarn}</span>
+                )}
+                {!liveOut && !dockStaffWarn && def.minPop > 0 && inst.assignedPop > 0 && inst.assignedPop < def.minPop && (
                   <span className="text-sm text-red-400 ml-2">⚠ 人口不足（需≥{def.minPop}人）</span>
                 )}
-                {!liveOut && !(def.minPop > 0 && inst.assignedPop > 0 && inst.assignedPop < def.minPop) && <span className="text-sm text-slate-600 ml-2">{getBuildingEffect(def)}</span>}
+                {!liveOut && !dockStaffWarn && !(def.minPop > 0 && inst.assignedPop > 0 && inst.assignedPop < def.minPop) && <span className="text-sm text-slate-600 ml-2">{getBuildingEffect(def)}</span>}
                 {def.powerConsumption !== undefined && def.powerConsumption > 0 && (
                   <span className="text-sm text-amber-500 ml-2">⚡ {def.powerConsumption}</span>
                 )}
@@ -607,7 +619,12 @@ function ColonyPanel(props: ColonyPanelProps) {
                     <span className="text-slate-600">| {cost.turns}回合{planet?.buffs.buildTurnDelta ? <span className="text-slate-600"> ({def.buildTurns}+{planet.buffs.buildTurnDelta})</span> : ''}</span>
                     {effMaxCount && <span className="text-slate-600">| 上限{effMaxCount} (已建{count})</span>}
                     {!effMaxCount && <span className="text-slate-600">| 已建{count}座</span>}
-                    {def.minPop > 0 && <span className="text-slate-600">| 需要{def.minPop}-{def.maxPop}人入驻</span>}
+                    {def.minPop > 0 && (
+                      <span className="text-slate-600">
+                        | 需要{def.minPop}-{def.maxPop}人入驻
+                        {def.category === 'shipyard' ? '（建成后要到「人口」页分配 —— 船坞没入驻就不能下单造舰）' : ''}
+                      </span>
+                    )}
                     {def.powerConsumption !== undefined && def.powerConsumption > 0 && (
                       <span className="text-amber-500">| ⚡ {def.powerConsumption}</span>
                     )}

@@ -6,6 +6,9 @@ import type { FleetRow } from '@/lib/battle/hangar';
 //   每张卡：名字 / 编成摘要 / total·capacity / 防守徽章 / **出征中标记** / 编成入口 / 改名 / 删除 / 防守标签
 //   ⚠ 动作不可用时**写明原因**（原因全部来自 lib/battle/hangar 的 canXxx，组件不重算判定）；
 //     出征中的舰队：整块操作区打上"出征中"标记，所有按钮禁用并给出同一条原因。
+//   ⚠ 「改名」按钮的禁用判据是 `FleetRow.canRename`（= hangar.canRenameFleet 的唯一真值），
+//     **不是** `canEdit` —— 后者是"能不能动这支队"的概称，两者语义不同，混用会让改名入口
+//     在某天与编成/标签的判据分叉时静默失效（用户 2026-08 报的正是"改名怎么点都没反应"）。
 // ============================================================================
 
 interface FleetListProps {
@@ -25,7 +28,6 @@ interface FleetListProps {
   /** 每支队"能不能做"的原因：由调用方调 hangar.ts 的纯函数取，这里只显示 */
   deleteReason: (fleetId: string) => string;
   toggleReason: (fleetId: string) => string;
-  renameReason: (fleetId: string) => string;
 }
 
 function FleetListBase({
@@ -42,7 +44,6 @@ function FleetListBase({
   onToggleDefending,
   deleteReason,
   toggleReason,
-  renameReason,
 }: FleetListProps) {
   if (fleets.length === 0) {
     return (
@@ -58,7 +59,9 @@ function FleetListBase({
         const selected = selectedId === f.id;
         const delReason = deleteReason(f.id);
         const tglReason = toggleReason(f.id);
-        const renReason = renameReason(f.id);
+        // 改名可用性与原因**直接读 FleetRow 上的字段**（= hangar.canRenameFleet 的唯一真值，
+        // 由 fleetRows 一次算好）：组件不再自己调判定、也不再读别的字段冒充改名判据。
+        const renReason = f.renameReason;
         return (
           <div
             key={f.id}
@@ -146,7 +149,7 @@ function FleetListBase({
               <button
                 type="button"
                 onClick={() => onBeginRename(f.id, f.name)}
-                disabled={!f.canEdit}
+                disabled={!f.canRename}
                 title={renReason}
                 className="rounded-[7px] border border-[#39507d] bg-[#22304d] px-2 py-1 text-[11.5px] text-slate-200 hover:enabled:bg-[#2c3d61] disabled:cursor-not-allowed disabled:opacity-40"
               >

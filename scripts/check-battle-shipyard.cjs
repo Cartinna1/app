@@ -11,6 +11,10 @@
      ⑥ 只有未开工的排队项能取消（canCancelBuild）
      ⑦ ENQUEUE_BUILD / CANCEL_BUILD 走 reducer：扣费、入队、返还
      ⑧ 船坞电力 6/10/18 真的进 computeColonyPower 的耗电结算
+     ⑨ 科技 T28–T36（§9.1）
+     ⑩ 面板渲染模型（完整数组 + 队列视图）
+     ⑪ **船坞入驻门**（V1.5 §8.2 的「入驻人口」列 = BuildingDef.minPop；未入驻不能下单造舰，
+        入驻真值 = BuildingInstance.assignedPop ≥ minPop，与 economy.ts 的产出/发电判据同口径）
    ============================================================================ */
 const fails = [];
 const check = (ok, label, detail) => {
@@ -27,11 +31,24 @@ const eq = (a, b) => JSON.stringify(a) === JSON.stringify(b);
   const { ALL_TECHS } = await import('@/data/colony/techs');
   const D = (st, action) => gameReducer(st, action);
 
-  /** 造一份"有殖民地 + 有船坞 + 科技已研 + 资源充足"的状态 */
+  /** 造一份"有殖民地 + 有船坞 + 科技已研 + 资源充足"的状态。
+   *  `opts.staffByLevel` 可指定某一级的入驻人数（如 `{1: 0}` = 一级船坞没人），
+   *  缺省 = 该级船坞数据里的 `minPop`（**入驻达标**——否则新加的入驻门会把等级/科技那几条断言全挡掉）。
+   *  `opts.techs` = 已研科技 id 列表。 */
   const docked = (level, opts) => {
     const o = opts || {};
+    const staffByLevel = o.staffByLevel || {};
     const buildings = [];
-    for (let i = 1; i <= level; i++) buildings.push({ defId: 'B3' + (i + 1), uid: 'u' + i, assignedPop: 2, buildProgress: 9, active: true });    return {
+    let assigned = 0;
+    for (let i = 1; i <= level; i++) {
+      // i=1 → B32 / i=2 → B33 / i=3 → B34
+      const defId = 'B3' + (i + 1);
+      const def = getBuildingDef(defId);
+      const assignedPop = staffByLevel[i] !== undefined ? staffByLevel[i] : def.minPop;
+      assigned += assignedPop;
+      buildings.push({ defId, uid: 'u' + i, assignedPop, buildProgress: 9, active: true });
+    }
+    return {
       ...createInitialGameState(),
       phase: 'playing',
       turn: 5,
@@ -48,9 +65,9 @@ const eq = (a, b) => JSON.stringify(a) === JSON.stringify(b);
           phase: 'active',
           planetType: 'terran',
           buildings,
-          // 人口 4：够三级船坞（入驻需求 2/3/4 人）全部满足 —— 不满足时船坞虽仍耗电（economy 的耗电
-          // 循环不看入驻），但"已建成且在运转"的语义要成立（与 UI 的 dockLevel 口径一致）。
-          population: { total: 4, available: 4, cap: 20 },
+          // 人口 = Σ 各船坞入驻人数（B32 2 / B33 3 / B34 4，合 9 人），available 与 assignedPop 自洽
+          // （types/colony.ts 的 Population：「available = total − Σ assignedPop」）。
+          population: { total: assigned, available: 0, cap: 20 },
           leaders: [],
           leaderCap: 3,
           energy: 100,
@@ -232,6 +249,59 @@ const eq = (a, b) => JSON.stringify(a) === JSON.stringify(b);
   const qv = SY.queueView(D(D(base, { type: 'ENQUEUE_BUILD', cardId: 'h1' }), { type: 'ENQUEUE_BUILD', cardId: 'h1' }));
   check(qv.building.length === 2 && qv.waiting.length === 0 && qv.maxConcurrent === 2, 'queueView：在建 2 格 / 上限 2');
   check(SY.formatBuildCost({ gold: 1600, alloy: 16, materials: { silicon: 4 } }) === '金币 1600 + 合金 16 + 硅片 4', '造价中文一行', SY.formatBuildCost({ gold: 1600, alloy: 16, materials: { silicon: 4 } }));
+
+  // ---------- ⑪ 船坞入驻门（没分配人口不能下单造舰） ----------
+  console.log('\n[11] 船坞入驻门（V1.5 §8.2 的「入驻人口」列 = BuildingDef.minPop）');
+  // 入驻真值只有两个既有字段（economy.ts 的产出/发电判据同源）：assignedPop < minPop → 不运转
+  check(getBuildingDef('B32').minPop === 2 && getBuildingDef('B33').minPop === 3 && getBuildingDef('B34').minPop === 4,
+    '船坞入驻需求 = 数据里的 minPop（B32 2 / B33 3 / B34 4，§8.2 表）');
+  const emptyDock = docked(1, { staffByLevel: { 1: 0 } });   // 一级船坞，入驻 0 人
+  const hl = SY.canBuild(emptyDock, 'h1');
+  check(!hl.ok, '一级船坞未入驻 → canBuild 为假（白卡也不能造）');
+  check(/入驻/.test(hl.reason || ''), '原因里写明"入驻"', hl.reason);
+  check(/一级船坞还没有入驻人口（需要 2 人）/.test(hl.reason || ''), '原因具体到"哪一级 + 需要几人"', hl.reason);
+  check(!SY.canEnqueue(emptyDock, 'h1').ok, 'canEnqueue 同源：未入驻也不能入队');
+  check(SY.dockStaffed(emptyDock, 1) === false, '谓词 dockStaffed(未入驻) = false');
+  check(SY.dockStaffed(docked(1), 1) === true, '谓词 dockStaffed(入驻 2 人 = minPop) = true');
+  const staffRow = SY.dockStaffStatuses(emptyDock.ships[0].colony);
+  check(staffRow.length === 1 && staffRow[0].assignedPop === 0 && staffRow[0].minPop === 2 && staffRow[0].staffed === false,
+    'dockStaffStatuses 读的是既有真值 BuildingInstance.assignedPop / BuildingDef.minPop', JSON.stringify(staffRow));
+  // 部分入驻（0 < x < minPop：旧档 / 克隆实例可能出现，面板分配框会自动抬到 minPop）
+  const partial = docked(1, { staffByLevel: { 1: 1 } });
+  check(/入驻人口不足（需要 2 人，当前 1 人）/.test(SY.canBuild(partial, 'h1').reason || ''),
+    '部分入驻 1/2 → 原因写明"当前 1 人"', SY.canBuild(partial, 'h1').reason);
+  check(SY.canBuild(docked(1), 'h1').ok, '入驻够（2 人）→ 能造白卡');
+  // 未入驻**不算"未解锁"**：卡片留在可造列表里、只是按钮禁用 + 给原因（不许静默隐藏）
+  const g0 = SY.lockGate(emptyDock, 'h1');
+  check(g0.unlocked === true && g0.staffed === false, 'lockGate：未入驻仍 unlocked（入驻不是进度门槛）');
+  const v0 = SY.shipyardView(emptyDock);
+  check(v0.unlockedCards.some((c) => c.id === 'h1'), '未入驻时白卡仍在「可造战舰」列表里（不静默隐藏）');
+  check(/入驻/.test((v0.cards.find((c) => c.id === 'h1') || {}).reason || ''), '面板渲染的 reason 就是那句话（UI 不写第二份）');
+  // ③ 不同稀有度各查自己那一级
+  const l2Half = docked(2, { techs: ['T28'], staffByLevel: { 2: 0 } });   // 一级有人、二级没人
+  check(SY.canBuild(l2Half, 'h1').ok, '一级船坞有人 → 白卡照样能造（不受二级船坞未入驻影响）');
+  const blue = SY.canBuild(l2Half, 'h3');
+  check(!blue.ok && /二级船坞/.test(blue.reason || '') && /入驻/.test(blue.reason || ''),
+    '二级船坞没人 → 蓝卡被"二级船坞入驻"挡住（点名二级 + 含入驻）', blue.reason);
+  const l1EmptyL2Full = docked(2, { techs: ['T28'], staffByLevel: { 1: 0 } });   // 二级有人、一级没人
+  check(SY.canBuild(l1EmptyL2Full, 'h3').ok, '二级船坞有人 → 蓝卡能造（各查自己那一级）');
+  check(SY.canBuild(l1EmptyL2Full, 'h1').ok, '高级船坞也能产低级稀有度（等级门是 ≥，§8.2）');
+  const allTechs = ['T28', 'T29', 'T30', 'T31', 'T32', 'T33', 'T34', 'T35', 'T36'];
+  const l3Ok = docked(3, { techs: allTechs });
+  check(SY.canBuild(l3Ok, 'h7').ok, '三级船坞入驻 4 人 → 能造橙卡');
+  const l3Empty = docked(3, { techs: allTechs, staffByLevel: { 3: 0 } });
+  const orange = SY.canBuild(l3Empty, 'h7');
+  check(!orange.ok && /三级船坞/.test(orange.reason || '') && /入驻/.test(orange.reason || ''),
+    '三级船坞没人 → 橙卡被"三级船坞入驻"挡住（点名三级 + 含入驻）', orange.reason);
+  check(SY.canBuild(l3Empty, 'h1').ok, '三级船坞未入驻不影响白卡（一级船坞有人就够了）');
+  // ④ reducer 守卫：未入驻时 ENQUEUE_BUILD **原样返回**（不许扣钱）
+  const gold0 = emptyDock.ships[0].gold;
+  const blocked = D(emptyDock, { type: 'ENQUEUE_BUILD', cardId: 'h1' });
+  check(blocked === emptyDock, '未入驻时 ENQUEUE_BUILD 原样返回（reducer 守卫，引用相等）');
+  check(blocked.buildQueue.length === 0, '未入驻时不入队');
+  check(emptyDock.ships[0].gold === gold0 && emptyDock.buildQueue.length === 0, '未入驻时不扣钱、不改 prev');
+  const allowed = D(docked(1), { type: 'ENQUEUE_BUILD', cardId: 'h1' });
+  check(allowed.buildQueue.length === 1, '入驻够时 ENQUEUE_BUILD 照常入队（守卫不误伤）');
 
   console.log('\n=== P8 船坞验收结果 ===');
   if (fails.length === 0) console.log('  全部通过 ✓');

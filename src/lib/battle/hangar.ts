@@ -79,8 +79,14 @@ export interface FleetRow {
   capacityLeft: number;
   /** 是否正在出征（= expedition.fleetId === 该队 id） */
   onExpedition: boolean;
-  /** 能否编成/改名/打标签/删除（出征中 = false） */
+  /** 能否编成/打标签/删除（出征中 = false） */
   canEdit: boolean;
+  /** 能否**改名**（唯一真值 = canRenameFleet；目前与 canEdit 同值，但**必须分开表达**：
+   *  UI 的「改名」按钮只许读它 —— 早先按钮读的是 canEdit，等于把"能不能改名"寄托在
+   *  另一个语义的字段上，哪天两者分叉就会出现"按钮能点但点了没用"或反之） */
+  canRename: boolean;
+  /** 不能改名的中文原因（能改名时为空串；给按钮的 title 用） */
+  renameReason: string;
   /** 按型聚合，保持首次出现顺序 */
   members: FleetMemberRow[];
 }
@@ -238,6 +244,10 @@ export function fleetRows(state: GameState): FleetRow[] {
       counts.set(id, (counts.get(id) || 0) + 1);
     }
     const onExpedition = isFleetOnExpedition(state, f.id);
+    // 改名可用性只认 canRenameFleet（唯一真值），**不在 UI 里另判一次**。
+    // ⚠ canRenameFleet / canDeleteFleet 声明在本函数下方 —— 函数声明提升，调用合法；
+    //   保持"判定区"集中在一处，比为了阅读顺序把它们前移更不容易改错。
+    const rename = canRenameFleet(state, f.id);
     return {
       id: f.id,
       name: f.name,
@@ -247,6 +257,8 @@ export function fleetRows(state: GameState): FleetRow[] {
       capacityLeft: capacityLeft > 0 ? capacityLeft : 0,
       onExpedition,
       canEdit: !onExpedition,
+      canRename: rename.ok,
+      renameReason: rename.reason || '',
       members: order.map((id) => {
         const d = defOf(id);
         return { id, name: d ? d.name : id, count: counts.get(id) || 0, artSrc: cardArtSrc(id) };

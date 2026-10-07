@@ -25,7 +25,8 @@ import {
 } from '@/lib/battle/raid';
 import { flattenCost, payCost } from '@/lib/turn/resourceCost';
 import { pushGoldLog } from '@/lib/turn/goldLog';
-import { canAddShip, canDeleteFleet, canRemoveShip, canToggleDefending, isFleetOnExpedition } from '@/lib/battle/hangar';
+import { tickExpedition } from '@/lib/battle/expedition';
+import { canAddShip, canDeleteFleet, canRemoveShip, canRenameFleet, canToggleDefending, isFleetOnExpedition } from '@/lib/battle/hangar';
 import { buildRefund, buildCost, canCancelBuild, canEnqueue, enqueueBuild } from '@/lib/battle/shipyard';
 
 // ==================== 初始状态（单一真值：新开局/重置/选船共用，勿另抄一份） ====================
@@ -249,8 +250,11 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
       return { ...state, fleets: state.fleets.filter((f) => f.id !== action.fleetId) };
 
     case 'RENAME_BATTLE_FLEET':
-      // 改名同属"编成/操作"：出征中的舰队不许动（判据同 canDeleteFleet = 出征中即 false）
-      if (!canDeleteFleet(state, action.fleetId).ok) return state;
+      // 改名同属"编成/操作"：出征中的舰队不许动。
+      // ⚠ 判据用 canRenameFleet（**不是** canDeleteFleet）—— 它是"能不能改名"的唯一真值，
+      //   与机库 UI 上「改名」按钮的禁用判据（FleetRow.canRename）同源；两处共用一份判定，
+      //   才不会出现"按钮能点、reducer 却静默拒绝（名字不变）"这种查不出来的断链。
+      if (!canRenameFleet(state, action.fleetId).ok) return state;
       return {
         ...state,
         fleets: state.fleets.map((f) => (f.id === action.fleetId ? { ...f, name: action.name } : f)),
@@ -459,8 +463,15 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
     case 'ARRIVE_RAID': {
       // 阶段 A 归零 → **转入阶段 B**（不自动开战）：海盗抵达、停在战斗页签等玩家点「开战」，
       // 同时开始 RAID_ARRIVED_TURNS 回合的"不打就自动失败"倒计时。
-      // 幂等：不在阶段 A（inTurns 已是 null）时原样返回。
-      if (state.raid.inTurns === null) return state;
+      // ⚠ 幂等判据 = **已经在阶段 B**（`arrivedTurns > 0`），**不是** `inTurns === null`：
+      //   阶段 A 的倒计时被 tickRaid 钳在 0，所以"归零"会先以 `inTurns: 0` 的形态存在；
+      //   旧判据 `inTurns === null` 在那一刻是 false（还能转），看似没问题 —— 但它把"能不能转"
+      //   押在"ARRIVE_RAID 必须落在 TICK 之后、且必须真的被派发"这个隐含时序上。一旦这次派发
+      //   被批边界/丢帧吞掉，状态就永久停在 `inTurns: 0 + arrivedTurns: 0`（阶段仍是 warning）：
+      //   界面显示"还有 0 回合抵达"、开战按钮又只在阶段 B 渲染 → 玩家卡在一个**空窗口**里
+      //   （用户 2026-08 截图实证，与 P5 出征踩过的 off-by-one 同类）。
+      //   改为按"是否已抵达"判幂等后，转段只取决于状态本身，与派发时序无关。
+      if (state.raid.arrivedTurns > 0) return state;
       return {
         ...state,
         raid: { ...state.raid, inTurns: null, arrivedTurns: RAID_ARRIVED_TURNS, arrived: true },
@@ -487,11 +498,10 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
     case 'TICK_BATTLE_STATE': {
       // 每个游戏回合调用一次（useTurn）：出征倒计时与掠夺倒计时各减 1，下限 0（到 0 就停在 0）。
       // 「归零即开战 / 归零即掠夺」的判定留给调用方：开战需要 seed / 参战舰队等只有调用方才知道的信息。
-      // 掠夺那一段的算式是 lib/battle/raid.tickRaid（唯一真值：useTurn 判"本次 TICK 后是否归零"
-      // 也读它，若在这里就地再写一遍会出现显示与结算分叉）。
-      const expedition = state.expedition
-        ? { ...state.expedition, turnsRemaining: Math.max(0, state.expedition.turnsRemaining - 1) }
-        : null;
+      // ⚠ 两段倒计时的算式**都只在这里各有一份**（出征 = lib/battle/expedition.tickExpedition，
+      //   掠夺 = lib/battle/raid.tickRaid）：useTurn 判"本次 TICK 后是否归零"读的也是它们，
+      //   若在这里就地再写一遍，显示与结算就会分叉（P5/P7 都踩过）。
+      const expedition = tickExpedition(state.expedition);
       return { ...state, expedition, raid: tickRaid(state.raid) };
     }
 
@@ -502,7 +512,8 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
     case 'ENQUEUE_BUILD': {
       const ship = state.ships[0];
       if (!ship) return state;
-      // ① 门槛（船坞等级 / 科技 / 资源）的唯一真值 = lib/battle/shipyard.canEnqueue（内部即 canBuild）。
+      // ① 门槛（船坞等级 / 科技 / **船坞入驻** / 资源）的唯一真值 = lib/battle/shipyard.canEnqueue
+      //    （内部即 canBuild；入驻判据是 lockGate 里的 dockStaffGate，UI 不许自己写）。
       //    ⚠ 队列长度**不在它里面**：§11 #5「排队无限」，同时建造数只限制"开工"（见 advanceQueue）。
       if (!canEnqueue(state, action.cardId).ok) return state;
       // ② 扣费走 lib/turn/resourceCost 那一套（clone 母舰 → payCost → pushGoldLog），

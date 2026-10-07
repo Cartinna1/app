@@ -10,8 +10,8 @@ import { getCurrentFactionId } from '@/lib/galaxy/access';
 import { processArchaeologyTurn } from '@/lib/galaxy/archaeologyTurn';
 import { EVENT_LOG_LIMIT } from '@/data/gameData';
 import { createUid } from '@/lib/id';
-import { canEndGameTurn, readyExpedition } from '@/lib/battle/expedition';
-import { raidResolution, raidSquadCount, shouldStartRaid } from '@/lib/battle/raid';
+import { canEndGameTurn, readyExpedition, tickExpedition } from '@/lib/battle/expedition';
+import { raidResolution, raidSquadCount, shouldStartRaid, tickRaid } from '@/lib/battle/raid';
 import { advanceQueue, dockLevel } from '@/lib/battle/shipyard';
 import { BATTLE_CARDS } from '@/data/battle/cards';
 
@@ -56,8 +56,12 @@ export function useTurn(
     // 出征倒计时：每个游戏回合先 TICK 一次（出征 / 掠夺倒计时各减 1，下限 0），
     // 归零则本回合就开战 —— TICK_BATTLE_STATE 的注释把「归零即开战」的判定留给调用方。
     // ⚠ `_gameState` 是这次渲染的最新状态，也就是 **TICK 之前**的状态（dispatch 不同步回读），
-    //   所以判定必须传 afterTick=true（等价于 turnsRemaining <= 1）；否则会 off-by-one：
-    //   玩家要多点一次结束回合才开战，中间那回合界面还显示「还有 0 回合」。
+    //   所以判定必须读"本次 TICK 之后"的状态。**做法是先投影、再判**（把 TICK 用到的两个纯函数
+    //   tickExpedition / tickRaid 各跑一次），而不是传一个 afterTick=true 让判据去"猜一位"：
+    //   猜一位等于把"这一帧该不该开战"押在「TICK 与 START_BATTLE 必须同批、且真的被派发」上 ——
+    //   批边界一旦落在两者之间，状态就会停在 turnsRemaining: 0 而这一帧既不开战、界面也没有开战
+    //   入口（用户 2026-08 报的出征卡死；掠夺那条 P7 已用同一套写法修过，这里补齐出征）。
+    //   先投影后判之后，判定与最终落库的状态**逐值同源**，不存在 off-by-one 的窗口。
     // 这些 dispatch 都排在本函数返回前，与 nextTurn 那条 FUNCTIONAL_UPDATE、fluctuatePrices
     // 同批处理，且都排在回合结算那条之前 —— 故掠夺扣掉的资源会被本回合结算读到（而非被覆盖）。
     // 同批的 action 各写各的键：TICK 写 expedition/raid；START_BATTLE（出征）写 battle；
@@ -65,9 +69,16 @@ export function useTurn(
     // ⚠ 掠夺**不再**在归零时派发 START_BATTLE（旧口径已作废）：它只转段或结算损失。
     dispatch({ type: 'TICK_BATTLE_STATE' });
 
+    // 「本次 TICK 之后」的状态投影（与 reducer 的 TICK_BATTLE_STATE **同一份算式**，各跑一次纯函数）
+    const afterTick: GameState = {
+      ..._gameState,
+      expedition: tickExpedition(_gameState.expedition),
+      raid: tickRaid(_gameState.raid),
+    };
+
     // 倒计时归零 → 自动开战（参战舰船 = 该舰队当前编制）。
     // seed 用 Date.now()：战斗**不进存档**（V1.5 §〇），读档会回到战斗前、可以重来，属既定口径。
-    const ready = readyExpedition(_gameState, true);
+    const ready = readyExpedition(afterTick);
     if (ready) {
       dispatch({
         type: 'START_BATTLE',
@@ -89,7 +100,14 @@ export function useTurn(
     //   「开战」（那里 dispatch START_RAID_BATTLE），本 hook 只在阶段 B 超时后结算掠夺成功。
     // ⚠ 与出征同时归零时：TICK 与 START_BATTLE（出征）排在同一批里 —— 出征照旧自动开战；
     //   掠夺只转入阶段 B，等这场仗打完再让玩家决定要不要打掠夺（守家顺序不受影响）。
-    const raidNow = raidResolution(_gameState, true);
+    // ⚠ **掠夺的判定要读"本次 TICK 之后"的掠夺状态**（唯一真值 tickRaid，与 reducer 的
+    //   TICK_BATTLE_STATE 同一份算式，投影见上方 afterTick）。为什么不像旧出征那样传
+    //   afterTick=true 让 raidResolution 去猜"减 1 之后会不会归零"：那种"读 TICK 前的状态 + 前瞻一位"
+    //   的写法，把转段的正确性押在了"这次 ARRIVE_RAID 必须与 TICK 同批、且必须真的被派发"上 ——
+    //   批边界一旦落在两者之间，状态就会停在 inTurns: 0 而永远不进阶段 B（界面卡在"还有 0 回合抵达"
+    //   且没有开战按钮）。先把 tick 投影出来再判，判定与最终落库的状态就**逐值同源**。
+    //   （出征那条 P5 的 off-by-one 已用完全相同的写法修掉，见上方 readyExpedition(afterTick)。）
+    const raidNow = raidResolution(afterTick);
     if (raidNow === 'arrived') {
       // 阶段 A → 阶段 B（登记"已抵达 + 再 N 回合不迎战就自动失败"）
       dispatch({ type: 'ARRIVE_RAID' });

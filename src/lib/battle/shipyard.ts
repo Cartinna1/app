@@ -6,8 +6,12 @@
 //   · 造价：`稀有度基准 × 卡牌系数`，基准表与系数表都在本文件（`RARITY_BASELINE` /
 //     `cardCoefficient`），**任何地方都不得再写一遍数字**。
 //   · 建造门槛：稀有度 → 船坞等级（`RARITY_DOCK_LEVEL`）、系列 × 稀有度 → 科技
-//     （`TECH_BY_SERIES`，前置链来自 §9：图解 → 精锐改装）。判定只有 `canBuild` 一份，
-//     reducer 守卫、`canEnqueue` 与 UI 的禁用原因全部调它。
+//     （`TECH_BY_SERIES`，前置链来自 §9：图解 → 精锐改装）、**船坞入驻**（`dockStaffGate`
+//     与谓词 `dockStaffed`）。判定只有 `canBuild` 一份，reducer 守卫、`canEnqueue`
+//     与 UI 的禁用原因全部调它。
+//   · 入驻真值：`BuildingInstance.assignedPop` ≥ `BuildingDef.minPop`（**与
+//     lib/colony/economy.ts 的产出/发电判据逐字同口径**：那里是 `inst.assignedPop < def.minPop → 不产出`）。
+//     本文件不新增字段、不另立门槛。
 //   · 同时建造数：`MAX_CONCURRENT_BUILDS`（§11 #5「同时建造 2 艘 + 排队无限」，
 //     §8.3「每座船坞同时可建造 2 艘」）——**只在这里出现一次**。
 //   · 船坞等级：`dockLevel(state)` 读殖民地建筑列表，**不另存字段**。
@@ -23,9 +27,15 @@
 //     「精锐改装」1200 科研点 3 回合产紫橙、前置 = 本系蓝图解析；通用系只有蓝图解析。
 //   · §8.3 的"基础生产回合"与"造船队列"都**不受星球建造回合修正影响**（那是建筑工期），
 //     故本文件不引 lib/colony/costs，也没有任何星球/领袖倍率。
+//   · ⚠ **「船坞入驻才开工」是"文档无值"的判断**：§8.2 只给了船坞的「入驻人口」列
+//     （2/2、3/3、4/4，代码里就是 `BuildingDef.minPop`），§8.3 的「生产规则」通篇
+//     没写"开工要不要入驻"（grep「入驻」在 §8.3 零命中）。此处照**既有模型**办：
+//     其它生产建筑的"入驻不足 = 不运转"是 `economy.ts` 的既有判据，船坞与它同口径。
+//     已登记进 AGENTS.md §10.3。
 // ============================================================================
 
 import type { GameState, Mothership } from '@/types/game';
+import type { Colony } from '@/types/colony';
 import type { BattleRarity, ShipCardDef, ShipCardId } from '@/types/battle';
 import { BATTLE_CARDS, BATTLE_CARD_IDS } from '@/data/battle/cards';
 import { getBuildingDef } from '@/data/colony/buildings';
@@ -339,6 +349,94 @@ export function activeBuildCount(queue: BuildQueueItem[]): number {
   return n;
 }
 
+// ---------------- 船坞入驻（造船的开工前提） ----------------
+//
+// 「入驻」的真值只有两个既有字段（**没有现成的谓词函数**，判据内联在 economy.ts 的两条循环里）：
+//   · `BuildingInstance.assignedPop`（src/types/colony.ts：「当前入驻人口」）
+//   · `BuildingDef.minPop`（同文件：「最少入驻人口」；B32/B33/B34 = 2/3/4，来自 V1.5 §8.2 表）
+// 其它生产建筑的"够不够"就是 `inst.assignedPop < def.minPop → continue`（economy.ts 的
+// 产出循环与发电循环各一处），UI 侧同口径的两处是 useColonyPop 的分配校验（`count < def.minPop`
+// 直接拒绝）与 ColonyPanel 的「⚠ 人口不足（需≥N人）」。本文件按**同一条判据**做船坞的门，
+// 不新增字段、不引入第三套概念。
+
+/** 一座**已建成**船坞的入驻状态（ColonyPanel 的船坞卡片与 canBuild 共用同一份判定） */
+export interface DockStaffStatus {
+  /** 建筑实例 uid（UI 按它把告警挂到对应的那张船坞卡片上） */
+  uid: string;
+  defId: string;
+  /** 船坞等级（B32=1 / B33=2 / B34=3） */
+  level: 1 | 2 | 3;
+  /** 当前入驻人口（`BuildingInstance.assignedPop`） */
+  assignedPop: number;
+  /** 数据里的最少入驻人口（`BuildingDef.minPop`；B32 2 / B33 3 / B34 4） */
+  minPop: number;
+  /** 够不够开工（= `assignedPop >= minPop`，与 economy.ts 判据同口径） */
+  staffed: boolean;
+}
+
+/** 殖民地**已建成**船坞的入驻状态（按等级升序）。没殖民地 / 没船坞时返回空数组。 */
+export function dockStaffStatuses(colony: Colony | undefined): DockStaffStatus[] {
+  const out: DockStaffStatus[] = [];
+  if (!colony || colony.phase !== 'active') return out;
+  for (const inst of colony.buildings) {
+    if (!inst.active) continue;
+    const def = getBuildingDef(inst.defId);
+    if (!def || def.category !== 'shipyard') continue;
+    const tier = SHIPYARD_BUILDING_TIERS.indexOf(def.id) + 1;
+    if (tier < 1 || tier > 3) continue;
+    const assignedPop = inst.assignedPop || 0;
+    out.push({
+      uid: inst.uid,
+      defId: def.id,
+      level: tier as 1 | 2 | 3,
+      assignedPop,
+      minPop: def.minPop,
+      staffed: assignedPop >= def.minPop,
+    });
+  }
+  out.sort((a, b) => a.level - b.level);
+  return out;
+}
+
+/** 未入驻时的中文原因（**唯一文案源**，UI 与 canBuild 都渲染这一句）：
+ *  `一级船坞还没有入驻人口（需要 2 人）—— 到「殖民」页签的「人口」页分配`。
+ *  `assignedPop` 在 0 < x < minPop 之间时说"不足"并给出当前人数（旧档 / 克隆实例可能出现这种值；
+ *  面板的分配输入框会自动抬到 minPop，正常操作到不了这里）。 */
+export function dockStaffText(dock: DockStaffStatus): string {
+  const hint = '—— 到「殖民」页签的「人口」页分配';
+  return dock.assignedPop > 0
+    ? `${dockLevelText(dock.level)}入驻人口不足（需要 ${dock.minPop} 人，当前 ${dock.assignedPop} 人）${hint}`
+    : `${dockLevelText(dock.level)}还没有入驻人口（需要 ${dock.minPop} 人）${hint}`;
+}
+
+/**
+ * **造船的入驻门（唯一判据）**：等级 ≥ `dockLevel` 的已建成船坞里，至少有一座入驻达标。
+ *
+ * ⚠ 取「等级 ≥ 需要」而不是「正好那一级」：`lockGate` 的等级门本来就是
+ *   `dockLevel(state) >= 需要等级`（高级船坞也能产低级稀有度，§8.2），换成"正好那一级"就会出现
+ *   「只建了三级船坞的殖民地反而造不了白卡」——与已经放行的等级门自相矛盾。
+ *   没达标时点名**等级最低且 ≥ 需要**的那座（玩家最容易补齐的那座）。
+ */
+export function dockStaffGate(state: GameState, dockLevel: 1 | 2 | 3): { ok: true } | { ok: false; reason: string } {
+  const list = dockStaffStatuses(leadShip(state)?.colony).filter((s) => s.level >= dockLevel);
+  if (list.some((s) => s.staffed)) return { ok: true };
+  const blame = list[0];
+  if (!blame) {
+    // 连这一级（或更高级）的船坞都没建成 —— 那是 lockGate 的"缺船坞"分支在管；这里仍给一句
+    // 同口径的话，保证任何调用方都不会拿到空原因（AGENTS 铁律：动作不可用必须写明原因）。
+    const def = getBuildingDef(SHIPYARD_BUILDING_TIERS[dockLevel - 1]);
+    const hint = '—— 到「殖民」页签的「人口」页分配';
+    return { ok: false, reason: `${dockLevelText(dockLevel)}还没有入驻人口（需要 ${def ? def.minPop : 0} 人）${hint}` };
+  }
+  return { ok: false, reason: dockStaffText(blame) };
+}
+
+/** 谓词：等级 ≥ `dockLevel` 的已建成船坞里有没有一座入驻达标
+ *  （= `dockStaffGate(...).ok`，**同一判据不重算**）。没有船坞时 false —— 没船坞谈不上"有人开工"。 */
+export function dockStaffed(state: GameState, dockLevel: 1 | 2 | 3): boolean {
+  return dockStaffGate(state, dockLevel).ok;
+}
+
 // ---------------- 能不能造 ----------------
 
 /** 船坞等级的中文名（判定文案与 UI 共用） */
@@ -350,28 +448,43 @@ export function dockLevelText(level: 0 | 1 | 2 | 3): string {
 }
 
 /**
- * **解锁门槛的唯一判定**（船坞等级 + 科技），返回"能不能造"与"还差什么"的中文一句话。
+ * **解锁门槛的唯一判定**（船坞等级 + 科技），返回"能不能造"与"还差什么"的中文一句话；
+ * 同时给出**入驻门**的结果（`staffed` / `staffReason`，来自 `dockStaffGate`，唯一真值）。
  * 供 `canBuild`（再加资源一道）与 `shipyardView`（主列表 / 汇总行 / 下一档指引）共用，
- * UI 不许再写第二份等级/科技比较。
+ * UI 不许再写第二份等级/科技/入驻比较。
  *
  * ⚠ 口径（用户 2026-08 裁定）：**资源够不够不算解锁门槛** —— 买不起也要在列表里看得见，
  *   只是按钮禁用并给中文原因。故资源那道门只在 `canBuild` 里加，不在本函数里。
+ * ⚠ 同理，**入驻不足也不算"未解锁"**（`unlocked` 只看船坞等级 + 科技）：入驻是可以随时靠分配
+ *   人口恢复的运行状态，不是进度门槛；并进 `unlocked` 会让"建成船坞但没分配人口"的玩家在
+ *   「可造战舰」列表里一张卡都看不到（全被折进未解锁汇总行），而卡片消失比按钮禁用更难懂。
  */
 export function lockGate(
   state: GameState,
   cardId: ShipCardId
-): { unlocked: boolean; reason?: string; dockLevel: 1 | 2 | 3; techId: string | null } {
+): {
+  unlocked: boolean;
+  reason?: string;
+  dockLevel: 1 | 2 | 3;
+  techId: string | null;
+  /** 等级 ≥ 需要级的船坞里有没有一座入驻达标（**只在 `unlocked === true` 时有意义**：没解锁时一律 false） */
+  staffed: boolean;
+  /** 未入驻时的中文原因（唯一文案源 = dockStaffGate）；`staffed === true` 或还没解锁时为 `''` */
+  staffReason: string;
+} {
   const card = defOf(cardId);
   const dockNeed: 1 | 2 | 3 = card ? requiredDockLevel(cardId) : 1;
   const techId = card ? requiredTechId(card) : null;
-  if (!card) return { unlocked: false, reason: '数据里找不到这张卡', dockLevel: dockNeed, techId };
-  if (card.token) return { unlocked: false, reason: '衍生单位不能建造', dockLevel: dockNeed, techId };
+  if (!card) return { unlocked: false, reason: '数据里找不到这张卡', dockLevel: dockNeed, techId, staffed: false, staffReason: '' };
+  if (card.token) return { unlocked: false, reason: '衍生单位不能建造', dockLevel: dockNeed, techId, staffed: false, staffReason: '' };
   if (card.series === '海盗') {
     return {
       unlocked: false,
       reason: '海盗舰船是 PvE 专属，玩家不能建造（V1.5 §3）',
       dockLevel: dockNeed,
       techId,
+      staffed: false,
+      staffReason: '',
     };
   }
 
@@ -383,6 +496,8 @@ export function lockGate(
       reason: '还没有殖民地 —— 先在星图的星球上建立殖民地，再建造船坞（V1.5 §8）',
       dockLevel: dockNeed,
       techId,
+      staffed: false,
+      staffReason: '',
     };
   }
 
@@ -395,6 +510,8 @@ export function lockGate(
       reason: `需要${dockLevelText(dockNeed)}${techHint}（当前${level === 0 ? '还没有船坞' : `只有${dockLevelText(level)}`}）`,
       dockLevel: dockNeed,
       techId,
+      staffed: false,
+      staffReason: '',
     };
   }
   if (tech && !(colony.techState?.researched || []).includes(tech.id)) {
@@ -403,9 +520,20 @@ export function lockGate(
       reason: `需要科技「${tech.name}」（科研点 ${tech.costRP}，在殖民地页签研究）`,
       dockLevel: dockNeed,
       techId,
+      staffed: false,
+      staffReason: '',
     };
   }
-  return { unlocked: true, dockLevel: dockNeed, techId };
+  // 入驻门：与等级/科技**同源**地在这里判一次「船坞有人才开工」，canBuild（→ canEnqueue →
+  // reducer 守卫）读它，UI 只渲染 canBuild 给的那句话（AGENTS 第三节：不许 UI 自己写）。
+  const staff = dockStaffGate(state, dockNeed);
+  return {
+    unlocked: true,
+    dockLevel: dockNeed,
+    techId,
+    staffed: staff.ok,
+    staffReason: staff.ok ? '' : staff.reason,
+  };
 }
 
 /** 某张卡是否**已解锁**（只判船坞等级 + 科技；资源不算门槛）。列表取舍与汇总行共用这一份。 */
@@ -415,13 +543,16 @@ export function cardUnlocked(state: GameState, cardId: ShipCardId): boolean {
 
 /**
  * 某张卡现在能不能造 + 不能造的中文原因。
- * 判定顺序：卡牌存在 → 可建造（非海盗/衍生） → 已建殖民地 → 船坞等级 → 科技 → 资源。
- * ⚠ 前三段与"船坞等级/科技"这两道门**全部来自 `lockGate`**（唯一真值），本函数只补最后一道资源门。
+ * 判定顺序：卡牌存在 → 可建造（非海盗/衍生） → 已建殖民地 → 船坞等级 → 科技 → **船坞入驻** → 资源。
+ * ⚠ 前四段与"船坞等级/科技/入驻"这三道门**全部来自 `lockGate`**（唯一真值，入驻那一段由它调
+ *   `dockStaffGate`），本函数只补最后一道资源门。
  * ⚠ "队列"这一条**故意不拦**：§11 #5「排队无限」，同时建造数只限制"开工"，见 advanceQueue。
  */
 export function canBuild(state: GameState, cardId: ShipCardId): { ok: boolean; reason?: string } {
   const gate = lockGate(state, cardId);
   if (!gate.unlocked) return { ok: false, reason: gate.reason };
+  // 入驻门：船坞有人才开工（文案与判据都来自 lockGate → dockStaffGate，UI 直接渲染这句话）
+  if (!gate.staffed) return { ok: false, reason: gate.staffReason };
 
   const ship = leadShip(state);
   const colony = ship?.colony;
@@ -434,8 +565,8 @@ export function canBuild(state: GameState, cardId: ShipCardId): { ok: boolean; r
 
 /**
  * 能否把该卡加入造船队列。分工：
- *   · 门槛（**解锁**：船坞/科技 → `lockGate`；资源 → `firstMissing`）全部来自 `canBuild` ——
- *     本函数只加"下单"这一层，不重写门槛；
+ *   · 门槛（**解锁**：船坞/科技 → `lockGate`；**入驻**：→ `lockGate` 内的 `dockStaffGate`；
+ *     资源 → `firstMissing`）全部来自 `canBuild` —— 本函数只加"下单"这一层，不重写门槛；
  *   · **队列长度不设上限**（§11 #5 排队无限），故这里不判队列；
  *   · `slots` 只用来决定新项是"开局即开工"还是"排队"。省略时按 state 现算。
  */
@@ -509,6 +640,8 @@ export function buildRefund(item: BuildQueueItem): { gold: number; alloy: number
  *     "玩家拥有什么"的唯一真值）；
  *   · `dockLv` 只用于"还能不能继续开工"的判定：0 级（拆了船坞 / 旧档）时**已开工的照常完工**，
  *     但**不再开新工**（否则可以拆掉船坞白嫖剩余产能）。
+ *     ⚠ 入驻（`dockStaffGate`）**只拦"下单"**：已经在队列里的项照常推进 —— 与"拆了船坞已开工照常
+ *       完工"同一个口径（中途把人调走的代价不该是队列凭空失效，取消排队另有 canCancelBuild 的返还）。
  */
 export function advanceQueue(
   queue: BuildQueueItem[],

@@ -29,7 +29,7 @@ const J = (v) => JSON.stringify(v);
   const { createMotherships } = await import('@/data/gameData');
   const { applyColonyFounding } = await import('@/lib/colony/colonySetup');
 
-  const need = ['RAID_CHANCE', 'RAID_WARNING_TURNS', 'RAID_ARRIVED_TURNS', 'RAID_IMMUNE_TURNS', 'idleRaidState', 'raidPhase', 'raidStatus', 'shouldStartRaid', 'raidResolution', 'readyRaidBattle', 'raidDefensePool', 'raidLootLoss', 'raidBattleFleet', 'raidHintLines'];
+  const need = ['RAID_CHANCE', 'RAID_WARNING_TURNS', 'RAID_ARRIVED_TURNS', 'RAID_IMMUNE_TURNS', 'idleRaidState', 'raidPhase', 'raidStatus', 'raidCardView', 'raidWarningElapsed', 'shouldStartRaid', 'raidResolution', 'readyRaidBattle', 'raidDefensePool', 'raidLootLoss', 'raidBattleFleet', 'raidHintLines'];
   const missing = need.filter((k) => R[k] === undefined);
   if (missing.length) { console.error('raid.ts 缺少导出：' + missing.join(', ') + '（现有：' + Object.keys(R).join(', ') + '）'); process.exit(2); }
 
@@ -279,6 +279,97 @@ const J = (v) => JSON.stringify(v);
     check(Array.isArray(all) && all.length > 0, 'getNextTurnHints 能算出来（含掠夺提示）', J(all.map((h) => h.id)));
     const allB = hints.getNextTurnHints(arrivedSt);
     check(allB.some((h) => h.id === 'raid_arrived'), 'getNextTurnHints 在阶段 B 也带上抵达提示', J(allB.map((h) => h.id)));
+  }
+
+  // ---------- ⑨ 两段窗口的**转段**与界面模型（P7 回归：用户 2026-08 报"卡在还有 0 回合抵达"） ----------
+  //  症状：界面显示「海盗还有 0 回合抵达」，推进多少回合都不变，也永远没有「开战」按钮。
+  //  根因有**两半**，这里分别钉住：
+  //   ① **状态那一半**：阶段 A 的倒计时被 tickRaid 钳在 0，所以"本次 TICK 后归零"先以
+  //      `inTurns: 0` 的形态存在；旧实现把转段押在"ARRIVE_RAID 必须与 TICK 同批且真的被派发"上，
+  //      批边界一旦落在两者之间，状态就永久停在 `inTurns: 0 + arrivedTurns: 0`（仍是阶段 A）。
+  //      现在转段信号 `raidWarningElapsed` 只看状态本身，与派发时序无关。
+  //   ② **界面那一半**：卡片只渲染 raidCardView 给的模型；阶段 A 永远不渲染「开战」按钮、
+  //      也永远不显示"还有 0 回合抵达"。
+  console.log('\n[9] 两段窗口的转段与开战入口（inTurns 归零必须转阶段 B；界面模型由 lib 定死）');
+  {
+    const A = setup({ fleets: [['h1']], defending: [0] });      // 有防守池（阶段 B 能开战）
+    const N = setup({ fleets: [['h1']], defending: [] });       // 无防守池（阶段 B 按钮禁用）
+
+    // ① 归零本身就是**与 dispatch 时序无关**的转段信号
+    const zero = { ...A, raid: raidState({ inTurns: 0, raiders: 1 }) };
+    check(R.raidWarningElapsed(zero.raid) === true, '归零判据：raidWarningElapsed(inTurns=0) = true（唯一真值）', J(R.raidWarningElapsed(zero.raid)));
+    check(R.raidWarningElapsed({ ...A, raid: raidState({ inTurns: 3 }) }.raid) === false, '未归零：raidWarningElapsed = false（inTurns=3）');
+    check(R.raidResolution(zero) === 'arrived', '**inTurns 已归零 → 按 TICK 前判也必须是 arrived**（旧实现这里给 none，转段全靠编排队列）');
+    check(R.raidResolution(zero, true) === 'arrived', 'inTurns 已归零 → 按 TICK 后判同样 arrived（两种读法一致）');
+
+    // ② ARRIVE_RAID 的幂等判据 = "已经在阶段 B"（不再用 inTurns === null）
+    const zeroSt = D(zero, { type: 'ARRIVE_RAID' });
+    check(
+      R.raidPhase(zeroSt.raid) === 'arrived' && zeroSt.raid.arrivedTurns === R.RAID_ARRIVED_TURNS,
+      '**ARRIVE_RAID 作用于 inTurns=0 的状态也能转段**（不再有"守卫把 0 当成不在阶段 A"的空档）',
+      J(zeroSt.raid)
+    );
+    check(D(zeroSt, { type: 'ARRIVE_RAID' }) === zeroSt, '已在阶段 B → ARRIVE_RAID 原样返回（幂等，重放不重置倒计时）');
+
+    // ③ 完整编排：从 5 起连续结束回合，**倒计时归零的那个回合必须转成阶段 B**
+    let lived = D(A, { type: 'START_RAID', raiders: 1 });
+    check(lived.raid.inTurns === R.RAID_WARNING_TURNS, '起手：START_RAID 记下阶段 A 倒计时', String(lived.raid.inTurns));
+    for (let k = 0; k < 3; k++) lived = D(lived, { type: 'TICK_BATTLE_STATE' });   // 5 → 2（与测试存档同一构造）
+    check(lived.raid.inTurns === 2, '三次 TICK 后剩 2 回合（与测试存档同起点）', String(lived.raid.inTurns));
+
+    const phases = [];
+    for (let n = 1; n <= 2; n++) {
+      const decision = R.raidResolution(lived, true);            // 编排判定（读 TICK 前，与 useTurn 同序）
+      lived = D(lived, { type: 'TICK_BATTLE_STATE' });           // ① TICK
+      if (decision === 'arrived') lived = D(lived, { type: 'ARRIVE_RAID' });
+      else if (decision === 'looted') lived = D(lived, { type: 'APPLY_RAID_LOOT' });
+      phases.push(R.raidStatus(lived).phase);
+      check(
+        R.raidStatus(lived).phase === 'arrived' || lived.raid.inTurns > 0,
+        `第 ${n} 个回合结束后**不许停在 inTurns=0 的阶段 A**`,
+        J(lived.raid)
+      );
+    }
+    check(phases[0] === 'warning' && phases[1] === 'arrived', '**连续 TICK 到 A 归零后，归零那回合必然转成阶段 B**（off-by-one 防线）', J(phases));
+    check(R.raidStatus(lived).turnsToAutoLoot === R.RAID_ARRIVED_TURNS, '转阶段 B 时待战倒计时 = 5', String(R.raidStatus(lived).turnsToAutoLoot));
+
+    // ④ UI 模型：阶段 B ≠ 阶段 A；阶段 A 永远不给开战入口
+    const cardA = R.raidCardView({ ...A, raid: raidState({ inTurns: 3, raiders: 1 }) });
+    const cardB = R.raidCardView({ ...A, raid: raidState({ arrivedTurns: 5, arrived: true, raiders: 1 }) });
+    check(cardA.phase === 'warning' && cardB.phase === 'arrived', 'raidCardView 的 phase 与 raidStatus 同源', J([cardA.phase, cardB.phase]));
+    check(
+      cardA.headline !== cardB.headline && cardA.detail !== cardB.detail && cardA.tone !== cardB.tone,
+      '**阶段 B 的渲染模型 ≠ 阶段 A**（标题 / 正文 / 配色三处都不同）',
+      J([cardA.headline, cardB.headline])
+    );
+    check(cardA.showFightButton === false, '**阶段 A 不渲染「开战」按钮**（还没到，用户 2026-08 裁定）');
+    check(cardB.showFightButton === true && cardB.canFight === true, '阶段 B 有防守池 → 渲染「开战」且可点', J({ s: cardB.showFightButton, c: cardB.canFight }));
+    check(cardB.fightHint.length > 0, '阶段 B 的开战按钮旁永远有一句话（手机端没有 hover）', cardB.fightHint);
+    const cardBEmpty = R.raidCardView({ ...N, raid: raidState({ arrivedTurns: 5, arrived: true, raiders: 1 }) });
+    check(cardBEmpty.showFightButton === true && cardBEmpty.canFight === false, '阶段 B 空防守池 → 按钮出现但禁用（并写明原因）', cardBEmpty.fightHint);
+
+    // ⑤ **界面永远不许显示"还有 0 回合抵达"**
+    const cardAtZero = R.raidCardView({ ...A, raid: raidState({ inTurns: 0, raiders: 1 }) });
+    check(
+      cardAtZero.status.turnsToArrival !== 0 || cardAtZero.phase === 'arrived',
+      '**inTurns=0 时不许渲染「还有 0 回合抵达」**（要么已转段，要么最少显示 1 回合）',
+      J({ phase: cardAtZero.phase, turns: cardAtZero.status.turnsToArrival, headline: cardAtZero.headline })
+    );
+    check(
+      R.raidStatus({ ...A, raid: raidState({ inTurns: 0 }) }).turnsToArrival === 1,
+      '阶段 A 的剩余回合数下限为 1（0 只出现在阶段 B 的待战倒计时）',
+      String(R.raidStatus({ ...A, raid: raidState({ inTurns: 0 }) }).turnsToArrival)
+    );
+
+    // ⑥ 整张卡该不该出现
+    check(cardA.showCard === true && cardB.showCard === true, '阶段 A / B 都渲染卡片');
+    check(R.raidCardView(setup({})).showCard === false, '没有掠夺在途且不在免疫期 → 不渲染卡片（不加噪音）');
+    const idleImmune = R.raidCardView({ ...setup({}), raid: raidState({ immuneTurns: 6 }) });
+    check(
+      idleImmune.showCard === true && idleImmune.phase === 'idle' && idleImmune.idleText.indexOf('6') >= 0,
+      '免疫期 → 渲染卡片并报"还有 N 回合不会再被掠夺"',
+      idleImmune.idleText
+    );
   }
 
   console.log('\n=== P7 验收结果 ===');

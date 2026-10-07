@@ -1,4 +1,4 @@
-﻿'use strict';
+'use strict';
 /* 生成一份「方便测试卡牌战斗」的存档（用真实 reducer + 真实存档 API 构造，保证能导入）
    用法：node --import ./scripts/register-ts.mjs scripts/make-test-save.cjs [输出路径]
    产出：默认写到 Downloads/测试存档-卡牌战斗.json */
@@ -13,6 +13,7 @@ const path = require('path');
   const cardsMod = await import('@/data/battle/cards');
   const raids = await import('@/lib/battle/raid');
   const shipyardMod = await import('@/lib/battle/shipyard');
+  const { getBuildingDef } = await import('@/data/colony/buildings');
   const fleetsMod = await import('@/data/battle/fleets');
   const D = (st, a) => gameReducer(st, a);
 
@@ -73,16 +74,41 @@ const path = require('path');
   st = mkFleet(st, '出征队', lib.slice(0, 10), false);
   st = mkFleet(st, '防守队', lib.slice(10, 14), true);
 
-  // ---- 5.5 船坞：直接给一座「一级船坞」（B32），这样导入后立刻能造舰 ----
-  //  做法：克隆殖民地已有的一个建筑实例、只换 defId + id（形状天然正确，不猜字段）
+  // ---- 5.5 船坞：直接给一座「一级船坞」（B32），并**按数据把入驻人口喂够** ----
+  //  ① 做法：克隆殖民地已有的一个建筑实例、只换 defId（形状天然正确，不猜字段）。
+  //     但 **uid 必须换新的** —— 沿用 proto.uid 会与那座建筑撞号（按 uid 定位的动作会打错人）。
+  //  ② 入驻人口 = 数据里的 minPop（B32 = 2 人）：船坞没入驻就造不了舰
+  //     （判据 lib/battle/shipyard.dockStaffGate，与 economy.ts 的产出/发电同口径）。
+  //     ⚠ 遗落星球的殖民地初始人口是 0（planets.ruin 没有 initialPop），所以这里必须自己把
+  //       人口凑够；B1 居住舱的 maxPop 是 0（居住建筑只给人口上限、不能入驻），
+  //       "给居住建筑分配人口"在既有模型里根本不成立 —— 要入驻的是**船坞本身**。
+  //  ③ 人口字段与入驻自洽：available = total − Σ assignedPop（types/colony.ts 的 Population 注释）。
   st = {
     ...st,
     ships: st.ships.map((s, i) => {
       if (i !== 0 || !s.colony) return s;
       const proto = (s.colony.buildings || [])[0];
       if (!proto) return s;
-      const dock = { ...proto, defId: 'B32', id: 'B32_test' };
-      return { ...s, colony: { ...s.colony, buildings: [...s.colony.buildings, dock] } };
+      const dockDef = getBuildingDef('B32');
+      const dock = {
+        ...proto,
+        defId: 'B32',
+        uid: 'B32_test',
+        assignedPop: dockDef.minPop,                 // 2 人：船坞的入驻门槛（数据唯一真值）
+        buildProgress: dockDef.buildTurns,           // 已完工
+        active: true,
+      };
+      const buildings = [...s.colony.buildings, dock];
+      const assigned = buildings.reduce((a, b) => a + (b.assignedPop || 0), 0);
+      const total = Math.max(s.colony.population.total, assigned);
+      return {
+        ...s,
+        colony: {
+          ...s.colony,
+          buildings,
+          population: { ...s.colony.population, total, available: total - assigned },
+        },
+      };
     }),
   };
 
@@ -111,6 +137,13 @@ const path = require('path');
   console.log('  卡库：' + back.cardLibrary.length + ' 艘 ' + JSON.stringify(back.cardLibrary));
   console.log('  舰队：' + back.fleets.map((f) => f.name + '(' + f.shipIds.length + (f.defending ? '·防守' : '') + ')').join(' / '));
   console.log('  船坞等级：' + shipyardMod.dockLevel(back) + '（0=没建，1=一级；已给一座 B32）');
+  const dockInst = (s0.colony ? s0.colony.buildings : []).find((b) => b.defId === 'B32');
+  const dockNeed = getBuildingDef('B32').minPop;
+  console.log('  船坞入驻人数：' + (dockInst ? dockInst.assignedPop + '/' + dockNeed + ' 人' : '没有船坞')
+    + '（船坞没入驻就不能下单造舰：lib/battle/shipyard.dockStaffGate）');
+  // 新规则自检：这份存档**导入后必须立刻能造舰**（否则等于把测试存档改废了）
+  const probe = white.length > 0 ? shipyardMod.canBuild(back, white[0].id) : { ok: false, reason: '没有可造的白卡' };
+  console.log('  导入后立刻能造舰：' + (probe.ok ? '是 ✓（' + (white[0] ? white[0].name + ' ' + white[0].id : '') + '）' : '否 ✗ ' + (probe.reason || '')));
   console.log('  造船队列：' + back.buildQueue.length + ' 项');
   console.log('  掠夺：阶段=' + raids.raidPhase(back.raid) + ' 还剩 ' + back.raid.inTurns + ' 回合抵达 · 掠夺队 ' + back.raid.raiders + ' 支');
   console.log('  已探明老巢：' + lairs.filter((n) => back.ships[0].galaxy.visitedNodes.indexOf(n.id) >= 0).map((n) => n.name).join(' / '));

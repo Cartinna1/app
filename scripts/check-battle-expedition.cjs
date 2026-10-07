@@ -20,6 +20,11 @@ const check = (ok, label, detail) => {
   const RW = await import('@/lib/battle/rewards');
   const fleetsMod = await import('@/data/battle/fleets');
   const E = await import('@/lib/battle/engine');
+  // 掠夺的唯一真值（③d 要验"出征与掠夺同时归零"两条都对：出征自动开战 / 掠夺只转阶段 B）
+  const RK = await import('@/lib/battle/raid');
+
+  /** 逐字段比较用的紧凑打印（对象顺序在两侧同源，故可直接比字符串） */
+  const J = (x) => JSON.stringify(x);
 
   const D = (st, a) => gameReducer(st, a);
   const fight = (st) => {
@@ -101,8 +106,12 @@ const check = (ok, label, detail) => {
   const list = EXP.discoveredLairs(st2);
   check(list.length === 1 && list[0].bossId === 'b1' && typeof list[0].turns === 'number', '出征列表只含已探明的老巢且带耗时', JSON.stringify(list));
 
-  // ---------- ③b readyExpedition 的 off-by-one（useTurn 读的是 TICK 之前的状态）----------
-  console.log('\n[3b] 归零判定的 off-by-one（TICK 前 vs TICK 后）');
+  // ---------- ③b 抵达判定：只取决于状态本身（off-by-one 的回归） ----------
+  // ⚠ P5 回归（2026-08 用户报"出征跃迁回合结束后既没开战、也没有开战入口"）：
+  //   旧实现 `readyExpedition(state, afterTick)` 是"读 TICK 前的状态 + 猜一位"（afterTick=true 等价
+  //   `turnsRemaining <= 1`），把抵达判定押在「TICK 与 START_BATTLE 必须同批、且真的被派发」上。  //   现在改成：**先 tickExpedition 投影、再从未投影结果判定**（与掠夺那条同形），
+  //   判据是 expeditionArrived（`turnsRemaining <= 0`）—— 谁读都只读状态，与派发时序无关。
+  console.log('\n[3b] 抵达判定只取决于状态（先投影再判；1 回合出征必须在结束回合那次就开战）');
   {
     let s = withColony('terran', ['e06']);
     s = { ...s, cardLibrary: fleetsMod.FLEET_STARTER.slice(0, 3) };
@@ -110,25 +119,139 @@ const check = (ok, label, detail) => {
     for (const id of s.cardLibrary) s = D(s, { type: 'ADD_SHIP_TO_FLEET', fleetId: s.fleets[0].id, shipId: id });
     const fid = s.fleets[0].id;
     const withTurns = (n) => D(s, { type: 'START_EXPEDITION', bossId: 'b1', fleetId: fid, turns: n });
+
+    // ① 投影 = reducer 的 TICK（唯一真值，逐字段一致 —— 不许两份算式）
     const e3 = withTurns(3);
-    check(EXP.readyExpedition(e3) === null && EXP.readyExpedition(e3, true) === null, '还剩 3 回合：都不该开战');
+    const projE3 = { ...e3, expedition: EXP.tickExpedition(e3.expedition), raid: RK.tickRaid(e3.raid) };
+    const tickedE3 = D(e3, { type: 'TICK_BATTLE_STATE' });
+    check(
+      J(tickedE3.expedition) === J(projE3.expedition) && J(tickedE3.raid) === J(projE3.raid),
+      '**投影函数（tickExpedition / tickRaid）与 reducer 的 TICK_BATTLE_STATE 逐字段一致**（同一份算式）',
+      J(projE3.expedition) + ' vs ' + J(tickedE3.expedition)
+    );
+    check(EXP.tickExpedition(null) === null, 'tickExpedition(null) = null（没有出征时不动）');
+
+    // ② 还剩 3 回合：投影后仍在路上
+    check(EXP.expeditionArrived(projE3.expedition) === false, '还剩 3 回合：投影后尚未抵达');
+    check(EXP.readyExpedition(projE3) === null, '还剩 3 回合：不开战');
+
+    // ③ **最短的 1 回合出征必须在结束回合的那一次就开战**（用户这次的卡尔戈出征就是 1 回合）
     const e1 = withTurns(1);
-    check(EXP.readyExpedition(e1) === null, '还剩 1 回合、按 TICK 前判：不开战');
-    check(!!EXP.readyExpedition(e1, true), '还剩 1 回合、按**本次 TICK 后**判：**开战**（否则 off-by-one）');
-    const e0 = withTurns(0);
-    check(!!EXP.readyExpedition(e0) && !!EXP.readyExpedition(e0, true), '已经 0 回合：两种口径都开战');
+    const projE1 = { ...e1, expedition: EXP.tickExpedition(e1.expedition), raid: RK.tickRaid(e1.raid) };
+    check(projE1.expedition.turnsRemaining === 0, '1 回合出征：结束回合那一次 TICK 后倒计时归零', String(projE1.expedition.turnsRemaining));
+    check(EXP.expeditionArrived(projE1.expedition) === true, '归零 = 已抵达（expeditionArrived 只看状态）');
+    const readyE1 = EXP.readyExpedition(projE1);
+    check(
+      !!readyE1 && readyE1.bossId === 'b1' && J(readyE1.fleet) === J(e1.fleets[0].shipIds),
+      '**1 回合出征：结束回合那次就给出 START_BATTLE（参战 = 该舰队编制）**',
+      J(readyE1)
+    );
+
+    // ④ 已经归零（turnsRemaining: 0 且 battle=null）的状态：判定只读状态 → 必然开战。
+    //   ⚠ 与旧实现的行为差异（已实测）：旧的 `readyExpedition(state, true)` 在这个形状上**也**会开战
+    //     （它的判据是 `<= 1`）——它的真正毛病是"读 TICK 前的状态 + 猜一位"：
+    //     ① 判据把"抵达"表达成"还剩 1 回合"，于是归零那一帧**界面只能显示「还有 0 回合抵达」**
+    //        （旧 expeditionEtaText 没有下限，这正是用户截图里那个死界面）；
+    //     ② 判定的正确性依赖调用方**恰好**多传那一位：少传 / 传错批次时，同一份状态给出的答案就变了
+    //        （判定不再只取决于状态）。新写法把这两条都断在上面：判据 = expeditionArrived（`<= 0`）。
+    const zero = withTurns(0);
+    const projZero = { ...zero, expedition: EXP.tickExpedition(zero.expedition), raid: RK.tickRaid(zero.raid) };
+    check(!!EXP.readyExpedition(projZero), '**倒计时已归零的旧状态（turnsRemaining=0）读到也必须开战**', J(EXP.readyExpedition(projZero)));
+    // 负数倒计时（读档 / 迁移可能造出来的越界值）也必须算"已抵达"：判据是 `<= 0` 而不是 `=== 0`。
+    const negative = { ...withTurns(0), expedition: { ...withTurns(0).expedition, turnsRemaining: -3 } };
+    check(EXP.expeditionArrived(negative.expedition) === true, '负数倒计时也算已抵达（判据是 <= 0，不是 == 0）');
+    check(!!EXP.readyExpedition(negative), '负数倒计时 → 照样开战（不卡死）');
+
+    // ⑤ 投影后方才归零 / 仍在路上：不开战（不提前开战）
+    check(EXP.readyExpedition({ ...withTurns(2), expedition: EXP.tickExpedition(withTurns(2).expedition) }) === null, '还剩 2 回合：投影后仍有 1 回合，不开战');
+
+    // ⑥ 边界：战斗进行中 / 没有出征 / 舰队被删 / 舰船全被击毁后编制为空
+    check(EXP.readyExpedition({ ...projZero, expedition: null }) === null, '没有出征 → 不开战');
+    const eBattle = { ...projZero, battle: E.createBattle({ seed: 9, bossId: 'b1' }) };
+    check(EXP.readyExpedition(eBattle) === null, '战斗已在进行 → 不开新战');
     // ⚠ P6 起 reducer 已经**不允许删除出征中的舰队**（DELETE_BATTLE_FLEET 有守卫）——
     //   这一步再也不能用 dispatch 造出"出征指向已不存在的舰队"。但 readyExpedition 的这条兜底仍必须保留：
     //   旧存档（P6 之前删过）与"舰船全被击毁/永久损失后编制为空"都可能落到这个形状。
     //   故这里**直接构造**那个形状（手写一份去掉该舰队的 fleets），而不是绕开守卫。
+    const zeroNow = withTurns(0);
     check(
-      D(e0, { type: 'DELETE_BATTLE_FLEET', fleetId: fid }) === e0,
+      D(zeroNow, { type: 'DELETE_BATTLE_FLEET', fleetId: fid }) === zeroNow,
       'P6 守卫：出征中的舰队删不掉（返回原对象）'
     );
-    const eNoFleet = { ...e0, fleets: e0.fleets.filter((f) => f.id !== fid) };
-    check(EXP.readyExpedition(eNoFleet, true) === null, '舰队被删 → 不开战（不崩）');
-    const eBattle = { ...e0, battle: E.createBattle({ seed: 9, bossId: 'b1' }) };
-    check(EXP.readyExpedition(eBattle, true) === null, '战斗已在进行 → 不开新战');
+    const eNoFleet = { ...zeroNow, fleets: zeroNow.fleets.filter((f) => f.id !== fid) };
+    check(EXP.readyExpedition(eNoFleet) === null, '舰队被删 → 不开战（不崩）');
+    const eEmpty = { ...zeroNow, fleets: zeroNow.fleets.map((f) => ({ ...f, shipIds: [] })) };
+    check(EXP.readyExpedition(eEmpty) === null, '出征舰队被掏空 → 不开战（不崩）');
+  }
+
+  // ---------- ③c 界面：绝不出现「还有 0 回合抵达」 ----------
+  console.log('\n[3c] 界面模型：剩余回合显示下限 1（与掠夺 raidStatus.turnsToArrival 同口径）');
+  {
+    let s = withColony('terran', ['e06']);
+    s = { ...s, cardLibrary: fleetsMod.FLEET_STARTER.slice(0, 3) };
+    s = D(s, { type: 'CREATE_BATTLE_FLEET', name: '界面队' });
+    for (const id of s.cardLibrary) s = D(s, { type: 'ADD_SHIP_TO_FLEET', fleetId: s.fleets[0].id, shipId: id });
+    const fid = s.fleets[0].id;
+    const at = (n) => D(s, { type: 'START_EXPEDITION', bossId: 'b1', fleetId: fid, turns: n });
+
+    const none = EXP.expeditionView(s);
+    check(none.onExpedition === false && none.turnsRemaining === 0 && none.etaText === '', '没有出征：onExpedition=false、无文案', J(none));
+
+    const v3 = EXP.expeditionView(at(3));
+    check(v3.turnsRemaining === 3 && v3.etaText === '还有 3 回合抵达', '在途 3 回合：显示 3', J(v3.etaText));
+    check(v3.bossId === 'b1' && v3.bossLabel.length > 0 && v3.fleetName === '界面队', '在途：目标名 / 舰队名来自 lib（UI 不查表）', J([v3.bossLabel, v3.fleetName]));
+
+    // 归零那一帧：显示下限 1，**不许**渲染「还有 0 回合抵达」
+    const zeroSt = at(0);
+    const v0 = EXP.expeditionView(zeroSt);
+    check(v0.arrived === true, '归零：arrived = true（界面该等开战）');
+    check(v0.turnsRemaining === 1, '**归零时剩余回合的显示下限是 1**（不是 0）', String(v0.turnsRemaining));
+    check(!/0/.test(v0.etaText), '**归零时文案里没有 0**（不出现「还有 0 回合抵达」）', v0.etaText);
+    check(EXP.expeditionEtaText(0) === '还有 1 回合抵达', 'expeditionEtaText(0) 下限 1', EXP.expeditionEtaText(0));
+    check(EXP.expeditionEtaText(-2) === '还有 1 回合抵达', 'expeditionEtaText(负数) 也钳到 1（防御性下限）', EXP.expeditionEtaText(-2));
+
+    // 投影之后（= useTurn 判定用的那一帧）：仍然不出现 0
+    const projZero = { ...zeroSt, expedition: EXP.tickExpedition(zeroSt.expedition) };
+    check(EXP.expeditionView(projZero).turnsRemaining === 1, '投影后（已归零）显示仍是下限 1', String(EXP.expeditionView(projZero).turnsRemaining));
+    const afterTickSt = D(at(1), { type: 'TICK_BATTLE_STATE' });
+    check(
+      EXP.expeditionView(afterTickSt).etaText === '还有 1 回合抵达',
+      'reducer 已 TICK 到 0 的那一帧：文案仍不是「还有 0 回合抵达」',
+      EXP.expeditionView(afterTickSt).etaText
+    );
+  }
+
+  // ---------- ③d 与掠夺同时归零：两条都正确 ----------
+  //   出征 = 自动开战；掠夺 = 只转阶段 B（等玩家开战）。两者都读"投影后的状态"，互不干扰。
+  console.log('\n[3d] 出征与掠夺同时归零：出征自动开战、掠夺转阶段 B（互不干扰）');
+  {
+    let s = withColony('terran', ['e06']);
+    s = { ...s, cardLibrary: fleetsMod.FLEET_STARTER.slice(0, 3) };
+    s = D(s, { type: 'CREATE_BATTLE_FLEET', name: '双线队' });
+    for (const id of s.cardLibrary) s = D(s, { type: 'ADD_SHIP_TO_FLEET', fleetId: s.fleets[0].id, shipId: id });
+    const fid = s.fleets[0].id;
+    s = D(s, { type: 'START_EXPEDITION', bossId: 'b1', fleetId: fid, turns: 1 });
+    s = D(s, { type: 'START_RAID', raiders: 1 });
+    s = { ...s, raid: { ...s.raid, inTurns: 1 } };   // 阶段 A 也只剩 1 回合
+
+    // useTurn 的编排：先投影，再判
+    const proj = { ...s, expedition: EXP.tickExpedition(s.expedition), raid: RK.tickRaid(s.raid) };
+    const readyExp = EXP.readyExpedition(proj);
+    check(!!readyExp && readyExp.bossId === 'b1', '出征归零 → 给出 START_BATTLE', J(readyExp));
+    check(RK.raidResolution(proj) === 'arrived', '掠夺同时归零 → 转阶段 B（arrived），不自动开战', RK.raidResolution(proj));
+    check(RK.raidPhase(proj.raid) === 'warning' && RK.raidWarningElapsed(proj.raid), '掠夺此刻仍是阶段 A 但倒计时已归零（转段信号只看状态）');
+
+    // 真正落库：TICK → START_BATTLE（出征）+ ARRIVE_RAID（掠夺），两条都走对
+    let live = D(s, { type: 'TICK_BATTLE_STATE' });
+    live = D(live, { type: 'START_BATTLE', bossId: readyExp.bossId, fleet: readyExp.fleet, kind: 'expedition', seed: 3 });
+    check(!!live.battle && live.battle.bossId === 'b1', '同一回合里出征真的开战了', live.battle ? live.battle.bossId : 'null');
+    const liveArrived = D(live, { type: 'ARRIVE_RAID' });
+    check(
+      RK.raidPhase(liveArrived.raid) === 'arrived' && liveArrived.raid.arrivedTurns === RK.RAID_ARRIVED_TURNS,
+      '同一回合里掠夺也转成了阶段 B（战斗结束后玩家可点「开战」）',
+      J(liveArrived.raid)
+    );
+    check(liveArrived.expedition !== null && liveArrived.expedition.turnsRemaining === 0, '出征记录保留到战斗结束（END_BATTLE 才清空）', J(liveArrived.expedition));
   }
 
   // ---------- ④ 全流程 ----------

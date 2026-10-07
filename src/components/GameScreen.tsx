@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
 import type { GameState, EventOption, ResourceChange, ChoiceEvent } from '@/types/game';
-import type { BattleAction, BattleExpedition, BattleFleet, BattleState, PirateBossId, ShipCardId } from '@/types/battle';
+import type { BattleAction, BattleFleet, BattleState, PirateBossId, ShipCardId } from '@/types/battle';
 import type { DodgeReason } from '@/hooks/useEvent';
 import {
   LayoutDashboard,
@@ -126,8 +126,6 @@ interface GameScreenProps {
   getShipTotalAssets: (ship: GameState['ships'][0]) => number;
   // ===== 舰船卡牌战斗（V1.5 §10）：只接「战斗」页签用 =====
   battle: BattleState | null;
-  /** 进行中的出征（先用 fleetExpedition 命名，避免与殖民地领袖远征混淆） */
-  fleetExpedition: BattleExpedition | null;
   fleets: BattleFleet[];
   cardLibrary: ShipCardId[];
   /** 发起舰队出征（START_EXPEDITION）；与殖民地领袖远征的 onStartExpedition 是两回事（V1.5 §10.1） */
@@ -247,7 +245,6 @@ export default function GameScreen({
   onResetGame,
   getShipTotalAssets,
   battle,
-  fleetExpedition,
   fleets,
   cardLibrary,
   onStartBattleExpedition,
@@ -662,7 +659,6 @@ export default function GameScreen({
           <div className={activeTab === 'battle' ? '' : 'hidden'}>
             <BattleTab
               battle={battle}
-              expedition={fleetExpedition}
               fleets={fleets}
               cardLibrary={cardLibrary}
               state={gameState}
@@ -682,7 +678,6 @@ export default function GameScreen({
               state={gameState}
               fleets={fleets}
               cardLibrary={cardLibrary}
-              expedition={fleetExpedition}
               onCreateFleet={onCreateBattleFleet}
               onDeleteFleet={onDeleteBattleFleet}
               onRenameFleet={onRenameBattleFleet}

@@ -1,6 +1,6 @@
 import { memo, useCallback, useMemo, useRef, useState } from 'react';
 import type { GameState } from '@/types/game';
-import type { BattleAction, BattleExpedition, BattleFleet, BattleState, PirateBossId, ShipCardId } from '@/types/battle';
+import type { BattleAction, BattleFleet, BattleState, PirateBossId, ShipCardId } from '@/types/battle';
 import { BATTLE_TUNING } from '@/data/battle/tuning';
 import { BATTLE_CARDS } from '@/data/battle/cards';
 import { PIRATE_BOSSES } from '@/data/battle/pirates';
@@ -9,11 +9,10 @@ import { bossArtSrc } from '@/lib/battle/view';
 import {
   canStartExpedition,
   discoveredLairs,
-  expeditionEtaText,
-  lairDisplayName,
+  expeditionView,
   travelTurnsText,
 } from '@/lib/battle/expedition';
-import { RAID_CHANCE, RAID_IMMUNE_TURNS, RAID_WARNING_TURNS, raidStatus } from '@/lib/battle/raid';
+import { raidCardView } from '@/lib/battle/raid';
 import { LAIR_REWARD_GOLD, LAIR_REWARD_STARDUST } from '@/lib/battle/rewards';
 import BattleScreen from './BattleScreen';
 import { BossAvatar } from './parts';
@@ -39,12 +38,10 @@ import { BossAvatar } from './parts';
 
 interface BattleTabProps {
   battle: BattleState | null;
-  /** 进行中的出征（V1.5 §10.1） */
-  expedition: BattleExpedition | null;
   fleets: BattleFleet[];
   cardLibrary: ShipCardId[];
   /** 整份存档状态：出征的可用性 / 耗时 / 探明判定（lib/battle/expedition）与
-   *  掠夺的两段窗口（lib/battle/raid.raidStatus，读 state.raid）都从它推导 —— 故**不再单独收 raid prop**。 */
+   *  掠夺卡片的全部内容（lib/battle/raid.raidCardView，读 state.raid）都从它推导 —— 故**不再单独收 raid prop**。 */
   state: GameState;
   /** 发起出征（START_EXPEDITION：登记目标老巢 + 出征舰队 + 耗时回合数） */
   onStartExpedition: (bossId: PirateBossId, fleetId: string, turns: number) => void;
@@ -71,7 +68,6 @@ function summarize(shipIds: ShipCardId[]): { id: string; n: number }[] {
 
 function BattleTabBase({
   battle,
-  expedition,
   fleets,
   cardLibrary,
   state,
@@ -107,8 +103,13 @@ function BattleTabBase({
   const defenders = useMemo(() => fleets.filter((f) => f.defending), [fleets]);
   const selected = fleets.find((f) => f.id === fleetId) || null;
   /** 掠夺的两段窗口（阶段 A 预警 / 阶段 B 已抵达待战 / idle + 免疫期）——
-   *  判定与文案口径的**唯一真值**是 lib/battle/raid.raidStatus，本组件只渲染。 */
-  const raidView = useMemo(() => raidStatus(state), [state]);
+   *  判定、文案与开战按钮的可用性**全部**来自 lib/battle/raid.raidCardView（唯一真值），
+   *  本组件只渲染：不许自己判 inTurns / arrivedTurns，也不许自己拼文案。 */
+  const raidCard = useMemo(() => raidCardView(state), [state]);
+  /** 出征卡片的整份渲染模型（唯一真值）：剩余回合的**显示下限 1**、「还有 N 回合抵达」文案、
+   *  目标名与老巢名都从它取 —— 本组件不读 `expedition.turnsRemaining` 原值，也不自己拼文案
+   *  （那正是"还有 0 回合抵达"死界面的来源，与 raidCardView 同一条纪律）。 */
+  const expeditionCard = useMemo(() => expeditionView(state), [state]);
 
   // 稳定引用：按钮共用同一个处理器（onCreateFleet 已是稳定引用）
   const newFleet = useCallback(() => {
@@ -185,15 +186,13 @@ function BattleTabBase({
           </span>
         </h3>
 
-        {expedition ? (
+        {expeditionCard.onExpedition ? (
           <div>
             <p className="text-[12.5px] font-bold text-amber-300">
-              {expeditionEtaText(expedition.turnsRemaining)}
-              <span className="ml-1 font-normal text-slate-300">
-                {PIRATE_BOSSES[expedition.bossId]?.name || '未知老巢'}
-              </span>
+              {expeditionCard.etaText}
+              <span className="ml-1 font-normal text-slate-300">{expeditionCard.bossLabel}</span>
               <span className="ml-1 text-[11px] font-normal text-slate-500">
-                （目标 {lairDisplayName(expedition.bossId)}）
+                （目标 {expeditionCard.lairName}）
               </span>
             </p>
             <p className="mt-1 text-[11px] text-slate-500">
@@ -260,61 +259,52 @@ function BattleTabBase({
       {/* ==================== 殖民地掠夺（V1.5 §10.2，两段窗口） ====================
            阶段 A（预警 CD）只报"还有 N 回合抵达"，**不给开战入口**；
            阶段 B（已抵达）海盗停在门口等玩家点「开战」，并给"还有 N 回合不迎战就自动失败"的倒计时。
-           阶段 / 倒计时 / 参战池条数全部来自 lib/battle/raid.raidStatus（唯一真值），本组件只渲染。 */}
-      {(raidView.phase !== 'idle' || raidView.immuneTurns > 0) && (
-        <div className={`${cardBase} ${raidView.phase === 'arrived' ? 'border-red-700/70' : raidView.phase === 'warning' ? 'border-amber-700/70' : 'border-[#2b3550]'}`}>
+           ⚠ **本卡片一个判定都不做**：显示哪一段、文案写什么、开战按钮出不出来，全部来自
+           lib/battle/raid.raidCardView（唯一真值，可被 check-battle 的纯函数验收覆盖）。
+           这里只把字段摆上去 —— 不许自己判 inTurns / arrivedTurns，也不许自己写文案。 */}
+      {raidCard.showCard && (
+        <div className={`${cardBase} ${
+          raidCard.tone === 'arrived' ? 'border-red-700/70' : raidCard.tone === 'warning' ? 'border-amber-700/70' : 'border-[#2b3550]'
+        }`}>
           <h3 className="mb-2 flex items-center gap-2 text-[13px] font-bold text-slate-200">
             殖民地掠夺
-            <span className="text-[11px] font-normal text-slate-500">
-              每回合 {RAID_CHANCE * 100}% 触发，{RAID_WARNING_TURNS} 回合预警，结束免疫 {RAID_IMMUNE_TURNS} 回合
-            </span>
+            <span className="text-[11px] font-normal text-slate-500">{raidCard.subtitle}</span>
           </h3>
 
-          {raidView.phase === 'warning' ? (
+          {raidCard.phase === 'warning' ? (
             <>
               <p className="text-[12.5px] font-bold text-amber-300">
-                海盗还有 {raidView.turnsToArrival} 回合抵达
-                {raidView.raiders > 1 ? `（本次 ${raidView.raiders} 支，赢下第一场要连打第二场）` : ''}
+                {raidCard.headline}
+                {raidCard.squadNote}
               </p>
-              <p className="mt-1 text-[11px] leading-relaxed text-slate-400">
-                {raidView.defenseCount > 0
-                  ? `现在有 ${raidView.defenseCount} 艘带「防守」标签的舰队会在抵达时合并成一个部署池（到那时再点「开战」）。`
-                  : '现在还没有带「防守」标签的舰队 —— 去机库给留守舰队打上防守标签（到达后不打会被掠夺成功）。'}
-              </p>
+              <p className="mt-1 text-[11px] leading-relaxed text-slate-400">{raidCard.detail}</p>
             </>
-          ) : raidView.phase === 'arrived' ? (
+          ) : raidCard.phase === 'arrived' ? (
             <>
               <p className="text-[12.5px] font-bold text-red-300">
-                海盗已抵达，还有 {raidView.turnsToAutoLoot} 回合
+                {raidCard.headline}
                 <span className="ml-1 font-normal text-slate-400">（到时你还不迎战，就会被掠夺成功）</span>
-                {raidView.raiders > 1 ? `（本次 ${raidView.raiders} 支，赢下第一场要连打第二场）` : ''}
+                {raidCard.squadNote}
               </p>
-              <p className="mt-1 text-[11px] leading-relaxed text-slate-400">
-                {raidView.defenseCount > 0
-                  ? `留守的 ${raidView.defenseCount} 艘带「防守」标签的舰队会合并成一个部署池接战；这 ${raidView.turnsToAutoLoot} 回合里还可以去机库调整编成与防守标签。`
-                  : '还没有挂防守标签的舰队 —— 现在去机库给留守舰队打上防守标签，再回来点「开战」；不打就会在倒计时归零时被掠夺成功。'}
-              </p>
-              <div className="mt-2 flex flex-wrap items-center gap-2">
-                <button
-                  type="button"
-                  onClick={startRaidBattle}
-                  disabled={!raidView.canFight}
-                  className="rounded-[7px] border border-red-500 bg-red-700 px-3 py-1.5 text-[12.5px] font-bold text-white hover:enabled:bg-red-600 disabled:cursor-not-allowed disabled:opacity-40"
-                >
-                  开战
-                </button>
-                {/* 不能开战的原因写在行内（手机端没有 hover）：防守池为空时的文案是用户裁定的逐字口径 */}
-                <span className="text-[10.5px] leading-relaxed text-amber-400">
-                  {raidView.canFight
-                    ? `可以迎战：${raidView.defenseCount} 艘防守舰队合并接战`
-                    : '还没有挂防守标签的舰队'}
-                </span>
-              </div>
+              <p className="mt-1 text-[11px] leading-relaxed text-slate-400">{raidCard.detail}</p>
+              {/* 开战入口：只有 raidCardView 说该出现时才渲染（阶段 A 永远没有） */}
+              {raidCard.showFightButton ? (
+                <div className="mt-2 flex flex-wrap items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={startRaidBattle}
+                    disabled={!raidCard.canFight}
+                    className="rounded-[7px] border border-red-500 bg-red-700 px-3 py-1.5 text-[12.5px] font-bold text-white hover:enabled:bg-red-600 disabled:cursor-not-allowed disabled:opacity-40"
+                  >
+                    开战
+                  </button>
+                  {/* 不能开战的原因写在行内（手机端没有 hover）——文案同样来自 lib */}
+                  <span className="text-[10.5px] leading-relaxed text-amber-400">{raidCard.fightHint}</span>
+                </div>
+              ) : null}
             </>
           ) : (
-            <p className="text-[12.5px] text-slate-300">
-              海盗已退（击退或已结算），{raidView.immuneTurns} 回合内不会再被掠夺。
-            </p>
+            <p className="text-[12.5px] text-slate-300">{raidCard.idleText}</p>
           )}
         </div>
       )}
@@ -384,10 +374,10 @@ function BattleTabBase({
           </div>
         ) : null}
 
-        {expedition && (
+        {expeditionCard.onExpedition && (
           <p className="mt-2 text-[11px] leading-relaxed text-amber-400">
-            已有出征在途：{PIRATE_BOSSES[expedition.bossId]?.name || '未知老巢'}
-            （剩 {expedition.turnsRemaining} 回合开战）—— 同时只能出征 1 个老巢；先等它抵达开战，或在上面的「出征」里取消。
+            已有出征在途：{expeditionCard.bossLabel}
+            （{expeditionCard.etaText}）—— 同时只能出征 1 个老巢；先等它抵达开战，或在上面的「出征」里取消。
           </p>
         )}
 

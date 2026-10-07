@@ -196,6 +196,53 @@ const J = (v) => JSON.stringify(v);
     check(ov2.currentCardName !== 'h1', '在造卡型渲染的是卡名而不是 cardId', ov2.currentCardName);
   }
 
+  // ---------- ⑦ 改名入口（UI 侧可断言的那一半） ----------
+  //  用户 2026-08 报的 bug：「编队」标签里给舰队改名，怎么点都没反应。
+  //  reducer 与守卫当时就是对的（④ 那条断言一直通过），所以断链在 **UI 那一侧**：
+  //  「改名」按钮的禁用判据读的是 `FleetRow.canEdit`（"能不能动这支队"的概称），
+  //  而 HangarTab 的提交路径又各自调了一遍 isFleetOnExpedition —— 同一判定两处派生。
+  //  下面这条把"改名入口是否可用 / 为什么不可用"收敛到 FleetRow 上，并检查两边同源。
+  console.log('\n[7] 改名入口（canRename 落在 FleetRow 上，UI 不许自己再判一次）');
+  {
+    const st = build(['h1', 'c1'], [['h1'], ['c1']]);
+    const rows = H.fleetRows(st);
+    check(
+      rows.every((r) => typeof r.canRename === 'boolean' && typeof r.renameReason === 'string'),
+      '每个 FleetRow 都带 canRename / renameReason（改名入口的唯一真值随渲染模型下发）',
+      JSON.stringify(rows.map((r) => [r.canRename, r.renameReason]))
+    );
+    check(
+      rows.every((r) => r.canRename === H.canRenameFleet(st, r.id).ok),
+      'FleetRow.canRename === canRenameFleet(state, id).ok（同一个真值，不是第二份派生）',
+      JSON.stringify(rows.map((r) => [r.canRename, H.canRenameFleet(st, r.id).ok]))
+    );
+    check(
+      rows.every((r) => r.renameReason === (H.canRenameFleet(st, r.id).reason || '')),
+      'FleetRow.renameReason === canRenameFleet 的中文原因（按钮 title 与行内原因同源）',
+      JSON.stringify(rows.map((r) => r.renameReason))
+    );
+    check(
+      H.canRenameFleet(st, st.fleets[0].id).ok === true,
+      '非出征舰队：改名入口可用（按钮不置灰）'
+    );
+
+    // 出征中的队：改名入口必须不可用，且给出与 reducer 完全相同的那条原因
+    const away = st.fleets[0].id;
+    const e = D(st, { type: 'START_EXPEDITION', bossId: 'b1', fleetId: away, turns: 3 });
+    const awayRow = H.fleetRows(e).find((r) => r.id === away);
+    check(awayRow.canRename === false && awayRow.renameReason.length > 0, '出征中的队：改名入口不可用并写明原因', awayRow.renameReason);
+    check(D(e, { type: 'RENAME_BATTLE_FLEET', fleetId: away, name: 'X' }) === e, '出征中的队：reducer 也拒绝改名（两处同源，不会"能点但没用"）');
+
+    // 改名之后渲染模型必须立刻反映新名字（UI 重渲染后读到的值）
+    const here = st.fleets[1].id;
+    const renamed = D(st, { type: 'RENAME_BATTLE_FLEET', fleetId: here, name: '新名字' });
+    check(H.fleetRows(renamed).find((r) => r.id === here).name === '新名字', '改名后 fleetRows 立刻给出新名字（渲染模型与状态同源）');
+    check(
+      H.fleetRows(renamed).find((r) => r.id === here).canRename === true,
+      '改名后入口仍然可用（没被自己的提交锁死）'
+    );
+  }
+
   console.log('\n=== P6 验收结果 ===');
   if (fails.length === 0) console.log('  全部通过 ✓');
   else { console.log('  ' + fails.length + ' 条失败 ✗'); process.exitCode = 1; }
