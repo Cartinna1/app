@@ -90,12 +90,14 @@
 **掠夺奖励与掠夺损失（`lib/battle/rewards.ts` / `lib/battle/raid.ts`）——用户 2026-08 裁定（优先于原占位）**：
 ① **原料 = 随机 40 个**（`RAID_REWARD_MATERIAL_AMOUNT = 40`，覆盖原占位 5；文案里的数量由该常量拼出，改它文案自动跟着变）；
 ② **声望只给已探明的势力** —— 候选**只**来自既有唯一真值 `lib/galaxy/knowledge.getKnownFactionIds(ship)`（与黑市 / 势力列表同雾），**不许自己写过滤**；**一个已探明势力都没有时不发声望，回退到金币**（`kind: 'gold'` + `RAID_REWARD_GOLD`，绝不发一条空奖励；旧口径「某个势力的声望 +5」已整条删除）；
-③ **奖励与损失都要显著地显示出来** —— `lastRaidSettlement` 快照（`RaidSettlement`，**SAVE_VERSION 7 → 8**；旧档兜底 `null`，v7 旧形状按 `win` 搬迁）：**打赢与打输共用同一形状**，用 `outcome: 'win' | 'lost'` 区分：
-  · 打赢 = `{ text: <reward.text 原话>, awardText: <同一句>, loot: 空 }` —— **文案仍只由 `rollRaidReward` 产出，一个字未变**；
-  · 打输（`END_BATTLE` 防守战打输 / `APPLY_RAID_LOOT` 阶段 B 超时未迎战）= `{ text: '殖民地被掠夺：金币 -X、硅片 -Y…', awardText: '', loot: <实扣明细> }`（用户追加原话「**失败也要显示丢了啥**」；阶段 B 超时那条 = 玩家什么都没做就被抢，尤其必须看得见）；
-  · **`loot` 是 `raidLootLoss` 那一次计算的原件**（同一个 `loss` 既交给 `payCost`/`pushGoldLog` 去扣、也进快照当显示值）→ **显示值 = 实扣值**；显示层与 lib **都不许再算一遍损失**（重算时资源已扣完，必然对不上），**扣 0 的项不列**；
-  · **写入点唯一 = `hooks/gameReducer.ts`**（`END_BATTLE` 的 win / lost 两条 + `APPLY_RAID_LOOT`），**清空 = `START_RAID`**（下一场掠夺事件开打时）；战斗结算界面（`BattleScreen.campaignText`）与战斗页签（`raidCardView.rewardText` / `.settlementOutcome` / `.rewardAwardText` / `.loot`）**读同一份** —— **UI 只渲染，不许自己算奖励、也不算损失**（源码级断言：`raidLootLoss` 在 reducer 里恰好出现 2 次，就是两条失败路各一次）；
-  · 同一次还新增 `raidCardView` 的 `squadsLeft` / `outcomeText`（"这一波还剩 N 支掠夺队"那两行）；
+③ **掠夺结算的显示出口 = 事件记录**（用户 2026-08 最终口径，原话：「是不是就相当于事件记录了，那干脆不要再战斗页签加东西了，直接放事件记录好了哇，打赢也一样。」）：
+  · **战斗页签 / 战斗结算画面都不放结算行**；唯一出口 = `GameState.eventLog`（事件面板底部「事件记录」，本来就在存档清单里，上限 100 条 / 展示最近 30 条）；
+  · 打赢 → `event: '掠夺战果'`、`detail = rollRaidReward(...).text`（**四类各自写明类型 + 数量**：`缴获 20000 金币` / `缴获 10 星尘` / `缴获 <原料名> ×40` / `与「<势力名>」的声望 +5`；每次只给抽中的那一类）；
+  · 打输（`END_BATTLE` 防守战打输）/ 阶段 B 超时被抢（`APPLY_RAID_LOOT`，玩家什么都没做）→ `event: RAID_LOOT_EVENT`（「殖民地被掠夺」）、`detail = raidLootText(loss)`：**逐项列出实际扣到的资源与数量**（`损失 金币 20000、硅片 100、量子簇 30、黄金 40（各项以当前持有量为上限）`），**扣 0 的项不列**，什么都没扣到就给一句完整的话（`殖民地里已经没什么可抢的了…`）；
+  · **同一个 `loss` 既交给 `payCost`/`pushGoldLog` 去扣、也交给 `raidLootText` 拼 detail** → **日志写的 = 账上真扣的**（AGENTS 第九节）；`raidLootLoss` 在 reducer 里**恰好 2 次**（两条失败路各一次，没有"重算一遍给显示用"）；
+  · **曾经的 `lastRaidSettlement` 快照字段已整个删除**（仓库硬规矩：不留死字段）：`types/game.ts` 的字段、`SaveData` 清单、`lib/save.ts` 的 `readRaidSettlement`、`raidCardView` 的 `settlementOutcome` / `rewardAwardText` / `settlementLoot`、`BattleScreen` 的 `campaignText` / `settlement` 两个 prop 与那一块 JSX，全部清掉；`rewards.ts` 只剩 `RAID_LOOT_EVENT` / `raidLootItems`（逐项串的唯一产出口）与 `rollRaidReward().text`；
+  · ⚠ **`SAVE_VERSION` 保持 8 不动**：用户机器上跑的已是 v8，本次只是**少读一个字段** → 旧档（v8 残留 `lastRaidSettlement`、v7 残留 `lastRaidReward`、v6 及更早没有）**一律照常读入**，残留键在 `stateFromSave` 里**被忽略**，不需要任何迁移分支（断言按 v6/v7/v8 三档逐一验证"不抛错 + 键被忽略 + 既有字段一字不差"）；
+  · ⚠ **教训（两次返工都出在"显示位置与状态解耦"上）**：第一版把结算行塞进「殖民地掠夺」卡片 → 免疫期一过卡片消失、玩家什么都看不到（用户报障）；第二版提到卡片外的常驻行 → 用户改主意要"只留事件记录"。**结论：这类"最近一次结算"的正确归宿是事件记录（它天生持久、已在存档、不依赖任何界面分支）**，不要为它新造存档字段与常驻行。
   · 顺带修掉一条显示缺陷：掠夺事件日志原先 `event='击退海盗'` + `detail`（自带「击退海盗：」）在 EventPanel 里并排渲染成**双前缀**「击退海盗：击退海盗：缴获 …」→ 现在 `event` 用中性词**「掠夺战果」**，`detail` 仍是 `reward.text` 原句。
 剩余占位：`RAID_REWARD_GOLD = 20000`（**0 已探明势力时的回退奖励也用它**）/ `RAID_REWARD_STARDUST = 10` / `RAID_REWARD_REPUTATION = 5`（四类仍等概率，§10.2 未给数值）。
 

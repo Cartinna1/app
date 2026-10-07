@@ -1,11 +1,12 @@
 import { memo, useCallback, useMemo, useState } from 'react';
 import type { GameState } from '@/types/game';
-import type { BuildQueueRow, ShipyardCardRow, ShipyardLockedTier, ShipyardSeriesFilter, ShipyardView } from '@/lib/battle/shipyard';
-import { canCancelBuild, defaultSeriesFilter, filterBySeries, formatBuildCost, dockLevelText, pickSeriesFilter, resolveSeriesFilter, seriesChipClass, shipyardView } from '@/lib/battle/shipyard';
+import type { BuildQueueRow, ShipyardCardRow, ShipyardLockedTier, ShipyardView } from '@/lib/battle/shipyard';
+import { canCancelBuild, defaultSeriesFilter, filterBySeries, formatBuildCost, dockLevelText, pickSeriesFilter, resolveSeriesFilter, shipyardView } from '@/lib/battle/shipyard';
 import { getBuildingDef } from '@/data/colony/buildings';
 import { getEffectiveMaxCount, getBuildingCostProfile } from '@/lib/colony/costs';
 import { MATERIAL_NAME_MAP } from '@/data/materialNames';
 import HangarCard from './HangarCard';
+import SeriesChipRow from './SeriesChipRow';
 
 // ============================================================================
 // 机库 · 船坞面板（V1.5 §8「殖民地建筑与战舰生产」/ §9「战舰科技树」）
@@ -62,51 +63,6 @@ function lockedSummaryLine(view: ShipyardView): string {
   const parts = view.locked.tiers.map((tier) => lockedTierText(tier));
   const head = `还有 ${view.locked.total} 种未解锁`;
   return parts.length > 0 ? `${head} · ${parts.join(' · ')}` : head;
-}
-
-/**
- * 可造列表上面那排系列标签（chip）：`圣辉 3 / 铁血 3 / …`。
- * · 档位、顺序与计数全部来自 `shipyard.ShipyardSeriesFilter`（从卡牌数据算）；
- * · ⚠ **没有「全部」那颗 chip**（用户 2026-08 口径）："全部多少张"由面板顶部那行
- *   「已解锁 N 型 · 现在能造 M 型」承担；
- * · ⚠ **永远恰好选中一个系列**（默认 = 第一个有已解锁卡的系列），**点已选中的那一颗什么都不发生**
- *   —— 没有"取消筛选"这条路，也没有那句提示（用户 2026-08 二次口径）；
- * · **一颗 chip 一个颜色**（用户 2026-08 口径「标签加颜色」）：颜色**只**来自
- *   `shipyard.seriesChipClass`（唯一真值表 `SHIPYARD_SERIES_THEME`），本组件不写任何颜色类；
- * · **尺寸按用户要求放大**（`px-3 py-1` + `text-[12.5px]`，原来是 `px-2 py-0.5` + `text-[11px]`）；
- *   **手机端不换行**：容器 `flex`（默认 nowrap）+ `overflow-x-auto` 横滑，chip 自身 `flex-none
- *   whitespace-nowrap` —— 与机库内部标签栏 / 底部页签同款做法（`scrollbar-hide` 在本项目**没有
- *   定义**，故这里照底部页签用显式的细滚动条类，滚动条可见、可发现）；
- * · **选中的档位只在组件内生效**（onPick 是 useCallback，不往 memo 子组件传 inline 箭头）；
- * · 只有一个档（或一个都没有）时**不渲染** —— 那时没有任何东西可筛，多一排标签只是噪音。
- */
-function ShipyardSeriesChips({
-  filters,
-  active,
-  onPick,
-}: {
-  filters: ShipyardSeriesFilter[];
-  active: string;
-  onPick: (series: string) => void;
-}) {
-  if (filters.length <= 1) return null;
-  return (
-    <div className="mt-1.5 flex items-center gap-2 overflow-x-auto pb-1 [scrollbar-width:thin] [&::-webkit-scrollbar]:h-1.5 [&::-webkit-scrollbar-track]:bg-slate-800/40 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-slate-600">
-      {filters.map((f) => (
-        <button
-          key={f.series}
-          type="button"
-          onClick={() => onPick(f.series)}
-          className={`flex-none whitespace-nowrap rounded-full border px-3 py-1 text-[12.5px] font-bold transition-colors ${seriesChipClass(
-            f.series,
-            active === f.series,
-          )}`}
-        >
-          {f.series} {f.unlockedCount}
-        </button>
-      ))}
-    </div>
-  );
 }
 
 /** 队列一行的显示（在建 / 排队） */
@@ -320,12 +276,12 @@ function ShipyardPanelBase({ state, onSelect, onBuild, onCancelBuild }: Shipyard
           {view.unlockedCards.length > 0 ? ` · 现在能造 ${view.unlockedCards.filter((c) => c.ok).length} 型` : ''}
         </span>
       </div>
-      {/* 系列标签（chip）：档位与计数从卡牌数据算（view.seriesFilters），只列出"有已解锁卡"的系列；
-          **默认选中第一个系列**，点别的系列就切过去，**点已选中的那颗什么都不发生**（没有"取消筛选"，
-          那颗「全部」已按用户口径删除）。「已解锁共几型」由上面那行承担；
+      {/* 系列标签（chip）：**与卡库共用同一个组件**（`SeriesChipRow`，颜色/尺寸/横滑只有一份实现）；
+          档位与计数来自 `view.seriesFilters`（= 已解锁卡按系列分组），判定在 lib/battle/seriesFilter。
+          默认选中第一个系列，点已选中的那颗什么都不发生（那颗「全部」已按用户口径删除）；
           **未解锁汇总行不受筛选影响**（它说的是总数）。 */}
-      <ShipyardSeriesChips
-        filters={view.seriesFilters}
+      <SeriesChipRow
+        groups={view.seriesFilters}
         active={activeSeries}
         onPick={pickSeries}
       />

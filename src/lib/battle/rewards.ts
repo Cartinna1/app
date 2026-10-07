@@ -81,9 +81,10 @@ export const RAID_REWARD_REPUTATION = 5;
 /** 掠夺奖励的类别（§10.2 的四类，等概率取一类） */
 export type RaidRewardKind = 'gold' | 'stardust' | 'material' | 'reputation';
 
-// ---------------- 文案（**唯一产出口**：UI 只渲染这里给出的句子） ----------------
-// ⚠ AGENTS 第九节「单一真值」：奖励文案一律在本文件拼，**UI 不许自己算奖励**（也不许自己拼数量/势力名）。
-//   唯一例外是"这次没有战利品"那一句（无奖励可报），见下方 RAID_NO_LOOT_TEXT。
+// ---------------- 文案（**唯一文案产出口**） ----------------
+// ⚠ AGENTS 第九节「单一真值」：奖励文案一律在本文件拼（`rollRaidReward().text`），
+//   **消费它的是事件记录**（`eventLog` 的 detail）—— 组件不许自己算奖励、也不许自己拼数量/势力名。
+//   四类各自写明"类型 + 数量"：`缴获 20000 金币` / `缴获 10 星尘` / `缴获 <原料名> ×40` / `与「<势力名>」的声望 +5`。
 
 /** 金币类奖励的文案（也用于"没有已探明势力"时回退到金币的那条路） */
 export const RAID_GOLD_TEXT = `击退海盗：缴获 ${RAID_REWARD_GOLD} 金币`;
@@ -198,28 +199,18 @@ export function grantRaidReward(ship: Mothership, reward: RaidReward, turn: numb
   return next;
 }
 
-// ---------------- 掠夺收尾的**展示模型**（用户 2026-08：奖励 / 损失都要显著显示出来） ----------------
-// 用户原话：「把奖励显著地显示出来」＋「失败也要显示丢了啥」。
-// 原先打赢掠夺战后奖励**确实发了**，但只落进"资源数字 + 事件日志一行"，玩家几乎不可能注意到；
-// 而**失败（被抢）那两条路连一行显示都没有**。
+// ---------------- 掠夺损失的**文案**（用户 2026-08：显示出口 = **事件记录**） ----------------
+// 用户最终口径（原话）：「是不是就相当于事件记录了，那干脆不要再战斗页签加东西了，直接放事件记录好了哇，
+// 打赢也一样。」→ **战斗页签 / 战斗结算画面都不再放结算行**，唯一的显示出口是**事件记录**（事件面板底部）。
+// 于是这里只剩「把实扣明细拼成中文」这一件事——**唯一文案产出口**，事件日志的 detail 直接用它。
 //
-// ⚠ **为什么要在状态里留一份快照**（而不是让 UI 收到战斗就自己再算一次）：
-//   · 打赢：奖励是在 reducer 的 `END_BATTLE` 里掷的（那里才有 Math.random、才能写回资源与声望），
-//     而战斗结算画面在按下「结算并返回」**之前**就已经渲染了 —— 那时奖励还没发。
-//     若让 UI 自己掷，同一次胜利会被掷两次（UI 显示的和实际到账的必然分叉）。
-//   · 打输 / 被抢：**显示值必须就是实扣值**（AGENTS 第九节："日志写明实际扣了什么"），
-//     而重算一遍 `raidLootLoss` 是在"已经扣完之后"读状态 → 两边必然对不上。
-//   → 取**做法 (a)**：写回状态的同一次调用里把这份结算存进 `GameState.lastRaidSettlement`，
-//     战斗结算界面与战斗页签**读同一份**（AGENTS 第九节：判定与文案进 lib，UI 只渲染）。
-//
-// 清空时机（唯一写入点 / 清空点都在 hooks/gameReducer.ts，见那里的注释）：
-//   · 写入 = `END_BATTLE`（打赢最后一支 → outcome 'win'；防守战打输 → outcome 'lost'）
-//     与 `APPLY_RAID_LOOT`（阶段 B 超时未迎战 → outcome 'lost'）；**2 支连打的中途那场不写**；
-//   · 清空 = `START_RAID`（下一场**掠夺事件**开打时 —— 用户明说"下一场掠夺开打时清空"）。
+// ⚠ 为什么不再需要"结算快照"（`lastRaidSettlement` 已整个删掉）：
+//   事件记录本身**就是**那条持久化的结算展示（`GameState.eventLog`，上限 100 条、事件面板展示最近 30 条），
+//   它由 reducer 在结算的同一次调用里写入、内容与实扣值同源，所以另存一份快照纯属重复。
 
-/** 失败时**实际扣掉**的那几项（逐项列清，扣 0 的项不进来）。
- *  ⚠ 这是"显示值 = 实扣值"的**唯一载体**：由 `raidLootLoss` 算一次，既交给 `payCost`/`pushGoldLog`
- *  去扣，也原样存进结算快照 —— 显示层**不许再算一遍**（AGENTS 第九节：日志/界面写明实际扣了什么）。 */
+/** 失败时**实际扣掉**的那几项（逐项列清，扣 0 的项不列）。
+ *  ⚠ 形状故意比 `raidLootLoss` 窄：那里面还有 `food` / `alloy`（恒 0，§10.2 只扣金币+原料+星尘），
+ *   展示层的形状由本类型说了算（`raidLootItems` 会逐字段取，不让上游形状漏进来）。 */
 export interface RaidLootDetail {
   gold: number;
   stardust: number;
@@ -227,78 +218,24 @@ export interface RaidLootDetail {
   materials: Record<string, number>;
 }
 
-/** 掠夺收尾的结果类型：'win' = 击退海盗拿到战利品；'lost' = 被掠夺成功（资源被抢） */
-export type RaidOutcomeKind = 'win' | 'lost';
-
-/** 最近一次掠夺收尾的展示模型（存档字段 `GameState.lastRaidSettlement` 的形状）。
- *  ⚠ **打赢与打输共用这一个形状**（用户 2026-08 口径：两条路写进同一份状态，用 `outcome` 区分）。
- *  ⚠ 字段名用 `outcome`（而不是 `kind`）：`kind` 在奖励语境里已是"奖励类别"（gold/stardust/…），
- *    这里说的是"赢还是输"，两者混用会让断言与 UI 配色都读错东西。 */
-export interface RaidSettlement {
-  /** 'win'（击退海盗、拿到战利品）| 'lost'（被掠夺成功、资源被抢） */
-  outcome: RaidOutcomeKind;
-  /** 界面上的**主句**：赢 = `reward.text`（唯一产出口，一个字不改）；
-   *  输 = 「殖民地被掠夺：…」（由 `raidSettlementLostText` 从**实扣明细**拼出）。 */
-  text: string;
-  /** 赢的那句原话（= `rollRaidReward().text`）；输的时候是空串。
-   *  ⚠ 保留它的唯一理由：战斗页签那行写「上次掠夺战果：<awardText>」时**必须**用奖励路径的原话。 */
-  awardText: string;
-  /** 打输时**实扣**明细；赢的时候是空对象（`EMPTY_RAID_LOOT_DETAIL`） */
-  loot: RaidLootDetail;
-}
-
-/** 空明细（模块级常量：无损失时用同一份，避免到处新造对象） */
-export const EMPTY_RAID_LOOT_DETAIL: RaidLootDetail = { gold: 0, stardust: 0, materials: {} };
-
-/** 打赢掠夺战但**没拿到任何东西**时的显示文案（唯一产出口：UI 不许自己拼这一句）。
- *  注：本游戏唯一"赢了也没战利品"的路径 = 母舰不存在（`applyRaidReward` 提前返回），属防御性文案。 */
-export const RAID_NO_LOOT_TEXT = '击退海盗：这次没缴获到战利品';
-
-/** 掠夺成功的显示前缀（用户逐字例：「殖民地被掠夺：金币 -20000、硅片 -100、量子簇 -30」） */
-export const RAID_LOOT_PREFIX = '殖民地被掠夺：';
-
-/** 明细里**到底扣没扣到东西**（全 0 = 没什么可抢的） */
-export function raidLootDetailEmpty(detail: RaidLootDetail): boolean {
-  return detail.gold <= 0 && detail.stardust <= 0 && Object.keys(detail.materials || {}).length === 0;
-}
+/** 掠夺失败（被抢）在**事件记录**里的 `event` 名（唯一写死处）。
+ *  `detail` 由 `raidLootText` 拼（逐项列实际扣到的资源与数量、扣 0 的项不列）。
+ *  ⚠ 文案口径：`event` 是"发生了什么"，`detail` 是"具体扣了什么"——两者不许互相重复前缀。 */
+export const RAID_LOOT_EVENT = '殖民地被掠夺';
 
 /**
- * 把**实扣明细**拼成那句中文（唯一产出口：UI 只渲染，不许自己拼资源名/数量）。
- * 逐项写法与用户例句一致：`金币 -20000` / `星尘 -3` / `硅片 -100`（原料译名走 getMaterialName）。
- * 什么都没扣到时说清楚（不许渲染成"殖民地被掠夺："这样的半句）。
+ * **实扣明细 → 逐项显示串**（唯一产出口：**事件记录**的 detail 由它拼出来）。
+ * 顺序固定 = 金币 → 星尘 → 原料（**扣 0 的项不列**）；原料译名走 `getMaterialName`。
+ * `sign` 只决定数字前写不写负号：事件记录用 `''`（「金币 20000」，与既有日志口径一致）；
+ * 默认 `'-'` 是用户给的逐字例那套写法（「金币 -20000」）。
+ * 返回空数组 = 什么都没扣到（调用方给一句"没抢走任何东西"，不许渲染成半句）。
  */
-export function raidSettlementLostText(detail: RaidLootDetail): string {
-  if (raidLootDetailEmpty(detail)) return '殖民地被掠夺：这次没抢走任何东西（金币与原料都已见底）';
-  const parts: string[] = [];
-  if (detail.gold > 0) parts.push(`金币 -${detail.gold}`);
-  if (detail.stardust > 0) parts.push(`星尘 -${detail.stardust}`);
+export function raidLootItems(detail: RaidLootDetail, sign: '' | '-' = '-'): string[] {
+  const out: string[] = [];
+  if ((detail.gold || 0) > 0) out.push(`金币 ${sign}${detail.gold}`);
+  if ((detail.stardust || 0) > 0) out.push(`星尘 ${sign}${detail.stardust}`);
   for (const [id, amount] of Object.entries(detail.materials || {})) {
-    if (amount > 0) parts.push(`${getMaterialName(id)} -${amount}`);
+    if (amount > 0) out.push(`${getMaterialName(id)} ${sign}${amount}`);
   }
-  return `${RAID_LOOT_PREFIX}${parts.join('、')}`;
-}
-
-/**
- * 把一次刚结算的掠夺**奖励**收成存档形状（读写都只走这里，勿在 reducer 里另拼对象）。
- * 打赢那条路的行为与文案**一个字都不许变**：`text` 与 `awardText` 都是 `reward.text`（空则兜底）。
- */
-export function raidRewardView(reward: RaidReward): RaidSettlement {
-  const text = reward.text || RAID_NO_LOOT_TEXT;
-  return { outcome: 'win', text, awardText: text, loot: EMPTY_RAID_LOOT_DETAIL };
-}
-
-/**
- * 把一次掠夺**失败**（防守战打输 / 阶段 B 超时未迎战）收成同一份形状。
- * `detail` 必须是**实扣明细**（`raidLootLoss` 算出来的那一份，与扣减/流水同源）。
- * ⚠ 这里**逐字段取**（而不是直接把传入对象塞进 `loot`）：`raidLootLoss` 的完整形状还带
- * `food` / `alloy`（恒 0，§10.2 只扣金币+原料+星尘），直接塞进去会让快照多出两个永远为 0 的字段、
- * 并让"快照到底存了什么"依赖上游形状。取三个字段 = 展示层的形状由本文件说了算。
- */
-export function raidLootView(detail: RaidLootDetail): RaidSettlement {
-  const loot: RaidLootDetail = {
-    gold: detail.gold || 0,
-    stardust: detail.stardust || 0,
-    materials: detail.materials || {},
-  };
-  return { outcome: 'lost', text: raidSettlementLostText(loot), awardText: '', loot };
+  return out;
 }

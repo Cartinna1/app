@@ -2,7 +2,6 @@
 
 import type { GalaxyState } from './galaxy';
 import type { BuildQueueItem } from '@/lib/battle/shipyard';
-import type { RaidSettlement } from '@/lib/battle/rewards';
 import type {
   BattleAction,
   BattleExpedition,
@@ -339,20 +338,10 @@ export interface GameState {
    *  ⚠ **不影响掠夺的触发**：掠夺队永远存在（用户 2026-08 裁定，覆盖 §10.2「全部打败后不再有掠夺」）。
    *  存档字段（v6 引入，旧档兜底 = 空数组 = 一个都没打败）。 */
   defeatedLairs: PirateBossId[];
-  /** **最近一次掠夺收尾**（用户 2026-08 裁定：「把奖励显著地显示出来」＋「失败也要显示丢了啥」）。
-   *  形状 = `lib/battle/rewards.ts` 的 `RaidSettlement`：
-   *   · 打赢 → `{ outcome: 'win', text: <reward.text 原话>, awardText: <同一句>, loot: 空 }`；
-   *   · 打输 / 被抢 → `{ outcome: 'lost', text: 「殖民地被掠夺：金币 -… 、…」, awardText: '', loot: <实扣明细> }`。
-   *  ⚠ `loot` 是**实扣明细本身**（`raidLootLoss` 算一次，既用来扣也用来显示）→ **显示值 = 实扣值**；
-   *    UI 与 lib 都**不许再算一遍损失**（重算时资源已经扣完，两边必然对不上）。
-   *  ⚠ 为什么要存快照：结算发生在 reducer 的 `END_BATTLE`/`APPLY_RAID_LOOT` 里，而战斗结算画面
-   *    在那之前就已渲染；且 `battle` 不入档 —— 只有快照能让玩家"回过头也看得到"。
-   *  写入 / 清空时机（唯一写入点 = gameReducer）：
-   *    · 写入 = `END_BATTLE`（打赢最后一支 → win；防守战打输 → lost）与 `APPLY_RAID_LOOT`（超时未迎战 → lost）；
-   *    · 清空 = `START_RAID`（下一场掠夺事件开打时）。
-   *  ⚠ 存档字段（v7 引入 = 只记打赢的战利品；**v8 改成"赢/输同一形状"**，见 lib/save.ts）。
-   *    旧档兜底 = null（没有可显示的掠夺结算）。 */
-  lastRaidSettlement: RaidSettlement | null;
+  // ⚠ 掠夺结算的显示出口 = **事件记录**（`eventLog`，用户 2026-08 最终口径："直接放事件记录好了哇，
+  //   打赢也一样"）—— 原先那个"最近一次掠夺收尾"快照字段 `lastRaidSettlement` **已整个删除**：
+  //   事件记录本身就是持久化的那条结算展示（打赢 = 「掠夺战果｜击退海盗：缴获 10 星尘」，
+  //   打输/被抢 = 「殖民地被掠夺｜损失 金币 20000、硅片 100…」），另存一份快照纯属重复。
   battle: BattleState | null;             // 进行中的战斗。⚠ **不进存档**（读档一律为 null）
   // ===== 船坞与科技（V1.5 §8.2 造船建筑 / §8.3 生产规则 / §9 科技树）=====
   /** 造船队列（同时建造 2 艘 + 排队无限，§11 #5）。完工由 useTurn 每回合调
@@ -415,10 +404,8 @@ export type SaveData = Pick<
   | 'factionPolicy' | 'policyRemainingTurns' | 'stardustMarket' | 'gameWon' | 'wonWonderName'
   | 'factionReputation' | 'factionContracts'
   // 卡牌战斗：battle（进行中的战斗）**故意不进存档**
+  // ⚠ 掠夺结算不再有独立存档字段：显示出口 = `eventLog`（它本来就在存档清单里）
   | 'cardLibrary' | 'fleets' | 'expedition' | 'raid' | 'defeatedLairs'
-  // 掠夺收尾快照（v7 引入、v8 改成"赢/输同一形状"）：结算在 END_BATTLE / APPLY_RAID_LOOT 里做，
-  // 而 battle 不入档 —— 只有它能让玩家"回头也看得到"（打赢的战利品 **与** 打输被抢的东西）
-  | 'lastRaidSettlement'
   // 船坞与科技：造船队列（v4 新增）
   | 'buildQueue'
 > & { saveVersion: number };

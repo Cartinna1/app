@@ -14,9 +14,9 @@ import {
   travelTurnsText,
 } from '@/lib/battle/expedition';
 import { raidCardView } from '@/lib/battle/raid';
-import { LAIR_REWARD_GOLD, LAIR_REWARD_STARDUST, raidLootDetailEmpty } from '@/lib/battle/rewards';
+import { LAIR_REWARD_GOLD, LAIR_REWARD_STARDUST } from '@/lib/battle/rewards';
 import BattleScreen from './BattleScreen';
-import type { BattleScreenContext, BattleSettlementLine } from './BattleScreen';
+import type { BattleScreenContext } from './BattleScreen';
 import { BossAvatar } from './parts';
 
 // ============================================================================
@@ -132,17 +132,6 @@ function BattleTabBase({
     },
     [raidCard]
   );
-  /** 战斗结算界面要显示的**最近一次掠夺收尾**（用户 2026-08：奖励与损失都要显著显示）。
-   *  ⚠ 逐字来自 raidCard（= `GameState.lastRaidSettlement`），组件**不掷奖励、不算损失、不拼文案**；
-   *    "有没有可显示的东西"也由 lib 判（`raidLootDetailEmpty`），这里只搬运。 */
-  const settlementLine = useMemo<BattleSettlementLine>(
-    () => ({
-      outcome: raidCard.settlementOutcome,
-      text: raidCard.rewardText,
-      hasLoot: !raidLootDetailEmpty(raidCard.settlementLoot),
-    }),
-    [raidCard]
-  );
   /** 出征卡片的整份渲染模型（唯一真值）：剩余回合的**显示下限 1**、「还有 N 回合抵达」文案、
    *  目标名与老巢名都从它取 —— 本组件不读 `expedition.turnsRemaining` 原值，也不自己拼文案
    *  （那正是"还有 0 回合抵达"死界面的来源，与 raidCardView 同一条纪律）。 */
@@ -208,12 +197,9 @@ function BattleTabBase({
         // = lib/battle/raid.raidEnemyName，老巢打光后是「海盗残兵」）；出征战给空串
         // → BossPanel 回落到数据里的静态老巢名（b1~b5）。UI 不自己拼名字。
         enemyName={board.bossId === 'raid' ? raidCard.enemyName : ''}
-        // **最近一次掠夺收尾那一句话**：逐字来自 raidCard.rewardText（= GameState.lastRaidSettlement.text）
-        // —— 打赢是奖励路径的原话（lib/battle/rewards.rollRaidReward），打输是实扣明细拼出的
-        // 「殖民地被掠夺：金币 -… 、…」。组件**不掷奖励、不算损失、也不拼文案**。
-        campaignText={raidCard.rewardText}
-        settlement={settlementLine}
-        // 战果旁注（"还有 1 支掠夺队" / "这场没顶住…"）：同样来自 raidCardView，只做渲染。
+        // ⚠ 战斗结算画面上**不再有**"掠夺战利品 / 被抢了什么"那一条（用户 2026-08 最终口径：
+        // 显示出口 = 事件记录）。原先下发的 `campaignText` / `settlement` 两个 prop 已一并删除。
+        // 战果旁注（"还有 1 支掠夺队" / "这场没顶住…"）：来自 raidCardView，只做渲染。
         context={battleContext}
         onAction={onAction}
         onEnd={onEndBattle}
@@ -231,6 +217,12 @@ function BattleTabBase({
   return (
     <div className="mx-auto max-w-4xl">
       <h2 className="mb-1.5 text-lg font-bold text-slate-100">出征 / 防守</h2>
+
+      {/* ⚠ 掠夺奖励 / 被抢的显示出口 = **事件记录**（事件面板底部「事件记录」），本页签**不放任何结算行**
+          （用户 2026-08 最终口径：「是不是就相当于事件记录了，那干脆不要再战斗页签加东西了，
+          直接放事件记录好了哇，打赢也一样。」）。原先那两条常驻行（打赢「上次掠夺战果：…」/
+          打输「殖民地被掠夺：…」）与它们依赖的 `lastRaidSettlement` 快照字段**已全部删除** ——
+          事件记录本身就在存档里（`eventLog`），打赢/打输各留一条，内容与实扣值同源。 */}
 
       {/* ==================== 出征（V1.5 §10.1：本页签唯一的发起入口） ====================
            目标只列**已探明**的老巢（discoveredLairs：未探明的一律不出现，也不做占位提示，
@@ -378,26 +370,6 @@ function BattleTabBase({
           ) : (
             <p className="text-[12.5px] text-slate-300">{raidCard.idleText}</p>
           )}
-
-          {/* ==================== 最近一次掠夺收尾（用户 2026-08） ====================
-              「把奖励显著地显示出来」＋「失败也要显示丢了啥」。
-              ⚠ **逐字**渲染 raidCard.rewardText（打赢 = 奖励路径 `rollRaidReward` 的原话；
-                打输 = 由**实扣明细**拼出的「殖民地被掠夺：金币 -… 、…」）—— 这里
-                **不算奖励、不算损失、不拼数量、不选势力**（AGENTS 第九节：写明实际扣了什么）。
-              ⚠ 与战斗结算界面（BattleScreen）读的是**同一份**：两处同源。
-              清空时机：下一场掠夺事件开打时（reducer 的 START_RAID）。 */}
-          {raidCard.rewardText && raidCard.settlementOutcome === 'lost' ? (
-            <p className="mt-2 rounded-[7px] border border-red-700/70 bg-red-950/40 px-2 py-1.5 text-[13px] font-bold text-red-300">
-              {raidCard.rewardText}
-            </p>
-          ) : null}
-          {/* 打赢那行是奖励路径的**原话**（`击退海盗：缴获 …`），所以这里才补一个「上次掠夺战果：」标签；
-              打输那行自己就以「殖民地被掠夺：」起头，**不许再套一层前缀**（会读成"上次被掠夺：殖民地被掠夺：…"）。 */}
-          {raidCard.rewardText && raidCard.settlementOutcome === 'win' ? (
-            <p className="mt-2 rounded-[7px] border border-amber-500/70 bg-amber-900/25 px-2 py-1.5 text-[13px] font-bold text-amber-200">
-              上次掠夺战果：{raidCard.rewardAwardText}
-            </p>
-          ) : null}
         </div>
       )}
 

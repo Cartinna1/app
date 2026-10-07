@@ -243,6 +243,84 @@ const J = (v) => JSON.stringify(v);
     );
   }
 
+  // ---------- ⑧ 卡库的系列筛选 chip（与船坞同一份实现） ----------
+  //  用户 2026-08 口径：「卡库也按照船坞那样做每个系列的可点标签，颜色样式一样即可」
+  //  → 颜色/判定 = `lib/battle/seriesFilter`（**唯一实现**，船坞与卡库共用；shipyard 只再导出那些名字）；
+  //    chip 样式 = `components/hangar/SeriesChipRow`（两个标签都渲染它）。
+  //  差别只在**传进去的行**：船坞传「已解锁」的卡，卡库传「已拥有」的卡（`libraryRows`）。
+  console.log('\n[8] 卡库的系列 chip（默认落在有卡的系列 / 切系列 / 与船坞同一份实现）');
+  {
+    const SF = await import('@/lib/battle/seriesFilter');
+    const SY = await import('@/lib/battle/shipyard');
+    const fs = require('fs');
+    const path = require('path');
+
+    // ★ 单一真值：船坞用的就是这一份（引用相等 —— 不是抄了一份颜色表/一套判定）
+    check(
+      SY.seriesChipClass === SF.seriesChipClass && SY.defaultSeriesFilter === SF.defaultSeriesFilter &&
+        SY.pickSeriesFilter === SF.pickSeriesFilter && SY.resolveSeriesFilter === SF.resolveSeriesFilter &&
+        SY.filterBySeries === SF.filterBySeries,
+      '★ 船坞的系列筛选/配色 = lib/battle/seriesFilter 同一实现（引用相等，卡库也调它）'
+    );
+
+    // 有卡的卡库：h1/h2 圣辉 + c1 铁血 + g1 灵能（按 libraryRows 的真实排序）
+    const st = build(['h1', 'h1', 'c1', 'g1'], []);
+    const rows = H.libraryRows(st);
+    const groups = SF.seriesGroups(rows);
+    const sum = groups.reduce((n, g) => n + g.count, 0);
+    check(groups.length === 3, '卡库按系列分出 3 档（圣辉/铁血/灵能）', J(groups));
+    check(sum === rows.length, '各系列 chip 的张数之和 = 已拥有型数（chip 上的数字不丢）', sum + '/' + rows.length);
+    check(groups.every((g) => g.count > 0 && rows.some((r) => r.series === g.series)), '每颗 chip 的系列都真有已拥有的卡');
+    check(groups.every((g) => g.count === rows.filter((r) => r.series === g.series).length), 'chip 张数 = 该系列的卡型数');
+
+    // ★ 默认 = 第一个"有卡的"系列，且列表非空（绝不许默认落在空系列上）
+    const def = SF.defaultSeriesFilter(groups);
+    check(def === groups[0].series, '★ 默认选中第一个"有卡的"系列', def);
+    check(SF.filterBySeries(rows, def).length > 0, '★ 默认那颗的列表非空（不会开出空列表）', String(SF.filterBySeries(rows, def).length));
+    check(SF.defaultSeriesFilter([]) === '' && SF.filterBySeries([], '圣辉').length === 0,
+      '空卡库：默认是空串、筛选结果是空数组（不炸；此时 chip 行不渲染）');
+
+    // 交互与船坞一致：点已选中的那颗不变、点别的切过去、切了只剩该系列
+    const s1 = groups[1].series;
+    check(SF.pickSeriesFilter(def, def) === def, '★ 点已选中的那一颗 = 状态不变（不可取消）');
+    check(SF.pickSeriesFilter(def, s1) === s1, '点别的系列 = 切过去');
+    const only1 = SF.filterBySeries(rows, s1);
+    check(only1.every((r) => r.series === s1), '切到某系列 → 只剩该系列的卡');
+    check(only1.length === groups[1].count, '筛选结果条数 = 那颗 chip 上的张数', String(only1.length));
+    check(SF.resolveSeriesFilter(s1, groups) === s1, '有效系列 → 原样保留');
+    check(SF.resolveSeriesFilter('没有这个系列', groups) === def,
+      '★ 档位没了（造了新船/换了系列集合）→ 落到第一个有卡的系列（不是"不筛选"）',
+      SF.resolveSeriesFilter('没有这个系列', groups));
+    check(SF.filterBySeries(rows, '没有这个系列') === rows,
+      '★ 传入的档位无匹配 → 原样返回完整数组（杜绝静默空列表）');
+
+    // 颜色走同一张表（卡库出现的每个系列都有色、两态不同）
+    check(groups.every((g) => SF.seriesChipClass(g.series, true).length > 0 && SF.seriesChipClass(g.series, false).length > 0),
+      '卡库每个系列都有 chip 颜色（颜色走 seriesChipClass，卡库不写颜色）');
+    check(new Set(groups.map((g) => SF.seriesChipClass(g.series, true))).size === groups.length,
+      '卡库各系列的选中色互不相同');
+
+    // 静态核对：两个面板都用共用组件；颜色只在该组件里出现（面板零裸色类）
+    const read = (rel) => fs.readFileSync(path.resolve(__dirname, '..', rel), 'utf8');
+    const libPanel = read('src/components/hangar/LibraryPanel.tsx');
+    const shipPanel = read('src/components/hangar/ShipyardPanel.tsx');
+    const chipRow = read('src/components/hangar/SeriesChipRow.tsx');
+    check(libPanel.indexOf('<SeriesChipRow') >= 0 && shipPanel.indexOf('<SeriesChipRow') >= 0,
+      '★ 卡库与船坞渲染**同一个** SeriesChipRow（chip 样式只有一份实现）');
+    check(libPanel.indexOf('seriesGroups') >= 0 && libPanel.indexOf('defaultSeriesFilter') >= 0
+      && libPanel.indexOf('pickSeriesFilter') >= 0 && libPanel.indexOf('resolveSeriesFilter') >= 0
+      && libPanel.indexOf('filterBySeries') >= 0,
+      '卡库的派生/默认值/点击/回落/筛选都调 lib/battle/seriesFilter（UI 不写第二份）');
+    check(!/bg-(amber|red|violet|sky|orange|slate-100|white)/.test(libPanel),
+      '★ 卡库组件里没有裸的颜色类（颜色全在 SERIES_CHIP_THEME 表）');
+    check(chipRow.indexOf('seriesChipClass') >= 0 && !/bg-(amber|red|violet|sky|orange|slate-100|white)/.test(chipRow),
+      '★ 共用 chip 组件自己也不写颜色类（只调 seriesChipClass）');
+    check(libPanel.indexOf('共 {rows.length} 型') >= 0, '卡库顶部「共 N 型」那行仍在（说的是卡库总数，不受筛选影响）');
+    check(libPanel.indexOf('卡库是空的') >= 0, '空卡库的既有空态提示仍在（chip 行此时不渲染）');
+    check(libPanel.indexOf('export default memo(') >= 0, '卡库组件仍是 memo(...)');
+    check(libPanel.indexOf('useCallback(') >= 0, '卡库的点击处理走 useCallback（不往 memo 子组件传 inline 箭头）');
+  }
+
   console.log('\n=== P6 验收结果 ===');
   if (fails.length === 0) console.log('  全部通过 ✓');
   else { console.log('  ' + fails.length + ' 条失败 ✗'); process.exitCode = 1; }

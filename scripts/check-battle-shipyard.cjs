@@ -309,11 +309,14 @@ const eq = (a, b) => JSON.stringify(a) === JSON.stringify(b);
   // 用户 2026-08 **二次口径**（覆盖本段上一版）：删掉「全部 N」chip，**默认就选中第一个有已解锁卡的系列**，
   // **没有"回得来"**（点已选中的那颗 = 什么都不发生），兜底落到**第一个有已解锁卡的系列**（不是"不筛选"），
   // 且任何输入都**不许给出空列表**。chip 再各给一色（`seriesChipClass`）、放大、手机端横滑不换行。
-  // 判定唯一真值 = shipyard 的 defaultSeriesFilter / pickSeriesFilter / resolveSeriesFilter /
-  // filterBySeries / seriesChipClass（组件只渲染）。
-  console.log('\n[12] 系列筛选：默认第一个系列 + 不可取消 + 每系列一色');
+  // ⚠ 用户 2026-08 **三次口径**后，chip 行与系列判定已抽成**船坞 + 卡库共用的一份**：
+  //   判定/颜色 = `lib/battle/seriesFilter`（shipyard 只再导出那几个名字，不是第二份实现）；
+  //   chip 的样式/尺寸/横滑 = `components/hangar/SeriesChipRow`（两个标签都渲染它）。
+  //   故本段：① 行计数读 `SeriesGroup.count`；② 尺寸/横滑/裸色类的静态核对落在共用组件那个文件上；
+  //   ③ 船坞仍必须渲染那个共用组件（不是自己再写一份 chip）。
+  console.log('\n[12] 系列筛选：默认第一个系列 + 不可取消 + 每系列一色（与卡库共用）');
   const vAll = SY.shipyardView(docked(3, { techs: allTechs }));
-  const chipSum = vAll.seriesFilters.reduce((n, f) => n + f.unlockedCount, 0);
+  const chipSum = vAll.seriesFilters.reduce((n, f) => n + f.count, 0);
   check(vAll.seriesFilters.length > 1, '全解锁时系列档 ≥ 2（chip 那排才渲染）', String(vAll.seriesFilters.length));
   check(chipSum === vAll.unlockedCards.length,
     '各系列 chip 的计数之和 = 已解锁型数（chip 上的数字不丢）', chipSum + '/' + vAll.unlockedCards.length);
@@ -337,8 +340,14 @@ const eq = (a, b) => JSON.stringify(a) === JSON.stringify(b);
     '★ 传入的档位无匹配 → 原样返回完整数组（杜绝静默空列表）');
   const onlyS0 = SY.filterBySeries(vAll.unlockedCards, s0);
   check(onlyS0.every((c) => c.series === s0), '筛某系列 → 只剩该系列的卡');
-  check(onlyS0.length === vAll.seriesFilters[0].unlockedCount, '筛选结果条数 = 那颗 chip 上的计数', String(onlyS0.length));
-  // 每系列一色（颜色唯一真值 = SHIPYARD_SERIES_THEME / seriesChipClass）
+  check(onlyS0.length === vAll.seriesFilters[0].count, '筛选结果条数 = 那颗 chip 上的计数', String(onlyS0.length));
+  // ★ 单一真值：船坞再导出的这几个符号与共用模块**是同一个函数对象**（不是抄了一份）
+  const SF = await import('@/lib/battle/seriesFilter');
+  check(SY.defaultSeriesFilter === SF.defaultSeriesFilter && SY.pickSeriesFilter === SF.pickSeriesFilter
+    && SY.resolveSeriesFilter === SF.resolveSeriesFilter && SY.filterBySeries === SF.filterBySeries
+    && SY.seriesChipClass === SF.seriesChipClass,
+    '★ shipyard 的系列筛选/配色 = lib/battle/seriesFilter 的同一份（引用相等，卡库也用它）');
+  // 每系列一色（颜色唯一真值 = SERIES_CHIP_THEME / seriesChipClass）
   const activeClasses = vAll.seriesFilters.map((f) => SY.seriesChipClass(f.series, true));
   check(new Set(activeClasses).size === activeClasses.length && activeClasses.every((c) => c.length > 0),
     '每个系列 chip 的选中色互不相同（各系列一色）', activeClasses.join(' | '));
@@ -363,18 +372,17 @@ const eq = (a, b) => JSON.stringify(a) === JSON.stringify(b);
     '★ toggle-off / "不筛选"档的旧逻辑已从组件清除');
   check(panelSrc.indexOf('defaultSeriesFilter') >= 0 && panelSrc.indexOf('pickSeriesFilter') >= 0
     && panelSrc.indexOf('resolveSeriesFilter') >= 0 && panelSrc.indexOf('filterBySeries') >= 0,
-    '默认值 / 点击 / 回落 / 筛选判定都调 lib/battle/shipyard（UI 不写第二份）');
-  check(panelSrc.indexOf('seriesChipClass') >= 0, '★ chip 颜色调 lib 的 seriesChipClass（颜色走表）');
+    '默认值 / 点击 / 回落 / 筛选判定都调 lib（seriesFilter，经 shipyard 再导出；UI 不写第二份）');
+  check(panelSrc.indexOf('SeriesChipRow') >= 0 && panelSrc.indexOf('<SeriesChipRow') >= 0,
+    '★ 船坞渲染**与卡库共用**的 SeriesChipRow（chip 样式只有一份实现，不是自己再写一排）');
   // 静态核对只在 **chip 那一块** 里查（面板其它地方本来就有 `bg-emerald-900/10` 的船坞卡片与
-  // `flex flex-wrap` 的标题行，全文查会误报）
-  const chipsSrc = panelSrc.slice(
-    panelSrc.indexOf('function ShipyardSeriesChips('),
-    panelSrc.indexOf('/** 队列一行的显示'),
-  );
-  check(chipsSrc.length > 0, '取到了 chip 组件的源码块（静态核对的前提）');
+  // `flex flex-wrap` 的标题行，全文查会误报）。chip 行已抽成共用组件 → 核对它本身。
+  const chipsSrc = fs.readFileSync(path.resolve(__dirname, '../src/components/hangar/SeriesChipRow.tsx'), 'utf8');
+  check(chipsSrc.length > 0, '取到了共用 chip 组件的源码（静态核对的前提）');
+  check(chipsSrc.indexOf('seriesChipClass') >= 0, '★ chip 颜色调 lib 的 seriesChipClass（颜色走表）');
   check(!/bg-(amber|rose|violet|emerald|sky|orange)-\d/.test(chipsSrc)
     && !/border-(amber|rose|violet|emerald|sky|orange)-\d/.test(chipsSrc),
-    '★ chip 那一块里没有裸的系列色类名（颜色值全部走 SHIPYARD_SERIES_THEME 表）');
+    '★ chip 那一块里没有裸的系列色类名（颜色值全部走 SERIES_CHIP_THEME 表）');
   check(chipsSrc.indexOf('px-3 py-1') >= 0 && chipsSrc.indexOf('text-[12.5px]') >= 0,
     '★ chip 已放大（px-3 py-1 + text-[12.5px]）');
   check(chipsSrc.indexOf('flex items-center gap-2 overflow-x-auto') >= 0
