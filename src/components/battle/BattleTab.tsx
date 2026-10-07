@@ -175,6 +175,10 @@ function BattleTabBase({
         key={battleSeq.current}
         battle={board}
         seed={0}
+        // BOSS 面板要显示的名字：掠夺战用**同一份**名字规则（raidCardView.enemyName
+        // = lib/battle/raid.raidEnemyName，老巢打光后是「海盗残兵」）；出征战给空串
+        // → BossPanel 回落到数据里的静态老巢名（b1~b5）。UI 不自己拼名字。
+        enemyName={board.bossId === 'raid' ? raidCard.enemyName : ''}
         onAction={onAction}
         onEnd={onEndBattle}
       />

@@ -424,7 +424,7 @@ function ShipyardCardLine({
           >
             下单建造
           </button>
-          {/* 不能造的原因写在行内（不只置灰 / 不只 title）——AGENTS 第十节机库铁律② */}
+          {/* 不能造的原因写在行内（不只置灰 / 不只 title）——AGENTS-附录.md 10.2 机库铁律② */}
           <span className={`text-[10.5px] leading-relaxed ${card.ok ? 'text-slate-500' : 'text-amber-400'}`}>
             {card.ok
               ? `可以建造（下单后${card.turns}回合完工，完工进卡库）`

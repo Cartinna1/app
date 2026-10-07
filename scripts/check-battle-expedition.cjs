@@ -105,7 +105,7 @@ const check = (ok, label, detail) => {
   const st1 = withColony('terran', []);
   check(EXP.colonyNodeId(st1) === 'c_terran', '殖民地节点由 planetType 反查到 c_terran', String(EXP.colonyNodeId(st1)));
   check(EXP.isLairDiscovered(st1, 'b1') === false, '没到访过 → 该老巢未探明');
-  check(EXP.discoveredLairs(st1).length === 0, '未探明时不给出征列表（不做占位提示，§10.1）');
+  check(EXP.discoveredLairs(st1).length === 0, '未探明时不给出征列表（不做占位提示，V1.5 §10.1）');
   const st2 = withColony('terran', ['e06']);
   check(EXP.isLairDiscovered(st2, 'b1') === true, '到访过 e06 → b1 老巢已探明');
   const list = EXP.discoveredLairs(st2);
@@ -456,7 +456,7 @@ const check = (ok, label, detail) => {
     w = fight(w);
     check(w.battle.winner === 'player', '这场确实是玩家赢的', w.battle.winner);
     const rw = RW.battleRewards(w.battle);
-    check(rw.gold === 100000 && rw.stardust === 40, '老巢战利品 = 100000 金币 + 40 星尘（§〇/§10.2）', JSON.stringify(rw));
+    check(rw.gold === 100000 && rw.stardust === 40, '老巢战利品 = 100000 金币 + 40 星尘（V1.5 §〇/§10.2）', JSON.stringify(rw));
     check(w.ships[0].food >= 0, '这一场结算时不是饥荒（食物 ≥ 0）', String(w.ships[0].food));
     const before = { gold: w.ships[0].gold, sd: w.ships[0].stardust, log: (w.ships[0].goldLog || []).length };
     const after = D(w, { type: 'END_BATTLE' });
@@ -481,7 +481,7 @@ const check = (ok, label, detail) => {
 
   // 掠夺战本阶段不给奖励
   const rr = RW.battleRewards(E.createBattle({ seed: 5, bossId: 'raid' }));
-  check(rr.gold === 0 && rr.stardust === 0, '掠夺队本阶段不给奖励（§10.2 随机奖励属后续）', JSON.stringify(rr));
+  check(rr.gold === 0 && rr.stardust === 0, '掠夺队本阶段不给奖励（V1.5 §10.2 随机奖励属后续）', JSON.stringify(rr));
 
   console.log('\n=== P5 验收结果 ===');
   if (fails.length === 0) console.log('  全部通过 ✓');

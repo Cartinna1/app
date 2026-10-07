@@ -18,5 +18,9 @@ export const PIRATE_BOSSES: Record<string, PirateBossDef> = {
 /** 海盗舰船池（海盗每回合从这里按指挥度出牌，用光不补充；玩家永远不可获得） */
 export const PIRATE_POOL: readonly string[] = ["r1","r1","r1","r1","r2","r2","r2","r3","r3","r3","r4","r4","r4","r4","r5","r5","r5","r6","r6","r6","r7","r7","r7","r8","r8","r9","r9","r9","r9","r10"];
 
+/** 掠夺队（bossId = raid）自己的舰船池（**用户 2026-08 裁定**：15 艘、构成本身也更偏低阶，
+ *  最高 4 费、不含 r8/r9/r10 头目与旗舰级 —— 与 5 个老巢共用的 PIRATE_POOL 区分开）。 */
+export const RAID_POOL: readonly string[] = ["r1","r1","r1","r1","r2","r2","r2","r3","r3","r4","r4","r4","r5","r6","r7"];
+
 /** 老巢敌人 id（5 个 BOSS；掠夺队单列） */
 export const LAIR_BOSS_IDS: readonly string[] = ["b1","b2","b3","b4","b5"];

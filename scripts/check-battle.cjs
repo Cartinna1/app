@@ -1,12 +1,13 @@
-﻿'use strict';
+'use strict';
 /* ============================================================================
    舰船卡牌战斗 · 一键复验（改规则/改数据后都跑它）
    用法：node scripts/check-battle.cjs
-   依次跑：
+   依次跑（14 步）：
      1. 数据校验    src/data/battle/*.ts ↔ carddemo/engine.js 逐字段
      2. 静态审计    导出面 / 每张卡的 kw·fx / 敌人 / 编制 / 常量 ↔ DEMO
      3. 规则断言    DEMO 的 96 处定点断言跑在【移植版引擎】上
      4. 行为对拍    同 seed 逐场比对（含完整战斗日志）
+     ...（见下面 STEPS；含手动操作闸门：未开自动时手动必须可点、底部不许谎称自动）
    样本量：PARITY_N=200（默认），例如 PARITY_N=50 node scripts/check-battle.cjs
    ============================================================================ */
 const path = require('path');
@@ -25,6 +26,7 @@ const STEPS = [
   ['行为对拍（同 seed 逐场 + 完整日志）', ['scripts/parity-battle-engine.cjs'], true],
   ['战斗状态与存档（版本 / 默认值一致 / 往返 / 旧档 / 舰队不变量 / 不改 prev / 损失写回）', ['scripts/check-battle-state.cjs'], true],
   ['战斗界面展示逻辑（信息条 / 攻击状态三重区分 / 待选择只有候选可点 / 费用 / 墓地）', ['scripts/check-battle-view.cjs'], true],
+  ['手动操作闸门（未开自动时必须可点 + 底部不许谎称"正在替你行动" + 被拦必给原因）', ['scripts/check-battle-manual.cjs'], true],
   ['出征闭环（五个老巢节点 / 出征耗时 / 探明门槛 / 全流程 / 战利品与饥荒减半 / 回合守卫）', ['scripts/check-battle-expedition.cjs'], true],
   ['机库（卡库聚合 / 舰队视图 / 编成守卫 / 出征舰队不许动）', ['scripts/check-battle-hangar.cjs'], true],
   ['掠夺循环（触发前提 / 8% / 防守池合并 / 损失不为负 / 20 回合免疫 / 可预告）', ['scripts/check-battle-raid.cjs'], true],

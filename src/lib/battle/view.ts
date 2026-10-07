@@ -8,6 +8,7 @@
 //   · boss 面板  → bossView
 //   · graveHtml  → graveView
 //   · defaultHint 的按钮可用性 → canEndTurn
+//   · defaultHint / 输入闸门"谁在操作" → manualActionView（唯一真值，见其注释）
 // 本文件**只判展示**，不改任何战斗状态、不消费随机数（引擎的唯一真值仍是 lib/battle/engine.ts）。
 // ============================================================================
 
@@ -80,8 +81,18 @@ export interface CardView {
   name: string;
   /** 当前实际费用（含费用减免与动态费用） */
   cost: number;
-  /** 现在能不能部署（指挥度 / 空位 / 池子里还有） */
+  /**
+   * **能不能出它**：指挥度 / 空位 / 池子里还有（= `canDeploy`）。
+   * ⚠ 与 `selectable` 是**两个概念**，绝不许合成一个值（2026-08 用户报障）：
+   *   「能不能读它」≠「能不能出它」。把两者合成一个，灰卡的技能在手机上就**无处可看**
+   *   （`FleetPool` 的 `title` 是桌面专属的悬浮提示，手机没有 hover —— 铁律①说信息条才是唯一出口）。
+   */
   playable: boolean;
+  /**
+   * **能不能读它**：手牌里的每一张都必须能点选（点开 → 信息条给技能全文）。
+   * 唯一的前提是"现在轮到玩家手动操作"（`manualActionView`），与指挥度 / 空位无关。
+   */
+  selectable: boolean;
   /** 池中同型的份数 */
   count: number;
   series: string;
@@ -115,6 +126,54 @@ export interface BossView {
 export interface GraveView {
   total: number;
   chips: { id: string; name: string; count: number; pickable: boolean }[];
+}
+
+/**
+ * 「此刻谁在操作」的**唯一真值**（手动输入闸门 + 底部文案共用一份判定）。
+ *
+ * 为什么要有它（2026-08 用户报「上了一艘战舰后指挥度还剩 2，却再也上不了任何卡」）：
+ * 迁移到正式游戏时，DEMO 里**没有对应物**的两块被引进来了 ——
+ *   ① 组件级的 `busy`（"这一跳已经派发出去、等状态回来"的节奏位）；
+ *   ② 「自动战斗」开关（`auto`）。
+ * 原先 `busy` 被同时当成三种东西用：输入闸门（`if (busy) return`）、底部文案的分支条件、
+ * 「结束回合」的禁用条件。而 `setBusy(false)` **只写在两条自动推进的 effect 里**（BOSS 回合结束、
+ * 自动战斗出手）→ 玩家在自己回合手动部署一次就把 `busy` 置为 true，之后轮到玩家时**没有任何代码
+ * 会把它清掉**：点击被 `busy` 静默吞掉（点谁都没反应），底部又因为它渲染成
+ * 「（自动战斗）正在替你行动…」—— 而按钮读的 `auto` 明明还是"未开自动"。
+ * 这就是"同一个值派生了多份、彼此分叉"的同一形状（和 boardView.clickable 恒假、机库改名读 canEdit
+ * 是同一类：**判定散在组件里、每处各判一次**）。
+ *
+ * 口径（DEMO 的 `disabled = over || (active!==me && active!==other) || busy`）：
+ *   · 手动能不能点 = 「战斗没结束」+「轮到玩家」+「没有待选择」+「没开自动」；
+ *   · `auto` 打开时手动确实应当屏蔽（这是对的）—— 错的是它此前由 `busy` 代判；
+ *   · 不能操作时**必须给出中文原因**（铁律②：可攻击/已攻击/不能攻击+原因，出牌同理）。
+ */
+export interface ManualView {
+  /** 现在能不能手动出牌 / 攻击 / 结束回合 */
+  canAct: boolean;
+  /** canAct 为 true 时是操作提示；为 false 时是**点不动的原因**（绝不许为空） */
+  reason: string;
+  /** 由自动战斗接管时的那句话；未开自动时恒为空串（"没开自动就不许说正在替你行动"） */
+  autoHint: string;
+}
+
+/** 「此刻谁在操作」的唯一真值：手动输入闸门、底部文案、自动提示三处都读它 */
+export function manualActionView(st: BattleState, auto: boolean): ManualView {
+  if (st.over) return { canAct: false, reason: `战斗已结束：${st.reason}`, autoHint: '' };
+  if (auto) {
+    return {
+      canAct: false,
+      reason: '已开启自动战斗，正在替双方行动',
+      autoHint: '（自动战斗）正在替你行动…',
+    };
+  }
+  if (st.pending) return { canAct: false, reason: '请在可选战舰上点选目标', autoHint: '' };
+  if (st.active !== 'player') return { canAct: false, reason: 'BOSS 行动中，请稍候', autoHint: '' };
+  return {
+    canAct: true,
+    reason: '点「你的舰队」里的战舰 → 再点自己场上的空格部署；点己方战舰 → 再点敌方目标攻击。',
+    autoHint: '',
+  };
 }
 
 // ---------------- 图位路径（缺图由组件的 onError 回落占位块） ----------------
@@ -302,7 +361,8 @@ export function boardView(
 
 // ---------------- 舰队池 ----------------
 
-/** 部署池：同型合并计数、按费用升序（同费用按 id），只放「名字 / 系列·稀有度 / 攻·盾·体」+ 费用徽章 */
+/** 部署池：同型合并计数、按费用升序（同费用按 id），只放「名字 / 系列·稀有度 / 攻·盾·体」+ 费用徽章。
+ *  `playable`（能不能出）与 `selectable`（能不能读）分开给 —— 参见 CardView 的注释。 */
 export function poolView(st: BattleState): CardView[] {
   const counts: Record<string, number> = {};
   for (const cid of st.player.pool) counts[cid] = (counts[cid] || 0) + 1;
@@ -312,6 +372,9 @@ export function poolView(st: BattleState): CardView[] {
     if (ca !== cb) return ca - cb;
     return a < b ? -1 : a > b ? 1 : 0;
   });
+  // 「能不能读」只看"此刻是不是玩家在手动操作"：战斗已结束 / 不是玩家回合时点开也没意义
+  // （那时信息条正在说明"为什么点不动"）。**与指挥度、空位无关**。
+  const selectable = !st.over && st.active === 'player';
   return ids.map((cid) => {
     const c = defOf(cid);
     return {
@@ -319,6 +382,7 @@ export function poolView(st: BattleState): CardView[] {
       name: c.name,
       cost: costOf(st, 'player', cid),
       playable: canDeploy(st, 'player', cid),
+      selectable,
       count: counts[cid],
       series: c.series,
       rarity: c.rarity,

@@ -5,7 +5,7 @@
 //     → rollRaidReward / grantRaidReward（**本文件下半部分**；battleRewards 对它恒返回 0/0，语义不变）
 //   · 打输 → 不给任何奖励（永久损失由 gameReducer 的 END_BATTLE 按 P3 规则写回，不在本文件）
 // ⚠ 本文件只做纯计算：不 mutate 传入对象，不读随机数（随机数由调用方传进来），不 dispatch。
-// ⚠ 金币收益**必须**过 lib/turn/shipTurn.ts 的 famineHalveGold（AGENTS 第十节：新增金币收益都要问饥荒减半），
+// ⚠ 金币收益**必须**过 lib/turn/shipTurn.ts 的 famineHalveGold（AGENTS-附录.md 10.2：新增金币收益都要问饥荒减半），
 //   并按 AGENTS 第三节写 pushGoldLog（**调用前必须先改完金币**）。
 
 import type { Mothership } from '@/types/game';

@@ -24,8 +24,13 @@ export const BGM_MUTED_KEY = 'bgm_muted';
  *     不点则自动失败）→ `raid` 内**新增** `arrivedTurns`（阶段 B 倒计时）与 `arrived`（阶段 B 标记）。
  *     ⚠ 只新增字段、不改既有字段的结构与语义 → **无需 v4→v5 结构迁移**：
  *       老档缺这两项由 stateFromSave 兜底成 `arrivedTurns: 0` / `arrived: false`，
- *       **读出来就是"没有掠夺在途"（idle）**，与"旧存档不该凭空多一场掠夺"一致。 */
-export const SAVE_VERSION = 5;
+ *       **读出来就是"没有掠夺在途"（idle）**，与"旧存档不该凭空多一场掠夺"一致。
+ *  6：新增**已打败的老巢账本** `defeatedLairs`（用户 2026-08 裁定：5 个老巢全被打败后掠夺队改名
+ *     「海盗残兵」；掠夺本身**永远存在**，不受该账本影响）。
+ *     ⚠ 同样**只新增字段、不改既有字段的结构与语义** → **无需 v5→v6 结构迁移**：
+ *       老档缺该字段由 stateFromSave 兜底成 `[]` = 一个老巢都没打败，
+ *       于是掠夺队仍叫「海盗旗舰（掠夺队）」、掠夺照常可触发（与"旧档不该凭空少一场掠夺"一致）。 */
+export const SAVE_VERSION = 6;
 
 /** 存档结构校验（防止损坏/恶意存档导致崩溃） */
 export function validateSaveData(data: unknown): data is Record<string, unknown> {
@@ -73,6 +78,8 @@ export function buildSaveData(prev: GameState): SaveData {
     fleets: prev.fleets,
     expedition: prev.expedition,
     raid: prev.raid,
+    // 已打败的老巢账本（v6）：掠夺队的显示名（「海盗残兵」）读它，必须存档
+    defeatedLairs: prev.defeatedLairs,
     // 船坞与科技（v4）：造船队列
     buildQueue: prev.buildQueue,
   };
@@ -150,6 +157,9 @@ export function stateFromSave(d: Record<string, any>): GameState {
     // v5：新增 arrivedTurns（阶段 B 待战倒计时）与 arrived（阶段 B 标记）——
     //   v4 及更早的存档没有这两项 → 兜底成 0 / false，即"没有掠夺在途"（idle）。
     raid: { inTurns: null, arrivedTurns: 0, immuneTurns: 0, raiders: 0, arrived: false, ...(d.raid || {}) },
+    // v6：已打败的老巢账本。v5 及更早的存档没有这个字段 → 兜底成 []（一个都没打败），
+    //   于是掠夺队仍叫「海盗旗舰（掠夺队）」、掠夺**照常可触发**（用户 2026-08 裁定：永远存在）。
+    defeatedLairs: d.defeatedLairs || [],
     // 进行中的战斗**不进存档**：即使存档里混入了 battle 也一律丢弃（V1.5 §〇「战斗中不能保存」）
     battle: null,
     // ===== 船坞与科技（V1.5 §8，v4 新增）=====
@@ -171,7 +181,10 @@ export function stateFromSave(d: Record<string, any>): GameState {
  *    存量的 `colony.buildings` / `colony.techState.researched` 原样可读。
  *  v5：掠夺改成两段窗口（用户 2026-08 裁定），`raid` 只**新增** arrivedTurns / arrived 两个字段
  *  → **同样无需 v4→v5 结构迁移**：老档缺这两项由 stateFromSave 兜底成 0 / false，
- *    读出来即"没有掠夺在途"（idle），不会给旧档凭空补一场掠夺。 */
+ *    读出来即"没有掠夺在途"（idle），不会给旧档凭空补一场掠夺。
+ *  v6：新增已打败的老巢账本 `defeatedLairs`（用户 2026-08 裁定：老巢打光后掠夺队改名「海盗残兵」）
+ *  → **同样无需 v5→v6 结构迁移**：老档缺该字段由 stateFromSave 兜底成 `[]`，
+ *    读出来即"一个老巢都没打败"（掠夺队仍叫「海盗旗舰（掠夺队）」、掠夺照常可触发）。 */
 export function migrateSave(loaded: GameState): GameState {
   // 兼容旧存档：补充破产/饥荒/叛乱字段（这几个字段不在 stateFromSave 的清单里，故仍需在此兜底）
   if (loaded.ships) {

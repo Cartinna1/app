@@ -11,13 +11,17 @@ import { BossAvatar } from './parts';
 
 interface BossPanelProps {
   boss: BossView;
+  /** 覆盖 BOSS 名（非空则用它）。**唯一用途**：掠夺队的动态名（平时「海盗旗舰（掠夺队）」、
+   *  5 个老巢全被打败后「海盗残兵」，判据在 lib/battle/raid.raidEnemyName）——
+   *  大厅掠夺卡片与这里的名字必须是同一份，故由 BattleTab 经 BattleScreen 下发，组件不推导。 */
+  nameOverride?: string;
   /** 本体是否可点（已选己方攻击者、且没有待选择效果） */
   bodyClickable: boolean;
   onBodyClick: () => void;
   children?: ReactNode;
 }
 
-function BossPanelBase({ boss, bodyClickable, onBodyClick, children }: BossPanelProps) {
+function BossPanelBase({ boss, nameOverride, bodyClickable, onBodyClick, children }: BossPanelProps) {
   const pct = `${boss.hpPct}%`;
   return (
     <div className="mb-2.5 rounded-[10px] border border-[#2b3550] bg-[#141b2e] px-2.5 py-2">
@@ -25,7 +29,7 @@ function BossPanelBase({ boss, bodyClickable, onBodyClick, children }: BossPanel
         <BossAvatar src={boss.artSrc} />
         <div className="min-w-0 flex-1">
           <h2 className="mb-[3px] flex items-center gap-1.5 text-[13px] font-bold">
-            BOSS <span className="text-[11px] font-normal text-slate-500">{boss.name}</span>
+            BOSS <span className="text-[11px] font-normal text-slate-500">{nameOverride || boss.name}</span>
           </h2>
           <div className="text-[11px] leading-relaxed text-slate-500">头目技能：{boss.skill}</div>
         </div>

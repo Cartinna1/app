@@ -17,19 +17,27 @@
 //     只损失**金币 + 原料**（星尘按用户裁定不动），各项**以当前持有量为上限**
 //   · 掠夺结束后 **20 回合**内不再被掠夺（打赢 / 打输 / 被掠夺成功都免疫）
 //   · 必须可预告（§10.2【补完·实现要求】）→ raidHintLines / tickRaid 出来的两个倒计时
+//   · **掠夺队永远存在**（用户 2026-08 裁定，覆盖 §10.2「全部打败后不再有掠夺」）：
+//     5 个老巢全被打败只是把这支队伍**改名叫「海盗残兵」**，触发概率 / 两段窗口 / 损失口径全不变。
 //
 // ⚠ 文档**没有**给的两处（不许"凭常识补数"，在此集中标注，详见交付报告）：
 //   ① 损失**比例**：§10.2 只写"各项以当前持有量为上限" → 用户裁定：金币 20%、原料各自 1/3、不动星尘。
-//   ② 掠夺队的卡池来源：§10.2 写"从尚未被打败的海盗星系里取"，但当前 GameState **没有**
-//      "已打败的老巢"账本 → 暂与老巢共用 data/battle/pirates.ts 的 PIRATE_POOL（待办，勿在
-//      engine.ts 里硬做）。
+//   ② 掠夺队的卡池与"打完老巢之后怎么办"：§10.2 写"从尚未被打败的海盗星系里取（全部打败后不再有掠夺）"
+//      → **用户 2026-08 裁定覆盖原文**：
+//        · 掠夺队**永远存在**（"星际海盗不可能打光"）→ `shouldStartRaid` 的四个条件里
+//          **不含任何"还有没打败的老巢"门槛**，也不要再"凭借这个理由"给它加门槛；
+//        · 掠夺队改用**自己的**卡池（data/battle/pirates.ts 的 `RAID_POOL`：15 张、构成本身更偏低阶，
+//          与 5 个老巢共用的 30 张 `PIRATE_POOL` 区分开 —— 减轻玩家的防守负担）；
+//        · 5 个老巢全被打败后，掠夺队只**改名**「海盗残兵」（见 `raidEnemyName`），流程一字不改。
 //
 // ⚠ 本文件**不吃随机数**：所有掷骰由调用方取好随机数后传进来（便于测试），这里只做纯判定。
 // ⚠ 不依赖 React/DOM，不做任何副作用。
 
 import type { GameState } from '@/types/game';
-import type { BattleRaidState, ShipCardId } from '@/types/battle';
+import type { BattleRaidState, PirateBossId, ShipCardId } from '@/types/battle';
 import { BATTLE_TUNING } from '@/data/battle/tuning';
+import { PIRATE_BOSSES } from '@/data/battle/pirates';
+import { GALAXY_NODES } from '@/data/galaxy/nodes';
 import { getMaterialName } from '@/data/materialNames';
 import { colonyNodeId } from './expedition';
 
@@ -148,6 +156,55 @@ export function raidStatus(state: GameState): RaidStatusView {
   };
 }
 
+// ---------------- 掠夺队的名字 ＋「已打败的老巢」账本（用户 2026-08 裁定） ----------------
+
+/**
+ * 老巢 BOSS id 全集（**数据驱动**：星图里带 `pirateLair` 标记的节点，当前 5 个）。
+ * ⚠ 判据不许硬编码 5：老巢就是挂在星图节点上的标记（data/galaxy/nodes.ts），
+ *   与 lib/battle/expedition.ts 的 LAIR_NODE_BY_BOSS 读的是同一份数据。
+ */
+export const LAIR_BOSS_IDS_FROM_NODES: readonly PirateBossId[] = GALAXY_NODES
+  .map((n) => n.pirateLair)
+  .filter((id): id is PirateBossId => !!id);
+
+/** 掠夺队平时的名字（= 数据里的静态名「海盗旗舰（掠夺队）」；**不在这里另写一份字面量**） */
+export const RAID_ENEMY_NAME: string = PIRATE_BOSSES['raid']?.name ?? '海盗旗舰（掠夺队）';
+
+/** 老巢全被打败后掠夺队的名字（**用户 2026-08 裁定**） */
+export const RAID_REMNANT_NAME = '海盗残兵';
+
+/**
+ * 老巢是不是**全被打败了**（数据驱动：判据是 GALAXY_NODES 里带 `pirateLair` 的那些节点，不硬编码 5）。
+ * 账本缺字段时按"一个都没打败"兜底（正常读档由 lib/save.stateFromSave 补 `[]`）。
+ */
+export function allLairsDefeated(state: GameState): boolean {
+  const defeated = state.defeatedLairs || [];
+  return LAIR_BOSS_IDS_FROM_NODES.every((id) => defeated.includes(id));
+}
+
+/**
+ * 掠夺队的**显示名（唯一真值）**：平时「海盗旗舰（掠夺队）」；
+ * **5 个老巢全被打败后**改成「海盗残兵」（用户 2026-08 裁定）。
+ * ⚠ 大厅的掠夺卡片（`raidCardView.enemyName`）与战斗界面的 BOSS 面板读的是**同一份** ——
+ *   不许在组件里再写一遍名字规则（"同一场战斗在大厅与战报里名字必须一致"）。
+ * ⚠ 名字与"掠夺会不会来"无关：掠夺队**永远存在**，改名只是换个称呼。
+ */
+export function raidEnemyName(state: GameState): string {
+  return allLairsDefeated(state) ? RAID_REMNANT_NAME : RAID_ENEMY_NAME;
+}
+
+/**
+ * 把一场胜利记进「已打败的老巢」账本（**唯一写入点** = gameReducer 的 END_BATTLE 出征战分支，
+ * 判据用既有的 `battle.winner === 'player'`，不新造一套胜负判断）。
+ * **幂等**：已经在账本里 → 原样返回同一个数组（重复写入不产生重复项）；
+ * 不是老巢的 id（例如掠夺队 `'raid'`）一律不记。
+ */
+export function recordDefeatedLair(defeated: PirateBossId[], bossId: PirateBossId): PirateBossId[] {
+  if (!LAIR_BOSS_IDS_FROM_NODES.includes(bossId)) return defeated;
+  if (defeated.includes(bossId)) return defeated;
+  return [...defeated, bossId];
+}
+
 // ---------------- 战斗页签「殖民地掠夺」卡片的整份渲染模型 ----------------
 
 /**
@@ -166,7 +223,10 @@ export interface RaidCardView {
   tone: 'warning' | 'arrived' | 'idle';
   /** 标题行右侧那句说明（唯一真值：概率与两个窗口常数） */
   subtitle: string;
-  /** 主标题行（阶段 A 写"海盗还有 N 回合抵达"、阶段 B 写"海盗已抵达，还有 N 回合"、idle 写"海盗已退"） */
+  /** 掠夺队的**显示名**（= `raidEnemyName(state)`：平时「海盗旗舰（掠夺队）」、
+   *  5 个老巢全被打败后「海盗残兵」）。战斗界面的 BOSS 面板读同一份（BattleTab 下发的就是这个字段）。 */
+  enemyName: string;
+  /** 主标题行（阶段 A 写"<名字>还有 N 回合抵达"、阶段 B 写"<名字>已抵达，还有 N 回合"） */
   headline: string;
   /** 阶段 A / B 都有的"本次几支掠夺队"后缀（1 支时为空串） */
   squadNote: string;
@@ -191,6 +251,9 @@ export function raidCardView(state: GameState): RaidCardView {
     ? `（本次 ${status.raiders} 支，赢下第一场要连打第二场）`
     : '';
   const subtitle = `每回合 ${RAID_CHANCE * 100}% 触发，${RAID_WARNING_TURNS} 回合预警，结束免疫 ${RAID_IMMUNE_TURNS} 回合`;
+  // 掠夺队的名字走**唯一真值** raidEnemyName（老巢打光后是「海盗残兵」）；
+  // 卡片、预告、战斗界面 BOSS 面板都从这里取，组件不许自己拼名字。
+  const enemyName = raidEnemyName(state);
 
   if (status.phase === 'warning') {
     return {
@@ -198,7 +261,8 @@ export function raidCardView(state: GameState): RaidCardView {
       showCard: true,
       tone: 'warning',
       subtitle,
-      headline: `海盗还有 ${status.turnsToArrival} 回合抵达`,
+      enemyName,
+      headline: `${enemyName}还有 ${status.turnsToArrival} 回合抵达`,
       squadNote: squads,
       detail: status.defenseCount > 0
         ? `现在有 ${status.defenseCount} 艘带「防守」标签的舰队会在抵达时合并成一个部署池（到那时再点「开战」）。`
@@ -217,7 +281,8 @@ export function raidCardView(state: GameState): RaidCardView {
       showCard: true,
       tone: 'arrived',
       subtitle,
-      headline: `海盗已抵达，还有 ${status.turnsToAutoLoot} 回合`,
+      enemyName,
+      headline: `${enemyName}已抵达，还有 ${status.turnsToAutoLoot} 回合`,
       squadNote: squads,
       detail: status.defenseCount > 0
         ? `留守的 ${status.defenseCount} 艘带「防守」标签的舰队会合并成一个部署池接战；这 ${status.turnsToAutoLoot} 回合里还可以去机库调整编成与防守标签。`
@@ -237,13 +302,14 @@ export function raidCardView(state: GameState): RaidCardView {
     showCard: status.immuneTurns > 0,
     tone: 'idle',
     subtitle,
+    enemyName,
     headline: '',
     squadNote: '',
     detail: '',
     showFightButton: false,
     canFight: false,
     fightHint: '',
-    idleText: `海盗已退（击退或已结算），${status.immuneTurns} 回合内不会再被掠夺。`,
+    idleText: `${enemyName}已退（击退或已结算），${status.immuneTurns} 回合内不会再被掠夺。`,
     status,
   };
 }
@@ -438,6 +504,8 @@ export function raidLootText(loss: RaidLootLoss): string {
 export function raidHintLines(state: GameState): RaidHintLine[] {
   const out: RaidHintLine[] = [];
   const view = raidStatus(state);
+  // 名字与卡片 / 战斗界面同源（唯一真值 raidEnemyName）：老巢打光后预告里也叫「海盗残兵」。
+  const enemyName = raidEnemyName(state);
   if (view.phase === 'warning') {
     const when = view.turnsToArrival <= 1 ? '下回合' : `${view.turnsToArrival} 回合后`;
     const squads = view.raiders > 1 ? `（本次 ${view.raiders} 支掠夺队，赢下第一场要连打第二场）` : '';
@@ -445,13 +513,13 @@ export function raidHintLines(state: GameState): RaidHintLine[] {
       out.push({
         id: 'raid_incoming',
         severity: 'warn',
-        text: `海盗${when}抵达${squads}：留守的 ${view.defenseCount} 艘防守舰队会接战；防守战打输与没有防守一样会被掠夺`,
+        text: `${enemyName}${when}抵达${squads}：留守的 ${view.defenseCount} 艘防守舰队会接战；防守战打输与没有防守一样会被掠夺`,
       });
     } else {
       out.push({
         id: 'raid_incoming',
         severity: 'danger',
-        text: `海盗${when}抵达${squads}：没有带「防守」标签的舰队 —— 到时候不打就等着被掠夺（损失金币与原料）`,
+        text: `${enemyName}${when}抵达${squads}：没有带「防守」标签的舰队 —— 到时候不打就等着被掠夺（损失金币与原料）`,
       });
     }
   } else if (view.phase === 'arrived') {
@@ -460,13 +528,13 @@ export function raidHintLines(state: GameState): RaidHintLine[] {
       out.push({
         id: 'raid_arrived',
         severity: 'warn',
-        text: `海盗已抵达${squads}，还有 ${view.turnsToAutoLoot} 回合不迎战就会被掠夺成功 —— 去战斗页签点「开战」（留守的 ${view.defenseCount} 艘会合并接战）`,
+        text: `${enemyName}已抵达${squads}，还有 ${view.turnsToAutoLoot} 回合不迎战就会被掠夺成功 —— 去战斗页签点「开战」（留守的 ${view.defenseCount} 艘会合并接战）`,
       });
     } else {
       out.push({
         id: 'raid_arrived',
         severity: 'danger',
-        text: `海盗已抵达${squads}，还有 ${view.turnsToAutoLoot} 回合：没有带「防守」标签的舰队 —— 到时会被掠夺成功，损失金币与原料（先给留守舰队打上防守标签）`,
+        text: `${enemyName}已抵达${squads}，还有 ${view.turnsToAutoLoot} 回合：没有带「防守」标签的舰队 —— 到时会被掠夺成功，损失金币与原料（先给留守舰队打上防守标签）`,
       });
     }
   }
@@ -474,7 +542,7 @@ export function raidHintLines(state: GameState): RaidHintLine[] {
     out.push({
       id: 'raid_immune',
       severity: 'info',
-      text: `海盗退去：${state.raid.immuneTurns} 回合内不会再被掠夺`,
+      text: `${enemyName}退去：${state.raid.immuneTurns} 回合内不会再被掠夺`,
     });
   }
   return out;

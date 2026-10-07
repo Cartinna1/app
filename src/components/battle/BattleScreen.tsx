@@ -1,11 +1,13 @@
 import { memo, useEffect, useState } from 'react';
 import type { BattleAction, BattleState } from '@/types/battle';
+import type { CardView } from '@/lib/battle/view';
 import {
   boardView,
   bossView,
   canEndTurn,
   graveView,
   infoBarView,
+  manualActionView,
   poolView,
 } from '@/lib/battle/view';
 import { TURN_LIMIT } from '@/lib/battle/engine';
@@ -37,17 +39,21 @@ interface BattleScreenProps {
   battle: BattleState;
   /** 本场战斗的随机种子（主游戏传入）。**换一场就变**，用来把上一场的选择态清掉 */
   seed: number;
+  /** BOSS 面板要显示的**敌人名**（唯一真值 = lib/battle/raid.raidEnemyName，由 BattleTab 从
+   *  `raidCardView.enemyName` 下发；空串 = 用数据里的静态 BOSS 名）。
+   *  ⚠ 为什么由父组件下发而不是在这里推导：名字规则只许有一份（老巢打光后掠夺队叫「海盗残兵」），
+   *    而 `lib/battle/view.ts` 的 bossView 是冻结区（语义不许改）→ 组件只做"显示哪个名字"的渲染。 */
+  enemyName: string;
   onAction: (action: BattleAction) => void;
   /** 结束这场战斗（END_BATTLE：结算永久损失、收起出征/掠夺状态） */
   onEnd: () => void;
 }
 
-function BattleScreenBase({ battle, seed, onAction, onEnd }: BattleScreenProps) {
+function BattleScreenBase({ battle, seed, enemyName, onAction, onEnd }: BattleScreenProps) {
   const [selCard, setSelCard] = useState<string | null>(null);
   const [selUnit, setSelUnit] = useState<string | null>(null);
   const [flash, setFlash] = useState('');
   const [auto, setAuto] = useState(false);
-  const [busy, setBusy] = useState(false);
   /** 自动战斗：一个回合只排一次（打完这一方后重新武装） */
   const [autoArmed, setAutoArmed] = useState(false);
   /** 已经为哪一场（seed）初始化过选择态 */
@@ -74,15 +80,29 @@ function BattleScreenBase({ battle, seed, onAction, onEnd }: BattleScreenProps) 
   const cards = poolView(battle);
   const info = infoBarView(battle, selCard, selUnit);
   const grave = graveView(battle);
+  /**
+   * 「此刻谁在操作」的**唯一真值**（lib/battle/view.ts → manualActionView）。
+   * ⚠ 输入闸门（下面 4 个点击处理器）与底部文案**都读这一份**，不许再各判一次。
+   *   2026-08 的卡死正是"各判一次"的后果：闸门读组件级的 `busy`，而 `busy` 只在两条自动推进的
+   *   effect 里被清 → 玩家在自己回合手动部署后 `busy` 永假为真，点谁都没反应，底部还写着
+   *   「（自动战斗）正在替你行动…」（而按钮读的 `auto` 明明是"未开自动"）。
+   *   组件因此**不再持有任何"谁在行动"的状态**（`busy` 已删除）。
+   */
+  const manual = manualActionView(battle, auto);
+  /** 输入被拦时给出的那句话（点了没反应是最坏的结果：铁律②同理） */
+  const gateHint = manual.reason;
 
   // 动作分发：
-  //   · userAction  = 玩家手动动作（先撤掉自动战斗的待发回合，免得手动点完又被自动打一手；再置 busy）
-  //   · sysAction   = 自动行棋（BOSS 回合 / 自动战斗本身），不改 busy 的语义
+  //   · userAction  = 玩家手动动作（先撤掉自动战斗的待发回合，免得手动点完又被自动打一手）
+  //   · sysAction   = 自动行棋（BOSS 回合 / 自动战斗本身）
   // 两者都是稳定引用（useStableActions），不击穿子组件 memo（AGENTS 第五节）。
+  // ⚠ 这里**不再有 busy**（已删除）：它原先既是输入闸门、又是文案分支、又是「结束回合」的禁用条件，
+  //   而清除它的代码只活在两条自动推进的 effect 里 → 玩家手动出手一次就永久卡死。
+  //   "谁在操作"改由 lib/battle/view.manualActionView 单一判定；双击的重复动作由引擎
+  //   （canDeploy / canAttack 会再校验一次）与 reducer 兜底，不再靠组件闸门。
   const { userAction, sysAction } = useStableActions({
     userAction: (action: BattleAction) => {
       setAutoArmed(false);
-      setBusy(true);
       onAction(action);
     },
     sysAction: (action: BattleAction) => {
@@ -95,7 +115,6 @@ function BattleScreenBase({ battle, seed, onAction, onEnd }: BattleScreenProps) 
     if (battle.over || battle.active !== 'boss') return;
     const t = setTimeout(() => {
       sysAction({ type: 'autoTurn' });
-      setBusy(false);
     }, BOSS_DELAY_MS);
     return () => clearTimeout(t);
   }, [battle.over, battle.active, battle.round, sysAction]);
@@ -107,7 +126,6 @@ function BattleScreenBase({ battle, seed, onAction, onEnd }: BattleScreenProps) 
     const t = setTimeout(() => {
       setAutoArmed(false);
       sysAction({ type: 'autoTurn' });
-      setBusy(false);
     }, AUTO_DELAY_MS);
     return () => clearTimeout(t);
   }, [auto, autoArmed, battle.over, battle.active, battle.round, sysAction]);
@@ -128,35 +146,43 @@ function BattleScreenBase({ battle, seed, onAction, onEnd }: BattleScreenProps) 
 
   // ---------------- 输入（逐条对齐 DEMO 的 onPoolClick / onPlayerSlot / onBossTarget） ----------------
 
+  /** 部署被拦时的原因（唯一真值 = view.CardView.playable / cost）——「能不能读」与「能不能出」分开 */
+  const deployBlockReason = (card: CardView): string =>
+    card.cost > battle.player.cur
+      ? `指挥度不够（需要 ${card.cost}，现有 ${battle.player.cur}）`
+      : '场上没有空位了（上限 6 艘）';
+
   const onPoolClick = (cid: string) => {
-    if (battle.over || busy || battle.active !== 'player') return;
+    // 唯一的输入闸门：读 lib 的 manualActionView（未开自动 + 轮到玩家 + 无待选择）。被拦时说出原因。
+    if (!manual.canAct) { hint(gateHint); return; }
     const card = cards.find((c) => c.id === cid);
     if (!card) return;
-    if (!card.playable) {
-      hint(card.cost > battle.player.cur
-        ? `指挥度不够（需要 ${card.cost}，现有 ${battle.player.cur}）`
-        : '场上没有空位了（上限 6 艘）');
-      return;
-    }
+    // ⚠ 「能不能读它」≠「能不能出它」：**灰卡照样能选中**（点开看技能全文，信息条是手机端唯一出口，铁律①），
+    //   出不出得去等点空格部署时再判（`deployBlockReason` 给原因）。把两者合成一个值的后果就是
+    //   用户 2026-08 报的"灰卡的技能在手机上无处可看"（卡面 title 是桌面专属的悬浮提示）。
     setSelCard(selCard === cid ? null : cid);
     setSelUnit(null);
-    setFlash('');
+    setFlash(card.playable ? '' : deployBlockReason(card));
   };
 
   /** 待选择状态：点任意候选单位即完成一次选择；返回是否消费了这次点击 */
   const tryResolvePending = (uid: string): boolean => {
-    if (!battle.pending) return false;
+    // 待选择**也是手动操作**：自动模式接管时不许手动选（判定同 manualActionView，一处不写第二份）
+    if (!battle.pending || !manual.canAct) return false;
     setFlash('');
     userAction({ type: 'resolvePending', unitId: uid });
     return true;
   };
 
   const onPlayerSlot = (i: number) => {
-    if (battle.over || battle.active !== 'player') return;
+    if (!manual.canAct) { hint(gateHint); return; }
     const u = battle.player.board[i];
     if (u && tryResolvePending(u.uid)) return;
     if (battle.pending) { hint('请先点一艘可选的战舰作为目标（这个位置不在候选里）'); return; }
     if (selCard && !u) {
+      // 部署这一步才判"能不能出"：指挥度不足 / 场上满 → **明确写出原因**，不派发（铁律②同理）。
+      const card = cards.find((c) => c.id === selCard);
+      if (card && !card.playable) { hint(deployBlockReason(card)); return; }
       setSelCard(null);
       setFlash('');
       userAction({ type: 'deploy', cardId: selCard, slot: i });
@@ -172,13 +198,15 @@ function BattleScreenBase({ battle, seed, onAction, onEnd }: BattleScreenProps) 
   };
 
   const onBossTarget = (ref: string) => {
-    if (battle.over || battle.active !== 'player') return;
+    // 待选择时点候选**是合法操作**，故闸门放在"该不该做这件事"的判断之后，但先给一句原因。
+    if (battle.over) return;
     if (battle.pending) {
       // 待选择状态下：点敌方单位 = 指定目标（点本体无效，只会得到一句提示）
       if (ref !== 'body' && tryResolvePending(ref)) return;
       hint('请先在可选的战舰上点选目标（点本体无效）');
       return;
     }
+    if (!manual.canAct) { hint(gateHint); return; }
     if (!selUnit) { hint('先点己方一艘可以攻击的战舰，再点目标'); return; }
     setSelUnit(null);
     setFlash('');
@@ -186,7 +214,7 @@ function BattleScreenBase({ battle, seed, onAction, onEnd }: BattleScreenProps) 
   };
 
   const endTurn = () => {
-    if (!canEndTurn(battle) || busy) return;
+    if (!manual.canAct || !canEndTurn(battle)) { hint(gateHint); return; }
     setSelCard(null);
     setSelUnit(null);
     userAction({ type: 'endTurn' });
@@ -197,15 +225,21 @@ function BattleScreenBase({ battle, seed, onAction, onEnd }: BattleScreenProps) 
     ? `${Math.max(0, Math.round((Math.max(0, battle.player.body) / battle.player.bodyMax) * 100))}%`
     : '0%';
 
-  const defaultHint = (() => {
-    if (battle.over) return `战斗结束：${battle.reason}`;
-    if (busy) return battle.active === 'player' ? '（自动战斗）正在替你行动…' : 'BOSS 行动中…';
-    if (battle.pending) return '请在可选战舰上点选目标';
-    if (battle.active !== 'player') return '等待 BOSS 行动…';
-    if (selCard) return `已选卡牌（${cards.find((c) => c.id === selCard)?.cost ?? 0} 费）→ 点自己场上的空格部署`;
-    if (selUnit) return '已选战舰 → 点敌方战舰或 BOSS 本体发起攻击';
-    return '点「你的舰队」里的战舰 → 再点自己场上的空格部署；点己方战舰 → 再点敌方目标攻击。';
-  })();
+  /**
+   * 底部默认文案 = lib/battle/view.manualActionView 的那句话（**唯一真值**）。
+   * ⚠ 删掉的是组件自己的分支链（`busy ? '（自动战斗）正在替你行动…' : …`）：
+   *   「谁在操作」只许有一份判定，否则又会出现"按钮说手动、底部说自动"的分叉。
+   *   只有 `manual.canAct`（= 玩家真的能操作）时才把"已选卡牌 / 已选战舰"这两句操作提示叠上去 ——
+   *   否则一律原文渲染 `reason`，`autoHint` 未开自动时恒为空串（渲染串不许撒谎）。
+   */
+  const defaultHint = manual.autoHint
+    || (manual.canAct
+      ? (selCard
+        ? `已选卡牌（${cards.find((c) => c.id === selCard)?.cost ?? 0} 费）→ 点自己场上的空格部署`
+        : selUnit
+          ? '已选战舰 → 点敌方战舰或 BOSS 本体发起攻击'
+          : manual.reason)
+      : manual.reason);
 
   const turnText = `${battle.round > TURN_LIMIT ? TURN_LIMIT : battle.round}/${TURN_LIMIT}`;
   const manaText = `${battle.player.cur}/${battle.player.cap}` +
@@ -240,7 +274,7 @@ function BattleScreenBase({ battle, seed, onAction, onEnd }: BattleScreenProps) 
         <button
           type="button"
           className="rounded-[7px] border border-blue-500 bg-blue-700 px-2.5 py-1 text-[12px] text-white hover:enabled:bg-blue-600 disabled:cursor-not-allowed disabled:opacity-40"
-          disabled={!canEndTurn(battle) || busy}
+          disabled={!canEndTurn(battle)}
           onClick={endTurn}
         >
           结束回合
@@ -250,6 +284,7 @@ function BattleScreenBase({ battle, seed, onAction, onEnd }: BattleScreenProps) 
       {/* ==================== BOSS 面板 ==================== */}
       <BossPanel
         boss={boss}
+        nameOverride={enemyName}
         bodyClickable={!battle.over && !battle.pending && battle.active === 'player' && !!selUnit}
         onBodyClick={() => onBossTarget('body')}
       >

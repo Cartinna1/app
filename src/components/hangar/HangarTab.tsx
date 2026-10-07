@@ -117,7 +117,7 @@ function HangarAssignBar({
           {fleetName ? ` · 当前舰队：${fleetName}` : ' · 当前没有舰队'}
         </span>
       </div>
-      {/* 原因 / 说明写在行内（不只 title/置灰）——手机端没有 hover，AGENTS 第十节机库铁律② */}
+      {/* 原因 / 说明写在行内（不只 title/置灰）——手机端没有 hover，AGENTS-附录.md 10.2 机库铁律② */}
       <p className={`mt-1 text-[11px] leading-relaxed ${ok ? 'text-slate-500' : 'text-amber-400'}`}>{message}</p>
     </div>
   );

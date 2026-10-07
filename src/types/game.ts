@@ -333,6 +333,11 @@ export interface GameState {
   fleets: BattleFleet[];                  // 舰队：数量不限；一船只能编入一队；每队 ≤ 30 艘
   expedition: BattleExpedition | null;    // 进行中的出征（同时只能 1 个）
   raid: BattleRaidState;                  // 掠夺状态（两段窗口：预警 CD → 已抵达待战；见 types/battle.ts）
+  /** **已打败的老巢账本**（用户 2026-08 裁定）：打赢老巢时记下 bossId（幂等），
+   *  5 个老巢全被打败后掠夺队的显示名改成「海盗残兵」（唯一真值 lib/battle/raid.raidEnemyName）。
+   *  ⚠ **不影响掠夺的触发**：掠夺队永远存在（用户 2026-08 裁定，覆盖 §10.2「全部打败后不再有掠夺」）。
+   *  存档字段（v6 引入，旧档兜底 = 空数组 = 一个都没打败）。 */
+  defeatedLairs: PirateBossId[];
   battle: BattleState | null;             // 进行中的战斗。⚠ **不进存档**（读档一律为 null）
   // ===== 船坞与科技（V1.5 §8.2 造船建筑 / §8.3 生产规则 / §9 科技树）=====
   /** 造船队列（同时建造 2 艘 + 排队无限，§11 #5）。完工由 useTurn 每回合调
@@ -395,7 +400,7 @@ export type SaveData = Pick<
   | 'factionPolicy' | 'policyRemainingTurns' | 'stardustMarket' | 'gameWon' | 'wonWonderName'
   | 'factionReputation' | 'factionContracts'
   // 卡牌战斗：battle（进行中的战斗）**故意不进存档**
-  | 'cardLibrary' | 'fleets' | 'expedition' | 'raid'
+  | 'cardLibrary' | 'fleets' | 'expedition' | 'raid' | 'defeatedLairs'
   // 船坞与科技：造船队列（v4 新增）
   | 'buildQueue'
 > & { saveVersion: number };

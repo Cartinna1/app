@@ -5,9 +5,13 @@
    核对：① 每个导出组件都 memo          ② 列表/卡面图走 getThumbPath（AGENTS 第五节）
         ③ 图片都有 onError 回落占位      ④ 没有把空数组/空对象字面量当 props 默认值
         ⑤ 没有内联 style 传给 memo 子组件（粗略）  ⑥ 没有 enum/namespace（tsc 也查）
+        ⑦ **渲染字符串里不许出现 `V1.5 §`**（components/** 与组件直接渲染的 lib/data 文案源**都硬失败**）
+        ⑧ **AGENTS.md ≤ 60000 字节**（防 workspace 指令预算 65536 从尾部静默截断，超限即红）
+        ⑨ **战斗「谁在操作」只许有一份判定**（manualActionView）：组件不许再用组件态闸门，
+           也不许在代码里写死「（自动战斗）正在替你行动…」——否则就是"按钮说手动、底部说自动"的分叉
    ============================================================================ */
-// ⑦ 渲染字符串里不许出现「V1.5 §」（用户 2026-08 口径：界面只讲"现在什么情况、能做什么"，
-//    不许把文档出处写进玩家看见的文案；注释里的出处保留）—— 实现见文件末尾的 auditRenderStrings。
+// ⑦ 口径（用户 2026-08）：界面只讲"现在什么情况、能做什么"，不许把文档出处（V1.5 §x.y）
+//    写进玩家看见的文案；注释里的出处保留。实现见下面的 auditRenderStrings。
 const fs = require('fs');
 const path = require('path');
 
@@ -22,11 +26,12 @@ const VIEWS = [
 const issues = [];
 
 // ---------------------------------------------------------------------------
-// ⑦ 渲染字符串里不许出现「V1.5 §」（用户 2026-08 口径）
+// ⑦ 渲染字符串里不许出现「V1.5 §」（用户 2026-08 口径，**两批全硬失败**）
 //    判据沿用本轮既定口径：**解释界面/机制怎么运作的旁白 → 删**；**告诉玩家现在什么情况 /
 //    能做什么 → 留**。文档出处（V1.5 §x.y）属于前者，只许留在代码注释里。
-//    范围：「组件」目录 + **这些组件直接渲染的 lib 文案源**（那条横幅就来自
-//    lib/battle/expedition.ts 的 endTurnView.reason，只查 components 会漏掉源头）。
+//    范围：① src/components/**（组件自己写的串）② **组件直接渲染的 lib / data 文案源**
+//    （那条横幅来自 lib/battle/expedition.ts 的 endTurnView.reason、船坞原因来自 shipyard.ts、
+//     建筑效果来自 data/colony/buildings.ts —— 只查 components 会漏掉这些源头）。
 // ---------------------------------------------------------------------------
 const COMPONENT_DIRS = [
   path.resolve(__dirname, '../src/components'),
@@ -41,6 +46,7 @@ const TEXT_LIB_FILES = [
   path.resolve(__dirname, '../src/lib/battle/shipyard.ts'),
   path.resolve(__dirname, '../src/lib/battle/rewards.ts'),
   path.resolve(__dirname, '../src/lib/battle/view.ts'),
+  path.resolve(__dirname, '../src/data/colony/buildings.ts'),
 ];
 const V15 = /V1\.5\s*§/;
 /** 去掉注释（先块注释、再行注释；顺序不能反），剩下的就是代码与字符串字面量。
@@ -65,7 +71,7 @@ function scanRenderStrings(files) {
 }
 
 function auditRenderStrings() {
-  // ① 硬性：components/** —— 组件里的渲染串一处都不许有
+  // ① 组件自己写的渲染串
   const compFiles = [];
   for (const d of COMPONENT_DIRS) {
     if (!fs.existsSync(d)) continue;
@@ -74,15 +80,16 @@ function auditRenderStrings() {
     }
   }
   const compHits = scanRenderStrings(compFiles);
-  // ② 追源头：这些 lib 文件的字符串**会被上面这些组件直接渲染**
-  //    （横幅那句就在 lib/battle/expedition.ts 的 endTurnView.reason 里，只查 components 会漏掉源头）
-  const libHits = scanRenderStrings(TEXT_LIB_FILES.filter((f) => fs.existsSync(f)));
-  console.log('\n=== 渲染字符串里的「V1.5 §」 ===');
+  // ② 这些 lib / data 文件的字符串**会被上面这些组件直接渲染**（横幅 = expedition.endTurnView.reason、
+  //    船坞不可用原因 = shipyard、建筑效果 = data/colony/buildings）——**同样硬失败**，
+  //    否则"出处进渲染串"还会从这个源头回来。
+  const textFiles = TEXT_LIB_FILES.filter((f) => fs.existsSync(f));
+  const libHits = scanRenderStrings(textFiles);
+  console.log('\n=== 渲染字符串里的「V1.5 §」（两批都硬失败） ===');
   console.log('  ① components/**：' + compFiles.length + ' 个文件 → ' + (compHits.length ? compHits.length + ' 处 ✗' : '未发现 ✓'));
-  console.log('  ② 组件直接渲染的 lib 文案源：' + libHits.length + ' 处'
-    + (libHits.length ? '（见下；用户 2026-08 只点名了两处，这里列出其余同类）' : ' ✓'));
-  for (const h of compHits) issues.push(h);
-  for (const h of libHits) console.log('     · ' + h);
+  console.log('  ② 组件直接渲染的 lib / data 文案源：' + textFiles.length + ' 个文件 → '
+    + (libHits.length ? libHits.length + ' 处 ✗' : '未发现 ✓'));
+  for (const h of compHits.concat(libHits)) issues.push(h);
 }
 
 const files = [];
@@ -120,7 +127,7 @@ for (const VIEW of VIEWS) {
   const exps = [...v.matchAll(/export function (\w+)/g)].map((m) => m[1]);
   const base = path.basename(VIEW);
   const need = base === 'view.ts'
-    ? ['unitView', 'boardView', 'poolView', 'infoBarView', 'bossView', 'graveView', 'canEndTurn']
+    ? ['unitView', 'boardView', 'poolView', 'infoBarView', 'bossView', 'graveView', 'canEndTurn', 'manualActionView']
     : ['libraryRows', 'fleetRows', 'canAddShip', 'canRemoveShip', 'canDeleteFleet', 'canToggleDefending', 'hangarSummary', 'hangarOverview', 'hangarGuide'];
   const miss = need.filter((n) => !exps.includes(n));
   console.log('\n=== ' + base + ' 导出（' + exps.length + ' 个）===');
@@ -147,6 +154,81 @@ for (const VIEW of VIEWS) {
 
 auditRenderStrings();
 
+// ---------------------------------------------------------------------------
+// ⑧ AGENTS.md 体积守卫（防复发：文档被 workspace 指令预算截断，尾部静默丢失）
+//    背景：会话的 workspace 指令预算上限 = 65536 字节，超了系统**从尾部截断**——
+//    而尾部正是「§十 唯一真值表 / 10.1 修过的坑」这一块，丢了没有任何提示（属文档损坏）。
+//    口径：AGENTS.md（§〇–§九 操作性规则 + 指向附录的指针）**必须显著低于预算**；
+//    §十 那类"查表型"内容一律放 AGENTS-附录.md（不进 workspace 预算）。
+//    实测：2026-10 拆分前 AGENTS.md 66354 字节 → 已被截断；拆分后 ≈49500 字节（余量 ≈24%）。
+//    超限时：**别再压缩语义内容**，照本文件的拆法把大块内容搬去 AGENTS-附录.md，正文留指针。
+// ---------------------------------------------------------------------------
+const AGENTS_BUDGET = 60000;   // 目录里的硬上限（工作区提示预算 65536 − 余量）
+const AGENTS_WARN = 45000;     // 目标线：超过只是提醒，不算失败
+function auditAgentsSize() {
+  const agents = path.resolve(__dirname, '../AGENTS.md');
+  console.log('\n=== AGENTS.md 体积守卫（≤ ' + AGENTS_BUDGET + ' 字节，防尾部被截断） ===');
+  if (!fs.existsSync(agents)) {
+    issues.push('AGENTS.md 不存在（改代码前的准则文档，必须保留）');
+    console.log('  ✗ 不存在：' + agents);
+    return;
+  }
+  const bytes = fs.statSync(agents).size;
+  const pct = ((bytes / AGENTS_BUDGET) * 100).toFixed(1);
+  console.log('  实测字节数（fs.statSync.size，与预算同一口径）= ' + bytes
+    + ' / 上限 ' + AGENTS_BUDGET + '（' + pct + '%）');
+  if (bytes > AGENTS_BUDGET) {
+    issues.push('AGENTS.md 实测 ' + bytes + ' 字节 > 上限 ' + AGENTS_BUDGET
+      + ' —— 会被 workspace 指令预算（65536）从尾部截断、且没人知道丢了什么。'
+      + '别压缩语义内容：把大块查表型内容（如 §十 唯一真值表）搬到 AGENTS-附录.md，正文只留指针。');
+    console.log('  ✗ 超出 ' + (bytes - AGENTS_BUDGET) + ' 字节（余量 ' + (65536 - bytes) + ' 字节@65536）');
+  } else if (bytes > AGENTS_WARN) {
+    console.log('  ⚠ 已过目标线 ' + AGENTS_WARN + ' 字节（未超上限，未算失败）；'
+      + '注意 workspace 指令预算 65536 的余量只剩 ' + (65536 - bytes) + ' 字节');
+  } else {
+    console.log('  ✓ 未超限（余量 ' + (AGENTS_BUDGET - bytes) + ' 字节；@65536 余量 ' + (65536 - bytes) + ' 字节）');
+  }
+}
+auditAgentsSize();
+
+// ---------------------------------------------------------------------------
+// ⑨ 战斗「谁在操作」的唯一真值（manualActionView）
+//    2026-08 用户报「上了一艘战舰后指挥度还剩 2/4，却再也上不了任何卡；底部还写着
+//    「（自动战斗）正在替你行动…」而按钮是「自动战斗」（= 没开自动）」。
+//    根因：DEMO 没有 `busy` 这个组件态，移植时新加了它，却把它同时当成输入闸门 + 文案分支 +
+//    「结束回合」禁用条件，而清除它的代码只活在两条自动推进的 effect 里 → 手动出一手就永久卡死。
+//    判据（两条都硬失败）：
+//      ① BattleScreen 的**代码**里不许再出现 `busy`（注释里解释坑可以留）；
+//      ② 「正在替你行动」这句话只许出现在 lib/battle/view.ts（组件不许写死），
+//         且组件必须引入 manualActionView。
+// ---------------------------------------------------------------------------
+function auditManualGate() {
+  const screen = path.resolve(__dirname, '../src/components/battle/BattleScreen.tsx');
+  console.log('\n=== 战斗「谁在操作」唯一真值（manualActionView / 无组件态闸门） ===');
+  if (!fs.existsSync(screen)) { issues.push('BattleScreen.tsx 不存在（战斗主板没了？）'); return; }
+  const raw = fs.readFileSync(screen, 'utf8');
+  const code = stripComments(raw);
+  const busyHits = code.split('\n')
+    .map((l, i) => ({ l, i: i + 1 }))
+    .filter((x) => /\bbusy\b/.test(x.l));
+  if (busyHits.length) {
+    busyHits.forEach((h) => issues.push(
+      `components/battle/BattleScreen.tsx:${h.i}: 出现组件态 busy —— 它曾被当成输入闸门，`
+      + '清除它的代码只活在自动推进的 effect 里，是"点了没反应 + 底部谎称自动"的根因。'
+      + '「谁在操作」请读 lib/battle/view.manualActionView'));
+  }
+  if (code.indexOf('manualActionView') < 0) {
+    issues.push('BattleScreen.tsx 没读 lib/battle/view.manualActionView —— 输入闸门与底部文案必须同源');
+  }
+  if (code.indexOf('正在替你行动') >= 0) {
+    issues.push('BattleScreen.tsx 里写死了「正在替你行动」—— 这句话只许来自 lib/battle/view.ts 的 manualActionView.autoHint（未开自动时它恒为空串）');
+  }
+  console.log('  ① BattleScreen 代码里的组件态 busy：' + (busyHits.length ? busyHits.length + ' 处 ✗' : '未发现 ✓'));
+  console.log('  ② 读 manualActionView：' + (code.indexOf('manualActionView') >= 0 ? '是 ✓' : '否 ✗'));
+  console.log('  ③ 组件里写死「正在替你行动」：' + (code.indexOf('正在替你行动') >= 0 ? '有 ✗' : '未发现 ✓'));
+}
+auditManualGate();
+
 console.log('\n=== 静态 UI 审计结果 ===');
-if (issues.length === 0) console.log('  未发现问题 ✓（组件 memo / 缩略图 / onError / 纯函数分层 / 渲染串无 V1.5 §）');
+if (issues.length === 0) console.log('  未发现问题 ✓（组件 memo / 缩略图 / onError / 纯函数分层 / 渲染串无 V1.5 § / 手动闸门唯一真值 / AGENTS.md 体积）');
 else { issues.forEach((i) => console.log('  ⚠ ' + i)); process.exitCode = 1; }

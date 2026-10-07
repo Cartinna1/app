@@ -1,4 +1,4 @@
-﻿'use strict';
+'use strict';
 /* ============================================================================
    校验 src/data/battle/*.ts 与 carddemo/engine.js 逐字段一致（0 差异）
    用法：node scripts/verify-battle-data.cjs
@@ -50,6 +50,9 @@ for (const id of Object.keys(E.BOSSES)) {
   check(a.skill === b.skill, `敌人 ${id}.skill`);
 }
 check(JSON.stringify(pir.PIRATE_POOL) === JSON.stringify(E.PIRATE_POOL), '海盗池一致');
+check(JSON.stringify(pir.RAID_POOL) === JSON.stringify(E.RAID_POOL), '掠夺池一致');
+check(pir.RAID_POOL.length === 15, '掠夺池 15 张（用户 2026-08 裁定：与老巢池区分、减半）', String(pir.RAID_POOL.length));
+check(JSON.stringify(pir.RAID_POOL) !== JSON.stringify(pir.PIRATE_POOL), '掠夺池与老巢池不是同一个池');
 
 // ---------------- fleets ----------------
 const fl = loadTs('fleets.ts');

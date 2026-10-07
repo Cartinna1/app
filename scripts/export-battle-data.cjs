@@ -69,11 +69,15 @@ const q = (v) => JSON.stringify(v);
   lines.push('/** 海盗舰船池（海盗每回合从这里按指挥度出牌，用光不补充；玩家永远不可获得） */');
   lines.push(`export const PIRATE_POOL: readonly string[] = ${JSON.stringify(E.PIRATE_POOL)};`);
   lines.push('');
+  lines.push('/** 掠夺队（bossId = raid）自己的舰船池（**用户 2026-08 裁定**：15 艘、构成本身也更偏低阶，');
+  lines.push(' *  最高 4 费、不含 r8/r9/r10 头目与旗舰级 —— 与 5 个老巢共用的 PIRATE_POOL 区分开）。 */');
+  lines.push(`export const RAID_POOL: readonly string[] = ${JSON.stringify(E.RAID_POOL)};`);
+  lines.push('');
   lines.push('/** 老巢敌人 id（5 个 BOSS；掠夺队单列） */');
   lines.push(`export const LAIR_BOSS_IDS: readonly string[] = ${JSON.stringify(bids.filter((b) => b !== 'raid'))};`);
   lines.push('');
   fs.writeFileSync(path.join(OUT_DIR, 'pirates.ts'), lines.join('\n'), 'utf8');
-  console.log('  pirates.ts  ' + bids.length + ' 个敌人 + 海盗池 ' + E.PIRATE_POOL.length + ' 张');
+  console.log('  pirates.ts  ' + bids.length + ' 个敌人 + 海盗池 ' + E.PIRATE_POOL.length + ' 张 + 掠夺池 ' + E.RAID_POOL.length + ' 张');
 }
 
 // ---------------- fleets.ts ----------------

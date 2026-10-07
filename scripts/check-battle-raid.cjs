@@ -2,7 +2,7 @@
 /* ============================================================================
    P7 验收：掠夺循环（V1.5 §10.2）
    用法：node --import ./scripts/register-ts.mjs scripts/check-battle-raid.cjs
-   期望值一律取自 §10.2 原文（不是我的记忆）：
+   期望值一律取自 V1.5 §10.2 原文（不是我的记忆）：
      · 触发条件 = 卡库战舰总数 **≥10 艘** + **存在殖民地**（两者缺一不可）
      · 每回合 **8%**；冷却 **20 回合**；无防守 → **5 回合后**掠夺成功
      · 损失 = 金币 20% + 原料各自 1/3（**不动星尘**，用户 2026-08 裁定），各项以当前持有量为上限、绝不为负
@@ -12,8 +12,14 @@
      阶段 A（预警 5 回合）→ 归零只**转入阶段 B**（不自动开战）→ 阶段 B 再给 5 回合，
      玩家点「开战」才打（`readyRaidBattle`），一直不点则**自动失败 = 掠夺成功**。
      本脚本 [4]/[2]/[7]/[8] 的构造与期望已按新流程改写，逐条见交付报告。
+   ⚠ **用户 2026-08 三条裁定**（覆盖 §10.2 原文，见 [10]）：
+     ① 掠夺队**永远存在**（"星际海盗不可能打光"）→ 触发条件里不许加"还有没打败的老巢"门槛；
+     ② 5 个老巢全被打败后掠夺队**改名**「海盗残兵」（判据数据驱动 = GALAXY_NODES 的 pirateLair，不硬编码 5）；
+     ③ 掠夺队用**自己的**卡组 = 15 张（减半）且构成本身更偏低阶（比 30 张的老巢池弱）。
    ============================================================================ */
 const fails = [];
+const fs = require('fs');
+const path = require('path');
 const check = (ok, label, detail) => {
   if (ok) console.log('  ✓ ' + label);
   else { fails.push(label + (detail ? ' → ' + detail : '')); console.log('  ✗ ' + label + (detail ? '  → ' + detail : '')); }
@@ -29,11 +35,35 @@ const J = (v) => JSON.stringify(v);
   const { createMotherships } = await import('@/data/gameData');
   const { applyColonyFounding } = await import('@/lib/colony/colonySetup');
 
-  const need = ['RAID_CHANCE', 'RAID_WARNING_TURNS', 'RAID_ARRIVED_TURNS', 'RAID_IMMUNE_TURNS', 'idleRaidState', 'raidPhase', 'raidStatus', 'raidCardView', 'raidWarningElapsed', 'shouldStartRaid', 'raidResolution', 'readyRaidBattle', 'raidDefensePool', 'raidLootLoss', 'raidBattleFleet', 'raidHintLines'];
+  const need = ['RAID_CHANCE', 'RAID_WARNING_TURNS', 'RAID_ARRIVED_TURNS', 'RAID_IMMUNE_TURNS', 'idleRaidState', 'raidPhase', 'raidStatus', 'raidCardView', 'raidWarningElapsed', 'shouldStartRaid', 'raidResolution', 'readyRaidBattle', 'raidDefensePool', 'raidLootLoss', 'raidBattleFleet', 'raidHintLines', 'raidEnemyName', 'allLairsDefeated', 'recordDefeatedLair', 'LAIR_BOSS_IDS_FROM_NODES', 'RAID_ENEMY_NAME', 'RAID_REMNANT_NAME'];
   const missing = need.filter((k) => R[k] === undefined);
   if (missing.length) { console.error('raid.ts 缺少导出：' + missing.join(', ') + '（现有：' + Object.keys(R).join(', ') + '）'); process.exit(2); }
 
   const D = (st, a) => gameReducer(st, a);
+  /** 把一场战斗用 autoTurn 打到底（走 reducer 的 BATTLE_ACTION，全程 clone） */
+  const fightTo = (st) => {
+    let x = st, n = 0;
+    while (x.battle && !x.battle.over && n++ < 400) x = D(x, { type: 'BATTLE_ACTION', action: { type: 'autoTurn' } });
+    return x;
+  };
+  /** 扫 src/ 下所有 .ts/.tsx 的**代码部分**（去掉注释）里含有某字面量的文件（相对 src 的路径）。 */
+  const scanLiteralInSrc = (literal) => {
+    const root = path.resolve(__dirname, '../src');
+    const out = [];
+    const walk = (dir) => {
+      for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
+        const p = path.join(dir, e.name);
+        if (e.isDirectory()) { walk(p); continue; }
+        if (!/\.tsx?$/.test(e.name)) continue;
+        const code = fs.readFileSync(p, 'utf8')
+          .replace(/\/\*[\s\S]*?\*\//g, ' ')     // 块注释
+          .replace(/\/\/[^\n]*/g, '');           // 行注释
+        if (code.indexOf(literal) >= 0) out.push(path.relative(root, p).replace(/\\/g, '/'));
+      }
+    };
+    walk(root);
+    return out;
+  };
   /** raid 状态构造器（**两段窗口**：warning 用 inTurns，arrived 用 arrivedTurns；键序与 idleRaidState 一致） */
   const raidState = (o) => {
     const x = o || {};
@@ -370,6 +400,142 @@ const J = (v) => JSON.stringify(v);
       '免疫期 → 渲染卡片并报"还有 N 回合不会再被掠夺"',
       idleImmune.idleText
     );
+  }
+
+  // ---------- ⑩ 用户 2026-08 三条裁定：掠夺队永远存在 / 老巢打光改名「海盗残兵」/ 自有 15 张低阶卡组 ----------
+  //  裁定原文（覆盖 §10.2「全部打败后不再有掠夺」）：
+  //   · 掠夺队**永远存在**（"星际海盗不可能打光"）→ shouldStartRaid 的四个条件里不许加"还有没打败的老巢"；
+  //   · **5 个老巢全被打败**后掠夺队只**改名**「海盗残兵」（判据数据驱动，不硬编码 5）；
+  //   · 掠夺队用**自己的**卡组：15 张（减半）且构成本身更偏低阶（比老巢池弱）。
+  console.log('\n[10] 用户 2026-08 三条裁定（永远存在 / 打光改名 / 自有 15 张低阶卡组）');
+  {
+    const { RAID_POOL, PIRATE_POOL, PIRATE_BOSSES } = await import('@/data/battle/pirates');
+    const { GALAXY_NODES } = await import('@/data/galaxy/nodes');
+    const { buildSaveData, stateFromSave, migrateSave } = await import('@/lib/save');
+
+    // ---- ① 卡组：15 张、与老巢池不同、更弱，且引擎真的按 bossId 分流 ----
+    const costOf = (id) => E.CARDS[id].cost;
+    const powerOf = (pool) => pool.reduce((s, id) => s + E.CARDS[id].atk + E.CARDS[id].shield + E.CARDS[id].structure, 0);
+    const manaOf = (pool) => pool.reduce((s, id) => s + costOf(id), 0);
+    check(RAID_POOL.length === 15, '掠夺队卡组 = **15 张**（裁定：比老巢少一半）', String(RAID_POOL.length));
+    check(J(RAID_POOL) !== J(PIRATE_POOL), '掠夺池与老巢池**不是同一个池**（老巢仍是 30 张）', `老巢 ${PIRATE_POOL.length} / 掠夺 ${RAID_POOL.length}`);
+    check(!RAID_POOL.some((id) => id === 'r8' || id === 'r9' || id === 'r10'), '掠夺池不含头目 / 旗舰级（r8 头目舰 / r9 嗜血旗舰 / r10 深海阎王号）', J([...new Set(RAID_POOL)]));
+    check(Math.max(...RAID_POOL.map(costOf)) < Math.max(...PIRATE_POOL.map(costOf)), '掠夺池最高费 < 老巢池最高费（更偏低阶）', `${Math.max(...RAID_POOL.map(costOf))} vs ${Math.max(...PIRATE_POOL.map(costOf))}`);
+    check(powerOf(RAID_POOL) < powerOf(PIRATE_POOL), '掠夺池总战力（Σ 攻+盾+体）< 老巢池', `${powerOf(RAID_POOL)} vs ${powerOf(PIRATE_POOL)}`);
+    check(manaOf(RAID_POOL) < manaOf(PIRATE_POOL), '掠夺池总费用 < 老巢池（能花掉的指挥度更少）', `${manaOf(RAID_POOL)} vs ${manaOf(PIRATE_POOL)}`);
+    console.log('    卡组对比：掠夺 ' + RAID_POOL.length + ' 张 / 战力 ' + powerOf(RAID_POOL) + ' / 总费 ' + manaOf(RAID_POOL)
+      + '　老巢 ' + PIRATE_POOL.length + ' 张 / 战力 ' + powerOf(PIRATE_POOL) + ' / 总费 ' + manaOf(PIRATE_POOL));
+    // 实测口径（同 seed、同编制、两边都是引擎的 AI）：一把下来掠夺队到底能下多少艘
+    const deployedAvg = (bossId, n) => {
+      let sum = 0;
+      for (let i = 1; i <= n; i++) {
+        const b = E.createBattle({ seed: 900000 + i * 13, bossId });
+        let k = 0;
+        while (!b.over && k++ < 400) E.aiTurn(b, b.active);
+        sum += b.boss.deployed;
+      }
+      return Math.round((sum / n) * 10) / 10;
+    };
+    const dRaid = deployedAvg('raid', 20), dLair = deployedAvg('b1', 20);
+    check(dRaid < dLair, '实测（20 seed 均值）：掠夺队每场部署舰数 < 老巢 b1', `${dRaid} vs ${dLair}`);
+    console.log('    实测部署（20 seed 均值 · 新手编制 · 双方 AI）：掠夺队 ' + dRaid + ' 艘 / 老巢 b1 ' + dLair + ' 艘');
+    // 引擎分流（逐字搬自 DEMO 的那一处分支）
+    check(J(E.createBattle({ seed: 1, bossId: 'raid' }).boss.pool) === J(RAID_POOL), 'bossId=raid → 敌方池 = RAID_POOL', J(E.createBattle({ seed: 1, bossId: 'raid' }).boss.pool.slice(0, 3)));
+    check(J(E.createBattle({ seed: 1, bossId: 'b1' }).boss.pool) === J(PIRATE_POOL), 'bossId=b1 → 敌方池仍 = PIRATE_POOL（老巢不受影响）');
+
+    // ---- ② 名字：数据驱动（GALAXY_NODES 的 pirateLair，不硬编码 5）----
+    const lairIds = GALAXY_NODES.filter((n) => n.pirateLair).map((n) => n.pirateLair);
+    check(lairIds.length === 5, '老巢来自 GALAXY_NODES 的 `pirateLair` 标记（当前 5 个）', String(lairIds.length));
+    check(J(R.LAIR_BOSS_IDS_FROM_NODES) === J(lairIds), 'LAIR_BOSS_IDS_FROM_NODES 逐项 = 星图标记（不是硬编码的 b1..b5）', J(R.LAIR_BOSS_IDS_FROM_NODES));
+    const raidSrc = fs.readFileSync(path.resolve(__dirname, '../src/lib/battle/raid.ts'), 'utf8');
+    check(/GALAXY_NODES[\s\S]{0,120}pirateLair/.test(raidSrc), '名字判据确实读 GALAXY_NODES 的 pirateLair（源码级核对）');
+    const fresh = setup({});
+    check(R.raidEnemyName(fresh) === PIRATE_BOSSES.raid.name && R.RAID_ENEMY_NAME === PIRATE_BOSSES.raid.name,
+      '未打光老巢 → 名字 = 数据里的静态名「海盗旗舰（掠夺队）」（不另抄一份字面量）', R.raidEnemyName(fresh));
+    const four = { ...fresh, defeatedLairs: lairIds.slice(0, 4) };
+    check(R.allLairsDefeated(four) === false && R.raidEnemyName(four) === PIRATE_BOSSES.raid.name, '只打败 4/5 → 判定 false、名字**不变**', R.raidEnemyName(four));
+    const allDead = { ...fresh, defeatedLairs: lairIds.slice() };
+    check(R.allLairsDefeated(allDead) === true, '5 个老巢全被打败 → allLairsDefeated = true');
+    check(R.raidEnemyName(allDead) === '海盗残兵' && R.RAID_REMNANT_NAME === '海盗残兵', '5 个老巢全被打败 → 名字 = 「海盗残兵」', R.raidEnemyName(allDead));
+    // 「永远存在」：账本与触发无关（四个条件里没有一条与老巢进度有关）
+    check(R.shouldStartRaid(0, allDead) === true, '**老巢全打光后掠夺照常触发**（永远存在，没有"还有没打败的老巢"这道门槛）');
+    check(R.shouldStartRaid(0, { ...fresh, defeatedLairs: lairIds.slice(0, 2) }) === true, '只打掉部分老巢 → 同样照常触发');
+    check(R.shouldStartRaid(0, { ...fresh, defeatedLairs: [] }) === true, '一个老巢都没打 → 同样照常触发');
+
+    // ---- ③ 账本写入点：END_BATTLE 出征战胜利（既有胜负判定），且幂等 ----
+    //  舰队用 **FLEET_STARTER**（26 艘的既定编制）：同 seed 行为对拍用的就是它，
+    //  胜率与 PARITY 一致（b2 约 1/4 的 seed 玩家赢）→ 循环若干 seed 必能构造出一场胜利。
+    //  ⚠ 不要用 FLEET_ALL（每种一张，曲线零散，实测 12 个 seed 全败）——它不适合做"必胜"构造。
+    const DECK = fleetsMod.FLEET_STARTER.slice();
+    const winFight = (bossId) => {
+      for (let seed = 1; seed <= 200; seed++) {
+        let s = setup({ lib: DECK, fleets: [DECK] });
+        s = D(s, { type: 'START_BATTLE', bossId, fleet: s.fleets[0].shipIds.slice(), kind: 'expedition', seed });
+        s = fightTo(s);
+        if (s.battle && s.battle.over && s.battle.winner === 'player') return s;
+      }
+      return null;
+    };
+    const won = winFight('b2');
+    check(!!won, '构造出一场玩家获胜的老巢战（b2 + 26 艘新手编制，200 个 seed 内）');
+    if (won) {
+      const after = D(won, { type: 'END_BATTLE' });
+      check(J(after.defeatedLairs) === J(['b2']), '老巢战胜利 → 账本记下这一场的老巢（唯一写入点 = END_BATTLE）', J(after.defeatedLairs));
+      check(D(after, { type: 'END_BATTLE' }) === after, '重复 END_BATTLE（已无战斗）→ 原样返回（不会重复记账）');
+      // 同一个老巢再赢一次 → 账本里仍只有一项
+      const wonAgain = winFight('b2');
+      if (wonAgain) {
+        const again = D({ ...wonAgain, defeatedLairs: after.defeatedLairs.slice() }, { type: 'END_BATTLE' });
+        check(J(again.defeatedLairs) === J(['b2']), '同一老巢打赢两次 → 账本**只有一项**（幂等）', J(again.defeatedLairs));
+      } else {
+        check(false, '第二次老巢战没能构造出胜利（200 个 seed 都不赢，异常）');
+      }
+      // 打输 → 一项都不记（判据与发奖同一次：battleRewards 对打输恒 0/0）
+      const lost = D({ ...won, battle: { ...won.battle, winner: 'boss' } }, { type: 'END_BATTLE' });
+      check(J(lost.defeatedLairs) === J([]), '老巢战**打输** → 账本一项都不记', J(lost.defeatedLairs));
+    }
+    // 掠夺战（bossId='raid'）不走这条路：账本一项都不记（与上面是否构造出胜利无关）
+    {
+      let raidSt = setup({ lib: DECK, fleets: [DECK], defending: [0] });
+      raidSt = D(raidSt, { type: 'START_BATTLE', bossId: 'raid', fleet: raidSt.fleets[0].shipIds.slice(), kind: 'defense', seed: 7 });
+      raidSt = fightTo(raidSt);
+      check(!!raidSt.battle && raidSt.battle.over, '掠夺战能打完（用于验证它不动账本）');
+      check(J(D(raidSt, { type: 'END_BATTLE' }).defeatedLairs) === J([]), '掠夺战结束 → 账本不受影响（掠夺队不是老巢）');
+    }
+    // 纯函数层：幂等按**引用**表达（重复写入返回同一个数组）
+    const ledger = ['b1'];
+    check(R.recordDefeatedLair(ledger, 'b1') === ledger, 'recordDefeatedLair 重复写入同一老巢 → 原样返回同一个数组（引用相等，幂等）');
+    check(R.recordDefeatedLair(ledger, 'raid') === ledger, 'recordDefeatedLair 收到非老巢 id（掠夺队 raid）→ 不记账');
+    check(J(R.recordDefeatedLair([], 'b4')) === J(['b4']), 'recordDefeatedLair 首次写入 → 追加一项');
+    check(J(R.recordDefeatedLair(['b4'], 'b5')) === J(['b4', 'b5']), 'recordDefeatedLair 顺序 = 首次打败顺序');
+
+    // ---- ④ 旧档（v5）读入：账本兜底为空 ＋ 掠夺照常可触发 ----
+    const v5raw = buildSaveData(setup({}));
+    delete v5raw.defeatedLairs;        // v5 档里根本没有这个字段
+    v5raw.saveVersion = 5;
+    const v5 = migrateSave(stateFromSave(JSON.parse(JSON.stringify(v5raw))));
+    check(J(v5.defeatedLairs) === J([]), 'v5 旧档读入 → defeatedLairs = 空数组（= 一个都没打败）', J(v5.defeatedLairs));
+    check(R.raidEnemyName(v5) === PIRATE_BOSSES.raid.name, 'v5 旧档 → 掠夺队仍叫「海盗旗舰（掠夺队）」（不因缺账本而变名）');
+    check(R.shouldStartRaid(0, v5) === true, '**v5 旧档 → 掠夺照常可触发**（账本缺失不影响触发）');
+
+    // ---- ⑤ 大厅与战场读**同一份**名字 ----
+    const cardA = R.raidCardView({ ...allDead, raid: raidState({ inTurns: 3, raiders: 1 }) });
+    const cardB = R.raidCardView({ ...allDead, raid: raidState({ arrivedTurns: 4, arrived: true, raiders: 1 }) });
+    check(cardA.enemyName === '海盗残兵' && cardB.enemyName === '海盗残兵', '大厅掠夺卡片：阶段 A / B 的 enemyName 都是同一个名字', J([cardA.enemyName, cardB.enemyName]));
+    check(cardA.headline.indexOf('海盗残兵') === 0 && cardB.headline.indexOf('海盗残兵') === 0, '卡片标题行用的就是这个名字（阶段 A / B）', J([cardA.headline, cardB.headline]));
+    check(cardA.enemyName === R.raidEnemyName(allDead) && cardA.enemyName === cardB.enemyName, '卡片名字 = raidEnemyName(state)（同一份，不重算）');
+    const hintLines = R.raidHintLines({ ...allDead, raid: raidState({ arrivedTurns: 4, arrived: true, raiders: 1 }) });
+    check(hintLines[0].text.indexOf('海盗残兵') === 0, '「下一回合预告」也用同一个名字', hintLines[0].text);
+    // 战斗界面：BattleTab 下发 raidCard.enemyName → BattleScreen → BossPanel 只渲染
+    const readSrc = (rel) => fs.readFileSync(path.resolve(__dirname, '..', rel), 'utf8');
+    check(/board\.bossId === 'raid' \? raidCard\.enemyName : ''/.test(readSrc('src/components/battle/BattleTab.tsx')),
+      'BattleTab：掠夺战把 `raidCard.enemyName` 下发给 BattleScreen（出征战给空串回落静态名）');
+    check(/nameOverride=\{enemyName\}/.test(readSrc('src/components/battle/BattleScreen.tsx')),
+      'BattleScreen：把下发的名字交给 BossPanel（不在这里推导规则）');
+    check(/nameOverride \|\| boss\.name/.test(readSrc('src/components/battle/BossPanel.tsx')),
+      'BossPanel：只渲染下发的名字，没有名字时才用数据里的静态 BOSS 名');
+    const hits = scanLiteralInSrc('海盗残兵');
+    check(hits.length === 1 && hits[0] === 'lib/battle/raid.ts', '「海盗残兵」这个字面量全库（去注释后）**只有一处** = lib/battle/raid.ts', J(hits));
   }
 
   console.log('\n=== P7 验收结果 ===');

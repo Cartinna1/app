@@ -10,7 +10,7 @@
 
 import { BATTLE_CARDS } from '@/data/battle/cards';
 import { FLEET_ALL, FLEET_STARTER } from '@/data/battle/fleets';
-import { PIRATE_BOSSES, PIRATE_POOL } from '@/data/battle/pirates';
+import { PIRATE_BOSSES, PIRATE_POOL, RAID_POOL } from '@/data/battle/pirates';
 import { BATTLE_TUNING } from '@/data/battle/tuning';
 import type {
   BattleApi,
@@ -42,7 +42,7 @@ export const BODY_HP: number = BATTLE_TUNING.bodyHp;        // 玩家本体
 export const MANA_CAP: number = BATTLE_TUNING.manaCap;      // 指挥度上限
 
 // ---------------- 数据层再导出（与 DEMO 的导出面一致） ----------------
-export { FLEET_ALL, FLEET_STARTER, PIRATE_BOSSES, PIRATE_POOL };
+export { FLEET_ALL, FLEET_STARTER, PIRATE_BOSSES, PIRATE_POOL, RAID_POOL };
 
 // ============================================================================
 // 卡牌行为表（kw / fx / dynamicCost）
@@ -177,6 +177,9 @@ export function createBattle(opts?: CreateBattleOptions): BattleState {
   const playerFirst = o.playerFirst == null ? rnd() < 0.5 : !!o.playerFirst;
   const bossId: PirateBossId = o.bossId || 'b1';
   const fleet: readonly ShipCardId[] = o.fleet === 'all' ? FLEET_ALL : FLEET_STARTER;
+  // 掠夺队（raid）用自己的 15 张低阶池（RAID_POOL）；5 个老巢用 30 张的 PIRATE_POOL。
+  // 这一行是**逐字搬自 DEMO** 的同一处分支（用户 2026-08 裁定：掠夺队卡组与 BOSS 区分、更弱、减半）。
+  const enemyPool: readonly ShipCardId[] = bossId === 'raid' ? RAID_POOL : PIRATE_POOL;
   const st: BattleState = {
     rnd,
     bossId,
@@ -188,7 +191,7 @@ export function createBattle(opts?: CreateBattleOptions): BattleState {
     pending: null,   // 待玩家选择的交互（如「记忆掠夺者」选复制目标）
     stat: { player: { heal: 0, dmg: 0, healEvents: 0 }, boss: { heal: 0, dmg: 0, healEvents: 0 } },
     player: makeSide('player', fleet, BODY_HP, playerFirst ? BATTLE_TUNING.firstCap : BATTLE_TUNING.secondCap, false),
-    boss: makeSide('boss', PIRATE_POOL, BOSSES[bossId].hp, playerFirst ? BATTLE_TUNING.secondCap : BATTLE_TUNING.firstCap, true, bossId),
+    boss: makeSide('boss', enemyPool, BOSSES[bossId].hp, playerFirst ? BATTLE_TUNING.secondCap : BATTLE_TUNING.firstCap, true, bossId),
   };
   // 掷骰先后手
   log(st, `掷骰结果：${playerFirst ? '玩家' : 'BOSS'} 先手（先手 3 指挥度、后手 4 指挥度）`);
@@ -770,7 +773,7 @@ export function autoBattle(opts?: CreateBattleOptions): BattleState {
 
 // ---------------- 导出（与 DEMO 的 Engine 对象一致） ----------------
 const Engine = {
-  CARDS, BOSSES, FLEET_STARTER, FLEET_ALL, PIRATE_POOL,
+  CARDS, BOSSES, FLEET_STARTER, FLEET_ALL, PIRATE_POOL, RAID_POOL,
   TURN_LIMIT, BOARD_SIZE, BODY_HP, MANA_CAP,
   createBattle, deploy, attack, endTurn, aiTurn, autoBattle, startTurn, resolvePending,
   canDeploy, canAttack, legalTargets, costOf, unitsOf, enemiesOf, effAtk,

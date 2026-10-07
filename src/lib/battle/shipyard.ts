@@ -31,7 +31,7 @@
 //     （2/2、3/3、4/4，代码里就是 `BuildingDef.minPop`），§8.3 的「生产规则」通篇
 //     没写"开工要不要入驻"（grep「入驻」在 §8.3 零命中）。此处照**既有模型**办：
 //     其它生产建筑的"入驻不足 = 不运转"是 `economy.ts` 的既有判据，船坞与它同口径。
-//     已登记进 AGENTS.md §10.3。
+//     已登记进 AGENTS-附录.md 10.3。
 // ============================================================================
 
 import type { GameState, Mothership } from '@/types/game';
@@ -90,7 +90,7 @@ const RARITY_BASELINE: Record<BattleRarity, {
  *   线性派生，锚点取 3 费 = 1.00（低费便宜、高费贵），并四舍五入到 2 位小数、下限 0.7：
  *     系数 = max(0.7, round2(1 + (card.cost − 3) × 0.1))
  *   实测：1 费 → 0.8（白卡 1600 金币，基准 2000）；6 费 → 1.3（橙卡 65000 金币，基准 50000）。
- *   这是一个**有意登记为占位**的系数（AGENTS §10.3 的写法）：要改造价只动这一行。
+ *   这是一个**有意登记为占位**的系数（AGENTS-附录.md 10.3 的写法）：要改造价只动这一行。
  */
 export function cardCoefficient(card: ShipCardDef): number {
   const raw = 1 + (card.cost - 3) * 0.1;
@@ -480,7 +480,7 @@ export function lockGate(
   if (card.series === '海盗') {
     return {
       unlocked: false,
-      reason: '海盗舰船是 PvE 专属，玩家不能建造（V1.5 §3）',
+      reason: '海盗舰船是 PvE 专属，玩家不能建造',
       dockLevel: dockNeed,
       techId,
       staffed: false,
@@ -493,7 +493,7 @@ export function lockGate(
   if (!ship || !colony || colony.phase !== 'active') {
     return {
       unlocked: false,
-      reason: '还没有殖民地 —— 先在星图的星球上建立殖民地，再建造船坞（V1.5 §8）',
+      reason: '还没有殖民地 —— 先在星图的星球上建立殖民地，再建造船坞',
       dockLevel: dockNeed,
       techId,
       staffed: false,
@@ -556,7 +556,7 @@ export function canBuild(state: GameState, cardId: ShipCardId): { ok: boolean; r
 
   const ship = leadShip(state);
   const colony = ship?.colony;
-  if (!ship || !colony) return { ok: false, reason: '还没有殖民地 —— 先在星图的星球上建立殖民地，再建造船坞（V1.5 §8）' };
+  if (!ship || !colony) return { ok: false, reason: '还没有殖民地 —— 先在星图的星球上建立殖民地，再建造船坞' };
   const cost = flattenCost(buildCost(cardId));
   const missing = firstMissing(ship, colony, cost);
   if (missing) return { ok: false, reason: missing };
@@ -602,7 +602,7 @@ export function enqueueBuild(
 // ---------------- 取消 ----------------
 
 const R_NO_ITEM = '这一项已经不在队列里了';
-const R_ACTIVE = '已开工的战舰不能取消（V1.5 §8 没有中途终止生产的规则）';
+const R_ACTIVE = '已开工的战舰不能取消（没有中途终止生产的规则）';
 
 /** 能否取消队列里某一项（**只有未开工的排队项可取消**；已开工的一律挡） */
 export function canCancelBuild(queue: BuildQueueItem[], index: number): { ok: boolean; reason?: string } {
@@ -801,7 +801,7 @@ function lockHintText(view: {
       ? `${dockLevelText(next.dockLevel)}已建成`
       : `先造「${dockLevelText(next.dockLevel)}」`;
   if (names.length > 0) {
-    return `想造${who}卡：${dockPart}，再研发 ${names.join('、')}（V1.5 §9.1）${ofSeries}。`;
+    return `想造${who}卡：${dockPart}，再研发 ${names.join('、')}${ofSeries}。`;
   }
   return `想造${who}卡：${dockPart}（这一档不需要科技）${ofSeries}。`;
 }

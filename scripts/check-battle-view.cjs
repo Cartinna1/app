@@ -9,6 +9,8 @@
    必须 `clickable = true`，否则组件（`BoardSide`）在 onClick 第一行就 return，玩家点哪都没反应。
    ============================================================================ */
 const fails = [];
+const fs = require('fs');
+const path = require('path');
 const check = (ok, label, detail) => {
   if (ok) console.log('  ✓ ' + label);
   else { fails.push(label + (detail ? ' → ' + detail : '')); console.log('  ✗ ' + label + (detail ? '  → ' + detail : '')); }
@@ -19,7 +21,7 @@ const check = (ok, label, detail) => {
   const V = await import('@/lib/battle/view');
   const T = E._t;
 
-  const need = ['unitView', 'boardView', 'poolView', 'infoBarView', 'bossView', 'graveView', 'canEndTurn'];
+  const need = ['unitView', 'boardView', 'poolView', 'infoBarView', 'bossView', 'graveView', 'canEndTurn', 'manualActionView'];
   const missing = need.filter((k) => typeof V[k] !== 'function');
   if (missing.length) { console.error('view.ts 缺少导出：' + missing.join(', ') + '（现有：' + Object.keys(V).join(', ') + '）'); process.exit(2); }
 
@@ -178,6 +180,54 @@ const check = (ok, label, detail) => {
     const u2 = T.spawnUnit(stOver, 'player', 'c5'); T.placeUnit(stOver, 'player', u2, 0); u2.sick = false;
     stOver.over = true;
     check(V.boardView(stOver, 'player', null, null).every((s) => !s.clickable), '战斗已结束 → 己方格子全部不可点');
+  }
+
+  // ---------- ③c 「能不能读」≠「能不能出」（2026-08 用户报：灰卡的技能在手机上无处可看） ----------
+  // 用户实测：点可上的卡 ✓ 能选中、信息条给技能全文；点灰卡（指挥度不足）✗ 只弹一句原因、**选不中**
+  // → `FleetPool` 的 title 是桌面专属的悬浮提示，手机没有 hover ⇒ 那张卡的技能在全游戏里没有出口。
+  // 口径：`selectable`（能不能读）与 `playable`（能不能出）**必须分开**；出不去时在**部署那一步**给原因。
+  console.log('\n[3c] 灰卡照样能选中读技能；出不去在部署那一步给原因（两个值必须分开）');
+  {
+    const st = fresh();
+    st.player.pool = ['h1', 'h7'];   // 1 费（可出）与 6 费（指挥度不足）
+    st.player.cur = 3;
+    const pool = V.poolView(st);
+    const cheap = pool.find((c) => c.id === 'h1');
+    const pricey = pool.find((c) => c.id === 'h7');
+    check(!!cheap && !!pricey, '前置：池里有可出与不可出各一张', pool.map((c) => c.id + ':' + c.cost).join(','));
+    check(cheap.selectable === true && cheap.playable === true, '可出的卡：selectable 与 playable 都为 true',
+      JSON.stringify([cheap.selectable, cheap.playable]));
+    check(pricey.selectable === true, '★ 指挥度不足的卡仍然 selectable = true（能点开看技能）',
+      String(pricey.selectable));
+    check(pricey.playable === false, '★ 指挥度不足的卡 playable = false（出不去）',
+      String(pricey.playable));
+    check(pricey.playable !== pricey.selectable, '★ 两个值分开了（合成一个值的后果 = 灰卡技能无处可看）');
+    // ① 选中的灰卡必须能在信息条里读到技能全文
+    const greyInfo = V.infoBarView(st, 'h7', null);
+    check(greyInfo.kind === 'card', '灰卡被选中 → 信息条 kind = card（技能出口在信息条）', greyInfo.kind);
+    check(greyInfo.body === E.CARDS.h7.text, '★ 信息条给出该灰卡的**技能全文**',
+      JSON.stringify(greyInfo.body).slice(0, 40));
+    check(greyInfo.stats.indexOf('费用') < 0 && greyInfo.stats.indexOf('费') >= 0,
+      '信息条带费用与数值（系列·稀有度 / 攻盾体）', greyInfo.stats);
+    // ② 部署灰卡被引擎拦住，且原因就是那句"指挥度不够"
+    check(E.canDeploy(st, 'player', 'h7') === false, '引擎层：灰卡 canDeploy = false');
+    const blocked = E.deploy(st, 'player', 'h7', 0);
+    check(blocked.ok === false && typeof blocked.msg === 'string' && blocked.msg.length > 0,
+      '★ 部署灰卡被拦且有非空原因', blocked.msg || '');
+    check(st.player.board[0] === null && st.player.pool.indexOf('h7') >= 0, '被拦时场上与池子都没变');
+    // ③ 可出的卡照常出得去
+    check(E.canDeploy(st, 'player', 'h1') === true, '可出的卡 canDeploy = true');
+    check(E.deploy(st, 'player', 'h1', 0).ok === true, '可出的卡能正常部署');
+    // ④ title 不是技能出口（手机没有 hover）：组件不得把 title 当成"看过技能了"
+    const fp = fs.readFileSync(path.resolve(__dirname, '../src/components/battle/FleetPool.tsx'), 'utf8');
+    check(fp.indexOf('title=') >= 0, '（现状）卡面仍带 title 作桌面冗余提示');
+    check(/c\.selectable/.test(fp), '★ FleetPool 的点选可用性读 selectable（不是 playable）');
+    check(!/import \{[^}]*getThumbPath/.test(fp), 'FleetPool 不再重复套 getThumbPath（artSrc 已是缩略图路径）');
+    // ⑤ 非玩家回合：连读都没必要（信息条那时在说明"为什么点不动"）
+    const stBoss = fresh();
+    stBoss.active = 'boss';
+    check(V.poolView(stBoss).every((c) => c.selectable === false && c.playable === false),
+      'BOSS 回合：selectable 与 playable 都为 false（点开也没意义）');
   }
 
   // ---------- ④ 舰队池 / BOSS / 墓地 / 结束回合 ----------

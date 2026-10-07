@@ -21,6 +21,7 @@ import {
   raidLootText,
   raidPhase,
   readyRaidBattle,
+  recordDefeatedLair,
   tickRaid,
 } from '@/lib/battle/raid';
 import { flattenCost, payCost } from '@/lib/turn/resourceCost';
@@ -71,6 +72,9 @@ export function createInitialGameState(): GameState {
     // 掠夺初值 = lib/battle/raid.idleRaidState()（**唯一真值**，存档兜底 / 各处收尾都从它派生）：
     // 阶段 A 倒计时 null、阶段 B 倒计时 0、无免疫、无掠夺队
     raid: idleRaidState(),
+    // 已打败的老巢账本（用户 2026-08 裁定，v6 新增）：新开局一个老巢都没打败。
+    // ⚠ 只影响掠夺队的**显示名**（全打败 → 「海盗残兵」），**不影响掠夺触发**（永远存在）。
+    defeatedLairs: [],
     battle: null,
     // 船坞与科技（V1.5 §8.2 / §8.3）：造船队列初始为空。
     // ⚠ 这个初值必须与 lib/save.ts 的 stateFromSave 兜底**逐一一致**（都是 []）。
@@ -142,7 +146,7 @@ function settleRaidLoot(state: GameState): { ships: Mothership[]; detail: string
   const loss = raidLootLoss(state);
   const next: Mothership = { ...lead, materials: { ...(lead.materials || {}) } };
   payCost(next, lead.colony, flattenCost(loss));
-  // 金币流水：**必须先改完金币再记账**（pushGoldLog 读当前金币当 balanceAfter，AGENTS 第十节）
+  // 金币流水：**必须先改完金币再记账**（pushGoldLog 读当前金币当 balanceAfter，AGENTS-附录.md 10.2）
   if (loss.gold > 0) pushGoldLog(next, state.turn, -loss.gold, '殖民地被掠夺');
   return { ships: [next, ...state.ships.slice(1)], detail: raidLootText(loss) };
 }
@@ -460,11 +464,19 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
       const lead = state.ships[0];
       const rewarded = lead ? grantBattleRewards(lead, battle, state.turn) : null;
       const ships = rewarded && rewarded !== lead ? [rewarded, ...state.ships.slice(1)] : state.ships;
+      // 老巢账本（**唯一写入点**，用户 2026-08 裁定）：打赢才算打败 —— 判据就是既有的
+      // `battle.winner === 'player'`（与上面那条发奖路径同一次胜负判定：battleRewards 对打输恒 0/0），
+      // **不新造一套胜负判断**。写入幂等（lib/battle/raid.recordDefeatedLair：已在账本里就原样返回）。
+      // 效果：5 个老巢全被打败后掠夺队改名「海盗残兵」；掠夺本身**永远存在**，不受它影响。
+      const defeatedLairs = battle.winner === 'player'
+        ? recordDefeatedLair(state.defeatedLairs, battle.bossId)
+        : state.defeatedLairs;
       return {
         ...base,
         ships,
         battle: null,
         expedition: null,
+        defeatedLairs,
       };
     }
 
@@ -562,7 +574,7 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
       }
       next.alloy += refund.alloy;
       next.gold += refund.gold;
-      // ⚠ pushGoldLog 必须在金币改完之后调（它读当前金币当 balanceAfter，AGENTS 第十节）
+      // ⚠ pushGoldLog 必须在金币改完之后调（它读当前金币当 balanceAfter，AGENTS-附录.md 10.2）
       if (refund.gold) pushGoldLog(next, state.turn, refund.gold, '取消造舰返还');
       return { ...state, ships: [next, ...state.ships.slice(1)], buildQueue };
     }

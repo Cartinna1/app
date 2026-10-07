@@ -64,7 +64,8 @@ const DEMO = require(path.resolve(__dirname, '../../carddemo/engine.js'));
   if (!same(DEMO.FLEET_STARTER, PORT.FLEET_STARTER)) fails.push('FLEET_STARTER 不一致');
   if (!same(DEMO.FLEET_ALL, PORT.FLEET_ALL)) fails.push('FLEET_ALL 不一致');
   if (!same(DEMO.PIRATE_POOL, PORT.PIRATE_POOL)) fails.push('PIRATE_POOL 不一致');
-  console.log('  敌人 ' + Object.keys(DEMO.BOSSES).length + ' 个 / 新手编制 ' + DEMO.FLEET_STARTER.length + ' / 全集 ' + DEMO.FLEET_ALL.length + ' / 海盗池 ' + DEMO.PIRATE_POOL.length);
+  if (!same(DEMO.RAID_POOL, PORT.RAID_POOL)) fails.push('RAID_POOL 不一致');
+  console.log('  敌人 ' + Object.keys(DEMO.BOSSES).length + ' 个 / 新手编制 ' + DEMO.FLEET_STARTER.length + ' / 全集 ' + DEMO.FLEET_ALL.length + ' / 海盗池 ' + DEMO.PIRATE_POOL.length + ' / 掠夺池 ' + DEMO.RAID_POOL.length);
   console.log('  BOARD_SIZE ' + DEMO.BOARD_SIZE + ' vs ' + PORT.BOARD_SIZE + '；BODY_HP ' + DEMO.BODY_HP + ' vs ' + PORT.BODY_HP + '；MANA_CAP ' + DEMO.MANA_CAP + ' vs ' + PORT.MANA_CAP + '；TURN_LIMIT ' + DEMO.TURN_LIMIT + ' vs ' + PORT.TURN_LIMIT);
   for (const k of ['BOARD_SIZE', 'BODY_HP', 'MANA_CAP', 'TURN_LIMIT']) {
     if (DEMO[k] !== PORT[k]) fails.push(`${k} 不一致：${DEMO[k]} vs ${PORT[k]}`);

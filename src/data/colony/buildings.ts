@@ -102,7 +102,7 @@ export function getBuildingEffect(bd: BuildingDef): string {
   // 船坞：可产稀有度读本文件的 dockRarityText（口径与 lib/battle/shipyard.RARITY_DOCK_LEVEL 一致）
   if (bd.category === 'shipyard') {
     const lv = bd.id === BUILDING_DOCK_3 ? 3 : bd.id === BUILDING_DOCK_2 ? 2 : 1;
-    return `可建造${dockRarityText(lv)}卡战舰（造舰在机库页签的船坞面板，V1.5 §8）`;
+    return `可建造${dockRarityText(lv)}卡战舰（造舰在机库页签的船坞面板）`;
   }
   if (bd.category === 'power') {
     const lo = (bd.baseOutput || 0) + (bd.popFactor || 0) * bd.minPop;
