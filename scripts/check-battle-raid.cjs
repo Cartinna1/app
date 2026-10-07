@@ -565,7 +565,7 @@ const J = (v) => JSON.stringify(v);
     // ---- ③ 声望只给已探明势力（复用既有唯一真值 getKnownFactionIds，不许自己写过滤） ----
     const { getKnownFactionIds } = await import('@/lib/galaxy/knowledge');
     const { FACTIONS } = await import('@/data/factions');
-    const { getMaterialName } = await import('@/data/materialNames');
+    const { getMaterialName, MATERIAL_NAME_MAP } = await import('@/data/materialNames');
     const ALL_FACTION_IDS = FACTIONS.map((f) => f.id);
     const knownIds = ALL_FACTION_IDS.slice(0, 3);
     /** 把母舰的已探明势力设成指定集合（探明判据 = ship.galaxy.visitedNodes 里的势力节点） */
@@ -658,11 +658,33 @@ const J = (v) => JSON.stringify(v);
     const raised = (await import('@/lib/battle/rewards')).grantRaidReward(winRaid.ships[0], rewardByKind.material, 1);
     const afterWin = D({ ...winRaid, ships: [raised, ...winRaid.ships.slice(1)] }, { type: 'END_BATTLE' });
     check(afterWin.battle === null && afterWin.raid.immuneTurns === R.RAID_IMMUNE_TURNS, '打赢最后一支 → 战斗收起 + 进入免疫期', J(afterWin.raid));
-    // ⚠ `END_BATTLE` 里的奖励由 reducer 取 `Math.random()` 掷、脚本**无法指定类别** → 这里只断言
-    //   "detail 就是奖励路径产出的那一句（四类之一）"；四类各自的**逐字基准**由下面确定性的四类样例钉死。
+    // ⚠ `END_BATTLE` 里的奖励由 reducer 取 `Math.random()` 掷、脚本**无法指定类别** →
+    //   真实那一场只断言**形状 ∈ 四类**（见下方 isWinDetailShape），**不许拿"四份确定性样例"
+    //   去比**：样例里"原料类"只覆盖了 pickRoll 命中的那一种原料名，随机掷到别的原料就假红
+    //   （2026-08 实测：掷到「石油」被判红 —— 石油是完全合法的原料）。
+    //   四类各自的**逐字基准**由下面确定性的 `rollRaidReward(ship, 0.1/0.3/0.6/0.8, …)` 钉死。
     const winTexts = [rewardByKind.gold.text, rewardByKind.stardust.text, rewardByKind.material.text, rewardByKind.reputation.text];
-    check(winTexts.includes(afterWin.eventLog[0].detail),
-      '**打赢：事件记录 detail = 四类之一的奖励原话（含类型与数量）**', afterWin.eventLog[0].detail);
+    // 四类的**形状**（唯一真值：类别词与原料名都从 lib/数据取，**不硬编码名单**）：
+    //   金币 `击退海盗：缴获 20000 金币` / 星尘 `击退海盗：缴获 10 星尘`
+    //   原料 `击退海盗：缴获 <MATERIAL_NAME_MAP 里的原料名> ×40`（6 种都算合法）
+    //   声望 `击退海盗：与「<势力名>」的声望 +5`
+    const materialNames = Object.values(MATERIAL_NAME_MAP);
+    const isWinDetailShape = (t) =>
+      /^击退海盗：缴获 \d+ 金币$/.test(t)
+      || /^击退海盗：缴获 \d+ 星尘$/.test(t)
+      || new RegExp('^击退海盗：缴获 (' + materialNames.join('|') + ') ×' + RAID_REWARD_MATERIAL_AMOUNT + '$').test(t)
+      || /^击退海盗：与「.+」的声望 \+\d+$/.test(t);
+    const realWinDetail = afterWin.eventLog[0].detail;
+    check(isWinDetailShape(realWinDetail),
+      '**打赢：事件记录 detail 是四类之一的形状（含类型与数量）**', realWinDetail);
+    // 原料类那一条：原料名必须来自 `MATERIAL_NAME_MAP`（不硬编码名单）
+    const maybeMaterial = /^击退海盗：缴获 (.+) ×\d+$/.exec(realWinDetail);
+    if (maybeMaterial) {
+      check(materialNames.includes(maybeMaterial[1]),
+        '原料类的原料名来自 MATERIAL_NAME_MAP（石油/暗物质等 6 种都合法）', maybeMaterial[1]);
+    }
+    check(winTexts.every((t) => isWinDetailShape(t)),
+      '四类确定性样例都满足该形状（形状判据与唯一产出口一致）', J(winTexts));
     check(afterWin.eventLog[0].detail.startsWith('击退海盗：'),
       '打赢那条 detail 以「击退海盗：」开头（前缀来源唯一 = rewards.ts 的文案）', afterWin.eventLog[0].detail);
     check(!('lastRaidSettlement' in afterWin), '打赢后状态里不再有 lastRaidSettlement 字段');
@@ -721,22 +743,29 @@ const J = (v) => JSON.stringify(v);
 
     // ---- 路径 1：打赢（事件记录必须写出"类型 + 数量"） ----
     check(afterWin.eventLog[0].event === '掠夺战果', '打赢：事件记录 event = 「掠夺战果」', afterWin.eventLog[0].event);
-    check(winTexts.includes(afterWin.eventLog[0].detail),
-      '**打赢：事件记录 detail = 奖励路径原话（四类之一，含类型与数量）**', afterWin.eventLog[0].detail);
+    check(isWinDetailShape(afterWin.eventLog[0].detail),
+      '**打赢：事件记录 detail 是四类之一的形状（含类型与数量）**', afterWin.eventLog[0].detail);
     check(!('lastRaidSettlement' in afterWin), '**打赢后状态里不再有 lastRaidSettlement 字段**（死字段已删）');
 
     // 2 支掠夺队：第 1 场赢下时**立刻接第 2 场**（事件记录里此时**不该**有奖励那条）
     const twoStarted = D(mkRaidAtOver({ raiders: 2 }), { type: 'FUNCTIONAL_UPDATE', updater: (s) => s });
     const firstWin = { ...twoStarted, battle: { ...twoStarted.battle, winner: 'player', over: true } };
     const midState = D({ ...firstWin, raid: { ...firstWin.raid, raiders: 2 } }, { type: 'END_BATTLE' });
+    // ⚠ 判据用「顶部那条**不是**奖励」而不是"条数没变"：第 1 场赢下后有**两条**合法走向
+    //   （① 还有幸存舰 → 直接接第 2 场，日志不动；② 全灭 → 按"没有防守舰队"处理，写一条**被抢**日志）。
+    //   两条都不该出现「掠夺战果」，所以这条断言对两种走向都成立、不受战斗随机影响。
+    const midTop = midState.eventLog[0];
+    check(!midTop || midTop.event !== '掠夺战果',
+      '**2 支掠夺队：第 1 场打完不写奖励那条**（奖励只在最后一支打完才发）', J(midTop && midTop.event));
     if (midState.battle) {
-      check(midState.eventLog.length === firstWin.eventLog.length,
-        '**2 支掠夺队：第 1 场打完不写奖励那条**（奖励只在最后一支打完才发）', String(midState.eventLog.length));
       check(midState.raid.raiders === 1, '第 1 场打完 → 还剩 1 支（连打第二场）', String(midState.raid.raiders));
       check(R.raidCardView(midState).squadsLeft === 1, '正在打的那一帧：raidCardView.squadsLeft = 1（含当前这场）', String(R.raidCardView(midState).squadsLeft));
       check(R.raidCardView(firstWin).squadsLeft === 2, '第 1 场（掠夺队 2 支）→ squadsLeft = 2', String(R.raidCardView(firstWin).squadsLeft));
     } else {
-      check(false, '第 1 场赢下后没有接上第二场（2 支掠夺队的连打逻辑异常）');
+      // 全灭走向（极小概率）：按"第一场打赢了，但没有幸存舰拦第二支掠夺队"处理 —— 也是合法结果，
+      // 只要求日志里那条**不是奖励**（上面已断言），并确认掠夺已收尾。
+      check(midState.raid.raiders === 0 && midTop && midTop.event === '殖民地被掠夺',
+        '第 1 场全灭走向：按"没有幸存舰拦第二支"收尾（写一条被抢日志，不发奖励）', J(midTop && midTop.event));
     }
     // ---- 去重前缀的收尾：打输那条 detail 也不许以 event + '：' 开头 ----
     {
