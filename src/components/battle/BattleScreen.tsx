@@ -44,12 +44,47 @@ interface BattleScreenProps {
    *  ⚠ 为什么由父组件下发而不是在这里推导：名字规则只许有一份（老巢打光后掠夺队叫「海盗残兵」），
    *    而 `lib/battle/view.ts` 的 bossView 是冻结区（语义不许改）→ 组件只做"显示哪个名字"的渲染。 */
   enemyName: string;
+  /** **最近一次掠夺收尾那一句话**（用户 2026-08：「把奖励显著地显示出来」＋「失败也要显示丢了啥」）。
+   *  逐字来自 `GameState.lastRaidSettlement.text`（打赢 = lib/battle/rewards.rollRaidReward 的原话；
+   *  打输 = 由**实扣明细**拼出的「殖民地被掠夺：金币 -… 、…」），由 BattleTab 从 `raidCardView.rewardText`
+   *  下发 —— 本组件**一个数都不算**，只渲染。
+   *  ⚠ 打赢时只有"最后一支打完"才渲染它（2 支连打的中途由 `context.squadsLeftText` 说明"还有下一支"）；
+   *    打输（`settlement.outcome === 'lost'`）时总是渲染 —— 玩家被抢了必须看得见。 */
+  campaignText: string;
+  /** 这句话是**赢是输** ＋ 打输时有没有可显示的损失明细（唯一真值 = lib/battle/raid.raidCardView）。
+   *  ⚠ "有没有东西"由 lib 判（`raidLootDetailEmpty`），组件只据它决定渲染哪一块、什么配色。 */
+  settlement: BattleSettlementLine;
+  /** 与**掠夺队**战斗时的战果旁注（唯一真值 = lib/battle/raid.raidCardView，含"还有下一支"那句）。
+   *  不在掠夺战里（打老巢）时为空串/0，结算画面与平时完全一样。 */
+  context: BattleScreenContext;
   onAction: (action: BattleAction) => void;
   /** 结束这场战斗（END_BATTLE：结算永久损失、收起出征/掠夺状态） */
   onEnd: () => void;
 }
 
-function BattleScreenBase({ battle, seed, enemyName, onAction, onEnd }: BattleScreenProps) {
+/** 与掠夺队战斗时由 lib 下发的一行战果说明（组件不推导任何内容） */
+export interface BattleScreenContext {
+  /** 这一波还剩几支掠夺队（含当前这场；不在掠夺战里为 0） */
+  squadsLeft: number;
+  /** 顶栏那句"还剩 N 支掠夺队"（空串 = 不渲染） */
+  squadsLeftText: string;
+  /** 结算画面那句（空串 = 不渲染） */
+  outcomeText: string;
+}
+
+/** 结算画面上"最近一次掠夺收尾"那一块的渲染输入（内容全部由 lib 产出，组件只摆放） */
+export interface BattleSettlementLine {
+  /** 'win' | 'lost'；null = 没有可显示的结算（打老巢 / 还没有过掠夺收尾） */
+  outcome: 'win' | 'lost' | null;
+  /** 要逐字渲染的那句话（空串 = 不渲染） */
+  text: string;
+  /** 打输时**有没有**实际扣到东西（唯一判据 = lib/battle/rewards.raidLootDetailEmpty，由 BattleTab 下发）。
+   *  ⚠ 注意：文案本身已经说清了"抢走什么 / 什么都没抢走"，本组件**不据它改文案** ——
+   *    它只留给"将来想给损失加图标/条纹"时用，组件绝不据此重算任何数字。 */
+  hasLoot: boolean;
+}
+
+function BattleScreenBase({ battle, seed, enemyName, campaignText, settlement, context, onAction, onEnd }: BattleScreenProps) {
   const [selCard, setSelCard] = useState<string | null>(null);
   const [selUnit, setSelUnit] = useState<string | null>(null);
   const [flash, setFlash] = useState('');
@@ -259,6 +294,11 @@ function BattleScreenBase({ battle, seed, enemyName, onAction, onEnd }: BattleSc
         <div className={it}>行动方 <b className={battle.active === 'player' ? 'text-emerald-400' : 'text-red-400'}>{whoText}</b></div>
         <div className={it}>你的池 <b className="text-slate-100">{battle.player.pool.length}</b> 艘 · 已损失 <b className="text-slate-100">{battle.player.lost.length}</b></div>
         <div className={it}>BOSS 池 <b className="text-slate-100">{battle.boss.pool.length}</b> 艘 · 已损失 <b className="text-slate-100">{battle.boss.lost.length}</b></div>
+        {context.squadsLeftText ? (
+          <div className={it}>
+            <b className="text-amber-300">{context.squadsLeftText}</b>
+          </div>
+        ) : null}
         <span className="flex-1" />
         <button
           type="button"
@@ -356,6 +396,27 @@ function BattleScreenBase({ battle, seed, enemyName, onAction, onEnd }: BattleSc
           你：本体 {Math.max(0, battle.player.body)}/{battle.player.bodyMax}，被击毁 {battle.player.lost.length} 艘（永久损失），池内剩 {battle.player.pool.length} 艘
           <br />
           BOSS：本体 {Math.max(0, battle.boss.body)}/{battle.boss.bodyMax}，被击毁 {battle.boss.lost.length} 艘
+          {/* ==================== 掠夺奖励 / 被抢（用户 2026-08：奖励与损失都要显著显示） ====================
+              文案与"赢还是输"都由 lib 产出，组件一个数都不算：
+                · campaignText = GameState.lastRaidSettlement.text
+                  （打赢 = rewards.rollRaidReward 的原话；打输 = 由**实扣明细**拼出的「殖民地被掠夺：…」）
+                · settlement.outcome / .hasLoot = lib/battle/raid.raidCardView
+              ⚠ 打赢那行只在**打赢且没有下一支**时渲染：2 支掠夺队的第一场赢下会立刻接第二场，
+                那时 state 里的快照还是上一波留下的旧值 —— 不能把它当成"这一场的战果"显示。
+              ⚠ 打输那行**总是**渲染（含"阶段 B 超时未迎战、玩家什么都没做就被抢"这条）。 */}
+          {settlement.outcome === 'lost' && campaignText ? (
+            <div className="mt-2 rounded-[7px] border border-red-700/70 bg-red-950/40 px-2 py-1.5 text-[13px] font-bold text-red-300">
+              {campaignText}
+            </div>
+          ) : null}
+          {settlement.outcome === 'win' && context.squadsLeft <= 1 && campaignText ? (
+            <div className="mt-2 rounded-[7px] border border-amber-500/70 bg-amber-900/25 px-2 py-1.5 text-[13px] font-bold text-amber-200">
+              {campaignText}
+            </div>
+          ) : null}
+          {context.outcomeText ? (
+            <p className="mt-1.5 text-[12px] font-bold text-amber-300">{context.outcomeText}</p>
+          ) : null}
           <div className="mt-2">
             <button
               type="button"

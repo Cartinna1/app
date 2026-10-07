@@ -1,7 +1,7 @@
 import { memo, useCallback, useMemo, useState } from 'react';
 import type { GameState } from '@/types/game';
 import type { BuildQueueRow, ShipyardCardRow, ShipyardLockedTier, ShipyardSeriesFilter, ShipyardView } from '@/lib/battle/shipyard';
-import { canCancelBuild, formatBuildCost, dockLevelText, shipyardView } from '@/lib/battle/shipyard';
+import { canCancelBuild, defaultSeriesFilter, filterBySeries, formatBuildCost, dockLevelText, pickSeriesFilter, resolveSeriesFilter, seriesChipClass, shipyardView } from '@/lib/battle/shipyard';
 import { getBuildingDef } from '@/data/colony/buildings';
 import { getEffectiveMaxCount, getBuildingCostProfile } from '@/lib/colony/costs';
 import { MATERIAL_NAME_MAP } from '@/data/materialNames';
@@ -65,34 +65,43 @@ function lockedSummaryLine(view: ShipyardView): string {
 }
 
 /**
- * 可造列表上面那排系列标签（chip）：`全部 14 / 圣辉 3 / 铁血 3 / …`。
+ * 可造列表上面那排系列标签（chip）：`圣辉 3 / 铁血 3 / …`。
  * · 档位、顺序与计数全部来自 `shipyard.ShipyardSeriesFilter`（从卡牌数据算）；
+ * · ⚠ **没有「全部」那颗 chip**（用户 2026-08 口径）："全部多少张"由面板顶部那行
+ *   「已解锁 N 型 · 现在能造 M 型」承担；
+ * · ⚠ **永远恰好选中一个系列**（默认 = 第一个有已解锁卡的系列），**点已选中的那一颗什么都不发生**
+ *   —— 没有"取消筛选"这条路，也没有那句提示（用户 2026-08 二次口径）；
+ * · **一颗 chip 一个颜色**（用户 2026-08 口径「标签加颜色」）：颜色**只**来自
+ *   `shipyard.seriesChipClass`（唯一真值表 `SHIPYARD_SERIES_THEME`），本组件不写任何颜色类；
+ * · **尺寸按用户要求放大**（`px-3 py-1` + `text-[12.5px]`，原来是 `px-2 py-0.5` + `text-[11px]`）；
+ *   **手机端不换行**：容器 `flex`（默认 nowrap）+ `overflow-x-auto` 横滑，chip 自身 `flex-none
+ *   whitespace-nowrap` —— 与机库内部标签栏 / 底部页签同款做法（`scrollbar-hide` 在本项目**没有
+ *   定义**，故这里照底部页签用显式的细滚动条类，滚动条可见、可发现）；
  * · **选中的档位只在组件内生效**（onPick 是 useCallback，不往 memo 子组件传 inline 箭头）；
  * · 只有一个档（或一个都没有）时**不渲染** —— 那时没有任何东西可筛，多一排标签只是噪音。
  */
 function ShipyardSeriesChips({
   filters,
-  totalCount,
   active,
   onPick,
 }: {
   filters: ShipyardSeriesFilter[];
-  totalCount: number;
   active: string;
   onPick: (series: string) => void;
 }) {
   if (filters.length <= 1) return null;
-  const chipClass = (on: boolean) =>
-    `rounded-full border px-2 py-0.5 text-[11px] font-bold transition-colors ${
-      on ? 'border-cyan-500 bg-cyan-800/60 text-white' : 'border-[#33405f] bg-[#161f36] text-slate-400 hover:bg-[#1d2740]'
-    }`;
   return (
-    <div className="mt-1.5 flex flex-wrap gap-1.5">
-      <button type="button" onClick={() => onPick('all')} className={chipClass(active === 'all')}>
-        全部 {totalCount}
-      </button>
+    <div className="mt-1.5 flex items-center gap-2 overflow-x-auto pb-1 [scrollbar-width:thin] [&::-webkit-scrollbar]:h-1.5 [&::-webkit-scrollbar-track]:bg-slate-800/40 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-slate-600">
       {filters.map((f) => (
-        <button key={f.series} type="button" onClick={() => onPick(f.series)} className={chipClass(active === f.series)}>
+        <button
+          key={f.series}
+          type="button"
+          onClick={() => onPick(f.series)}
+          className={`flex-none whitespace-nowrap rounded-full border px-3 py-1 text-[12.5px] font-bold transition-colors ${seriesChipClass(
+            f.series,
+            active === f.series,
+          )}`}
+        >
           {f.series} {f.unlockedCount}
         </button>
       ))}
@@ -206,26 +215,26 @@ interface ShipyardPanelProps {
 function ShipyardPanelBase({ state, onSelect, onBuild, onCancelBuild }: ShipyardPanelProps) {
   /** 本面板自己的高亮（共用详情区由 HangarTab 持有，这里只管哪张卡被点过） */
   const [selectedId, setSelectedId] = useState<string | null>(null);
-  /** 可造列表的系列筛选（'all' = 全部，**默认「全部」**）。
-   *  ⚠ 这是**用户自己点的**筛选，不是 AGENTS 第九节禁止的"静默截断"：默认不缩、计数标在标签上、
-   *    未解锁汇总行不受它影响；档位与计数由 lib/battle/shipyard.seriesFilters 从卡牌数据算。 */
-  const [seriesFilter, setSeriesFilter] = useState<string>('all');
-
   const view = useMemo(() => shipyardView(state), [state]);
 
-  /** 系列标签的点击处理（**useCallback 保持稳定引用**，不往渲染里塞 inline 箭头 —— AGENTS 第五节） */
+  /** 可造列表的系列筛选：**默认 = 第一个"有已解锁卡"的系列**（用户 2026-08 二次口径，
+   *  进面板就只看该系列；以前是"默认不筛选"，已废）。初值由 `shipyard.defaultSeriesFilter` 算，
+   *  **不硬编码系列名**——将来换卡/换档也不会开出空列表。
+   *  ⚠ 计数标在每颗 chip 上、顶部「已解锁 N 型」与底部未解锁汇总行都不受它影响。 */
+  const [seriesFilter, setSeriesFilter] = useState<string>(() => defaultSeriesFilter(view.seriesFilters));
+
+  /** 系列标签的点击处理（**useCallback 保持稳定引用**，不往渲染里塞 inline 箭头 —— AGENTS 第五节）。
+   *  ⚠ **点已选中的那一颗什么都不发生**（`shipyard.pickSeriesFilter` 原样返回），**没有"取消筛选"**
+   *    —— 永远恰好选中一个系列（用户 2026-08 二次口径）。 */
   const pickSeries = useCallback((series: string) => {
-    setSeriesFilter(series);
+    setSeriesFilter((prev) => pickSeriesFilter(prev, series));
   }, []);
 
-  /** 当前选中的档还在不在（造出更高档船坞 / 换存档后可能没有该系列的已解锁卡了）→ 回落到「全部」。
-   *  这样不会出现"标签不见了、列表却还被筛着"的空列表。 */
-  const activeSeries = seriesFilter === 'all' || view.seriesFilters.some((f) => f.series === seriesFilter)
-    ? seriesFilter
-    : 'all';
-  const visibleCards = activeSeries === 'all'
-    ? view.unlockedCards
-    : view.unlockedCards.filter((c) => c.series === activeSeries);
+  /** 当前筛选在现有档位里还有效吗（造出更高档船坞 / 换存档后可能没有该系列的已解锁卡了）→
+   *  落到**第一个有已解锁卡的系列**（不是"不筛选"）。判定在 shipyard.resolveSeriesFilter。
+   *  配合 filterBySeries 的"无匹配 → 完整数组"防线，任何路径都不会给出空列表。 */
+  const activeSeries = resolveSeriesFilter(seriesFilter, view.seriesFilters);
+  const visibleCards = filterBySeries(view.unlockedCards, activeSeries);
 
   const pick = useCallback(
     (cardId: string) => {
@@ -312,10 +321,11 @@ function ShipyardPanelBase({ state, onSelect, onBuild, onCancelBuild }: Shipyard
         </span>
       </div>
       {/* 系列标签（chip）：档位与计数从卡牌数据算（view.seriesFilters），只列出"有已解锁卡"的系列；
-          默认「全部」，点了才缩到某系列。**未解锁汇总行不受筛选影响**（它说的是总数）。 */}
+          **默认选中第一个系列**，点别的系列就切过去，**点已选中的那颗什么都不发生**（没有"取消筛选"，
+          那颗「全部」已按用户口径删除）。「已解锁共几型」由上面那行承担；
+          **未解锁汇总行不受筛选影响**（它说的是总数）。 */}
       <ShipyardSeriesChips
         filters={view.seriesFilters}
-        totalCount={view.unlockedCards.length}
         active={activeSeries}
         onPick={pickSeries}
       />

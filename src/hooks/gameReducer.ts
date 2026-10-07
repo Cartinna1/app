@@ -8,8 +8,15 @@ import { createUid } from '@/lib/id';
 import { migrateSave } from '@/lib/save';
 import { getCurrentFactionId } from '@/lib/galaxy/access';
 import { createBattle, cloneBattleState, deploy, attack, endTurn, resolvePending, aiTurn } from '@/lib/battle/engine';
-import { grantBattleRewards, grantRaidReward, rollRaidReward } from '@/lib/battle/rewards';
-import type { RaidReward } from '@/lib/battle/rewards';
+import {
+  EMPTY_RAID_LOOT_DETAIL,
+  grantBattleRewards,
+  grantRaidReward,
+  raidLootView,
+  raidRewardView,
+  rollRaidReward,
+} from '@/lib/battle/rewards';
+import type { RaidReward, RaidSettlement } from '@/lib/battle/rewards';
 import {
   RAID_ARRIVED_TURNS,
   RAID_IMMUNE_TURNS,
@@ -24,6 +31,7 @@ import {
   recordDefeatedLair,
   tickRaid,
 } from '@/lib/battle/raid';
+import type { RaidLootLoss } from '@/lib/battle/raid';
 import { flattenCost, payCost } from '@/lib/turn/resourceCost';
 import { pushGoldLog } from '@/lib/turn/goldLog';
 import { readyExpedition, tickExpedition } from '@/lib/battle/expedition';
@@ -75,6 +83,11 @@ export function createInitialGameState(): GameState {
     // 已打败的老巢账本（用户 2026-08 裁定，v6 新增）：新开局一个老巢都没打败。
     // ⚠ 只影响掠夺队的**显示名**（全打败 → 「海盗残兵」），**不影响掠夺触发**（永远存在）。
     defeatedLairs: [],
+    // 掠夺收尾快照（用户 2026-08 裁定「把奖励显著地显示出来」＋「失败也要显示丢了啥」，
+    // v7 引入、v8 改成"赢/输同一形状"）：新开局没有可显示的掠夺结算。
+    // ⚠ 写入 / 清空时机都在本文件（`END_BATTLE` 与 `APPLY_RAID_LOOT` 写、`START_RAID` 清），
+    //   见 types/game.ts 的字段注释。
+    lastRaidSettlement: null,
     battle: null,
     // 船坞与科技（V1.5 §8.2 / §8.3）：造船队列初始为空。
     // ⚠ 这个初值必须与 lib/save.ts 的 stateFromSave 兜底**逐一一致**（都是 []）。
@@ -136,19 +149,25 @@ function applyBattleAction(battle: BattleState, action: BattleAction): void {
 /**
  * 掠夺损失结算：**没有防守舰队（掠夺成功）** 与 **防守战打输** 走**同一条**路径
  * （§10.2 原话"防守战打输了 = 与'没有防守舰队'完全一样"）。
- * 返回新的 ships 与一条事件日志明细。
+ * 返回新的 ships、一条事件日志明细，**以及"最近一次掠夺收尾"快照**。
  * 扣减走 lib/turn/resourceCost 的 flattenCost + payCost（AGENTS 第三节：勿在 reducer 里自己写一份扣资源），
  * 实扣值（每项以当前持有量为上限）由 raid.ts 的 raidLootLoss 给（唯一真值）。
+ * ⚠ **实扣明细由调用方算好传进来**（不再在函数内部算一份）：同一份 `loss` 既交给 payCost/pushGoldLog 去扣，
+ *   也进 `raidLootView(loss)` 当显示值 —— 这样**显示值 = 实扣值**（用户 2026-08：「失败也要显示丢了啥」，
+ *   且"日志写明实际扣了什么"是 AGENTS 第九节的硬要求）。若让显示层在扣完之后再调一次 raidLootLoss，
+ *   读到的就是已经扣完的状态，两边必然对不上。
  */
-function settleRaidLoot(state: GameState): { ships: Mothership[]; detail: string } {
+function settleRaidLoot(
+  state: GameState,
+  loss: RaidLootLoss,
+): { ships: Mothership[]; detail: string; settlement: RaidSettlement } {
   const lead = state.ships[0];
-  if (!lead) return { ships: state.ships, detail: '' };
-  const loss = raidLootLoss(state);
+  if (!lead) return { ships: state.ships, detail: '', settlement: raidLootView(EMPTY_RAID_LOOT_DETAIL) };
   const next: Mothership = { ...lead, materials: { ...(lead.materials || {}) } };
   payCost(next, lead.colony, flattenCost(loss));
   // 金币流水：**必须先改完金币再记账**（pushGoldLog 读当前金币当 balanceAfter，AGENTS-附录.md 10.2）
   if (loss.gold > 0) pushGoldLog(next, state.turn, -loss.gold, '殖民地被掠夺');
-  return { ships: [next, ...state.ships.slice(1)], detail: raidLootText(loss) };
+  return { ships: [next, ...state.ships.slice(1)], detail: raidLootText(loss), settlement: raidLootView(loss) };
 }
 
 /**
@@ -421,11 +440,17 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
         //    按"没有防守舰队"处理（不能因为赢了第一场就发奖励，那等于用空池白拿战利品）。
         const noDefenderLeft = raidWin && state.raid.raiders > 1;
         if (!raidWin || noDefenderLeft) {
-          const { ships, detail } = settleRaidLoot(base);
+          // **实扣明细在这里算一次**（raid.ts 的 raidLootLoss 是唯一真值），同时交给 settleRaidLoot 去扣
+          // 与 raidLootView 去当显示值 → **界面显示的数字就是账上真扣的数字**（用户 2026-08：「失败也要显示丢了啥」）。
+          const loss = raidLootLoss(base);
+          const { ships, detail, settlement } = settleRaidLoot(base, loss);
           const prefix = noDefenderLeft ? '第一场打赢了，但没有幸存舰拦第二支掠夺队：' : '防守战失利，';
           return {
             ...base,
             ships,
+            // **失败也要显著显示**（用户 2026-08 追加裁定）：与打赢共用同一份状态、同一个出口，
+            // 用 `outcome: 'lost'` 区分。清空时机与打赢一致 = START_RAID（下一波掠夺开打时）。
+            lastRaidSettlement: settlement,
             battle: null,
             raid: raidOver,
             eventLog: [
@@ -445,10 +470,21 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
           ...base,
           ships,
           factionReputation,
+          // **掠夺收尾快照（用户 2026-08 裁定：把奖励显著地显示出来）**：只有走到这一条
+          // （= 掠夺打赢**且再没有下一支掠夺队**）才算"这一波掠夺的战果"。中途那场在第一场赢下
+          // 就 return 了（上面的 ①），不会走到这里 → 快照天然只在最后一支打完后写。
+          // 文案逐字取自奖励路径（reward.text，唯一产出口），UI 只渲染 —— 不许 UI 自己算奖励。
+          // 打输那两条路（上面 ② / APPLY_RAID_LOOT）写的是**同一个字段、同一个形状**，只是 outcome='lost'。
+          // 清空时机 = START_RAID（下一场掠夺事件开打时）。
+          lastRaidSettlement: raidRewardView(reward),
           battle: null,
           raid: raidOver,
           eventLog: [
-            { id: createUid('raid'), turn: state.turn, event: '击退海盗', detail: reward.text },
+            // ⚠ `event` 必须是**中性词**、不许与 `detail` 重复前缀：`reward.text` 自带「击退海盗：」
+            //   （它是奖励文案的**唯一产出口**，一个字都不许改），而 EventPanel 是
+            //   `第N回合 <event> <detail>` 并排渲染 —— 早先 event 也写「击退海盗」，玩家读到的是
+            //   「击退海盗：击退海盗：缴获 10 星尘」（用户 2026-08 报"没奖励"时读的正是这一行）。
+            { id: createUid('raid'), turn: state.turn, event: '掠夺战果', detail: reward.text },
             ...state.eventLog,
           ].slice(0, EVENT_LOG_LIMIT),
         };
@@ -488,6 +524,10 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
       return {
         ...state,
         raid: { ...idleRaidState(), inTurns: RAID_WARNING_TURNS, raiders: action.raiders },
+        // **清空上一次的掠夺收尾快照**（用户 2026-08 裁定的时机：下一场掠夺开打时）——
+        // 否则上一波那句"缴获 …"或"殖民地被掠夺：…"会在这一波的第一场战斗结算画面上
+        // 被当成"这一波的战果/损失"显示出来。
+        lastRaidSettlement: null,
       };
     }
 
@@ -514,10 +554,13 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
       // 结算资源损失并进入免疫期（§10.2）。
       // 损失 = 金币 20% + 原料各自 1/3，各项以当前持有量为上限（实扣值来自 raid.raidLootLoss，唯一真值）；
       // 与"防守战打输"共用 settleRaidLoot，两条路的损失口径必须完全一致（§10.2 原话）。
-      const { ships, detail } = settleRaidLoot(state);
+      // ⚠ **玩家什么都没做就被抢，这条尤其必须让他看见**（用户 2026-08 追加裁定）→ 写同一份收尾快照。
+      const loss = raidLootLoss(state);
+      const { ships, detail, settlement } = settleRaidLoot(state, loss);
       return {
         ...state,
         ships,
+        lastRaidSettlement: settlement,
         raid: { ...idleRaidState(), immuneTurns: RAID_IMMUNE_TURNS },
         eventLog: [
           { id: createUid('raid'), turn: state.turn, event: '殖民地被掠夺', detail },

@@ -164,21 +164,25 @@ type TabId = 'overview' | 'stocks' | 'materials' | 'production' | 'products' | '
 const EMPTY_REPUTATION: Record<string, number> = {};
 const EMPTY_CONTRACTS: NonNullable<GameState['factionContracts']> = [];
 
+// 排序口径（2026-08 用户裁定 A 版）：按"玩家用它的顺序"排，不按功能上线顺序。
+//   总览（默认落地页）→ 星图（定位/移动）→ 经济（贸易最前，它是经济链入口）
+//   → 建设（殖民在机库之前 —— 没殖民地就造不了舰）→ 造船 → 打仗 → 考古 → 低频系统项收尾。
+// ⚠ 只动顺序，id/label/icon 一个字不动；桌面侧栏与手机底栏共用这一份。
 const tabs: { id: TabId; label: string; shortLabel: string; icon: React.ElementType }[] = [
   { id: 'overview', label: '总览', shortLabel: '总览', icon: LayoutDashboard },
   { id: 'galaxy', label: '星图', shortLabel: '星图', icon: Globe },
+  { id: 'trade', label: '贸易', shortLabel: '贸易', icon: Coins },
   { id: 'stocks', label: '股票', shortLabel: '股票', icon: TrendingUp },
   { id: 'materials', label: '原料', shortLabel: '原料', icon: Package },
   { id: 'production', label: '生产', shortLabel: '生产', icon: Factory },
   { id: 'products', label: '集会', shortLabel: '集会', icon: ShoppingCart },
   { id: 'events', label: '事件', shortLabel: '事件', icon: Sparkles },
   { id: 'loan', label: '贷款', shortLabel: '贷款', icon: Banknote },
-  { id: 'trade', label: '贸易', shortLabel: '贸易', icon: Coins },
-  { id: 'battle', label: '战斗', shortLabel: '战斗', icon: Swords },
-  { id: 'hangar', label: '机库', shortLabel: '机库', icon: Warehouse },
-  { id: 'archaeology', label: '考古', shortLabel: '考古', icon: Landmark },
   { id: 'colony', label: '殖民', shortLabel: '殖民', icon: Home },
   { id: 'module', label: '改造', shortLabel: '改造', icon: Wrench },
+  { id: 'hangar', label: '机库', shortLabel: '机库', icon: Warehouse },
+  { id: 'battle', label: '战斗', shortLabel: '战斗', icon: Swords },
+  { id: 'archaeology', label: '考古', shortLabel: '考古', icon: Landmark },
   { id: 'redeem', label: '兑换', shortLabel: '兑换', icon: Gift },
   { id: 'goldlog', label: '日志', shortLabel: '日志', icon: Receipt },
   { id: 'save', label: '存档', shortLabel: '存档', icon: Save },

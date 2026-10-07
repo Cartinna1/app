@@ -3,8 +3,9 @@
    P3 验收：卡牌战斗状态 + 存档三处同步
    用法：node --import ./scripts/register-ts.mjs scripts/check-battle-state.cjs
    覆盖：
-     ① SAVE_VERSION=6 ② 新开局默认值 ③ **新开局与读档默认值必须一致**（AGENTS 反复踩的坑）
-     ④ `battle` 不进存档 ⑤ 存档往返一致 ⑥ v2/v3/v5 旧档能读入且拿到默认值（含 v4 造船队列、v6 老巢账本）
+     ① SAVE_VERSION=8 ② 新开局默认值 ③ **新开局与读档默认值必须一致**（AGENTS 反复踩的坑）
+     ④ `battle` 不进存档 ⑤ 存档往返一致 ⑥ v2/v3/v5/v6/v7 旧档能读入且拿到默认值
+        （含 v4 造船队列、v6 老巢账本、v7→v8 掠夺收尾快照的结构迁移）
      ⑦ 舰队不变量（**按份数**：编入份数≤卡库份数 / 每队 30 / 同型可拆分 / 出征队不能打防守标签 / 同时只能 1 个出征）
      ⑧ reducer 不 mutate prev（快照比对）  ⑨ cloneBattleState 深拷贝
      ⑩ END_BATTLE 写回永久损失（**按份**），且**掠夺战与出征战收尾不同**（V1.5 §10.1 出征 vs §10.2 掠夺）
@@ -15,6 +16,15 @@
    构造改动（v6 已打败的老巢账本，用户 2026-08 裁定）：
      · `SAVE_VERSION = 5` → `6`；新增 `defeatedLairs` 的四处断言（新开局空 / 新开局↔读档一致 /
        存档往返 / 旧档兜底成 `[]`）——**都是"只新增字段"的等价断言，不改既有任何一条**。
+   构造改动（v7 掠夺战利品快照，用户 2026-08 裁定「把奖励显著地显示出来」）：
+     · `SAVE_VERSION = 6` → `7`；新增 `lastRaidSettlement` 的四处断言（新开局 null / 新开局↔读档一致 /
+       存档往返 / v6 旧档兜底成 `null`）——**都是"只新增字段"的等价断言，不改既有任何一条**。
+       写入 / 清空时机在 reducer 侧（`END_BATTLE` 写、`START_RAID` 清），由 check-battle-raid 的 [11] 覆盖。
+   构造改动（v8 掠夺收尾快照，用户 2026-08 追加裁定「**失败也要显示丢了啥**」）：
+     · `SAVE_VERSION = 7` → `8`；字段 `lastRaidReward` **改名扩形**成 `lastRaidSettlement`
+       （`{ text, kind }` → `{ outcome: 'win'|'lost', text, awardText, loot }`）。
+       **这是 v2 以来第一个真正的字段级结构改写**，故新增 [5e]：v7 旧档（只有旧字段）必须能按 `win`
+       转进新形状；[5d] 改为"两个键都没有 → null"。打赢那份的往返断言**逐字等价**（只改字段名）。
    口径说明（踩过的坑）：
      · 损失是**按份**的：同型 2 份损失 1 份 → 卡库与舰队各少 1 份，幸存的那份留在舰队里。
        所以不能断言"舰队里不再出现该 cardId"（那是按卡 id 整类清除，会多删）。
@@ -52,7 +62,7 @@ const eq = (a, b) => J(a) === J(b);
 
   // ---------- ① 版本 ----------
   console.log('\n[1] 存档版本与新开局默认值');
-  check(SAVE_VERSION === 6, 'SAVE_VERSION = 6（v6 = 已打败的老巢账本 defeatedLairs）', '实际 ' + SAVE_VERSION);
+  check(SAVE_VERSION === 8, 'SAVE_VERSION = 8（v6 = 老巢账本 defeatedLairs，v7 = 掠夺收尾快照，v8 = 赢/输同一形状）', '实际 ' + SAVE_VERSION);
 
   const init = createInitialGameState();
   check(Array.isArray(init.cardLibrary) && init.cardLibrary.length === 0, '新开局卡库为空（不赠送战舰）');
@@ -60,14 +70,15 @@ const eq = (a, b) => J(a) === J(b);
   check(init.expedition === null, '新开局没有出征');
   check(eq(init.raid, EMPTY_RAID), '新开局掠夺状态为默认', J(init.raid));
   check(eq(init.defeatedLairs, []), '新开局"已打败的老巢"账本为空（v6 字段 = 一个都没打败）', J(init.defeatedLairs));
+  check(init.lastRaidSettlement === null, '新开局没有掠夺收尾快照（v7 引入 / v8 扩形；旧档兜底 = null）', J(init.lastRaidSettlement));
   check(init.battle === null, '新开局没有进行中的战斗');
   check(Array.isArray(init.buildQueue) && init.buildQueue.length === 0, '新开局造船队列为空（v4 字段）');
 
   // ---------- ③ 新开局 ↔ 读档默认值一致 ----------
   console.log('\n[2] 新开局 与 读档默认值 必须一致（AGENTS 的坑）');
-  const minimal = { saveVersion: 6, phase: 'playing', turn: 1, ships: init.ships };
+  const minimal = { saveVersion: 8, phase: 'playing', turn: 1, ships: init.ships };
   const fromSave = stateFromSave(minimal);
-  for (const f of ['cardLibrary', 'fleets', 'expedition', 'raid', 'defeatedLairs', 'battle', 'buildQueue']) {
+  for (const f of ['cardLibrary', 'fleets', 'expedition', 'raid', 'defeatedLairs', 'lastRaidSettlement', 'battle', 'buildQueue']) {
     check(eq(fromSave[f], init[f]), `stateFromSave 的 ${f} 与新开局一致`, J(fromSave[f]) + ' vs ' + J(init[f]));
   }
 
@@ -75,7 +86,7 @@ const eq = (a, b) => J(a) === J(b);
   console.log('\n[3] battle 不进存档');
   const save = buildSaveData(init);
   check(!('battle' in save), 'buildSaveData 不含 battle');
-  for (const f of ['cardLibrary', 'fleets', 'expedition', 'raid', 'defeatedLairs', 'buildQueue']) check(f in save, `buildSaveData 含 ${f}`);
+  for (const f of ['cardLibrary', 'fleets', 'expedition', 'raid', 'defeatedLairs', 'lastRaidSettlement', 'buildQueue']) check(f in save, `buildSaveData 含 ${f}`);
 
   // ---------- ⑤ 存档往返 ----------
   console.log('\n[4] 存档往返（含卡库/舰队/出征/掠夺/老巢账本/造船队列）');
@@ -90,6 +101,17 @@ const eq = (a, b) => J(a) === J(b);
   st = { ...st, raid: { inTurns: 3, arrivedTurns: 0, immuneTurns: 7, raiders: 2, arrived: false } };
   // 已打败的老巢账本（v6）：手写两项（不靠打赢老巢，避免把"战斗胜负"混进存档往返这一条）
   st = { ...st, defeatedLairs: ['b1', 'b3'] };
+  // 掠夺收尾快照（v7 引入 / v8 扩形）：**手写两份**，把"赢/输同一形状"两侧都过一遍存档往返
+  // （不靠真的打一场掠夺战，避免把"发奖/扣损失"混进存档往返这一条）。
+  st = { ...st, lastRaidSettlement: { outcome: 'win', text: '击退海盗：缴获 10 星尘', awardText: '击退海盗：缴获 10 星尘', loot: { gold: 0, stardust: 0, materials: {} } } };
+  // 打输那份另用一个独立 state 单独往返（含 loot 实扣明细 —— 这是"显示值 = 实扣值"的载体，必须存得住）
+  const lostSettlement = {
+    outcome: 'lost',
+    text: '殖民地被掠夺：金币 -20000、硅片 -100、量子簇 -30',
+    awardText: '',
+    loot: { gold: 20000, stardust: 0, materials: { silicon: 100, quantum: 30 } },
+  };
+  const lostState = { ...st, lastRaidSettlement: lostSettlement };
   // 造船队列：手写两项（不靠 ENQUEUE_BUILD，避免把"资源/船坞门槛"混进存档往返这一条）
   st = {
     ...st,
@@ -104,6 +126,9 @@ const eq = (a, b) => J(a) === J(b);
   check(eq(round.expedition, st.expedition), '往返后出征一致', J(round.expedition));
   check(eq(round.raid, st.raid), '往返后掠夺状态一致');
   check(eq(round.defeatedLairs, st.defeatedLairs), '往返后"已打败的老巢"账本一致（v6 字段）', J(round.defeatedLairs));
+  check(eq(round.lastRaidSettlement, st.lastRaidSettlement), '往返后"掠夺收尾快照（打赢）"一致（v8 形状）', J(round.lastRaidSettlement));
+  const lostRound = stateFromSave(JSON.parse(JSON.stringify(buildSaveData(lostState))));
+  check(eq(lostRound.lastRaidSettlement, lostSettlement), '往返后"掠夺收尾快照（被打输）"一致（含 loot 实扣明细）', J(lostRound.lastRaidSettlement));
   check(eq(round.buildQueue, st.buildQueue), '往返后造船队列一致', J(round.buildQueue));
   check(round.battle === null, '往返后 battle 为 null');
 
@@ -113,6 +138,7 @@ const eq = (a, b) => J(a) === J(b);
   v2.saveVersion = 2;
   delete v2.cardLibrary; delete v2.fleets; delete v2.expedition; delete v2.raid; delete v2.buildQueue;
   delete v2.defeatedLairs;   // v6 字段：v2 档当然没有
+  delete v2.lastRaidSettlement;  // v7 字段：v2 档当然没有
   let oldOk = true, oldState = null;
   try { oldState = migrateSave(stateFromSave(v2)); } catch (e) { oldOk = false; console.log('    抛错：' + e.message); }
   check(oldOk, 'v2 旧档不抛错');
@@ -124,6 +150,7 @@ const eq = (a, b) => J(a) === J(b);
     check(oldState.battle === null, 'v2 旧档 battle 为 null');
     check(eq(oldState.buildQueue, []), 'v2 旧档的造船队列为空（v4 兜底）', J(oldState.buildQueue));
     check(eq(oldState.defeatedLairs, []), 'v2 旧档的"已打败的老巢"账本为空（v6 兜底 = 一个都没打败）', J(oldState.defeatedLairs));
+    check(oldState.lastRaidSettlement === null, 'v2 旧档没有掠夺战利品快照（v7 兜底 = null，不给旧档凭空补战利品）', J(oldState.lastRaidSettlement));
   }
 
   // v3 → v4：只多一个 buildQueue 字段（不该崩，且兜底成 []）
@@ -150,6 +177,41 @@ const eq = (a, b) => J(a) === J(b);
   if (v5State) {
     check(eq(v5State.defeatedLairs, []), 'v5 旧档的"已打败的老巢"账本兜底为 []（一个都没打败）', J(v5State.defeatedLairs));
     check(eq(v5State.raid, st.raid) && v5State.expedition !== null, 'v5 旧档的掠夺在途与出征原样读入（只新增字段、不改既有语义）');
+  }
+
+  // v7 → v8：v7 只有 `lastRaidReward`（旧字段名 + 旧形状 `{ text, kind }`），
+  // v8 改名扩形成 `lastRaidSettlement`（赢/输同一形状）→ 旧值按 **win** 转进来（只搬运旧值，不造新值）
+  console.log('\n[5e] v7 旧档读入（lastRaidReward → lastRaidSettlement 的结构迁移）');
+  const v7 = JSON.parse(JSON.stringify(buildSaveData(st)));
+  v7.saveVersion = 7;
+  delete v7.lastRaidSettlement;
+  v7.lastRaidReward = { text: '击退海盗：缴获 10 星尘', kind: 'stardust' };
+  let v7Ok = true, v7State = null;
+  try { v7State = migrateSave(stateFromSave(v7)); } catch (e) { v7Ok = false; console.log('    抛错：' + e.message); }
+  check(v7Ok, 'v7 旧档不抛错');
+  if (v7State) {
+    check(v7State.lastRaidSettlement !== null && v7State.lastRaidSettlement.outcome === 'win',
+      '**v7 旧档的战利品 → 按 win 收进新形状**', J(v7State.lastRaidSettlement));
+    check(v7State.lastRaidSettlement.text === '击退海盗：缴获 10 星尘'
+      && v7State.lastRaidSettlement.awardText === '击退海盗：缴获 10 星尘',
+      'v7 旧档转换后 text 与 awardText 是同一句（一个字未改）', J(v7State.lastRaidSettlement));
+    check(eq(v7State.lastRaidSettlement.loot, { gold: 0, stardust: 0, materials: {} }),
+      'v7 旧档转换后 loot 补空明细（旧档没有损失数据，不许凭空造）', J(v7State.lastRaidSettlement.loot));
+  }
+
+  // v6 → v7/v8：两个键都没有 → 兜底 null（没有可显示的掠夺结算）
+  console.log('\n[5d] v6 旧档读入（v7 新增 lastRaidSettlement 的兜底）');
+  const v6 = JSON.parse(JSON.stringify(buildSaveData(st)));
+  v6.saveVersion = 6;
+  delete v6.lastRaidSettlement;
+  delete v6.lastRaidReward;
+  let v6Ok = true, v6State = null;
+  try { v6State = migrateSave(stateFromSave(v6)); } catch (e) { v6Ok = false; console.log('    抛错：' + e.message); }
+  check(v6Ok, 'v6 旧档不抛错');
+  if (v6State) {
+    check(v6State.lastRaidSettlement === null, 'v6 旧档的"掠夺收尾快照"兜底为 null（没有可显示的奖励或被抢记录）', J(v6State.lastRaidSettlement));
+    check(eq(v6State.defeatedLairs, st.defeatedLairs), 'v6 旧档的老巢账本原样读入（只新增字段、不改既有语义）', J(v6State.defeatedLairs));
+    check(eq(v6State.raid, st.raid) && v6State.expedition !== null, 'v6 旧档的掠夺在途与出征原样读入');
   }
 
   // ---------- ⑦ 舰队不变量（按份数） ----------

@@ -1,7 +1,10 @@
 'use strict';
 /* 生成一份「方便测试卡牌战斗」的存档（用真实 reducer + 真实存档 API 构造，保证能导入）
    用法：node --import ./scripts/register-ts.mjs scripts/make-test-save.cjs [输出路径]
-   产出：默认写到 Downloads/测试存档-卡牌战斗.json */
+   产出：默认写到 Downloads/测试存档-卡牌战斗.json
+   ⚠ 2026-08 起 visitedNodes 额外含两个**势力节点**（f07/f01）：掠夺奖励的声望只从
+     `getKnownFactionIds`（已探明势力）里挑 —— 一个都没探明时会**回退成金币**，
+     所以测试存档必须探明至少一个势力，才能测到"声望只给已探明势力"这条规则。 */
 const fs = require('fs');
 const path = require('path');
 
@@ -38,7 +41,7 @@ const path = require('path');
         ...s.galaxy,
         currentNodeId: ruinNode.id,
         travelTurnsRemaining: 0,
-        visitedNodes: [ruinNode.id, easy.id, hard.id],      // 探明两个老巢：一易一难
+        visitedNodes: [ruinNode.id, easy.id, hard.id, 'f07', 'f01'],   // 探明两个老巢（一易一难）+ 两个势力（测"声望只给已探明势力"）
       },
     })),
   };

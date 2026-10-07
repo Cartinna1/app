@@ -17,6 +17,8 @@
         入驻真值 = BuildingInstance.assignedPop ≥ minPop，与 economy.ts 的产出/发电判据同口径）
    ============================================================================ */
 const fails = [];
+const fs = require('fs');
+const path = require('path');
 const check = (ok, label, detail) => {
   if (ok) console.log('  ✓ ' + label);
   else { fails.push(label + (detail ? ' → ' + detail : '')); console.log('  ✗ ' + label + (detail ? '  → ' + detail : '')); }
@@ -302,6 +304,88 @@ const eq = (a, b) => JSON.stringify(a) === JSON.stringify(b);
   check(emptyDock.ships[0].gold === gold0 && emptyDock.buildQueue.length === 0, '未入驻时不扣钱、不改 prev');
   const allowed = D(docked(1), { type: 'ENQUEUE_BUILD', cardId: 'h1' });
   check(allowed.buildQueue.length === 1, '入驻够时 ENQUEUE_BUILD 照常入队（守卫不误伤）');
+
+  // ---------- ⑫ 系列筛选：默认第一个系列 / 不可取消 / 每系列一色 ----------
+  // 用户 2026-08 **二次口径**（覆盖本段上一版）：删掉「全部 N」chip，**默认就选中第一个有已解锁卡的系列**，
+  // **没有"回得来"**（点已选中的那颗 = 什么都不发生），兜底落到**第一个有已解锁卡的系列**（不是"不筛选"），
+  // 且任何输入都**不许给出空列表**。chip 再各给一色（`seriesChipClass`）、放大、手机端横滑不换行。
+  // 判定唯一真值 = shipyard 的 defaultSeriesFilter / pickSeriesFilter / resolveSeriesFilter /
+  // filterBySeries / seriesChipClass（组件只渲染）。
+  console.log('\n[12] 系列筛选：默认第一个系列 + 不可取消 + 每系列一色');
+  const vAll = SY.shipyardView(docked(3, { techs: allTechs }));
+  const chipSum = vAll.seriesFilters.reduce((n, f) => n + f.unlockedCount, 0);
+  check(vAll.seriesFilters.length > 1, '全解锁时系列档 ≥ 2（chip 那排才渲染）', String(vAll.seriesFilters.length));
+  check(chipSum === vAll.unlockedCards.length,
+    '各系列 chip 的计数之和 = 已解锁型数（chip 上的数字不丢）', chipSum + '/' + vAll.unlockedCards.length);
+  check(vAll.seriesFilters.every((f) => vAll.unlockedCards.some((c) => c.series === f.series)),
+    '每颗 chip 的系列都真有已解锁卡');
+  const s0 = vAll.seriesFilters[0].series;
+  const s1 = vAll.seriesFilters[1].series;
+  const defaultSel = SY.defaultSeriesFilter(vAll.seriesFilters);
+  check(defaultSel === s0, '★ 默认选中的是"第一个有已解锁卡的系列"（不是"全部"）', defaultSel);
+  check(SY.filterBySeries(vAll.unlockedCards, defaultSel).length > 0,
+    '★ 默认选中那颗的列表非空（进面板不会开出空列表）',
+    String(SY.filterBySeries(vAll.unlockedCards, defaultSel).length));
+  check(SY.pickSeriesFilter(s0, s0) === s0, '★ 点已选中的那一颗 = 状态不变（不可取消）');
+  check(SY.pickSeriesFilter(s0, s1) === s1, '点别的系列 = 切过去');
+  check(SY.resolveSeriesFilter(s0, vAll.seriesFilters) === s0, '有效系列 → 原样保留');
+  check(SY.resolveSeriesFilter('不存在的系列', vAll.seriesFilters) === s0,
+    '★ 档位没了（换档/换存档）→ 落到**第一个有已解锁卡的系列**（不是"不筛选"）',
+    SY.resolveSeriesFilter('不存在的系列', vAll.seriesFilters));
+  check(SY.resolveSeriesFilter('随便', []) === '', '一个系列都没有 → 空串（那时本来就没有卡可筛）');
+  check(SY.filterBySeries(vAll.unlockedCards, '没有这个系列') === vAll.unlockedCards,
+    '★ 传入的档位无匹配 → 原样返回完整数组（杜绝静默空列表）');
+  const onlyS0 = SY.filterBySeries(vAll.unlockedCards, s0);
+  check(onlyS0.every((c) => c.series === s0), '筛某系列 → 只剩该系列的卡');
+  check(onlyS0.length === vAll.seriesFilters[0].unlockedCount, '筛选结果条数 = 那颗 chip 上的计数', String(onlyS0.length));
+  // 每系列一色（颜色唯一真值 = SHIPYARD_SERIES_THEME / seriesChipClass）
+  const activeClasses = vAll.seriesFilters.map((f) => SY.seriesChipClass(f.series, true));
+  check(new Set(activeClasses).size === activeClasses.length && activeClasses.every((c) => c.length > 0),
+    '每个系列 chip 的选中色互不相同（各系列一色）', activeClasses.join(' | '));
+  check(vAll.seriesFilters.every((f) => SY.seriesChipClass(f.series, false) !== SY.seriesChipClass(f.series, true)),
+    '同一系列"选中 / 未选中"两态类名不同（选中态一眼看得出）');
+  check(SY.seriesChipClass('将来才有的系列', true).length > 0 && SY.seriesChipClass('将来才有的系列', false).length > 0,
+    '表里没有的系列有兜底色（不会出现没颜色的 chip）');
+  // 对比度（用户 2026-08 配色口径：白/金是亮色，选中态必须"亮底 + 深字"，不许白底白字；
+  // 白系列的未选中态必须"深底 + 浅字"）—— 这三条只读 seriesChipClass 的返回值，不绑组件。
+  check(!/text-white/.test(SY.seriesChipClass('圣辉', true)) && /text-slate-(800|900)/.test(SY.seriesChipClass('圣辉', true)),
+    '★ 白系列选中态 = 亮底 + 深字（不是白底白字）', SY.seriesChipClass('圣辉', true));
+  check(!/text-white/.test(SY.seriesChipClass('财团', true)) && /text-amber-9\d\d/.test(SY.seriesChipClass('财团', true)),
+    '★ 金系列选中态 = 亮底 + 深字（金色同样不吃白字）', SY.seriesChipClass('财团', true));
+  check(/text-white|text-slate-[12]00/.test(SY.seriesChipClass('圣辉', false)),
+    '★ 白系列未选中态 = 深底 + 浅字（暗面板上读得清）', SY.seriesChipClass('圣辉', false));
+  // 静态核对组件（组件在 Node 里渲染不了，只能核对源码里的口径）
+  const panelSrc = fs.readFileSync(path.resolve(__dirname, '../src/components/hangar/ShipyardPanel.tsx'), 'utf8');
+  check(panelSrc.indexOf("onPick('all')") < 0 && !/全部\s*\{/.test(panelSrc),
+    'ShipyardPanel 不再渲染「全部 N」chip（那颗按钮的 onClick 已删）');
+  check(panelSrc.indexOf('（再点一次取消筛选）') < 0, '★ 提示「（再点一次取消筛选）」已删（不留旧口径文案）');
+  check(panelSrc.indexOf('toggleSeriesFilter') < 0 && panelSrc.indexOf('SERIES_FILTER_ALL') < 0,
+    '★ toggle-off / "不筛选"档的旧逻辑已从组件清除');
+  check(panelSrc.indexOf('defaultSeriesFilter') >= 0 && panelSrc.indexOf('pickSeriesFilter') >= 0
+    && panelSrc.indexOf('resolveSeriesFilter') >= 0 && panelSrc.indexOf('filterBySeries') >= 0,
+    '默认值 / 点击 / 回落 / 筛选判定都调 lib/battle/shipyard（UI 不写第二份）');
+  check(panelSrc.indexOf('seriesChipClass') >= 0, '★ chip 颜色调 lib 的 seriesChipClass（颜色走表）');
+  // 静态核对只在 **chip 那一块** 里查（面板其它地方本来就有 `bg-emerald-900/10` 的船坞卡片与
+  // `flex flex-wrap` 的标题行，全文查会误报）
+  const chipsSrc = panelSrc.slice(
+    panelSrc.indexOf('function ShipyardSeriesChips('),
+    panelSrc.indexOf('/** 队列一行的显示'),
+  );
+  check(chipsSrc.length > 0, '取到了 chip 组件的源码块（静态核对的前提）');
+  check(!/bg-(amber|rose|violet|emerald|sky|orange)-\d/.test(chipsSrc)
+    && !/border-(amber|rose|violet|emerald|sky|orange)-\d/.test(chipsSrc),
+    '★ chip 那一块里没有裸的系列色类名（颜色值全部走 SHIPYARD_SERIES_THEME 表）');
+  check(chipsSrc.indexOf('px-3 py-1') >= 0 && chipsSrc.indexOf('text-[12.5px]') >= 0,
+    '★ chip 已放大（px-3 py-1 + text-[12.5px]）');
+  check(chipsSrc.indexOf('flex items-center gap-2 overflow-x-auto') >= 0
+    && chipsSrc.indexOf('flex-wrap') < 0
+    && chipsSrc.indexOf('flex-none whitespace-nowrap') >= 0,
+    '★ 手机端横滑不换行（容器 overflow-x-auto 且无 flex-wrap；chip flex-none + whitespace-nowrap）');
+  check(panelSrc.indexOf('已解锁 {view.unlockedCards.length} 型') >= 0,
+    '顶部「已解锁 N 型」那行仍在（"全部多少张"由它承担，一个字没动）');
+  check(/未解锁/.test(panelSrc) && panelSrc.indexOf('lockedSummaryLine(view)') >= 0,
+    '未解锁汇总行仍在、且不受筛选影响（它读 view.locked，不读 visibleCards）');
+  check(panelSrc.indexOf('export default memo(') >= 0, '组件仍是 memo(...)');
 
   console.log('\n=== P8 船坞验收结果 ===');
   if (fails.length === 0) console.log('  全部通过 ✓');

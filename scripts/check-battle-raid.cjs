@@ -64,6 +64,13 @@ const J = (v) => JSON.stringify(v);
     walk(root);
     return out;
   };
+  /** 读一份源码（相对仓库根，如 'src/lib/battle/rewards.ts'）—— 源码级断言用 */
+  const readSrc = (rel) => fs.readFileSync(path.resolve(__dirname, '..', rel), 'utf8');
+  /** 去掉注释后的代码（只留代码与字符串）—— 判"组件有没有 import 奖励常量"这类断言必须去注释，
+   *  否则解释口径的注释（例如"唯一产出口 = rewards.rollRaidReward"）会命中。保留换行。 */
+  const codeOf = (rel) => readSrc(rel)
+    .replace(/\/\*[\s\S]*?\*\//g, (m) => m.replace(/[^\n]/g, ' '))
+    .replace(/\/\/[^\n]*/g, '');
   /** raid 状态构造器（**两段窗口**：warning 用 inTurns，arrived 用 arrivedTurns；键序与 idleRaidState 一致） */
   const raidState = (o) => {
     const x = o || {};
@@ -536,6 +543,352 @@ const J = (v) => JSON.stringify(v);
       'BossPanel：只渲染下发的名字，没有名字时才用数据里的静态 BOSS 名');
     const hits = scanLiteralInSrc('海盗残兵');
     check(hits.length === 1 && hits[0] === 'lib/battle/raid.ts', '「海盗残兵」这个字面量全库（去注释后）**只有一处** = lib/battle/raid.ts', J(hits));
+  }
+
+  // ---------- ⑪ 用户 2026-08 裁定：奖励显著显示（收尾快照）/ 原料 5→40 / 声望只给已探明势力 / **失败也要显显示丢了啥** ----------
+  //  用户原话：「把奖励显著地显示出来，原料改成随机 40 个原料。还有，声望只能给已探明的势力。」
+  //  追加原话：「失败也要显示丢了啥。」
+  //  ① 显著显示：存档字段 `lastRaidSettlement`（v7 引入、**v8 改成"赢/输同一形状"**）
+  //     · 打赢（END_BATTLE，最后一支）→ outcome 'win'，text = 奖励路径 rollRaidReward.text 原话；
+  //     · 打输（END_BATTLE 防守战打输）/ 被抢（APPLY_RAID_LOOT 阶段 B 超时未迎战）→ outcome 'lost'，
+  //       text = 由**实扣明细**（raidLootLoss 那一次计算）拼出的「殖民地被掠夺：金币 -… 、…」；
+  //     START_RAID（下一场掠夺开打）清空；战斗结算界面与战斗页签**读同一份**（UI 只渲染）。
+  //  ② 原料数量 = 40（用户裁定，覆盖原占位 5）。
+  //  ③ 声望**只**从 `getKnownFactionIds(ship)` 里挑（唯一真值，与黑市/势力列表同雾）；
+  //     **一个已探明势力都没有时不发声望，回退到金币**（绝不发空奖励）。
+  console.log('\n[11] 用户 2026-08 裁定（奖励显著显示 / 失败也显示丢了啥 / 原料 40 / 声望只给已探明势力）');
+  {
+    const { buildSaveData, stateFromSave, migrateSave, SAVE_VERSION } = await import('@/lib/save');
+    const RW = await import('@/lib/battle/rewards');
+    const { rollRaidReward, raidRewardView, canGrantReputationReward, RAID_REWARD_GOLD, RAID_REWARD_MATERIAL_AMOUNT, RAID_GOLD_TEXT } = RW;
+
+    // ---- ③ 声望只给已探明势力（复用既有唯一真值 getKnownFactionIds，不许自己写过滤） ----
+    const { getKnownFactionIds } = await import('@/lib/galaxy/knowledge');
+    const { FACTIONS } = await import('@/data/factions');
+    const { getMaterialName } = await import('@/data/materialNames');
+    const ALL_FACTION_IDS = FACTIONS.map((f) => f.id);
+    const knownIds = ALL_FACTION_IDS.slice(0, 3);
+    /** 把母舰的已探明势力设成指定集合（探明判据 = ship.galaxy.visitedNodes 里的势力节点） */
+    const withKnown = (st, ids) => ({
+      ...st,
+      ships: st.ships.map((s, i) => i === 0
+        ? { ...s, galaxy: { ...s.galaxy, visitedNodes: ids.slice() } }
+        : s),
+    });
+    const knownState = withKnown(setup({}), knownIds);
+    const knownShip = knownState.ships[0];
+    check(J([...getKnownFactionIds(knownShip)]) === J(knownIds), '已探明势力 = getKnownFactionIds（唯一真值）', J([...getKnownFactionIds(knownShip)]));
+
+    // 多次掷骰：声望档（kindRoll=0.8）**只出现已探明势力**
+    const seenFactions = new Set();
+    let notKnown = 0;
+    let notRep = 0;
+    for (let i = 0; i < 200; i++) {
+      const r = rollRaidReward(knownShip, 0.8, i / 200);
+      if (r.kind !== 'reputation') { notRep++; continue; }
+      seenFactions.add(r.factionId);
+      if (!knownIds.includes(r.factionId)) notKnown++;
+    }
+    check(notRep === 0, 'kindRoll=0.8 → 200 次全是声望类（四类边界未动）', String(notRep));
+    check(notKnown === 0, '**未探明势力绝不出现在声望奖励里**（200 次掷骰，0 次越界）', String(notKnown));
+    check(seenFactions.size === knownIds.length, '声望候选覆盖全部已探明势力（3 个都出现过）', J([...seenFactions]));
+    check([...seenFactions].every((f) => knownIds.includes(f)), '出现过的势力 id 全部 ∈ 已探明集合', J([...seenFactions]));
+    // 未探明势力在**没有任何一个**已探明势力时也不会漏出来
+    const unknownOnly = withKnown(setup({}), []);
+    check(canGrantReputationReward(unknownOnly.ships[0]) === false, '0 个已探明势力 → canGrantReputationReward = false');
+    check(canGrantReputationReward(knownShip) === true, '有已探明势力 → canGrantReputationReward = true');
+    // 声望文案里的势力名保持不变（「与「XX」的声望 +5」），且名字取自 FACTIONS 静态表
+    const rep = rollRaidReward(knownShip, 0.8, 0.5);
+    check(rep.kind === 'reputation' && rep.reputation === 5, '声望奖励数值仍是 +5（未改锚点）', J(rep));
+    check(
+      rep.text === `击退海盗：与「${FACTIONS.find((f) => f.id === rep.factionId).name}」的声望 +5`,
+      '**声望文案里的势力名保持不变**（「与「<势力名>」的声望 +5」，名字走 FACTIONS 表）',
+      rep.text
+    );
+
+    // **0 个已探明 → 不许发空奖励**：回退到金币（kind/gold/text 三处都是金币那条）
+    const fallback = rollRaidReward(unknownOnly.ships[0], 0.8, 0.5);
+    check(fallback.kind === 'gold', '**0 个已探明势力时不发声望**：kind 回退成 gold', fallback.kind);
+    check(fallback.gold === RAID_REWARD_GOLD && fallback.stardust === 0, '0 个已探明势力时回退到**金币**（有实体收益）', J({ gold: fallback.gold, stardust: fallback.stardust }));
+    check(fallback.factionId === null && fallback.reputation === 0, '0 个已探明势力时**不带任何势力 id / 声望**', J({ factionId: fallback.factionId, reputation: fallback.reputation }));
+    check(fallback.text === RAID_GOLD_TEXT && fallback.text.length > 0, '0 个已探明势力时文案 = 金币那条（**不是空串**）', J(fallback.text));
+    // 走完整发奖路径：真的把金币发出去，声望一点没动
+    const fallbackShip = unknownOnly.ships[0];
+    const goldBefore = fallbackShip.gold;
+    const granted = (await import('@/lib/battle/rewards')).grantRaidReward(fallbackShip, fallback, 1);
+    check(granted.gold === goldBefore + RAID_REWARD_GOLD, '0 已探明时的回退奖励**真的到账**（金币 +20000）', `${goldBefore} → ${granted.gold}`);
+    // 四类边界没动（等概率仍是 0.25 一档）
+    check(rollRaidReward(knownShip, 0.24, 0).kind === 'gold' && rollRaidReward(knownShip, 0.25, 0).kind === 'stardust'
+      && rollRaidReward(knownShip, 0.5, 0).kind === 'material' && rollRaidReward(knownShip, 0.75, 0).kind === 'reputation',
+      '四类等概率的边界不变（0.25 / 0.5 / 0.75）');
+
+    // ---- ② 原料 5 → 40（用户裁定） ----
+    check(RAID_REWARD_MATERIAL_AMOUNT === 40, '**掠夺胜利的原料奖励 = 40 个**（用户 2026-08 裁定，覆盖原占位 5）', String(RAID_REWARD_MATERIAL_AMOUNT));
+    const mat = rollRaidReward(knownShip, 0.6, 0.42);
+    check(mat.kind === 'material' && mat.materialAmount === 40, '原料类奖励数量 = 40', J({ kind: mat.kind, amount: mat.materialAmount }));
+    check(mat.text.indexOf('×40') >= 0 && mat.text.indexOf('×5') < 0, '**原料文案里的数量跟着变**（拼出来的「… ×40」，不再是 ×5）', mat.text);
+    check(/^击退海盗：缴获 .+ ×40$/.test(mat.text), '原料文案形状不变（击退海盗：缴获 <原料名> ×40）', mat.text);
+    const matSrc = fs.readFileSync(path.resolve(__dirname, '../src/lib/battle/rewards.ts'), 'utf8');
+    check(/RAID_REWARD_MATERIAL_AMOUNT\s*=\s*40/.test(matSrc), '源码级核对：RAID_REWARD_MATERIAL_AMOUNT = 40 写在 rewards.ts（唯一一处可改）');
+
+    // ---- ① 奖励显著显示：快照字段的写入 / 清空时机 ----
+    // 用真实 reducer 走到"掠夺战打赢收尾"这一帧：先把战斗打到 over（双方 AI 全自动，与 [10] 的 fightTo 同型），
+    // 再把 winner 改成 'player' —— 本用例只关心 END_BATTLE 的写回，胜负由战斗末态决定。
+    const FLEETS10 = fleetsMod.FLEET_STARTER.slice(0, 10);
+    const mkRaidAtOver = (o) => {
+      let s = setup({ fleets: [FLEETS10.slice()], defending: [0] });
+      s = D(s, { type: 'START_RAID', raiders: (o && o.raiders) || 1 });
+      for (let k = 0; k < R.RAID_WARNING_TURNS; k++) s = D(s, { type: 'TICK_BATTLE_STATE' });
+      s = D(s, { type: 'ARRIVE_RAID' });
+      s = D(s, { type: 'START_RAID_BATTLE' });
+      return fightTo(s);
+    };
+    const raidOver = mkRaidAtOver({});
+    check(!!raidOver.battle && raidOver.battle.over, '构造出掠夺战的终局帧（双方 AI 全自动打完）', J({ over: raidOver.battle && raidOver.battle.over, winner: raidOver.battle && raidOver.battle.winner }));
+    const winRaid = { ...raidOver, battle: { ...raidOver.battle, winner: 'player', over: true } };
+    check(winRaid.lastRaidSettlement === null, '开打前快照为空（新开局 = null）', J(winRaid.lastRaidSettlement));
+
+    // 打赢最后一支 → 写入；文案 = 事件日志那条奖励路径的原话
+    const rewardByKind = {
+      gold: rollRaidReward(winRaid.ships[0], 0.1, 0.5),
+      stardust: rollRaidReward(winRaid.ships[0], 0.3, 0.5),
+      material: rollRaidReward(winRaid.ships[0], 0.6, 0.5),
+      reputation: rollRaidReward(winRaid.ships[0], 0.8, 0.5),
+    };
+    const raised = (await import('@/lib/battle/rewards')).grantRaidReward(winRaid.ships[0], rewardByKind.material, 1);
+    const afterWin = D({ ...winRaid, ships: [raised, ...winRaid.ships.slice(1)] }, { type: 'END_BATTLE' });
+    check(afterWin.battle === null && afterWin.raid.immuneTurns === R.RAID_IMMUNE_TURNS, '打赢最后一支 → 战斗收起 + 进入免疫期', J(afterWin.raid));
+    check(afterWin.lastRaidSettlement !== null && afterWin.lastRaidSettlement.text.length > 0, '**打赢掠夺战后写入收尾快照（outcome win）**', J(afterWin.lastRaidSettlement));
+    check(afterWin.eventLog[0].detail === afterWin.lastRaidSettlement.text, '**快照文案 = 事件日志那条奖励路径的原话**（同一份，不是另拼的）', J([afterWin.lastRaidSettlement.text, afterWin.eventLog[0].detail]));
+    // ---- 事件日志的**去重前缀**（用户 2026-08：那行日志是玩家读到的奖励凭证，必须干净）----
+    //  渲染口径：EventPanel 是 `第N回合 <event> <detail>` 三个 span 并排 —— 早先 event='击退海盗'
+    //  而 detail（reward.text）自带「击退海盗：」→ 玩家读到「击退海盗：击退海盗：缴获 10 星尘」。
+    //  修法：**event 改中性词「掠夺战果」**、detail 保留 reward.text 原句。
+    const logEventText = (e) => (e.event || '') + '：' + (e.detail || '');
+    check(afterWin.eventLog[0].event === '掠夺战果', '**事件日志的 event 是中性词「掠夺战果」**（不再与 detail 重复前缀）', afterWin.eventLog[0].event);
+    check(afterWin.eventLog[0].detail === afterWin.lastRaidSettlement.text,
+      '**detail = reward.text 原句**（唯一产出口，一个字未改）', afterWin.eventLog[0].detail);
+    check(!afterWin.eventLog[0].detail.startsWith(afterWin.eventLog[0].event + '：'),
+      "**detail 不以 `event + '：'` 开头**（= 拼起来不含重复前缀）", J(logEventText(afterWin.eventLog[0])));
+    check(!logEventText(afterWin.eventLog[0]).includes('击退海盗：击退海盗'),
+      '**日志条目拼起来不含重复的「击退海盗：」**', logEventText(afterWin.eventLog[0]));
+    check((afterWin.eventLog[0].event.match(/击退海盗/g) || []).length === 0,
+      'event 里不再出现「击退海盗」（前缀只由 detail 带一次）', afterWin.eventLog[0].event);
+    // 四类奖励**逐字**钉死（这就是"改前一致"的基准：谁顺手动了唯一产出口，这里立刻红）
+    check(rewardByKind.gold.text === '击退海盗：缴获 20000 金币', '金币奖励文案逐字不变（击退海盗：缴获 20000 金币）', rewardByKind.gold.text);
+    check(rewardByKind.stardust.text === '击退海盗：缴获 10 星尘', '星尘奖励文案逐字不变（击退海盗：缴获 10 星尘）', rewardByKind.stardust.text);
+    check(rewardByKind.material.text === '击退海盗：缴获 ' + getMaterialName(rewardByKind.material.materialId) + ' ×40',
+      '原料奖励文案逐字不变（击退海盗：缴获 <原料名> ×40）', rewardByKind.material.text);
+    check(rewardByKind.reputation.text === '击退海盗：与「' + (FACTIONS.find((f) => f.id === rewardByKind.reputation.factionId) || {}).name + '」的声望 +5',
+      '声望奖励文案逐字不变（击退海盗：与「<势力名>」的声望 +5）', rewardByKind.reputation.text);
+    check(['gold', 'stardust', 'material', 'reputation'].every((k) => rewardByKind[k].text.startsWith('击退海盗：')),
+      '四类奖励文案都以「击退海盗：」开头（前缀来源唯一 = rewards.ts 的文案，不由日志补）');
+    check(scanLiteralInSrc("event: '击退海盗'").length === 0, '源码里不再有 event 写成「击退海盗」的旧写法（整条消失）', J(scanLiteralInSrc("event: '击退海盗'")));
+    check(!/event: *'掠夺战果'[\s\S]{0,40}detail: *'掠夺/.test(readSrc('src/hooks/gameReducer.ts')), '掠夺日志的 event 与 detail 不会同文（源码级）');
+    check(/event: '掠夺战果', detail: reward\.text/.test(readSrc('src/hooks/gameReducer.ts')), '日志写入点用的是中性 event + reward.text（源码级）');
+    // 战斗页签 / 结算徽章渲染的就是 reward.text **原句**（自己不许再加前缀）
+    const tabCode0 = codeOf('src/components/battle/BattleTab.tsx');
+    const screenCode0 = codeOf('src/components/battle/BattleScreen.tsx');
+    check(!/击退海盗/.test(tabCode0) && !/击退海盗/.test(screenCode0),
+      '两个 UI 出口都不自己写「击退海盗」前缀（只渲染 reward.text）', J({ tab: /击退海盗/.test(tabCode0), screen: /击退海盗/.test(screenCode0) }));
+    check(/上次掠夺战果[：:]/.test(tabCode0) && !/上次掠夺战果[：:]\s*\{?[^}]*击退海盗/.test(tabCode0), '页签的行是「上次掠夺战果：<rewardAwardText>」（前缀只有「上次掠夺战果：」这一层）');
+    // 打输那行**不许再套前缀**：文案自己就以「殖民地被掠夺：」起头（套上会读成"上次被掠夺：殖民地被掠夺：…"）
+    check(!/上次被掠夺/.test(tabCode0) && !/上次被掠夺/.test(screenCode0),
+      '打输那行不套第二层前缀（逐字渲染快照原文，与战斗结算画面完全一致）', J({ tab: /上次被掠夺/.test(tabCode0), screen: /上次被掠夺/.test(screenCode0) }));
+    check(raidRewardView({ ...rewardByKind.gold, text: '' }).text.length > 0, 'raidRewardView 对空文案有兜底（胜利必有可见的结算行）');
+    // 两个出口读同一份（大厅卡片模型 + 组件下发的 prop 源）
+    check(R.raidCardView(afterWin).rewardText === afterWin.lastRaidSettlement.text, '**战斗页签的卡片 rewardText = 快照原文**（UI 不自己算）', R.raidCardView(afterWin).rewardText);
+    check(afterWin.lastRaidSettlement.outcome === 'win' && afterWin.lastRaidSettlement.awardText === afterWin.lastRaidSettlement.text,
+      '打赢 → outcome = win、awardText = text（打赢那条路的形状与文案都不变）', J(afterWin.lastRaidSettlement));
+
+    // 2 支掠夺队：第 1 场赢下时**立刻接第 2 场**，中途不写快照
+    const twoStarted = D(mkRaidAtOver({ raiders: 2 }), { type: 'FUNCTIONAL_UPDATE', updater: (s) => s });
+    const firstWin = { ...twoStarted, battle: { ...twoStarted.battle, winner: 'player', over: true } };
+    const midState = D({ ...firstWin, raid: { ...firstWin.raid, raiders: 2 } }, { type: 'END_BATTLE' });
+    if (midState.battle) {
+      check(midState.lastRaidSettlement === null, '**2 支掠夺队：第 1 场打完不写快照**（奖励只在最后一支打完才发）', J(midState.lastRaidSettlement));
+      check(midState.raid.raiders === 1, '第 1 场打完 → 还剩 1 支（连打第二场）', String(midState.raid.raiders));
+      check(R.raidCardView(midState).squadsLeft === 1, '正在打的那一帧：raidCardView.squadsLeft = 1（含当前这场）', String(R.raidCardView(midState).squadsLeft));
+      check(R.raidCardView(firstWin).squadsLeft === 2, '第 1 场（掠夺队 2 支）→ squadsLeft = 2', String(R.raidCardView(firstWin).squadsLeft));
+    } else {
+      check(false, '第 1 场赢下后没有接上第二场（2 支掠夺队的连打逻辑异常）');
+    }
+    // 清空时机：下一场掠夺事件开打（START_RAID）
+    const seeded = { ...afterWin, lastRaidSettlement: { outcome: 'win', text: '上一波留下的旧战利品', awardText: '上一波留下的旧战利品', loot: { gold: 0, stardust: 0, materials: {} } } };
+    check(R.raidCardView(seeded).rewardText === '上一波留下的旧战利品', '快照非空时卡片就渲染它（同一个出口）');
+    const cleared = D(seeded, { type: 'START_RAID', raiders: 1 });
+    check(cleared.lastRaidSettlement === null, '**下一场掠夺开打（START_RAID）→ 清空快照**（用户裁定的清空时机）', J(cleared.lastRaidSettlement));
+    check(R.raidCardView(cleared).rewardText === '', '清空后卡片不再渲染那一行', J(R.raidCardView(cleared).rewardText));
+    // ==================== 用户 2026-08 追加裁定：**失败也要显示丢了啥** ====================
+    //  两条入口都要覆盖：① 防守战打输（END_BATTLE 的 isRaid 分支、winner !== 'player'）
+    //                    ② 阶段 B 超时未迎战（APPLY_RAID_LOOT，玩家什么都没做就被抢）
+    //  硬性口径：**显示的是实扣值**（同一份 raidLootLoss 既用来扣也用来显示），扣 0 的项不列。
+    const { raidLootView } = RW;
+    const { raidLootLoss } = R;
+    /** 摘要：只列实扣 > 0 的项（与 UI 的"扣 0 的项不列"同一口径；原料走译名，与文案同一个函数） */
+    const lootSummary = (loss) => {
+      const out = [];
+      if (loss.gold > 0) out.push('金币 -' + loss.gold);
+      if (loss.stardust > 0) out.push('星尘 -' + loss.stardust);
+      for (const [id, n] of Object.entries(loss.materials || {})) if (n > 0) out.push(getMaterialName(id) + ' -' + n);
+      return out;
+    };
+    /** raidLootLoss 的完整形状 = { gold, food, alloy, stardust, materials }，而**展示模型只收三类**
+     *  实扣项（金币 / 星尘 / 原料；food 与 alloy 恒 0）→ 比较时按同一个口径取。 */
+    const lootDetailOf = (loss) => ({ gold: loss.gold, stardust: loss.stardust, materials: loss.materials });
+    /** 造"资源被抢之前"的状态：给足资源，保证扣得到东西 */
+    const richRaid = (st) => ({
+      ...st,
+      ships: st.ships.map((s, i) => i === 0
+        ? { ...s, gold: 100000, stardust: 50, materials: { silicon: 300, quantum: 90, gold_ore: 120 } }
+        : s),
+    });
+
+    // ---- ① 防守战打输（END_BATTLE） ----
+    {
+      const lostBattle = richRaid(mkRaidAtOver({}));
+      const forced = { ...lostBattle, battle: { ...lostBattle.battle, winner: 'boss', over: true } };
+      const expectLoss = raidLootLoss(forced);                          // 扣减用的那一份（同源）
+      const before = forced.ships[0];
+      const after = D(forced, { type: 'END_BATTLE' });
+      const now = after.ships[0];
+      check(after.lastRaidSettlement !== null && after.lastRaidSettlement.outcome === 'lost',
+        '**防守战打输 → 写入收尾快照（outcome = lost）**', J(after.lastRaidSettlement));
+      check(now.gold === before.gold - expectLoss.gold, '实际扣的金币 = 快照算的那一份', `${before.gold} → ${now.gold}（应扣 ${expectLoss.gold}）`);
+      const matOk = Object.entries(expectLoss.materials).every(([id, n]) => (now.materials[id] || 0) === (before.materials[id] || 0) - n);
+      check(matOk, '实际扣的原料 = 快照算的那一份', J({ before: before.materials, after: now.materials, expect: expectLoss.materials }));
+      check(J(after.lastRaidSettlement.loot) === J(lootDetailOf(expectLoss)),
+        '**快照里的 loot = 实扣明细原件**（显示值 = 实扣值，不是重算的）', J(after.lastRaidSettlement.loot));
+      const shown = lootSummary(after.lastRaidSettlement.loot);
+      check(shown.length > 0, '打输后至少列出一样实际扣到的东西', J(shown));
+      check(shown.every((piece) => after.lastRaidSettlement.text.indexOf(piece) >= 0),
+        '**界面文案逐项含实扣值**（金币 -X / 硅片 -Y …）', J({ text: after.lastRaidSettlement.text, shown }));
+      check(after.lastRaidSettlement.text.indexOf('殖民地被掠夺：') === 0,
+        '打输文案以「殖民地被掠夺：」开头（用户逐字例）', after.lastRaidSettlement.text);
+      check(after.lastRaidSettlement.awardText === '', '打输时 awardText 为空（没有"战果"可言）', J(after.lastRaidSettlement.awardText));
+      check(after.eventLog[0].event === '殖民地被掠夺' && after.lastRaidSettlement.text.indexOf('殖民地被掠夺：') === 0,
+        '事件日志与快照说的是同一件事（都叫「殖民地被掠夺」）');
+      // 出口 1：战斗页签卡片；出口 2：战斗结算画面下发的 prop（同一份）
+      const cardLost = R.raidCardView(after);
+      check(cardLost.settlementOutcome === 'lost' && cardLost.rewardText === after.lastRaidSettlement.text,
+        '**战斗页签读同一份**（settlementOutcome = lost + rewardText = 快照原文）', J([cardLost.settlementOutcome, cardLost.rewardText]));
+      check(R.raidCardView(after).rewardAwardText === '', '打输时卡片不给「上次掠夺战果」用的话（awardText 空）');
+    }
+
+    // ---- ② 阶段 B 超时未迎战（APPLY_RAID_LOOT：玩家什么都没做就被抢） ----
+    {
+      const st = richRaid(setup({ fleets: [FLEETS10.slice()], defending: [0] }));
+      const arrived = D(D(D(st, { type: 'START_RAID', raiders: 1 }), { type: 'TICK_BATTLE_STATE' }), { type: 'ARRIVE_RAID' });
+      const expectLoss = raidLootLoss(arrived);
+      const before = arrived.ships[0];
+      const after = D(arrived, { type: 'APPLY_RAID_LOOT' });
+      const now = after.ships[0];
+      check(after.lastRaidSettlement !== null && after.lastRaidSettlement.outcome === 'lost',
+        '**阶段 B 超时未迎战 → 也写收尾快照（outcome = lost）**（这条尤其必须让他看见）', J(after.lastRaidSettlement));
+      check(now.gold === before.gold - expectLoss.gold, '超时被抢：实扣金币 = 快照那一份', `${before.gold} → ${now.gold}`);
+      check(J(after.lastRaidSettlement.loot) === J(lootDetailOf(expectLoss)),
+        '超时被抢：快照 loot = 实扣明细原件', J(after.lastRaidSettlement.loot));
+      check(after.lastRaidSettlement.text === '殖民地被掠夺：' + lootSummary(after.lastRaidSettlement.loot).join('、'),
+        '**超时被抢的文案逐字 = 「殖民地被掠夺：」+ 实扣项**', after.lastRaidSettlement.text);
+      check(R.raidCardView(after).rewardText === after.lastRaidSettlement.text, '超时被抢：战斗页签读同一份', R.raidCardView(after).rewardText);
+    }
+
+    // ---- 扣 0 的项不列 + 什么都没抢到时给一句完整的话 ----
+    {
+      const empty = raidLootView({ gold: 0, stardust: 0, materials: {} });
+      check(empty.text.indexOf('没抢走任何东西') >= 0 && empty.text.indexOf('：）') < 0,
+        '**什么都没扣到时给一句完整的话**（不是"殖民地被掠夺："这样的半句）', empty.text);
+      const onlyGold = raidLootView({ gold: 1234, stardust: 0, materials: { silicon: 0 } });
+      check(onlyGold.text === '殖民地被掠夺：金币 -1234' && onlyGold.text.indexOf('硅片') < 0,
+        '**扣 0 的项不列**（只有金币时文案里不出现硅片）', onlyGold.text);
+      check(onlyGold.outcome === 'lost' && onlyGold.awardText === '', '丢掉的那个形状也带 outcome/awardText（同一份模型）', J(onlyGold));
+      check(J(raidLootView({ gold: 100, stardust: 0, materials: { quantum: 30, silicon: 0, gold_ore: 0 } }).text)
+        === J('殖民地被掠夺：金币 -100、量子簇 -30'), '多项时按"金币 → 星尘 → 原料"列，且只列实扣 > 0 的', raidLootView({ gold: 100, stardust: 0, materials: { quantum: 30, silicon: 0, gold_ore: 0 } }).text);
+    }
+
+    // ---- 打老巢：快照字段与两个出口都不受影响（不在掠夺战里） ----
+    {
+      const lairOnly = setup({});
+      check(lairOnly.lastRaidSettlement === null, '打老巢：新开局快照为 null（结算画面不多渲染任何东西）');
+      check(R.raidCardView(lairOnly).settlementOutcome === null && R.raidCardView(lairOnly).rewardText === '',
+        '打老巢：卡片模型的结算三件套为空（outcome null / 文案空串）', J([R.raidCardView(lairOnly).settlementOutcome, R.raidCardView(lairOnly).rewardText]));
+    }
+
+    // 战果旁注（结算画面那行）：只在与掠夺队的战斗里非空
+    const inRaidCard = R.raidCardView({ ...firstWin, battle: { ...firstWin.battle, over: true, winner: 'player' } });
+    check(inRaidCard.outcomeText.indexOf('掠夺队') >= 0, '**中途那行"还有 N 支掠夺队"**（赢下第 1 场、还剩 1 支时给出）', J(inRaidCard.outcomeText));
+    const lostCard = R.raidCardView({ ...firstWin, battle: { ...firstWin.battle, over: true, winner: 'boss' } });
+    check(lostCard.outcomeText.indexOf('没顶住') >= 0, '打输那一帧给出"会被抢走一部分"的战果说明', J(lostCard.outcomeText));
+    const lairBattleSt = { ...setup({}), battle: E.createBattle({ seed: 5, bossId: 'b1' }) };
+    check(R.raidCardView(lairBattleSt).outcomeText === '' && R.raidCardView(lairBattleSt).squadsLeft === 0,
+      '**打老巢时战果旁注恒为空**（结算画面与从前逐字一样）', J([R.raidCardView(lairBattleSt).outcomeText, R.raidCardView(lairBattleSt).squadsLeft]));
+
+    const need2 = ['rollRaidReward', 'grantRaidReward', 'raidRewardView', 'canGrantReputationReward', 'RAID_REWARD_MATERIAL_AMOUNT', 'RAID_GOLD_TEXT'];
+    const missing2 = need2.filter((k) => RW[k] === undefined);
+    check(missing2.length === 0, 'rewards.ts 的掠夺半部分导出齐全（新增的也齐）', J({ missing: missing2 }));
+
+    // ---- 存档三处同步（v8） + v7/v6 旧档兜底 ----
+    check(SAVE_VERSION === 8, '存档版本抬到 8（掠夺收尾快照改成"赢/输同一形状"）', String(SAVE_VERSION));
+    const save = buildSaveData(afterWin);
+    check(save.saveVersion === 8 && save.lastRaidSettlement !== undefined, 'buildSaveData 写入 lastRaidSettlement', J(save.lastRaidSettlement));
+    const roundTrip = migrateSave(stateFromSave(JSON.parse(JSON.stringify(save))));
+    check(J(roundTrip.lastRaidSettlement) === J(afterWin.lastRaidSettlement), '存档往返后 lastRaidSettlement 一致', J(roundTrip.lastRaidSettlement));
+    // 打输那一份也要往返一致（含 loot 实扣明细）
+    const lostForSave = D({ ...richRaid(mkRaidAtOver({})), battle: { ...mkRaidAtOver({}).battle, winner: 'boss', over: true } }, { type: 'END_BATTLE' });
+    const lostRound = migrateSave(stateFromSave(JSON.parse(JSON.stringify(buildSaveData(lostForSave)))));
+    check(J(lostRound.lastRaidSettlement) === J(lostForSave.lastRaidSettlement),
+      '**打输那份（含 loot 实扣明细）往返一致**', J(lostRound.lastRaidSettlement));
+    const v6raw = buildSaveData(setup({}));
+    delete v6raw.lastRaidSettlement;
+    delete v6raw.lastRaidReward;
+    v6raw.saveVersion = 6;
+    const v6 = migrateSave(stateFromSave(JSON.parse(JSON.stringify(v6raw))));
+    check(v6.lastRaidSettlement === null, '**v6 旧档读入 → lastRaidSettlement = null**（不给旧档凭空补战利品或被抢记录）', J(v6.lastRaidSettlement));
+    check(R.raidCardView(v6).rewardText === '' && R.raidCardView(v6).settlementOutcome === null, 'v6 旧档 → 两个出口都不渲染结算行', J(R.raidCardView(v6).rewardText));
+    // v7 旧档（只有 lastRaidReward 的旧形状）→ 按赢收下（只搬运旧值，不造新值）
+    const v7raw = buildSaveData(setup({}));
+    delete v7raw.lastRaidSettlement;
+    v7raw.lastRaidReward = { text: '击退海盗：缴获 10 星尘', kind: 'stardust' };
+    v7raw.saveVersion = 7;
+    const v7 = migrateSave(stateFromSave(JSON.parse(JSON.stringify(v7raw))));
+    check(v7.lastRaidSettlement !== null && v7.lastRaidSettlement.outcome === 'win'
+      && v7.lastRaidSettlement.text === '击退海盗：缴获 10 星尘' && v7.lastRaidSettlement.awardText === '击退海盗：缴获 10 星尘',
+      '**v7 旧档的战利品 → 按 win 收进新形状**（text/awardText 同一句）', J(v7.lastRaidSettlement));
+    check(J(v7.lastRaidSettlement.loot) === J({ gold: 0, stardust: 0, materials: {} }),
+      'v7 旧档转换后 loot 补空明细（旧档没有损失数据，不许凭空造）', J(v7.lastRaidSettlement.loot));
+    const junk = buildSaveData({ ...setup({}), lastRaidSettlement: { outcome: 'lost' } });
+    const junkBack = stateFromSave(JSON.parse(JSON.stringify(junk)));
+    check(junkBack.lastRaidSettlement === null && R.raidCardView(junkBack).rewardText === '',
+      '改档：lastRaidSettlement 缺 text → 兜底成 null（不渲染空白行）', J(junkBack.lastRaidSettlement));
+
+    // ---- 源码级：旧口径必须**整条消失**，新口径不许出现第二份 ----
+    const oldFallbackHits = scanLiteralInSrc('某个势力的声望');
+    check(oldFallbackHits.length === 0, '**旧口径"某个势力的声望 +5"整条已删除**（0 已探明不再发声望）', J(oldFallbackHits));
+    const rewardSrc = readSrc('src/lib/battle/rewards.ts');
+    check(/getKnownFactionIds\(ship\)/.test(rewardSrc), '声望候选**复用唯一真值** getKnownFactionIds(ship)（源码级核对）', 'rewards.ts');
+    check(!/visitedNodes/.test(rewardSrc), 'rewards.ts 不自己写迷雾过滤（不许出现 visitedNodes）');
+    check(/lastRaidSettlement:\s*raidRewardView\(reward\)/.test(readSrc('src/hooks/gameReducer.ts')), 'gameReducer 的 END_BATTLE 用 raidRewardView 写快照（唯一形状）', 'gameReducer.ts');
+    check(/lastRaidSettlement:\s*settlement/.test(readSrc('src/hooks/gameReducer.ts')), 'gameReducer 的**两条失败路**都用 raidLootView 的结果写同一份快照（END_BATTLE 打输 / APPLY_RAID_LOOT）', 'gameReducer.ts');
+    check(/lastRaidSettlement:\s*null/.test(readSrc('src/hooks/gameReducer.ts')), 'gameReducer 里有清空/初值（lastRaidSettlement: null）', 'gameReducer.ts');
+    // 失败两条入口都接进快照（源码级：settleRaidLoot 的第三个返回值被两处消费）
+    const reducerCode = codeOf('src/hooks/gameReducer.ts');
+    check((reducerCode.match(/settleRaidLoot\(/g) || []).length === 3, 'settleRaidLoot 只被定义一次 + 两处失败路调用（定义 1 + 调用 2）', String((reducerCode.match(/settleRaidLoot\(/g) || []).length));
+    check(/const loss = raidLootLoss\(base\)/.test(reducerCode) && /const loss = raidLootLoss\(state\)/.test(reducerCode),
+      '两条失败路各自**只算一次** raidLootLoss（同一份交给扣减与显示）', 'gameReducer.ts');
+    check(/raidLootLoss\(/.test(reducerCode) && (reducerCode.match(/raidLootLoss\(/g) || []).length === 2,
+      'reducer 里 raidLootLoss 恰好 2 次（两条失败路各一次；没有第三处"重算一遍给显示用"）', String((reducerCode.match(/raidLootLoss\(/g) || []).length));
+    // 两个出口同源：结算界面 + 战斗页签都读 lib 给的字段，组件不掷奖励/不算损失（**去注释后**再判）
+    const screenCode = codeOf('src/components/battle/BattleScreen.tsx');
+    const tabCode = codeOf('src/components/battle/BattleTab.tsx');
+    check(/campaignText=\{raidCard\.rewardText\}/.test(tabCode), 'BattleTab 把 raidCard.rewardText 下发给结算界面（同源同一份）', 'BattleTab.tsx');
+    check(/campaignText/.test(screenCode) && !/rollRaidReward|RAID_REWARD_|grantRaidReward|raidLootLoss/.test(screenCode), '**BattleScreen 只渲染下发的文案**（不 import 奖励常量、不算奖励也不算损失）', 'BattleScreen.tsx');
+    check(!/rollRaidReward|RAID_REWARD_GOLD|RAID_REWARD_STARDUST|RAID_REWARD_MATERIAL_AMOUNT|raidLootLoss/.test(tabCode), '**BattleTab 不持有任何奖励/损失数值**（只读 raidCard.rewardText 渲染）', 'BattleTab.tsx');
+    check(/\{raidCard\.rewardText\}/.test(tabCode) && /\{raidCard\.rewardAwardText\}/.test(tabCode),
+      '大厅卡片：赢渲染 awardText、输渲染 rewardText（两处都是 lib 给的原文）', 'BattleTab.tsx');
+    check(/settlement\.outcome === 'lost'/.test(screenCode) && /settlement\.outcome === 'win'/.test(screenCode),
+      'BattleScreen 按 outcome 分流：`lost` 渲染红框那条、`win` 才算战利品（判定在 lib 给的值上）', 'BattleScreen.tsx');
+    check(/raidCard\.settlementOutcome === 'lost'/.test(tabCode) && /raidCard\.settlementOutcome === 'win'/.test(tabCode),
+      'BattleTab 按 outcome 分流：`lost` 逐字渲染原文、`win` 补「上次掠夺战果：」标签', 'BattleTab.tsx');
   }
 
   console.log('\n=== P7 验收结果 ===');

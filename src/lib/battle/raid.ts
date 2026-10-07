@@ -39,6 +39,8 @@ import { BATTLE_TUNING } from '@/data/battle/tuning';
 import { PIRATE_BOSSES } from '@/data/battle/pirates';
 import { GALAXY_NODES } from '@/data/galaxy/nodes';
 import { getMaterialName } from '@/data/materialNames';
+import { EMPTY_RAID_LOOT_DETAIL } from './rewards';
+import type { RaidLootDetail, RaidOutcomeKind } from './rewards';
 import { colonyNodeId } from './expedition';
 
 // ---------------- 数值锚点（V1.5 §10.2 + 用户 2026-08 裁定） ----------------
@@ -240,6 +242,27 @@ export interface RaidCardView {
   fightHint: string;
   /** 底部"海盗已退"那句（仅 idle + 免疫期） */
   idleText: string;
+  /** **最近一次掠夺收尾的原话**（用户 2026-08：「把奖励显著地显示出来」＋「失败也要显示丢了啥」）。
+   *  逐字取自 `state.lastRaidSettlement.text`（打赢 = `rollRaidReward` 的 text；打输 = 由**实扣明细**
+   *  拼出的「殖民地被掠夺：金币 -… 、…」）—— **UI 只渲染，不许自己算奖励、也不许自己算损失**。
+   *  空串 = 没有可显示的掠夺结算（不渲染这一行）。 */
+  rewardText: string;
+  /** 最近一次掠夺收尾**是赢还是输**（null = 没有可显示的结算）。
+   *  UI 只据此选配色/措辞，文案本身已在 `rewardText` 里（组件不许在这里拼字符串）。 */
+  settlementOutcome: RaidOutcomeKind | null;
+  /** 赢的那句原话（= `rollRaidReward().text`）；输 / 无结算时为空串。
+   *  ⚠ 战斗页签那行写「上次掠夺战果：<awardText>」时用它（**不许**拿 `rewardText` 顶替 ——
+   *    打输时 `rewardText` 是「殖民地被掠夺：…」，套上"战果"就不通了）。 */
+  rewardAwardText: string;
+  /** 打输时**实际扣掉**的明细（金币/星尘/原料；赢 / 无结算时为空明细）。
+   *  ⚠ 它是 `raidLootLoss` 那一次计算的原件（**显示值 = 实扣值**）—— 组件**不许**据此再算一遍，
+   *  只用来判断"这次到底抢走没抢走"（`raidLootDetailEmpty` 是唯一判据）。 */
+  settlementLoot: RaidLootDetail;
+  /** 战斗结算旁的一行战果说明（只在与掠夺队的战斗里非空）：输了就说会被掠夺，
+   *  赢了但**还有下一支**就说还剩几支 —— 用户原话"中途要能看出还有 1 支掠夺队"。 */
+  outcomeText: string;
+  /** 正在打（或刚打完）的这一波还剩几支掠夺队（= 含当前这场在内；不在掠夺战里为 0） */
+  squadsLeft: number;
   /** 原始视图（数字徽章 / 防守池条数等仍可读它，UI 不重算） */
   status: RaidStatusView;
 }
@@ -254,6 +277,23 @@ export function raidCardView(state: GameState): RaidCardView {
   // 掠夺队的名字走**唯一真值** raidEnemyName（老巢打光后是「海盗残兵」）；
   // 卡片、预告、战斗界面 BOSS 面板都从这里取，组件不许自己拼名字。
   const enemyName = raidEnemyName(state);
+  // **最近一次掠夺收尾**（用户 2026-08：奖励与损失都要显著显示）：逐字渲染
+  // `state.lastRaidSettlement.text`，这里一个数都不算（打赢的文案产出口 = lib/battle/rewards.rollRaidReward；
+  // 打输的文案产出口 = raidSettlementLostText，输入是**实扣明细原件**）。空串 = 不渲染这一行。
+  const settlement = state.lastRaidSettlement || null;
+  const rewardText = settlement?.text || '';
+  const settlementOutcome = settlement ? settlement.outcome : null;
+  const rewardAwardText = settlement?.awardText || '';
+  const settlementLoot = settlement?.loot || EMPTY_RAID_LOOT_DETAIL;
+  // 战果旁注（结算画面用）：**只在与掠夺队的战斗里**非空 —— 不在掠夺战里时字段恒为空串/0，
+  // 免得老巢战的结算画面莫名其妙多一行"还剩 N 支掠夺队"。
+  const inRaidBattle = !!state.battle && state.battle.bossId === 'raid';
+  const squadsLeft = inRaidBattle ? Math.max(1, state.raid.raiders) : 0;
+  const outcomeText = inRaidBattle
+    ? (state.battle && state.battle.winner === 'player'
+      ? (squadsLeft > 1 ? `这一波还剩 ${squadsLeft} 支掠夺队 —— 返回后马上要接着打下一场` : '')
+      : '这场没顶住：返回后殖民地的金币与原料会被抢走一部分')
+    : '';
 
   if (status.phase === 'warning') {
     return {
@@ -271,6 +311,12 @@ export function raidCardView(state: GameState): RaidCardView {
       canFight: false,
       fightHint: '',
       idleText: '',
+      rewardText,
+      settlementOutcome,
+      rewardAwardText,
+      settlementLoot,
+      outcomeText,
+      squadsLeft,
       status,
     };
   }
@@ -293,6 +339,12 @@ export function raidCardView(state: GameState): RaidCardView {
         ? `可以迎战：${status.defenseCount} 艘防守舰队合并接战`
         : '还没有挂防守标签的舰队',
       idleText: '',
+      rewardText,
+      settlementOutcome,
+      rewardAwardText,
+      settlementLoot,
+      outcomeText,
+      squadsLeft,
       status,
     };
   }
@@ -310,6 +362,12 @@ export function raidCardView(state: GameState): RaidCardView {
     canFight: false,
     fightHint: '',
     idleText: `${enemyName}已退（击退或已结算），${status.immuneTurns} 回合内不会再被掠夺。`,
+    rewardText,
+    settlementOutcome,
+    rewardAwardText,
+    settlementLoot,
+    outcomeText,
+    squadsLeft,
     status,
   };
 }

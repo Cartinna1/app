@@ -3,6 +3,8 @@
 // 旧存档兼容补丁集中在 migrateSave（由 gameReducer 的 LOAD_SAVE 统一调用）。
 
 import type { GameState, SaveData, Mothership } from '@/types/game';
+import type { RaidSettlement, RaidLootDetail } from '@/lib/battle/rewards';
+import { EMPTY_RAID_LOOT_DETAIL } from '@/lib/battle/rewards';
 import { FACTIONS, POLICY_EFFECTS, refreshFactionPrices } from '@/data/factions';
 import { createGalaxyState } from '@/data/galaxy/nodes';
 import { BLACK_MARKET_DEFAULT } from '@/data/exchangeRates';
@@ -29,8 +31,22 @@ export const BGM_MUTED_KEY = 'bgm_muted';
  *     「海盗残兵」；掠夺本身**永远存在**，不受该账本影响）。
  *     ⚠ 同样**只新增字段、不改既有字段的结构与语义** → **无需 v5→v6 结构迁移**：
  *       老档缺该字段由 stateFromSave 兜底成 `[]` = 一个老巢都没打败，
- *       于是掠夺队仍叫「海盗旗舰（掠夺队）」、掠夺照常可触发（与"旧档不该凭空少一场掠夺"一致）。 */
-export const SAVE_VERSION = 6;
+ *       于是掠夺队仍叫「海盗旗舰（掠夺队）」、掠夺照常可触发（与"旧档不该凭空少一场掠夺"一致）。
+ *  7：新增**掠夺战利品快照** `lastRaidReward`（用户 2026-08 裁定「把奖励显著地显示出来」）。
+ *     ⚠ 同样**只新增字段、不改既有字段的结构与语义** → **无需 v6→v7 结构迁移**：
+ *       老档缺该字段由 stateFromSave 兜底成 `null` = 没有可显示的掠夺战利品
+ *       （**不能凭空给旧档补一条"缴获 10 星尘"**）。
+ *  8：把 v7 的战利品快照**改名并扩形**成 **掠夺收尾快照** `lastRaidSettlement`
+ *     （用户 2026-08 追加裁定「**失败也要显示丢了啥**」）：打赢与打输**共用同一个形状**
+ *     （`lib/battle/rewards.ts` 的 `RaidSettlement`：`outcome: 'win' | 'lost'` + `text` +
+ *      `awardText` + **`loot`（实扣明细：金币/星尘/原料，显示值 = 实扣值）**）。
+ *     ⚠ 这是 v2 以来**第一个真正的字段级结构改写**（旧字段名 + 旧形状都要转），故 `stateFromSave`
+ *       里按"**旧字段存在 → 转成新形状**"处理（v7 的旧值一律按 `outcome: 'win'` 收下：
+ *       它只可能是打赢那一刻写的，`text` 同时当 `awardText`，`loot` 补空明细）；
+ *       两个键都没有（v6 及更早）→ `null` = 没有可显示的掠夺结算。
+ *     ⚠ 语义上"旧档不该凭空多一条被抢记录"与"不能凭空补一条战利品"两侧都满足：
+ *       转换只搬运旧值，不造新值。 */
+export const SAVE_VERSION = 8;
 
 /** 存档结构校验（防止损坏/恶意存档导致崩溃） */
 export function validateSaveData(data: unknown): data is Record<string, unknown> {
@@ -80,6 +96,9 @@ export function buildSaveData(prev: GameState): SaveData {
     raid: prev.raid,
     // 已打败的老巢账本（v6）：掠夺队的显示名（「海盗残兵」）读它，必须存档
     defeatedLairs: prev.defeatedLairs,
+    // 掠夺收尾快照（v7 引入、v8 扩形）：结算在 END_BATTLE / APPLY_RAID_LOOT 里做、而 battle 不进档
+    // —— 打赢的战利品与打输被抢的东西都靠它让玩家"回头也看得到"
+    lastRaidSettlement: prev.lastRaidSettlement,
     // 船坞与科技（v4）：造船队列
     buildQueue: prev.buildQueue,
   };
@@ -95,6 +114,34 @@ function reputationFromLegacyInvestments(ships: Mothership[] | undefined): Recor
     }
   }
   return rep;
+}
+
+/**
+ * 读档：掠夺收尾快照的**唯一兜底点**（v8）。
+ *   · 新档（v8）：形状 = RaidSettlement（lib/battle/rewards.ts 是唯一形状定义）。
+ *   · v7 旧档：只有 `lastRaidReward`（`{ text, kind }`，只可能是**打赢**那一刻写的）→ 按 `outcome: 'win'` 收下，
+ *     `text` 同时当 `awardText`，`loot` 补空明细（**只搬运旧值，不造新值**）。
+ *   · v6 及更早 / 改档坏数据（缺 text）：null = 没有可显示的掠夺结算（UI 一次都不渲染）。
+ */
+function readRaidSettlement(d: Record<string, any>): RaidSettlement | null {
+  const raw = d.lastRaidSettlement;
+  if (raw && typeof raw.text === 'string' && raw.text) {
+    const outcome = raw.outcome === 'lost' ? 'lost' as const : 'win' as const;
+    const awardText = typeof raw.awardText === 'string' ? raw.awardText : '';
+    const detail: RaidLootDetail = raw.loot && typeof raw.loot === 'object'
+      ? {
+          gold: raw.loot.gold || 0,
+          stardust: raw.loot.stardust || 0,
+          materials: raw.loot.materials && typeof raw.loot.materials === 'object' ? raw.loot.materials : {},
+        }
+      : EMPTY_RAID_LOOT_DETAIL;
+    return { outcome, text: raw.text, awardText: awardText || (outcome === 'win' ? raw.text : ''), loot: detail };
+  }
+  const legacy = d.lastRaidReward;
+  if (legacy && typeof legacy.text === 'string' && legacy.text) {
+    return { outcome: 'win', text: legacy.text, awardText: legacy.text, loot: EMPTY_RAID_LOOT_DETAIL };
+  }
+  return null;
 }
 
 /** 存档 JSON → GameState（缺失字段用默认值兜底） */
@@ -160,6 +207,13 @@ export function stateFromSave(d: Record<string, any>): GameState {
     // v6：已打败的老巢账本。v5 及更早的存档没有这个字段 → 兜底成 []（一个都没打败），
     //   于是掠夺队仍叫「海盗旗舰（掠夺队）」、掠夺**照常可触发**（用户 2026-08 裁定：永远存在）。
     defeatedLairs: d.defeatedLairs || [],
+    // v7→v8：**掠夺收尾快照**。三个来源按优先级读（唯一兜底点，别在 LOAD_SAVE 预填）：
+    //   ① 新档（v8）：`lastRaidSettlement`，形状 = lib/battle/rewards.ts 的 RaidSettlement
+    //      （outcome 'win' | 'lost' + text + awardText + loot 实扣明细）。`text` 缺失（改档）→ null。
+    //   ② v7 旧档：只有 `lastRaidReward`（`{ text, kind }`，且只可能是**打赢**那一刻写的）
+    //      → 转成 `{ outcome: 'win', text, awardText: text, loot: 空 }`（只搬运旧值，不造新值）。
+    //   ③ v6 及更早：两个键都没有 → null（没有可显示的掠夺结算，不凭空补一条战利品/被抢记录）。
+    lastRaidSettlement: readRaidSettlement(d),
     // 进行中的战斗**不进存档**：即使存档里混入了 battle 也一律丢弃（V1.5 §〇「战斗中不能保存」）
     battle: null,
     // ===== 船坞与科技（V1.5 §8，v4 新增）=====
@@ -184,7 +238,10 @@ export function stateFromSave(d: Record<string, any>): GameState {
  *    读出来即"没有掠夺在途"（idle），不会给旧档凭空补一场掠夺。
  *  v6：新增已打败的老巢账本 `defeatedLairs`（用户 2026-08 裁定：老巢打光后掠夺队改名「海盗残兵」）
  *  → **同样无需 v5→v6 结构迁移**：老档缺该字段由 stateFromSave 兜底成 `[]`，
- *    读出来即"一个老巢都没打败"（掠夺队仍叫「海盗旗舰（掠夺队）」、掠夺照常可触发）。 */
+ *    读出来即"一个老巢都没打败"（掠夺队仍叫「海盗旗舰（掠夺队）」、掠夺照常可触发）。
+ *  v7：新增掠夺战利品快照 `lastRaidReward`（用户 2026-08 裁定「把奖励显著地显示出来」）
+ *  → **同样无需 v6→v7 结构迁移**：老档缺该字段由 stateFromSave 兜底成 `null`（没有可显示的战利品），
+ *    不给旧档凭空补一条战利品文案。 */
 export function migrateSave(loaded: GameState): GameState {
   // 兼容旧存档：补充破产/饥荒/叛乱字段（这几个字段不在 stateFromSave 的清单里，故仍需在此兜底）
   if (loaded.ships) {

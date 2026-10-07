@@ -87,7 +87,17 @@
 ⚠ **每级船坞 `maxCount: 1` 也是文档没写的判断**（三级覆盖低级产出，重复建造无意义）；文档未给船坞的殖民地等级/科技前置 → 未加额外门槛。
 ⚠ **「船坞入驻才开工」也是"文档无值"的判断**（§8.2 只给了入驻人口列 = `BuildingDef.minPop`；§8.3 通篇没写"开工要不要入驻"）：照**既有模型**办——船坞与其它生产建筑**同口径、同字段**（`assignedPop ≥ minPop`，判据在 `economy.ts`）。唯一真值 = `lib/battle/shipyard.dockStaffGate` / `dockStaffed` / `dockStaffText`，**UI 只渲染 `canBuild` 给的 `reason`**。**口径：等级 ≥ 需要级的船坞里有一座入驻达标即可**。⚠ 入驻**不算** `lockGate.unlocked`；**没入驻 = 按钮禁用 + 一句话原因，不是卡片消失。**
 
-⚠ **掠夺胜利的随机奖励数值（`lib/battle/rewards.ts`：`RAID_REWARD_GOLD=20000` / `RAID_REWARD_STARDUST=10` / `RAID_REWARD_MATERIAL_AMOUNT=5` / `RAID_REWARD_REPUTATION=5`）同样是"文档无值"的占位**（§10.2 只写"随机获得星尘 / 原料 / 金币 / 某势力声望"），占位口径写得比老巢固定战利品（100000 金币 + 40 星尘）低一档。
+**掠夺奖励与掠夺损失（`lib/battle/rewards.ts` / `lib/battle/raid.ts`）——用户 2026-08 裁定（优先于原占位）**：
+① **原料 = 随机 40 个**（`RAID_REWARD_MATERIAL_AMOUNT = 40`，覆盖原占位 5；文案里的数量由该常量拼出，改它文案自动跟着变）；
+② **声望只给已探明的势力** —— 候选**只**来自既有唯一真值 `lib/galaxy/knowledge.getKnownFactionIds(ship)`（与黑市 / 势力列表同雾），**不许自己写过滤**；**一个已探明势力都没有时不发声望，回退到金币**（`kind: 'gold'` + `RAID_REWARD_GOLD`，绝不发一条空奖励；旧口径「某个势力的声望 +5」已整条删除）；
+③ **奖励与损失都要显著地显示出来** —— `lastRaidSettlement` 快照（`RaidSettlement`，**SAVE_VERSION 7 → 8**；旧档兜底 `null`，v7 旧形状按 `win` 搬迁）：**打赢与打输共用同一形状**，用 `outcome: 'win' | 'lost'` 区分：
+  · 打赢 = `{ text: <reward.text 原话>, awardText: <同一句>, loot: 空 }` —— **文案仍只由 `rollRaidReward` 产出，一个字未变**；
+  · 打输（`END_BATTLE` 防守战打输 / `APPLY_RAID_LOOT` 阶段 B 超时未迎战）= `{ text: '殖民地被掠夺：金币 -X、硅片 -Y…', awardText: '', loot: <实扣明细> }`（用户追加原话「**失败也要显示丢了啥**」；阶段 B 超时那条 = 玩家什么都没做就被抢，尤其必须看得见）；
+  · **`loot` 是 `raidLootLoss` 那一次计算的原件**（同一个 `loss` 既交给 `payCost`/`pushGoldLog` 去扣、也进快照当显示值）→ **显示值 = 实扣值**；显示层与 lib **都不许再算一遍损失**（重算时资源已扣完，必然对不上），**扣 0 的项不列**；
+  · **写入点唯一 = `hooks/gameReducer.ts`**（`END_BATTLE` 的 win / lost 两条 + `APPLY_RAID_LOOT`），**清空 = `START_RAID`**（下一场掠夺事件开打时）；战斗结算界面（`BattleScreen.campaignText`）与战斗页签（`raidCardView.rewardText` / `.settlementOutcome` / `.rewardAwardText` / `.loot`）**读同一份** —— **UI 只渲染，不许自己算奖励、也不算损失**（源码级断言：`raidLootLoss` 在 reducer 里恰好出现 2 次，就是两条失败路各一次）；
+  · 同一次还新增 `raidCardView` 的 `squadsLeft` / `outcomeText`（"这一波还剩 N 支掠夺队"那两行）；
+  · 顺带修掉一条显示缺陷：掠夺事件日志原先 `event='击退海盗'` + `detail`（自带「击退海盗：」）在 EventPanel 里并排渲染成**双前缀**「击退海盗：击退海盗：缴获 …」→ 现在 `event` 用中性词**「掠夺战果」**，`detail` 仍是 `reward.text` 原句。
+剩余占位：`RAID_REWARD_GOLD = 20000`（**0 已探明势力时的回退奖励也用它**）/ `RAID_REWARD_STARDUST = 10` / `RAID_REWARD_REPUTATION = 5`（四类仍等概率，§10.2 未给数值）。
 
 ### 10.4 已知未做项（有意留待）
 

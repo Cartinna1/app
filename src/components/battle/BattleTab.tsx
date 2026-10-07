@@ -14,8 +14,9 @@ import {
   travelTurnsText,
 } from '@/lib/battle/expedition';
 import { raidCardView } from '@/lib/battle/raid';
-import { LAIR_REWARD_GOLD, LAIR_REWARD_STARDUST } from '@/lib/battle/rewards';
+import { LAIR_REWARD_GOLD, LAIR_REWARD_STARDUST, raidLootDetailEmpty } from '@/lib/battle/rewards';
 import BattleScreen from './BattleScreen';
+import type { BattleScreenContext, BattleSettlementLine } from './BattleScreen';
 import { BossAvatar } from './parts';
 
 // ============================================================================
@@ -74,6 +75,9 @@ function summarize(shipIds: ShipCardId[]): { id: string; n: number }[] {
   return order.map((id) => ({ id, n: counts[id] }));
 }
 
+/** 战斗结算旁注的**空值**（模块级常量：props 里不许出现新造的空对象字面量，AGENTS 第五节） */
+const EMPTY_BATTLE_CONTEXT: BattleScreenContext = { squadsLeft: 0, squadsLeftText: '', outcomeText: '' };
+
 function BattleTabBase({
   fleets,
   cardLibrary,
@@ -114,6 +118,31 @@ function BattleTabBase({
    *  判定、文案与开战按钮的可用性**全部**来自 lib/battle/raid.raidCardView（唯一真值），
    *  本组件只渲染：不许自己判 inTurns / arrivedTurns，也不许自己拼文案。 */
   const raidCard = useMemo(() => raidCardView(state), [state]);
+  /** 战斗结算旁注（与掠夺队战斗时的"还剩 N 支掠夺队"）：**内容全来自 raidCardView**，
+   *  本组件只把它原样交给 BattleScreen —— 不在组件里判 `raid.raiders`、也不自己拼那句话。 */
+  const battleContext = useMemo<BattleScreenContext>(
+    () => {
+      // 不在掠夺战里（打老巢）→ 复用模块级空常量，避免每次渲染新造一个等价对象
+      if (raidCard.squadsLeft <= 0 && !raidCard.outcomeText) return EMPTY_BATTLE_CONTEXT;
+      return {
+        squadsLeft: raidCard.squadsLeft,
+        squadsLeftText: raidCard.squadsLeft > 1 ? `这一波还剩 ${raidCard.squadsLeft} 支掠夺队` : '',
+        outcomeText: raidCard.outcomeText,
+      };
+    },
+    [raidCard]
+  );
+  /** 战斗结算界面要显示的**最近一次掠夺收尾**（用户 2026-08：奖励与损失都要显著显示）。
+   *  ⚠ 逐字来自 raidCard（= `GameState.lastRaidSettlement`），组件**不掷奖励、不算损失、不拼文案**；
+   *    "有没有可显示的东西"也由 lib 判（`raidLootDetailEmpty`），这里只搬运。 */
+  const settlementLine = useMemo<BattleSettlementLine>(
+    () => ({
+      outcome: raidCard.settlementOutcome,
+      text: raidCard.rewardText,
+      hasLoot: !raidLootDetailEmpty(raidCard.settlementLoot),
+    }),
+    [raidCard]
+  );
   /** 出征卡片的整份渲染模型（唯一真值）：剩余回合的**显示下限 1**、「还有 N 回合抵达」文案、
    *  目标名与老巢名都从它取 —— 本组件不读 `expedition.turnsRemaining` 原值，也不自己拼文案
    *  （那正是"还有 0 回合抵达"死界面的来源，与 raidCardView 同一条纪律）。 */
@@ -179,6 +208,13 @@ function BattleTabBase({
         // = lib/battle/raid.raidEnemyName，老巢打光后是「海盗残兵」）；出征战给空串
         // → BossPanel 回落到数据里的静态老巢名（b1~b5）。UI 不自己拼名字。
         enemyName={board.bossId === 'raid' ? raidCard.enemyName : ''}
+        // **最近一次掠夺收尾那一句话**：逐字来自 raidCard.rewardText（= GameState.lastRaidSettlement.text）
+        // —— 打赢是奖励路径的原话（lib/battle/rewards.rollRaidReward），打输是实扣明细拼出的
+        // 「殖民地被掠夺：金币 -… 、…」。组件**不掷奖励、不算损失、也不拼文案**。
+        campaignText={raidCard.rewardText}
+        settlement={settlementLine}
+        // 战果旁注（"还有 1 支掠夺队" / "这场没顶住…"）：同样来自 raidCardView，只做渲染。
+        context={battleContext}
         onAction={onAction}
         onEnd={onEndBattle}
       />
@@ -342,6 +378,26 @@ function BattleTabBase({
           ) : (
             <p className="text-[12.5px] text-slate-300">{raidCard.idleText}</p>
           )}
+
+          {/* ==================== 最近一次掠夺收尾（用户 2026-08） ====================
+              「把奖励显著地显示出来」＋「失败也要显示丢了啥」。
+              ⚠ **逐字**渲染 raidCard.rewardText（打赢 = 奖励路径 `rollRaidReward` 的原话；
+                打输 = 由**实扣明细**拼出的「殖民地被掠夺：金币 -… 、…」）—— 这里
+                **不算奖励、不算损失、不拼数量、不选势力**（AGENTS 第九节：写明实际扣了什么）。
+              ⚠ 与战斗结算界面（BattleScreen）读的是**同一份**：两处同源。
+              清空时机：下一场掠夺事件开打时（reducer 的 START_RAID）。 */}
+          {raidCard.rewardText && raidCard.settlementOutcome === 'lost' ? (
+            <p className="mt-2 rounded-[7px] border border-red-700/70 bg-red-950/40 px-2 py-1.5 text-[13px] font-bold text-red-300">
+              {raidCard.rewardText}
+            </p>
+          ) : null}
+          {/* 打赢那行是奖励路径的**原话**（`击退海盗：缴获 …`），所以这里才补一个「上次掠夺战果：」标签；
+              打输那行自己就以「殖民地被掠夺：」起头，**不许再套一层前缀**（会读成"上次被掠夺：殖民地被掠夺：…"）。 */}
+          {raidCard.rewardText && raidCard.settlementOutcome === 'win' ? (
+            <p className="mt-2 rounded-[7px] border border-amber-500/70 bg-amber-900/25 px-2 py-1.5 text-[13px] font-bold text-amber-200">
+              上次掠夺战果：{raidCard.rewardAwardText}
+            </p>
+          ) : null}
         </div>
       )}
 
