@@ -266,7 +266,6 @@ function BattleScreenBase({ battle, seed, onAction, onEnd }: BattleScreenProps) 
       <div className="mb-2.5 rounded-[10px] border border-[#2b3550] bg-[#141b2e] px-2.5 py-2">
         <h2 className="mb-[7px] flex items-center gap-1.5 text-[13px] font-bold">
           玩家（你）
-          <span className="text-[11px] font-normal text-slate-500">本体 = 玩家本人，不会消失，每场战斗后回满</span>
         </h2>
         <div className="mb-[7px] flex items-center gap-2">
           <span className="text-[13px] font-bold">本体</span>

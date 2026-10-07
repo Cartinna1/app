@@ -5,6 +5,8 @@
    为什么测这一层：组件本身没法在 Node 里渲染（本机没装 React），
    但"显示什么"这件事是可判定的 —— DEMO 踩坑换来的三条行为都在这一层：
      ① 信息条是手机端看技能的唯一出口  ② 攻击状态三重区分  ③ 待选择时只有候选可点
+   外加一条 2026-08 补的防线（[3b]）：**手动操作链的第一跳**——己方战舰 / 已选卡牌的空格
+   必须 `clickable = true`，否则组件（`BoardSide`）在 onClick 第一行就 return，玩家点哪都没反应。
    ============================================================================ */
 const fails = [];
 const check = (ok, label, detail) => {
@@ -129,6 +131,53 @@ const check = (ok, label, detail) => {
     const bb2 = V.boardView(st, 'boss', null);
     const otherSlot = bb2[2];
     check(otherSlot.clickable === false, '不在候选里的敌方单位不可点');
+  }
+
+  // ---------- ③b 手动操作链的第一跳：clickable 必须是「点得动」而非「视觉分类」 ----------
+  // 2026-08 用户报「自动战斗能跑，手动点了没反应」：`BoardSide` 的 onClick 第一行是
+  // `if (!s.clickable) return;`（DEMO 是把事件委托挂在整块棋盘上的，没有这道闸门），
+  // 而 boardView 当时只把「待选择候选」与「BOSS 侧合法目标」标成 clickable
+  // → 点己方战舰、点自己场上空格**永远进不到处理器**，部署与攻击两条手动路径一起死。
+  console.log('\n[3b] 手动操作链：己方战舰 / 部署空格必须 clickable（点了没反应的根因防线）');
+  {
+    // 点卡（组件里的 setSelCard）→ 点自己场上空格 → 该格必须可点
+    const st = fresh(['h1', 'c5']);
+    const selCard = st.player.pool[0];
+    check(E.canDeploy(st, 'player', selCard) === true, '前置：选中的卡确实买得起/有空位（canDeploy）', selCard);
+    const slots = V.boardView(st, 'player', null, selCard);
+    const empties = slots.filter((s) => !s.unit);
+    check(empties.length === 6, '开始空场：6 个空格');
+    check(empties.every((s) => s.tone === 'can'), '已选卡牌 → 空格 tone = can（视觉）');
+    check(empties.every((s) => s.clickable), '已选卡牌 → 空格 clickable = true（否则点了没反应）',
+      JSON.stringify(empties.map((s) => s.clickable)));
+    // 没选卡时空格不可点（点了只能是那句提示）
+    check(V.boardView(st, 'player', null, null).every((s) => !s.clickable), '没选卡时空格不可点');
+
+    // 点己方场上战舰（能攻击的 / 不能攻击的都要能点：信息条要说明原因）
+    const mine = T.spawnUnit(st, 'player', 'c5'); T.placeUnit(st, 'player', mine, 0); mine.sick = false;
+    const idle = T.spawnUnit(st, 'player', 'c5'); T.placeUnit(st, 'player', idle, 1); idle.sick = true; // 召唤失调
+    const pv = V.boardView(st, 'player', null, null);
+    check(pv[0].tone === 'act' && pv[0].clickable === true, '可攻击的己方战舰 clickable = true（能选中）',
+      pv[0].tone + '/' + pv[0].clickable);
+    check(pv[1].clickable === true, '不能攻击的己方战舰也要 clickable = true（选了才能看到"召唤失调"的原因）',
+      String(pv[1].clickable));
+
+    // 选中己方战舰 → 敌方合法目标可点（点敌目标才派发 attack）
+    const foe = T.spawnUnit(st, 'boss', 'c5'); T.placeUnit(st, 'boss', foe, 0);
+    const bs = V.boardView(st, 'boss', mine.uid, null);
+    check(bs[0].clickable === true && bs[0].tone === 'tgt', '选中己方舰 → 敌方目标可点', bs[0].clickable + '/' + bs[0].tone);
+    check(V.boardView(st, 'boss', null, null)[0].clickable === false, '没选己方舰时敌方目标不可点（先选攻击者）');
+
+    // 不是玩家回合 / 战斗已结束：己方格子一律不可点（点了也不该有任何反应）
+    const stTurn = fresh(['h1']);
+    const u1 = T.spawnUnit(stTurn, 'player', 'c5'); T.placeUnit(stTurn, 'player', u1, 0); u1.sick = false;
+    stTurn.active = 'boss';
+    check(V.boardView(stTurn, 'player', null, stTurn.player.pool[0]).every((s) => !s.clickable),
+      '不是玩家回合 → 己方格子全部不可点（含空格）');
+    const stOver = fresh(['h1']);
+    const u2 = T.spawnUnit(stOver, 'player', 'c5'); T.placeUnit(stOver, 'player', u2, 0); u2.sick = false;
+    stOver.over = true;
+    check(V.boardView(stOver, 'player', null, null).every((s) => !s.clickable), '战斗已结束 → 己方格子全部不可点');
   }
 
   // ---------- ④ 舰队池 / BOSS / 墓地 / 结束回合 ----------

@@ -6,6 +6,8 @@
         ③ 图片都有 onError 回落占位      ④ 没有把空数组/空对象字面量当 props 默认值
         ⑤ 没有内联 style 传给 memo 子组件（粗略）  ⑥ 没有 enum/namespace（tsc 也查）
    ============================================================================ */
+// ⑦ 渲染字符串里不许出现「V1.5 §」（用户 2026-08 口径：界面只讲"现在什么情况、能做什么"，
+//    不许把文档出处写进玩家看见的文案；注释里的出处保留）—— 实现见文件末尾的 auditRenderStrings。
 const fs = require('fs');
 const path = require('path');
 
@@ -18,6 +20,70 @@ const VIEWS = [
   path.resolve(__dirname, '../src/lib/battle/hangar.ts'),
 ];
 const issues = [];
+
+// ---------------------------------------------------------------------------
+// ⑦ 渲染字符串里不许出现「V1.5 §」（用户 2026-08 口径）
+//    判据沿用本轮既定口径：**解释界面/机制怎么运作的旁白 → 删**；**告诉玩家现在什么情况 /
+//    能做什么 → 留**。文档出处（V1.5 §x.y）属于前者，只许留在代码注释里。
+//    范围：「组件」目录 + **这些组件直接渲染的 lib 文案源**（那条横幅就来自
+//    lib/battle/expedition.ts 的 endTurnView.reason，只查 components 会漏掉源头）。
+// ---------------------------------------------------------------------------
+const COMPONENT_DIRS = [
+  path.resolve(__dirname, '../src/components'),
+  path.resolve(__dirname, '../src/components/battle'),
+  path.resolve(__dirname, '../src/components/hangar'),
+  path.resolve(__dirname, '../src/components/colony'),
+];
+const TEXT_LIB_FILES = [
+  path.resolve(__dirname, '../src/lib/battle/expedition.ts'),
+  path.resolve(__dirname, '../src/lib/battle/raid.ts'),
+  path.resolve(__dirname, '../src/lib/battle/hangar.ts'),
+  path.resolve(__dirname, '../src/lib/battle/shipyard.ts'),
+  path.resolve(__dirname, '../src/lib/battle/rewards.ts'),
+  path.resolve(__dirname, '../src/lib/battle/view.ts'),
+];
+const V15 = /V1\.5\s*§/;
+/** 去掉注释（先块注释、再行注释；顺序不能反），剩下的就是代码与字符串字面量。
+ *  ⚠ 用**保留换行**的替换（块注释里的每个换行都留着），否则行号会漂、报错位置对不上。 */
+const stripComments = (src) => src
+  .replace(/\/\*[\s\S]*?\*\//g, (m) => m.replace(/[^\n]/g, ' '))
+  .replace(/\/\/[^\n]*/g, '');
+
+/** 扫一批文件，返回命中（line 是**原始文件**的行号） */
+function scanRenderStrings(files) {
+  const hits = [];
+  for (const file of files) {
+    const lines = stripComments(fs.readFileSync(file, 'utf8')).split('\n');
+    const rel = path.relative(path.resolve(__dirname, '..'), file).replace(/\\/g, '/');
+    for (let i = 0; i < lines.length; i++) {
+      if (!V15.test(lines[i])) continue;
+      if (lines[i].trim().indexOf('import ') === 0) continue;   // 模块路径不算文案
+      hits.push(`${rel}:${i + 1}: 渲染字符串里出现「V1.5 §」—— 界面文案不许写文档出处（注释里的出处保留）`);
+    }
+  }
+  return hits;
+}
+
+function auditRenderStrings() {
+  // ① 硬性：components/** —— 组件里的渲染串一处都不许有
+  const compFiles = [];
+  for (const d of COMPONENT_DIRS) {
+    if (!fs.existsSync(d)) continue;
+    for (const f of fs.readdirSync(d)) {
+      if (f.endsWith('.tsx') || f.endsWith('.ts')) compFiles.push(path.join(d, f));
+    }
+  }
+  const compHits = scanRenderStrings(compFiles);
+  // ② 追源头：这些 lib 文件的字符串**会被上面这些组件直接渲染**
+  //    （横幅那句就在 lib/battle/expedition.ts 的 endTurnView.reason 里，只查 components 会漏掉源头）
+  const libHits = scanRenderStrings(TEXT_LIB_FILES.filter((f) => fs.existsSync(f)));
+  console.log('\n=== 渲染字符串里的「V1.5 §」 ===');
+  console.log('  ① components/**：' + compFiles.length + ' 个文件 → ' + (compHits.length ? compHits.length + ' 处 ✗' : '未发现 ✓'));
+  console.log('  ② 组件直接渲染的 lib 文案源：' + libHits.length + ' 处'
+    + (libHits.length ? '（见下；用户 2026-08 只点名了两处，这里列出其余同类）' : ' ✓'));
+  for (const h of compHits) issues.push(h);
+  for (const h of libHits) console.log('     · ' + h);
+}
 
 const files = [];
 for (const d of DIRS) {
@@ -79,6 +145,8 @@ for (const VIEW of VIEWS) {
   }
 }
 
+auditRenderStrings();
+
 console.log('\n=== 静态 UI 审计结果 ===');
-if (issues.length === 0) console.log('  未发现问题 ✓（组件 memo / 缩略图 / onError / 纯函数分层）');
+if (issues.length === 0) console.log('  未发现问题 ✓（组件 memo / 缩略图 / onError / 纯函数分层 / 渲染串无 V1.5 §）');
 else { issues.forEach((i) => console.log('  ⚠ ' + i)); process.exitCode = 1; }

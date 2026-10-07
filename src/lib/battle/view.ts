@@ -63,6 +63,12 @@ export interface UnitView {
 export interface SlotView {
   i: number;
   unit: UnitView | null;
+  /**
+   * 这一格**点得动**（点了会有事发生）。
+   * ⚠ 它是组件唯一的点击闸门（`BoardSide` 的 onClick 第一行就是 `if (!s.clickable) return;`），
+   *   所以「玩家此刻能做的每一种点击」都必须在这里为 true —— 少一种就是「点了没反应」。
+   *   与 `tone` 无关：tone 只是视觉（DEMO 的 .slot.act / .can / .tgt）。
+   */
   clickable: boolean;
   /** tgt 待选择候选/合法攻击目标 · act 己方可攻击 · can 已选卡牌的空位 · none 无 */
   tone: 'tgt' | 'act' | 'can' | 'none';
@@ -230,9 +236,19 @@ export function unitView(st: BattleState, u: BattleUnit, side: BattleSide, _sele
 
 /**
  * 一侧的 6 个槽位。
- * 判定顺序逐字照抄 DEMO 的 boardHtml：
+ * 视觉分类（tone）判定顺序逐字照抄 DEMO 的 boardHtml：
  *   待选择候选（tgt）→ BOSS 侧且已选己方攻击者时合法目标（tgt）→ 己方且可攻击（act）→ 己方空位且有选牌（can）
- * ⚠ 关键：`st.pending` 存在时**只有 `pending.cands` 里的格子 clickable**（点本体无效）。
+ * ⚠ 关键：`st.pending` 存在时**只有 `pending.cands` 里的格子可点**（点本体无效）。
+ *
+ * ⚠ `clickable` 是**组件的点击闸门**，不是 DEMO 的视觉分类 —— DEMO 的事件绑定挂在整块棋盘上
+ *   （`boardPlayer` 的委托对每一格都调 `onPlayerSlot`），移植时 `BoardSide` 改成了
+ *   `if (!s.clickable) return;`，于是这里少标一种就整条手动路径失效：
+ *     · 点己方战舰（能攻击的 / 不能攻击的都要能点，不能攻击时信息条要写明原因）→ 必须 true
+ *     · 点自己场上的空格部署（已选卡牌时）→ 必须 true
+ *   2026-08 用户报「自动战斗能跑、手动啥也操作不了」的根因就是这里只标了
+ *   「待选择候选」与「BOSS 侧合法目标」两种（= 手动链路的第一跳永远被拦在组件里，
+ *   reducer / 引擎 / action 派发全是好的）。
+ *   注意 pending 下的**己方格子恒不可点**（铁律③：待选择时只有候选可点），别为了"能选船"把这条破坏掉。
  *
  * `selCard` 与规格里的参数表相比是**可选的第 4 个参数**（默认 null）：它只决定"选中卡牌时空位高亮"这一处
  * 视觉（DEMO 的 `slot.can`）。按规格的两个参数调用即可，行为与 DEMO 一致。
@@ -245,6 +261,12 @@ export function boardView(
 ): SlotView[] {
   const board = st[side].board;
   const pending: PendingChoice | null = st.pending;
+  // 玩家能操作的时机：轮到玩家且战斗没结束。**pending 不算**（待选择时只有候选可点）。
+  const myTurn = !st.over && st.active === 'player';
+  /** 己方战舰可点选：轮到自己、没有待选择（点了会切"已选战舰"，信息条给技能与能否攻击） */
+  const canPickMyUnit = side === 'player' && myTurn && !pending;
+  /** 点自己场上的空格部署：已选卡牌且没有待选择（引擎与组件都会再校验一次，这里只保证点得动） */
+  const canDeployHere = side === 'player' && myTurn && !!selCard && !pending;
   const legalUids: string[] =
     side === 'boss' && selUnit ? legalTargets(st, 'player').map((x) => x.uid) : [];
   const out: SlotView[] = [];
@@ -258,11 +280,15 @@ export function boardView(
       } else if (side === 'boss' && legalUids.indexOf(u.uid) >= 0) {
         clickable = true; tone = 'tgt';
       } else if (side === 'player' && canAttack(st, 'player', u)) {
+        if (canPickMyUnit) clickable = true;
         tone = 'act';
+      } else if (canPickMyUnit) {
+        // 己方战舰一律可点选（哪怕本回合不能攻击）—— 信息条要能说明"为什么不能攻击"（铁律②）
+        clickable = true;
       }
-    } else if (side === 'player' && selCard && !pending) {
+    } else if (canDeployHere) {
       // DEMO 这里看的是 selCard（已选待部署的卡）—— 选中卡牌时空位亮成"可部署"
-      tone = 'can';
+      clickable = true; tone = 'can';
     }
     out.push({
       i,

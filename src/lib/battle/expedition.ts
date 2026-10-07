@@ -148,14 +148,14 @@ export function canStartExpedition(
 ): { ok: boolean; reason?: string } {
   const nodeId = lairNodeId(bossId);
   if (!nodeId) return { ok: false, reason: '目标不是海盗老巢' };
-  if (!colonyNodeId(state)) return { ok: false, reason: '还没有殖民地 —— 先建立殖民地才能出征（V1.5 §10.2）' };
+  if (!colonyNodeId(state)) return { ok: false, reason: '还没有殖民地 —— 先建立殖民地才能出征' };
   if (!isLairDiscovered(state, bossId)) return { ok: false, reason: '这个老巢还没探明 —— 先去星图探索' };
-  if (state.expedition) return { ok: false, reason: '已有出征在途，同时只能出征 1 个老巢（V1.5 §10.1）' };
+  if (state.expedition) return { ok: false, reason: '已有出征在途，同时只能出征 1 个老巢' };
   if (state.battle) return { ok: false, reason: '战斗进行中，无法发起新的出征' };
   const fleet = state.fleets.find((f) => f.id === fleetId);
   if (!fleet) return { ok: false, reason: '请先选择出征舰队' };
   if (fleet.defending) return { ok: false, reason: '带「防守」标签的舰队留守，不能出征' };
-  if (fleet.shipIds.length === 0) return { ok: false, reason: '这支舰队没有战舰，出征不能空手（V1.5 §10.1）' };
+  if (fleet.shipIds.length === 0) return { ok: false, reason: '这支舰队没有战舰，出征不能空手' };
   if (expeditionTurns(state, bossId) === null) return { ok: false, reason: '通往该老巢的航线被封锁，无法出征' };
   return { ok: true };
 }
@@ -188,7 +188,7 @@ export function endTurnView(state: GameState): EndTurnView {
   if (canEndGameTurn(state)) return { ok: true, reason: '' };
   return {
     ok: false,
-    reason: '战斗进行中 —— 去「战斗」页签打完这一场（战斗中不能结束回合，V1.5 §〇）',
+    reason: '战斗进行中 —— 去「战斗」页签打完这一场（战斗中不能结束回合）',
   };
 }
 
