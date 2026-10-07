@@ -348,7 +348,7 @@ function BattleScreenBase({ battle, seed, enemyName, context, onAction, onEnd }:
         />
       </div>
 
-      {/* ==================== 舰队池 ==================== */}
+      {/* ==================== 舰队池（标题 → 信息条 → 卡片列表） ==================== */}
       <div className="mb-2.5 rounded-[10px] border border-[#2b3550] bg-[#141b2e] px-2.5 py-2">
         <h2 className="mb-[7px] flex items-center gap-1.5 text-[13px] font-bold">
           你的舰队
@@ -356,11 +356,14 @@ function BattleScreenBase({ battle, seed, enemyName, context, onAction, onEnd }:
             部署池 —— 不抽牌，有指挥度就能上；被击毁即永久消失；<b className="text-slate-400">点卡看技能</b>
           </span>
         </h2>
+        {/* ⚠ **信息条 = 提示条 + 技能详情/待选择/最近战况，整块放在卡片列表之前**（用户 2026-08 口径：
+            「不然 30 个满编的，还得拉到最下面看技能」）。它在部署池**滚动窗的上方**常驻 ——
+            池子再长也不用滚（FleetPool 自己的 `max-h-[400px] overflow-auto` 只管卡片）。
+            这里是**手机端看技能的唯一出口**（铁律①）：四态（点卡 / 点己方战舰 / 待选择 / 最近战况）
+            都由 `BattleInfoBar` 内部按 `info.kind` 渲染，**全屏只此一份**（上移是移动，不是再渲染一份）。 */}
+        <BattleInfoBar info={info} flash={flash} defaultHint={defaultHint} />
         <FleetPool cards={cards} selCard={selCard} onPoolClick={onPoolClick} />
       </div>
-
-      {/* ==================== 提示条 + 信息条 ==================== */}
-      <BattleInfoBar info={info} flash={flash} defaultHint={defaultHint} />
 
       {/* ==================== 结算 ==================== */}
       {battle.over && (

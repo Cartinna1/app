@@ -9,6 +9,8 @@
         ⑧ **AGENTS.md ≤ 60000 字节**（防 workspace 指令预算 65536 从尾部静默截断，超限即红）
         ⑨ **战斗「谁在操作」只许有一份判定**（manualActionView）：组件不许再用组件态闸门，
            也不许在代码里写死「（自动战斗）正在替你行动…」——否则就是"按钮说手动、底部说自动"的分叉
+        ⑩ **信息条（点卡看技能）位置**：必须在「你的舰队」标题之后、`<FleetPool>` 卡片列表之前，
+           且**只渲染一份**（用户 2026-08：满编 30 张时不该拉到最底下才看得到技能）
    ============================================================================ */
 // ⑦ 口径（用户 2026-08）：界面只讲"现在什么情况、能做什么"，不许把文档出处（V1.5 §x.y）
 //    写进玩家看见的文案；注释里的出处保留。实现见下面的 auditRenderStrings。
@@ -232,6 +234,37 @@ function auditManualGate() {
 }
 auditManualGate();
 
+// ---------------------------------------------------------------------------
+// ⑩ 信息条位置（用户 2026-08 口径：「这个点卡看技能的信息条应该放到『你的舰队 …点卡看技能』
+//    这段话的下面，战舰卡的上面，不然 30 个满编的，还得拉到最下面看技能」）
+//    判据（两条都硬失败）：
+//      ① **只有一份**：`<BattleInfoBar>` 在 BattleScreen 里只许出现 1 次（上移是移动，不是复制）；
+//      ② **位置**：在「你的舰队」标题之后、`<FleetPool>`（卡片列表）之前 —— 部署池的
+//         `max-h-[400px] overflow-auto` 只包住卡片，信息条在滚动窗上方常驻，满编也不用滚。
+//    待选择态（`battle.pending`）不需要额外守卫：舰队池那一整块**没有条件包裹**，
+//    信息条跟它一起永远在渲染路径上（`info.kind === 'pending'` 由组件内部渲染）。
+// ---------------------------------------------------------------------------
+function auditInfoBarPlacement() {
+  const screen = path.resolve(__dirname, '../src/components/battle/BattleScreen.tsx');
+  console.log('\n=== 信息条位置（点卡看技能：在卡片列表之前，且只有一份） ===');
+  if (!fs.existsSync(screen)) { issues.push('BattleScreen.tsx 不存在（战斗主板没了？）'); return; }
+  const src = stripComments(fs.readFileSync(screen, 'utf8'));
+  const hits = src.split('<BattleInfoBar').length - 1;
+  const at = src.indexOf('<BattleInfoBar');
+  const title = src.indexOf('你的舰队');
+  const pool = src.indexOf('<FleetPool');
+  const ordered = title >= 0 && at > title && pool > at;
+  console.log('  ① <BattleInfoBar> 出现次数：' + hits + (hits === 1 ? ' ✓' : ' ✗'));
+  console.log('  ② 标题(' + title + ') → 信息条(' + at + ') → 卡片列表(' + pool + ')：' + (ordered ? '顺序正确 ✓' : '✗'));
+  if (hits !== 1) {
+    issues.push('BattleScreen.tsx 里 <BattleInfoBar> 出现 ' + hits + ' 次 —— 信息条只许渲染一份（上移是移动，不是复制）');
+  }
+  if (!ordered) {
+    issues.push('信息条不在「你的舰队」标题之后、<FleetPool> 卡片列表之前 —— 满编 30 张时用户又得拉到底才能看技能');
+  }
+}
+auditInfoBarPlacement();
+
 console.log('\n=== 静态 UI 审计结果 ===');
-if (issues.length === 0) console.log('  未发现问题 ✓（组件 memo / 缩略图 / onError / 纯函数分层 / 渲染串无 V1.5 § / 手动闸门唯一真值 / AGENTS.md 体积）');
+if (issues.length === 0) console.log('  未发现问题 ✓（组件 memo / 缩略图 / onError / 纯函数分层 / 渲染串无 V1.5 § / 手动闸门唯一真值 / 信息条位置唯一 / AGENTS.md 体积）');
 else { issues.forEach((i) => console.log('  ⚠ ' + i)); process.exitCode = 1; }
