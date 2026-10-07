@@ -4,7 +4,6 @@ import type { BattleAction, BattleFleet, BattleState, PirateBossId, ShipCardId }
 import { BATTLE_TUNING } from '@/data/battle/tuning';
 import { BATTLE_CARDS } from '@/data/battle/cards';
 import { PIRATE_BOSSES } from '@/data/battle/pirates';
-import { getThumbPath } from '@/lib/assetThumb';
 import { bossArtSrc } from '@/lib/battle/view';
 import {
   battleBoard,
@@ -289,7 +288,10 @@ function BattleTabBase({
                       on ? 'border-cyan-500 bg-cyan-900/20' : 'border-[#2b3550] bg-[#1b2438] hover:border-[#3a4767]'
                     }`}
                   >
-                    <BossAvatar src={getThumbPath(bossArtSrc(l.bossId))} />
+                    {/* BOSS 头像最大出口就是 112px（BossAvatar 渲染 56×56）→ 直接用原图，
+                        不再套 getThumbPath（AGENTS 第五节：只有详情/全宽/大图鉴卡位才用原图，
+                        而"只有 64px 出口的图直接把源文件改小即可"）。 */}
+                    <BossAvatar src={bossArtSrc(l.bossId)} />
                     <span className="min-w-0 flex-1">
                       <span className="block text-[12.5px] font-bold text-slate-100">
                         {PIRATE_BOSSES[l.bossId]?.name || '未知老巢'}

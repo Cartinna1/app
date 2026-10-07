@@ -99,7 +99,7 @@ src/
 | 机库（卡库聚合 / 舰队视图 / 编成守卫「能不能做 + 中文原因」） | `lib/battle/hangar.ts`（`libraryRows` / `fleetRows` / `canAddShip` / `canRemoveShip` / `canDeleteFleet` / `canToggleDefending` / `canRenameFleet` / `hangarSummary` / **`hangarOverview`（总览标签的数字 + 船坞概况）/ `hangarGuide`（「下一步该去哪」的引导）/ `HANGAR_TAB_LABEL`（四个标签 id→中文名的唯一真值）**，纯函数、不依赖 React/DOM）。**编成份数、每队 `fleetSize` 上限、出征中的舰队不许动、`onExpedition`/`canEdit`/`canRename` 判定都只在这一份**：reducer 守卫与 `components/hangar/*` 都调它，**不许再写第二份**。互斥两个方向都要挡：出征中打不了防守标签（`canToggleDefending`）、带防守标签的出征不了（`expedition.canStartExpedition`）。⚠ **改名入口的可用性随渲染模型下发**：`FleetRow.canRename` / `.renameReason` = `canRenameFleet` 的结果，`FleetList` 的「改名」按钮只读它（**不是 `canEdit`**），`HangarTab.commitRename` 与 reducer 的 `RENAME_BATTLE_FLEET` 守卫也走同一个 `canRenameFleet` —— 早先按钮读 `canEdit`、提交路径各自再判一次 `isFleetOnExpedition`，同一判定两处派生，一旦分叉就是用户 2026-08 报的「改名怎么点都没反应」 |
 | 机库页签的**四个内部标签**（总览 / 卡库 / 船坞 / 编队） | `components/hangar/HangarTab.tsx` —— 标签栏照 `colony/ColonyPanel`（可点 / 当前项高亮 / 手机端横向滚动不换行，标签项固定 4 个），默认落在「总览」。`selectedCardId` 与 `selectedFleetId` 是**页签级 state**（切标签不重置）；**技能详情固定区（铁律①）与「编入当前舰队」操作条抽成 HangarTab 内的同一份**、在能点卡的三个标签（卡库 / 船坞 / 编队）里都渲染 —— 这样"在卡库选卡、切到编队再编入"这条路径不会断（**别再各标签各写一份入口**）。总览标签只读 `hangarOverview`，不点卡 |
 | 战斗规则一键复验 | `scripts/check-battle.cjs`（14 步：数据校验 / 类型风险 / 未使用参数 / 静态审计 / DEMO 96 条定点断言 / 同 seed 行为对拍含完整日志 / 状态与存档 / 展示逻辑 / **手动操作闸门** / **出征闭环** / **机库** / 掠夺 / 船坞 / 星图老巢）—— **改战斗任何东西都要跑它** |
-| 列表/网格缩略图路径 | `lib/assetThumb.ts` → `getThumbPath`（`/<dir>/<rest>/<name>.<ext>` → `/<dir>/thumbs/<rest>/<name>.webp`）——缩略图由脚本生成到 `public/<dir>/thumbs/`，**别在别处手写第二套命名** |
+| 列表/网格缩略图路径 | `lib/assetThumb.ts` → `getThumbPath`（`/<dir>/<rest>/<name>.<ext>` → `/<dir>/thumbs/<rest>/<name>.webp`）——缩略图由 **`scripts/gen-thumbs.py`** 生成到 `public/<dir>/thumbs/`（`python scripts/gen-thumbs.py` 补缺、`--force` 覆盖、`--dir`/`--width`/`--exclude` 可指定；默认目录 = archaeology / expeditions / wonders / buildings / battle/units），**别在别处手写第二套命名** |
 
 ## 四、改 GameState 字段：存档三处同步
 
@@ -117,7 +117,7 @@ src/
 - 新增/修改 action：统一进 `hooks/useGameState.ts` 的 `useStableActions` 包装，再把稳定引用传给面板。**禁止**在 App/GameScreen 里写 inline 箭头函数传给已 memo 的面板——会让 memo 失效。
 - 新面板组件默认 `export default memo(...)`；props 里的空数组/空对象用模块级常量（参照 `EMPTY_REPUTATION` / `EMPTY_CONTRACTS`）。
 - `shipIndex` 恒为 0（单舰队），接口已收敛，组件层不感知该参数。
-- **列表/网格里的图一律走缩略图**（`lib/assetThumb.ts` → `getThumbPath`）：解码开销 = 宽×高×4 字节、**与文件大小无关**（1200×675 填 96px 格子每张白解 3 MB）。**只有「详情 / 全宽 / 大图鉴卡」位才用原图**。⚠ 缺缩略图时各面板的 `onError` 会把整块**静默隐藏**，所以**新增一类图片时先出缩略图，再改代码**（archaeology / expeditions / wonders / buildings 四类已建好 thumbs）。判断标准是「**这张图在游戏里最大的那个出口是多大**」：只有 64px 出口的图（母舰、原料图标）直接把源文件改小即可。
+- **列表/网格里的图一律走缩略图**（`lib/assetThumb.ts` → `getThumbPath`）：解码开销 = 宽×高×4 字节、**与文件大小无关**（1200×675 填 96px 格子每张白解 3 MB）。**只有「详情 / 全宽 / 大图鉴卡」位才用原图**。⚠ 缺缩略图时各面板的 `onError` 会把整块**静默隐藏**，所以**新增一类图片时先出缩略图，再改代码**；缩略图统一由 **`scripts/gen-thumbs.py`** 生成（`python scripts/gen-thumbs.py` 补缺 / `--force` 覆盖 / `--dir`、`--width`、`--exclude` 指定；默认目录 = archaeology / expeditions / wonders / buildings / battle/units，默认宽度 192 / 480 / 256 / 160 / 192）。判断标准是「**这张图在游戏里最大的那个出口是多大**」：只有 64px 级出口的图（BOSS 头像 112px、母舰、原料图标）直接用原图、**不生成缩略图**（脚本里叫 `NO_THUMBS_DIRS` + `TINY_SOURCE_MAX`）。
 
 ## 六、重构纪律（搬移代码时）
 
