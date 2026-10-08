@@ -20,16 +20,23 @@ function ArtPh({ text, className }: { text: string; className?: string }) {
   );
 }
 
-/** 场上单位的图位（**按断点两态**，用户 2026-08 口径：「桌面端感觉大小可以，可以互不影响么」）：
- *   · 手机（<`sm`）：**横条里的右侧图**（`shipArtClass('bar')` = `aspect-[2/1] h-[44px] w-auto` ⇒ 88×44）
- *     —— 战场格子只有 ≈53px 宽，竖格子会把 2:1 素材横裁 64%，横条后**零裁切**；
+/** 场上单位的图位（**按断点两态**，用户 2026-08：「桌面端感觉大小可以，可以互不影响么」
+ *  + 「好像是太高了，改成 3 列 × 2 行试试」）：
+ *   · 手机（<`sm`）：**图在上、占满格子宽**（`shipArtClass('stack')` = `aspect-[2/1] order-first w-full`）
+ *     —— 手机棋盘 3 列 × 2 行，格子 ≈111px ⇒ 图位 ≈109×55（2:1，裁切 ≈1.25% ✓）；
+ *     旧的 6 列竖格子只有 ≈53px 宽 ⇒ 53×72 = 0.73:1，2:1 素材被**横裁 64%**（用户截图实证）。
  *   · `sm` 起：**与改前逐字一致**（DEMO：宽 100% · 高 72px · object-cover）—— 桌面格子 ≈150×72 ≈ 2.08:1，
  *     本来就基本不裁，**一个字不改**。
  *   比例仍走共用 `SHIP_ART_ASPECT`（`shipArtClass`），不另写第二份。 */
 function UnitArtBase({ src }: { src: string }) {
   const [failed, setFailed] = useState(false);
   if (failed) {
-    return <ArtPh text="舰船图 370×144" className="h-[44px] w-auto sm:mt-auto sm:h-[72px] sm:w-full" />;
+    return (
+      <ArtPh
+        text="舰船图 370×144"
+        className="aspect-[2/1] w-full sm:mt-auto sm:aspect-auto sm:h-[72px] sm:w-full"
+      />
+    );
   }
   return (
     <img
@@ -39,7 +46,7 @@ function UnitArtBase({ src }: { src: string }) {
       onError={() => setFailed(true)}
       /* sm 起 = 旧的 `mt-auto block h-[72px] w-full rounded-[5px] border border-[#2b3550] object-cover object-center`
          （`aspect-[2/1]` 在宽高都确定时不起作用；`object-center` 是默认值；flex 子项本来就是 block 化） */
-      className={`${shipArtClass('bar')} sm:mt-auto sm:h-[72px] sm:w-full`}
+      className={`${shipArtClass('stack')} sm:order-none sm:mt-auto sm:h-[72px] sm:rounded-[5px] sm:border sm:border-[#2b3550]`}
     />
   );
 }

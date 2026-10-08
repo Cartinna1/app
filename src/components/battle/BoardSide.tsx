@@ -48,9 +48,9 @@ function UnitCardBase({ u, selected }: { u: UnitView | null; selected: boolean }
   return (
     <div
       title={u.tooltip}
-      /* 手机上 = **横条**（文字在左、图在右，图位 2:1 零裁切）；`sm` 起 = 改前的竖格子（同一条 JSX，
-         只靠断点类切换排布 —— 不复制第二份卡面）。 */
-      className={`relative flex w-full min-w-0 items-center gap-2 overflow-hidden rounded-lg border border-[#3a4767] bg-[#1b2438] px-1.5 py-1 sm:h-full sm:flex-col sm:items-stretch sm:gap-0 ${
+      /* 手机 = 图在上（占满格子宽，`UnitArt` 里切）、文字在下；`sm` 起 = 改前的竖格子。同一条 JSX，
+         只靠断点类调内边距 —— 手机要让图**顶满格子宽**，故卡内左右/上下内边距挪到文字块上。 */
+      className={`relative flex h-full w-full min-w-0 flex-col overflow-hidden rounded-lg border border-[#3a4767] bg-[#1b2438] px-0 py-0 sm:px-1.5 sm:py-1 ${
         selected ? 'border-amber-400 ring-2 ring-amber-400/25' : ''
       } ${unitStateClass(u.attackState)}`}
     >
@@ -65,7 +65,7 @@ function UnitCardBase({ u, selected }: { u: UnitView | null; selected: boolean }
           </i>
         ))}
       </div>
-      <div className="flex min-w-0 flex-1 flex-col justify-center sm:flex-none sm:justify-start">
+      <div className="flex min-w-0 flex-1 flex-col justify-center px-1.5 py-1 sm:flex-none sm:justify-start sm:px-0 sm:py-0">
         <div className="overflow-hidden text-ellipsis whitespace-nowrap text-[11px] font-bold leading-tight">
           {u.name}
         </div>
@@ -87,7 +87,7 @@ function UnitCardBase({ u, selected }: { u: UnitView | null; selected: boolean }
             <u className="text-[10px] text-slate-500 no-underline md:text-[11px]">/{u.maxStructure}</u>
           </span>
         </div>
-        {/* 关键词 + 状态：手机同排一行（横条省高度）；`sm` 起各自成行 = 改前的样子 */}
+        {/* 关键词 + 状态：手机同排一行（格子小、省高度）；`sm` 起各自成行 = 改前的样子 */}
         <div className="mt-[3px] flex flex-wrap items-baseline gap-x-2 sm:block">
           <span className="text-[9.5px] leading-[1.3] text-amber-400">{u.keywords}</span>
           {u.attackStateLabel ? (
@@ -120,8 +120,10 @@ interface BoardSideProps {
 
 function BoardSideBase({ side, slots, selUnit, selFoe, onPlayerSlot, onBossTarget }: BoardSideProps) {
   return (
-    /* 手机（<`sm`）：**一行一条**（6 行横条，两侧都是）；`sm` 起：原来的 6 列竖格子（DEMO 布局，不动）。 */
-    <div className="flex flex-col gap-1.5 sm:grid sm:min-h-[156px] sm:grid-cols-6">
+    /* 手机（<`sm`）：**3 列 × 2 行**（用户 2026-08：「好像是太高了，改成 3 列 × 2 行试试」）——
+       格子 ≈111px ⇒ 图位 2:1 ≈109×55、零裁切；两侧棋盘合计 ≈460px（"1 条 × 6 行"那版是 ≈756px）。
+       `sm` 起：原来的 6 列竖格子（DEMO 布局，**一个字不改**）。 */
+    <div className="grid grid-cols-3 gap-1.5 sm:min-h-[156px] sm:grid-cols-6">
       {slots.map((s) => (
         <div
           key={s.i}

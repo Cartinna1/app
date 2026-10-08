@@ -265,6 +265,40 @@ function auditInfoBarPlacement() {
 }
 auditInfoBarPlacement();
 
+// ---------------------------------------------------------------------------
+// ⑪ 战场断点（用户 2026-08 两轮口径：手机图位要 2:1 零裁切；`sm` 起**一个字不改**）
+//    实测依据：手机格子 ≈53px（旧的 6 列）时 53×72 = 0.73:1 ⇒ 2:1 素材被横裁 64%（用户截图实证）；
+//    改 **3 列 × 2 行** 后格子 ≈111px ⇒ 图位 2:1 ≈109×55（裁 ≈1.25%）✓。
+//    判据（都硬失败）：
+//      ① BoardSide 手机 = `grid-cols-3`（3 列 × 2 行），`sm` 起 = `sm:grid-cols-6` + `sm:min-h-[156px]`；
+//      ② 手机图位走**共用的** `shipArtClass('stack')`（`parts.tsx` 里必须调它，不许另写比例）；
+//      ③ `sm` 起图位仍是旧的 `sm:h-[72px]` + `sm:w-full`（桌面一字不改）。
+// ---------------------------------------------------------------------------
+function auditBoardBreakpoint() {
+  const board = path.resolve(__dirname, '../src/components/battle/BoardSide.tsx');
+  const parts = path.resolve(__dirname, '../src/components/battle/parts.tsx');
+  console.log('\n=== 战场断点（手机 3 列 × 2 行 / sm 起 6 列不变） ===');
+  if (!fs.existsSync(board) || !fs.existsSync(parts)) {
+    issues.push('BoardSide.tsx / parts.tsx 缺失（战场棋盘组件没了？）');
+    return;
+  }
+  const b = stripComments(fs.readFileSync(board, 'utf8'));
+  const p = stripComments(fs.readFileSync(parts, 'utf8'));
+  const mobile3 = b.indexOf('grid-cols-3') >= 0;
+  const desk6 = b.indexOf('sm:grid-cols-6') >= 0 && b.indexOf('sm:min-h-[156px]') >= 0;
+  const sharedArt = p.indexOf("shipArtClass('stack')") >= 0;
+  const deskArt = p.indexOf('sm:h-[72px]') >= 0 && p.indexOf('sm:w-full') >= 0;
+  console.log('  ① 手机 3 列：' + (mobile3 ? '✓' : '✗') + '　sm 起 6 列 + min-h 156：' + (desk6 ? '✓' : '✗'));
+  console.log('  ② 手机图位走共用 shipArtClass：' + (sharedArt ? '✓' : '✗')
+    + '　③ sm 起仍是 h-72 / w-full：' + (deskArt ? '✓' : '✗'));
+  if (!mobile3 || !desk6) {
+    issues.push('BoardSide 的手机棋盘不是 3 列 / sm 起不是 6 列（用户口径：手机 3 列 × 2 行，桌面一字不改）');
+  }
+  if (!sharedArt) issues.push('parts.tsx 的赛场图位没走共用的 shipArtClass —— 比例会漂成第二份（不许另写比例）');
+  if (!deskArt) issues.push('parts.tsx 的 sm 起图位不再是旧的 h-[72px] w-full —— 桌面被改了');
+}
+auditBoardBreakpoint();
+
 console.log('\n=== 静态 UI 审计结果 ===');
-if (issues.length === 0) console.log('  未发现问题 ✓（组件 memo / 缩略图 / onError / 纯函数分层 / 渲染串无 V1.5 § / 手动闸门唯一真值 / 信息条位置唯一 / AGENTS.md 体积）');
+if (issues.length === 0) console.log('  未发现问题 ✓（组件 memo / 缩略图 / onError / 纯函数分层 / 渲染串无 V1.5 § / 手动闸门唯一真值 / 信息条位置唯一 / 战场断点 / AGENTS.md 体积）');
 else { issues.forEach((i) => console.log('  ⚠ ' + i)); process.exitCode = 1; }
