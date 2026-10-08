@@ -83,7 +83,7 @@ const BEHAVIOR: Record<string, CardBehavior> = {
   // —— 黄金财团 ——
   g1: { kw: {}, fx: { death(_u, api) { api.gainMana(1); } } },
   g2: { kw: {}, fx: { play(u, api) { if (api.mana() >= 4) api.buffAtk(u, 1); } } },
-  g3: { kw: {}, fx: { turnEnd(_u, api) { api.gainMana(1); api.damageOwnBody(1); } } },
+  g3: { kw: {}, fx: { turnEnd(_u, api) { api.gainMana(1); } } },
   g4: { kw: {}, fx: { play(_u, api) { api.capUp(1); } } },
   g5: { kw: {}, fx: { play(_u, api) { api.costReduce(1); } } },
   g6: {

@@ -334,11 +334,18 @@ export function boardView(
     let clickable = false;
     let tone: SlotView['tone'] = 'none';
     if (u) {
-      if (pending && pending.cands.indexOf(u.uid) >= 0) {
-        clickable = true; tone = 'tgt';
-      } else if (side === 'boss' && legalUids.indexOf(u.uid) >= 0) {
-        clickable = true; tone = 'tgt';
-      } else if (side === 'player' && canAttack(st, 'player', u)) {
+      if (pending) {
+        // 铁律③：待选择期间**只有候选可点**（敌方也一样 —— 别把"任何敌方都能点"做进来）
+        if (pending.cands.indexOf(u.uid) >= 0) { clickable = true; tone = 'tgt'; }
+      } else if (side === 'boss') {
+        /* ⚠ 2026-08 用户报的真缺口：「我不能点对方的船看对面的船信息」——
+           敌方单位**永远可点**（点开 = 把它的 名字/系列/攻盾体/技能全文/状态 送进同一个信息条，
+           铁律①：信息条是手机端看技能的唯一出口）。战斗已结束才关掉（与己方"结束即不可点"同口径）。
+           `tone` 仍只在"已选己方攻击者且它是合法目标"时为 tgt（视觉 = 攻击目标）——
+           **可点 ≠ 可攻击**：没选攻击者时点它只更新信息条，`BattleScreen` 会给一句中文引导。 */
+        clickable = !st.over;
+        if (selUnit && legalUids.indexOf(u.uid) >= 0) tone = 'tgt';
+      } else if (canAttack(st, 'player', u)) {
         if (canPickMyUnit) clickable = true;
         tone = 'act';
       } else if (canPickMyUnit) {
@@ -420,13 +427,49 @@ function unitInfo(st: BattleState, u: BattleUnit): InfoBarView {
 }
 
 /**
- * 信息条。优先级与 DEMO 的 infoHtml 完全一致：
+ * **点敌方单位**看到的信息（用户 2026-08：「点对方的船看对面的船信息…显示的地方其实可以在同一个地方」）。
+ * 与 `unitInfo` 的区别：
+ *   · `attackReason(st,'player',敌方)` 只会回一句「那不是你的战舰」✗ —— 这里要的是
+ *     **"我能不能打它 / 为什么不能"**，唯一判据 = `legalTargets(st,'player')`（锁链优先、潜航不可选）；
+ *   · 标题点名「（敌方）」并补上系列，免得和自己场上的同名单位混淆。
+ * ⚠ 空列表/非法输入不返回（调用方先 `findUnit`）。
+ */
+function foeInfo(st: BattleState, u: BattleUnit): InfoBarView {
+  const kw = kwLine(u);
+  const legal = legalTargets(st, 'player');
+  const attackable = !st.over && legal.some((x) => x.uid === u.uid);
+  let note: string;
+  if (st.over) note = '战斗已结束';
+  else if (st.active !== 'player') note = '现在是对手回合，轮到你时才能攻击';
+  else if (attackable) note = '可以攻击：点自己一艘战舰作为攻击者，再点它';
+  else if (u.subm) note = '它在「潜航」中，不是合法目标（先点自己一艘战舰，再挑别的目标）';
+  else if (legal.length > 0) note = '必须优先攻击带「锁链」的战舰';
+  else note = '先点自己一艘战舰作为攻击者，再点它';
+  return {
+    kind: 'unit',
+    title: `${u.name}（敌方）`,
+    body: u.text,
+    hint: `${u.series} · ${u.rarity}${kw ? `　关键词：${kw}` : ''}　${note}`,
+    stats: unitStats(u),
+  };
+}
+
+/**
+ * 信息条。优先级与 DEMO 的 infoHtml 一致，并在 `selUnit` 之后插了「**点开的敌方单位**」：
  * ① 选中的卡牌（技能全文 + 费用 + 数值 + "点自己场上的空格即可部署"）
  * ② 选中的己方战舰（技能全文 + 关键词 + 能否攻击）
- * ③ 待选择（PENDING_LABEL / PENDING_HINT + "还需 N 艘（已选 M/N）"）
- * ④ 平时显示**最近一条战况**（st.log 最后一条）
+ * ③ 待选择（PENDING_LABEL / PENDING_HINT + "还需 N 艘（已选 M/N）"）—— **模态，优先于 ④**
+ * ④ 点开的敌方单位（名字（敌方）/ 系列·稀有度 / 攻盾体 / 技能全文 / 状态 + 能不能打它）
+ * ⑤ 平时显示**最近一条战况**（st.log 最后一条）
+ * ⚠ ①②④ 由组件保证"互斥"（每次点击只置一个），所以这里的先后只决定"同时存在时给谁"；
+ *   ③ 放在 ④ 之前是因为待选择期间玩家必须先选完目标（铁律③），那一刻信息条要说的是"还需几艘"。
  */
-export function infoBarView(st: BattleState, selCard: string | null, selUnit: string | null): InfoBarView {
+export function infoBarView(
+  st: BattleState,
+  selCard: string | null,
+  selUnit: string | null,
+  selFoe: string | null = null,
+): InfoBarView {
   if (selCard) {
     const c = defOf(selCard);
     return {
@@ -451,6 +494,10 @@ export function infoBarView(st: BattleState, selCard: string | null, selUnit: st
       hint: `请点目标（${PENDING_HINT[p.kind] || ''}）　还需 ${left} 艘${p.need > 1 ? `（已选 ${p.picked.length}/${p.need}）` : ''}`,
       stats: '',
     };
+  }
+  if (selFoe) {
+    const u = findUnit(st, selFoe);
+    if (u) return foeInfo(st, u);
   }
   const last = st.log.length ? st.log[st.log.length - 1] : '（暂无战况）';
   return { kind: 'event', title: '', body: last, hint: '', stats: '' };

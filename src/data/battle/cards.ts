@@ -30,7 +30,7 @@ export const BATTLE_CARDS: Record<string, ShipCardDef> = {
   "p7": { id: "p7", name: "心灵风暴母舰", cost: 6, atk: 6, shield: 7, structure: 3, series: "灵能", rarity: "橙", text: "入场：控制一艘攻击 ≤3 的敌方战舰（归你方场上）" },
   "g1": { id: "g1", name: "金鳞运输艇", cost: 1, atk: 1, shield: 3, structure: 1, series: "财团", rarity: "白", text: "亡语：本回合指挥度 +1" },
   "g2": { id: "g2", name: "雇佣兵炮舰", cost: 2, atk: 3, shield: 2, structure: 1, series: "财团", rarity: "白", text: "入场：若你当前指挥度 ≥4，攻击 +1" },
-  "g3": { id: "g3", name: "贸易货轮", cost: 3, atk: 2, shield: 5, structure: 2, series: "财团", rarity: "蓝", text: "回合结束：本回合指挥度 +1，本体受到 1 点伤害" },
+  "g3": { id: "g3", name: "贸易货轮", cost: 3, atk: 1, shield: 5, structure: 2, series: "财团", rarity: "蓝", text: "回合结束：本回合指挥度 +1" },
   "g4": { id: "g4", name: "铸币工厂舰", cost: 4, atk: 3, shield: 6, structure: 2, series: "财团", rarity: "紫", text: "入场：本局指挥度上限永久 +1" },
   "g5": { id: "g5", name: "财团主席舰", cost: 5, atk: 4, shield: 7, structure: 3, series: "财团", rarity: "紫", text: "入场：你所有舰船的指挥度 -1（最低为 1）" },
   "g6": { id: "g6", name: "黄金泰坦", cost: 6, atk: 8, shield: 8, structure: 3, series: "财团", rarity: "橙", text: "过载 2；入场时你每控制一艘友舰，费用 -1（最低 0）" },

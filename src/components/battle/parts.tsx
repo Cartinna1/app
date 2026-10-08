@@ -1,4 +1,5 @@
 import { memo, useState } from 'react';
+import { shipArtClass } from '@/components/ship/ShipCard';
 
 // ============================================================================
 // 战斗界面 · 共享图位（照抄 carddemo 的「美术未就位时的占位块」）
@@ -19,17 +20,26 @@ function ArtPh({ text, className }: { text: string; className?: string }) {
   );
 }
 
-/** 场上单位的横条图位（DEMO：宽 100% · 高 72px · object-cover） */
+/** 场上单位的图位（**按断点两态**，用户 2026-08 口径：「桌面端感觉大小可以，可以互不影响么」）：
+ *   · 手机（<`sm`）：**横条里的右侧图**（`shipArtClass('bar')` = `aspect-[2/1] h-[44px] w-auto` ⇒ 88×44）
+ *     —— 战场格子只有 ≈53px 宽，竖格子会把 2:1 素材横裁 64%，横条后**零裁切**；
+ *   · `sm` 起：**与改前逐字一致**（DEMO：宽 100% · 高 72px · object-cover）—— 桌面格子 ≈150×72 ≈ 2.08:1，
+ *     本来就基本不裁，**一个字不改**。
+ *   比例仍走共用 `SHIP_ART_ASPECT`（`shipArtClass`），不另写第二份。 */
 function UnitArtBase({ src }: { src: string }) {
   const [failed, setFailed] = useState(false);
-  if (failed) return <ArtPh text="舰船图 370×144" className="mt-auto h-[72px] w-full" />;
+  if (failed) {
+    return <ArtPh text="舰船图 370×144" className="h-[44px] w-auto sm:mt-auto sm:h-[72px] sm:w-full" />;
+  }
   return (
     <img
       src={src}
       alt=""
       loading="lazy"
       onError={() => setFailed(true)}
-      className="mt-auto block h-[72px] w-full rounded-[5px] border border-[#2b3550] object-cover object-center"
+      /* sm 起 = 旧的 `mt-auto block h-[72px] w-full rounded-[5px] border border-[#2b3550] object-cover object-center`
+         （`aspect-[2/1]` 在宽高都确定时不起作用；`object-center` 是默认值；flex 子项本来就是 block 化） */
+      className={`${shipArtClass('bar')} sm:mt-auto sm:h-[72px] sm:w-full`}
     />
   );
 }

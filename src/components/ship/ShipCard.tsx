@@ -29,23 +29,28 @@ import { memo } from 'react';
  *  · `stack`（默认）= 图在上、文字在下（**机库卡库**用；手机那版用户说最好看）
  *  · `row`          = 文字在左、图在右 58%（**船坞列表行**用，宽松）
  *  · `flat`         = 文字在左、图在右 **48%**、内边距略松（**战斗部署池**用 —— 那儿是"选卡"的地方，
- *                     要一屏看到 3 张以上；"扁"靠**缩窄图位**实现，不是裁切/拉伸） */
-export type ShipCardLayout = 'stack' | 'row' | 'flat';
+ *                     要一屏看到 3 张以上；"扁"靠**缩窄图位**实现，不是裁切/拉伸）
+ *  · `bar`          = **横条**（战场**手机端**的单位条）：图在右、**高度固定** `h-[44px]`、宽度由 2:1 算出来
+ *                     —— 战场竖格子只有 ≈53px 宽，2:1 素材会被横裁 64%；手机改横条后零裁切。
+ *                     （桌面仍用 6 列竖格子：格子 ≈150px × 72px ≈ 2.08:1，本来就基本不裁，不动。） */
+export type ShipCardLayout = 'stack' | 'row' | 'flat' | 'bar';
 
 /**
  * 图位比例（**唯一真值**）：素材实测 2.0253:1（原图 640×316）/ 2.0211:1（缩略图 192×95）
  * → 取 2:1，`object-cover` 裁切 ≈1.25%（可忽略）。**任何地方都不许再写第二份比例**。
- * ⚠ 三种排布**共用这一个比例**：变扁只改图位**宽度**（`w-[58%]` / `w-[48%]`），
+ * ⚠ 四种排布**共用这一个比例**：变扁/变条只改图位的**宽或高**（`w-[58%]` / `w-[48%]` / `h-[44px]`），
  *   绝不改比例 —— 改比例就等于裁切/拉伸。
  */
 export const SHIP_ART_ASPECT = 'aspect-[2/1]';
 
-/** 卡面图位的整串 class（三态；图位比例 / 边框 / 排布**只有这一处**，页面不许自己拼）
+/** 卡面图位的整串 class（四态；图位比例 / 边框 / 排布**只有这一处**，页面不许自己拼）
  *  ⚠ `self-center`：横排时文字块可能比图高，若不加它，flex 默认的 `stretch` 会把图拉高、
  *    2:1 比例被破坏（`object-cover` 就会开始裁切）。 */
 export function shipArtClass(layout: ShipCardLayout): string {
   const base = `${SHIP_ART_ASPECT} flex-none object-cover`;
   if (layout === 'stack') return `${base} order-first w-full border-b border-[#2b3550]`;
+  /* 横条：**高固定、宽由比例算**（`h-[44px]` + `w-auto` → 88×44），与竖格子的 `h-[72px] w-full` 同一套边框/圆角 */
+  if (layout === 'bar') return `${base} self-center h-[44px] w-auto rounded-[5px] border border-[#2b3550]`;
   return `${base} self-center ${layout === 'flat' ? 'w-[48%]' : 'w-[58%]'} border-l border-[#2b3550]`;
 }
 

@@ -48,7 +48,9 @@ function UnitCardBase({ u, selected }: { u: UnitView | null; selected: boolean }
   return (
     <div
       title={u.tooltip}
-      className={`relative flex h-full w-full min-w-0 flex-col overflow-hidden rounded-lg border border-[#3a4767] bg-[#1b2438] px-1.5 py-1 ${
+      /* 手机上 = **横条**（文字在左、图在右，图位 2:1 零裁切）；`sm` 起 = 改前的竖格子（同一条 JSX，
+         只靠断点类切换排布 —— 不复制第二份卡面）。 */
+      className={`relative flex w-full min-w-0 items-center gap-2 overflow-hidden rounded-lg border border-[#3a4767] bg-[#1b2438] px-1.5 py-1 sm:h-full sm:flex-col sm:items-stretch sm:gap-0 ${
         selected ? 'border-amber-400 ring-2 ring-amber-400/25' : ''
       } ${unitStateClass(u.attackState)}`}
     >
@@ -63,33 +65,40 @@ function UnitCardBase({ u, selected }: { u: UnitView | null; selected: boolean }
           </i>
         ))}
       </div>
-      <div className="overflow-hidden text-ellipsis whitespace-nowrap text-[11px] font-bold leading-tight">
-        {u.name}
-      </div>
-      <div className="mt-1 flex flex-wrap items-baseline gap-x-[9px] gap-y-0.5 text-[13px] md:text-base">
-        <span className="whitespace-nowrap text-[#fca5a5]">
-          <i className="mr-px text-[10px] not-italic opacity-80 md:text-[13px]">攻</i>
-          <b className={`font-extrabold leading-none ${u.attackState === 'ready' ? '' : 'text-slate-500'}`}>
-            {u.atk}
-          </b>
-        </span>
-        <span className="whitespace-nowrap text-[#7dd3fc]">
-          <i className="mr-px text-[10px] not-italic opacity-80 md:text-[13px]">盾</i>
-          <b className="font-extrabold leading-none">{u.shield}</b>
-          <u className="text-[10px] text-slate-500 no-underline md:text-[11px]">/{u.maxShield}</u>
-        </span>
-        <span className="whitespace-nowrap text-[#fcd34d]">
-          <i className="mr-px text-[10px] not-italic opacity-80 md:text-[13px]">体</i>
-          <b className="font-extrabold leading-none">{u.structure}</b>
-          <u className="text-[10px] text-slate-500 no-underline md:text-[11px]">/{u.maxStructure}</u>
-        </span>
-      </div>
-      <div className="mt-[3px] text-[9.5px] leading-[1.3] text-amber-400">{u.keywords}</div>
-      {u.attackStateLabel ? (
-        <div className={`mt-[3px] text-[9.5px] font-extrabold tracking-wide md:text-[11px] ${attackTextClass(u.attackState)}`}>
-          {u.attackStateLabel}
+      <div className="flex min-w-0 flex-1 flex-col justify-center sm:flex-none sm:justify-start">
+        <div className="overflow-hidden text-ellipsis whitespace-nowrap text-[11px] font-bold leading-tight">
+          {u.name}
         </div>
-      ) : null}
+        <div className="mt-1 flex flex-wrap items-baseline gap-x-[9px] gap-y-0.5 text-[13px] md:text-base">
+          <span className="whitespace-nowrap text-[#fca5a5]">
+            <i className="mr-px text-[10px] not-italic opacity-80 md:text-[13px]">攻</i>
+            <b className={`font-extrabold leading-none ${u.attackState === 'ready' ? '' : 'text-slate-500'}`}>
+              {u.atk}
+            </b>
+          </span>
+          <span className="whitespace-nowrap text-[#7dd3fc]">
+            <i className="mr-px text-[10px] not-italic opacity-80 md:text-[13px]">盾</i>
+            <b className="font-extrabold leading-none">{u.shield}</b>
+            <u className="text-[10px] text-slate-500 no-underline md:text-[11px]">/{u.maxShield}</u>
+          </span>
+          <span className="whitespace-nowrap text-[#fcd34d]">
+            <i className="mr-px text-[10px] not-italic opacity-80 md:text-[13px]">体</i>
+            <b className="font-extrabold leading-none">{u.structure}</b>
+            <u className="text-[10px] text-slate-500 no-underline md:text-[11px]">/{u.maxStructure}</u>
+          </span>
+        </div>
+        {/* 关键词 + 状态：手机同排一行（横条省高度）；`sm` 起各自成行 = 改前的样子 */}
+        <div className="mt-[3px] flex flex-wrap items-baseline gap-x-2 sm:block">
+          <span className="text-[9.5px] leading-[1.3] text-amber-400">{u.keywords}</span>
+          {u.attackStateLabel ? (
+            <span
+              className={`text-[9.5px] font-extrabold tracking-wide md:text-[11px] sm:mt-[3px] sm:block ${attackTextClass(u.attackState)}`}
+            >
+              {u.attackStateLabel}
+            </span>
+          ) : null}
+        </div>
+      </div>
       <UnitArt src={u.artSrc} />
     </div>
   );
@@ -103,13 +112,16 @@ interface BoardSideProps {
   side: 'player' | 'boss';
   slots: SlotView[];
   selUnit: string | null;
+  /** 被点开看信息的**敌方**单位（高亮用；点敌方看技能，与"攻击目标"是两件事） */
+  selFoe: string | null;
   onPlayerSlot: (i: number) => void;
   onBossTarget: (uid: string) => void;
 }
 
-function BoardSideBase({ side, slots, selUnit, onPlayerSlot, onBossTarget }: BoardSideProps) {
+function BoardSideBase({ side, slots, selUnit, selFoe, onPlayerSlot, onBossTarget }: BoardSideProps) {
   return (
-    <div className="grid min-h-[156px] grid-cols-6 gap-1.5">
+    /* 手机（<`sm`）：**一行一条**（6 行横条，两侧都是）；`sm` 起：原来的 6 列竖格子（DEMO 布局，不动）。 */
+    <div className="flex flex-col gap-1.5 sm:grid sm:min-h-[156px] sm:grid-cols-6">
       {slots.map((s) => (
         <div
           key={s.i}
@@ -118,10 +130,14 @@ function BoardSideBase({ side, slots, selUnit, onPlayerSlot, onBossTarget }: Boa
             if (side === 'player') onPlayerSlot(s.i);
             else if (s.unit) onBossTarget(s.unit.uid);
           }}
-          className={`flex min-h-[156px] min-w-0 items-center justify-center rounded-lg ${slotClass(s.tone)}`}
+          /* 空位在手机上也要看得见、点得动（部署目标）⇒ 给一个最小高度；`sm` 起回到 156px */
+          className={`flex min-h-[46px] min-w-0 items-center justify-center rounded-lg sm:min-h-[156px] ${slotClass(s.tone)}`}
         >
           {s.unit ? (
-            <UnitCard u={s.unit} selected={!!selUnit && selUnit === s.unit.uid} />
+            <UnitCard
+              u={s.unit}
+              selected={side === 'boss' ? !!selFoe && selFoe === s.unit.uid : !!selUnit && selUnit === s.unit.uid}
+            />
           ) : (
             <span className="text-[11px] text-[#3b4763]">空位</span>
           )}

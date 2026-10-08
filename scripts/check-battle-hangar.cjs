@@ -387,8 +387,17 @@ const J = (v) => JSON.stringify(v);
     // ③ 三处渲染同一个卡面组件
     check(libPanel.indexOf('ShipCard') >= 0 && shipPanel.indexOf('ShipCard') >= 0 && pool.indexOf('ShipCard') >= 0,
       '★ 卡库 / 船坞 / 战斗部署池渲染**同一个** ShipCard（样式只有一份实现）');
-    check(shipPanel.indexOf('layout="row"') >= 0 && shipPanel.indexOf('max-w-[280px]') >= 0,
-      '船坞列表用 row 排布 + 列宽 280（图位 162×81 时攻盾体仍一行放下）');
+    check(shipPanel.indexOf('layout="row"') >= 0 && shipPanel.indexOf('sm:max-w-[280px]') >= 0,
+      '船坞列表用 row 排布；280 上限只在 sm 起生效（手机端不受封顶，见下一条）');
+
+    // ③a 手机端船坞行必须竖排（用户 2026-08 截图实证：390 宽下行内只有 330px，
+    //     卡面封顶 280 + gap 8 ⇒ 建造信息列只剩 42px，「下单建造」「需要一级船坞…」全成一字一行）
+    check(/flex flex-col gap-2[^"]*sm:flex-row/.test(shipPanel),
+      '★ 船坞行手机端竖排（flex-col → sm:flex-row）：信息列 42px → 330px（成句显示）');
+    check(shipPanel.indexOf('w-full flex-none sm:max-w-[280px]') >= 0,
+      '★ 船坞卡面手机端拿满整行（280 上限只在 sm 起）⇒ 卡内文字列 ≈121px ≥ 攻盾体所需 97px');
+    check(shipPanel.indexOf('min-w-0 flex-1') >= 0 && shipPanel.indexOf('下单建造') >= 0,
+      '信息列仍是 min-w-0 flex-1、下单建造按钮仍在（竖排后各拿满一行，不被压成竖条）');
 
     // ③b 战斗部署池改扁（用户 2026-08：「战斗太大了改成扁一点的吧」）
     check(pool.indexOf('layout="flat"') >= 0, '★ 战斗部署池用 flat 排布（文字在左、图在右，不再用 stack）');
@@ -420,6 +429,36 @@ const J = (v) => JSON.stringify(v);
     check(pool.indexOf('×${c.count}') >= 0 || pool.indexOf('×') >= 0, '同型份数「×N」仍在费用角标上');
     check(pool.indexOf('selCard === c.id') >= 0, '选中态仍由 selCard 驱动（描边 + ring）');
     check(pool.indexOf('export default memo(') >= 0, '战斗池仍 memo(...)');
+  }
+
+  // ---------- ⑩ 船坞：指引文案删干净（用户 2026-08「船坞的指引文字太多了，红框里的都删去」） ----------
+  //  删的是**纯展示**（那三张船坞说明卡上没有任何按钮；建/升级都在「殖民」页签的建筑列表里），
+  //  所以判定层（`ShipyardView.built` / `.lockHint`）**原样保留**，只是面板不再渲染它们。
+  //  ⚠ 断言按**去注释后的代码**查：注释里会引用被删文案（说明删了什么），不能因此误报。
+  console.log('\n[10] 船坞：已删的指引文案不许回来 + 保留项仍在');
+  {
+    const fs = require('fs');
+    const path = require('path');
+    const code = (src) => src.replace(/\/\*[\s\S]*?\*\//g, ' ').replace(/\/\/[^\n]*/g, '');
+    const ship = code(fs.readFileSync(path.resolve(__dirname, '../src/components/hangar/ShipyardPanel.tsx'), 'utf8'));
+    // ① 删掉的 6 处（源码级：都不许再出现）
+    check(ship.indexOf('DockTier') < 0, '★ 三级船坞说明卡整块已删（DockTier 组件已移除）');
+    check(ship.indexOf('tier.level') < 0 && ship.indexOf('紫、橙') < 0,
+      '★ 说明卡里的「可造 白卡 / 蓝卡 / 紫、橙卡」已删（`tier.level` 分支已移除）', '顶部状态行的「同时可造 2 艘」不算：那是状态数字，保留');
+    check(ship.indexOf('座') < 0 || ship.indexOf('上限 ${maxCount}') < 0, '★ 说明卡里的「造价 … / 入驻 … / 上限 N 座」已删');
+    check(ship.indexOf('view.lockHint') < 0, '★ 「想造蓝卡：先造…」下一档解锁指引（view.lockHint）已删渲染');
+    check(ship.indexOf('现在下单立刻开工') < 0 && ship.indexOf('满位，现在下单会排到队尾') < 0,
+      '★ 队列标题里的引导括号已删（只留「同时建造 x/2 艘 · 排队 y 艘」）');
+    check(ship.indexOf('造船台是空的') < 0 && ship.indexOf('还没有船坞，暂时造不了舰') < 0,
+      '★ 空队列那句提示已删（队列空时整块不渲染）');
+    check(ship.indexOf('waiting.length === 0 ? null :') >= 0, '★ 队列空 → 直接 null（不留空壳边框）');
+    // ② 保留项
+    check(ship.indexOf('可造战舰') >= 0 && ship.indexOf('下单建造') >= 0, '保留：「可造战舰」列表 +「下单建造」按钮');
+    check(ship.indexOf('SeriesChipRow') >= 0, '保留：系列 chip 行');
+    check(ship.indexOf('已解锁 {view.unlockedCards.length} 型') >= 0, '保留：顶部「已解锁 N 型 · 现在能造 M 型」');
+    check(ship.indexOf('lockedSummaryLine(view)') >= 0, '保留：底部「还有 N 种未解锁…」汇总行');
+    check(ship.indexOf('同时建造 {view.queue.building.length}') >= 0, '保留：队列状态数字（有内容时的队列行照常）');
+    check(ship.indexOf('canCancelBuild') >= 0 && ship.indexOf('QueueRow') >= 0, '保留：队列行 + 取消排队');
   }
 
   console.log('\n=== P6 验收结果 ===');

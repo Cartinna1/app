@@ -67,6 +67,12 @@ export interface BattleScreenContext {
 function BattleScreenBase({ battle, seed, enemyName, context, onAction, onEnd }: BattleScreenProps) {
   const [selCard, setSelCard] = useState<string | null>(null);
   const [selUnit, setSelUnit] = useState<string | null>(null);
+  /**
+   * **点开看信息的敌方单位**（用户 2026-08：「我不能点对方的船看对面的船信息…显示的地方其实可以在同一个地方」）。
+   * 与 `selUnit`（己方攻击者）是两件事：点敌方时**两者可以同时成立**（既更新信息条、又照旧发动攻击）。
+   * `selCard` / `selUnit` / `selFoe` 三者**互斥**：每次点击只置一个（谁最后被点，信息条就显示谁）。
+   */
+  const [selFoe, setSelFoe] = useState<string | null>(null);
   const [flash, setFlash] = useState('');
   const [auto, setAuto] = useState(false);
   /** 自动战斗：一个回合只排一次（打完这一方后重新武装） */
@@ -74,7 +80,7 @@ function BattleScreenBase({ battle, seed, enemyName, context, onAction, onEnd }:
   /** 已经为哪一场（seed）初始化过选择态 */
   const [initSeed, setInitSeed] = useState(seed);
 
-  // 新开一场：把上一场的「已选卡 / 已选舰 / 临时提示 / 自动战斗」清掉，
+  // 新开一场：把上一场的「已选卡 / 已选舰 / 已点开的敌方 / 临时提示 / 自动战斗」清掉，
   // 等价 DEMO newBattle 里的 selCard = selUnit = flash = null。
   // ⚠ 判据是 seed，**不能**改成"battle 对象身份变了"：每次 BATTLE_ACTION 都会克隆出新对象，
   //   那样会把玩家每次操作的选择态都清掉。2 支掠夺队"连打两场"的第二场由父组件换个 key 重挂载
@@ -83,6 +89,7 @@ function BattleScreenBase({ battle, seed, enemyName, context, onAction, onEnd }:
     setInitSeed(seed);
     if (selCard !== null) setSelCard(null);
     if (selUnit !== null) setSelUnit(null);
+    if (selFoe !== null) setSelFoe(null);
     if (flash !== '') setFlash('');
     if (auto) setAuto(false);
     if (autoArmed) setAutoArmed(false);
@@ -93,7 +100,7 @@ function BattleScreenBase({ battle, seed, enemyName, context, onAction, onEnd }:
   const bossSlots = boardView(battle, 'boss', selUnit);
   const playerSlots = boardView(battle, 'player', selUnit, selCard);
   const cards = poolView(battle);
-  const info = infoBarView(battle, selCard, selUnit);
+  const info = infoBarView(battle, selCard, selUnit, selFoe);
   const grave = graveView(battle);
   /**
    * 「此刻谁在操作」的**唯一真值**（lib/battle/view.ts → manualActionView）。
@@ -177,6 +184,7 @@ function BattleScreenBase({ battle, seed, enemyName, context, onAction, onEnd }:
     //   用户 2026-08 报的"灰卡的技能在手机上无处可看"（卡面 title 是桌面专属的悬浮提示）。
     setSelCard(selCard === cid ? null : cid);
     setSelUnit(null);
+    setSelFoe(null);
     setFlash(card.playable ? '' : deployBlockReason(card));
   };
 
@@ -199,6 +207,7 @@ function BattleScreenBase({ battle, seed, enemyName, context, onAction, onEnd }:
       const card = cards.find((c) => c.id === selCard);
       if (card && !card.playable) { hint(deployBlockReason(card)); return; }
       setSelCard(null);
+      setSelFoe(null);
       setFlash('');
       userAction({ type: 'deploy', cardId: selCard, slot: i });
       return;
@@ -206,6 +215,7 @@ function BattleScreenBase({ battle, seed, enemyName, context, onAction, onEnd }:
     if (u) {
       setSelUnit(selUnit === u.uid ? null : u.uid);
       setSelCard(null);
+      setSelFoe(null);
       setFlash('');
       return;
     }
@@ -222,7 +232,18 @@ function BattleScreenBase({ battle, seed, enemyName, context, onAction, onEnd }:
       return;
     }
     if (!manual.canAct) { hint(gateHint); return; }
-    if (!selUnit) { hint('先点己方一艘可以攻击的战舰，再点目标'); return; }
+    /* ⚠「点敌方」= **看它的信息** + **（若已选攻击者）打它**，两件事同时成立（用户 2026-08）：
+       · 信息焦点先切到它（铁律①：信息条是手机端看技能的唯一出口）——`body` 不是单位，不记焦点；
+       · 已选攻击者 → 照旧派发 attack（`selUnit` 不被这里清掉，攻击流程一字未改）；
+       · 没选攻击者 → **不派发**，但必须说清"为什么没打"（铁律②），并留下它的信息。 */
+    const isUnitRef = ref !== 'body';
+    if (isUnitRef) { setSelFoe(ref); setSelCard(null); }
+    if (!selUnit) {
+      setSelUnit(null);
+      if (isUnitRef) hint('已选中敌方战舰，技能见上方信息条；想打它，先点自己一艘战舰作为攻击者');
+      else hint('先点己方一艘可以攻击的战舰，再点目标');
+      return;
+    }
     setSelUnit(null);
     setFlash('');
     userAction({ type: 'attack', attacker: selUnit, target: ref });
@@ -232,6 +253,7 @@ function BattleScreenBase({ battle, seed, enemyName, context, onAction, onEnd }:
     if (!manual.canAct || !canEndTurn(battle)) { hint(gateHint); return; }
     setSelCard(null);
     setSelUnit(null);
+    setSelFoe(null);
     userAction({ type: 'endTurn' });
   };
 
@@ -312,6 +334,7 @@ function BattleScreenBase({ battle, seed, enemyName, context, onAction, onEnd }:
           side="boss"
           slots={bossSlots}
           selUnit={selUnit}
+          selFoe={selFoe}
           onPlayerSlot={onPlayerSlot}
           onBossTarget={onBossTarget}
         />
@@ -339,6 +362,7 @@ function BattleScreenBase({ battle, seed, enemyName, context, onAction, onEnd }:
           side="player"
           slots={playerSlots}
           selUnit={selUnit}
+          selFoe={selFoe}
           onPlayerSlot={onPlayerSlot}
           onBossTarget={onBossTarget}
         />

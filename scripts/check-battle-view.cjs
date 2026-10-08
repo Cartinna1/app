@@ -168,7 +168,13 @@ const check = (ok, label, detail) => {
     const foe = T.spawnUnit(st, 'boss', 'c5'); T.placeUnit(st, 'boss', foe, 0);
     const bs = V.boardView(st, 'boss', mine.uid, null);
     check(bs[0].clickable === true && bs[0].tone === 'tgt', '选中己方舰 → 敌方目标可点', bs[0].clickable + '/' + bs[0].tone);
-    check(V.boardView(st, 'boss', null, null)[0].clickable === false, '没选己方舰时敌方目标不可点（先选攻击者）');
+    /* ⚠ 2026-08 **口径变更**（用户：「我不能点对方的船看对面的船信息…显示的地方其实可以在同一个地方」）：
+       旧断言是「没选己方舰时敌方目标**不可点**」—— 现在**改成可点**（点它 = 看它的技能全文），
+       但**仍不是攻击目标**（tone ≠ tgt）；没选攻击者时点它不派发攻击、只更新信息条 + 给一句引导。
+       （铁律③不变：待选择期间敌方格子仍只由候选决定 —— 见上面 [3] 那三条。） */
+    const bsNoAtk = V.boardView(st, 'boss', null, null);
+    check(bsNoAtk[0].clickable === true, '★ 没选己方舰时敌方**可点**（点开看技能，铁律①）', String(bsNoAtk[0].clickable));
+    check(bsNoAtk[0].tone === 'none', '★ 但 tone ≠ tgt（可点 ≠ 可攻击）', bsNoAtk[0].tone);
 
     // 不是玩家回合 / 战斗已结束：己方格子一律不可点（点了也不该有任何反应）
     const stTurn = fresh(['h1']);
@@ -180,6 +186,45 @@ const check = (ok, label, detail) => {
     const u2 = T.spawnUnit(stOver, 'player', 'c5'); T.placeUnit(stOver, 'player', u2, 0); u2.sick = false;
     stOver.over = true;
     check(V.boardView(stOver, 'player', null, null).every((s) => !s.clickable), '战斗已结束 → 己方格子全部不可点');
+  }
+
+  // ---------- ③d 点敌方单位 → 同一个信息条给它的技能全文（2026-08 用户报的真缺口） ----------
+  //  旧行为：只有**己方**单位能点开 → 敌方单位的技能在手机上**没有出口**（违反铁律①）。
+  //  新口径：点任意敌方单位 → `infoBarView(st, null, null, foeUid)` 给 名字（敌方）/ 系列·稀有度 /
+  //  攻盾体 / **技能全文** / 状态 + 一句"能不能打它、为什么"；与攻击流程**同时成立**（已选攻击者照旧打）。
+  console.log('\n[3d] 点敌方看信息（同一个信息条；与攻击流程并行）');
+  {
+    const st = fresh(['c5']);
+    const foeU = T.spawnUnit(st, 'boss', 'c5'); T.placeUnit(st, 'boss', foeU, 0);
+    // (a) 未选攻击者：信息条给技能原文 + 中文引导（不触发攻击，这里只验模型层）
+    const noAtk = V.infoBarView(st, null, null, foeU.uid);
+    check(noAtk.kind === 'unit' && noAtk.body === foeU.text, '★ 点敌方 → 信息条含该单位的**技能原文**', noAtk.body);
+    check(noAtk.title.indexOf('敌方') >= 0, '标题点名「敌方」（与自己场上的同名单位区分）', noAtk.title);
+    check(noAtk.hint.indexOf(foeU.series) >= 0 && noAtk.stats.indexOf('攻') === 0,
+      '带系列·稀有度与攻/盾/体', noAtk.hint + ' | ' + noAtk.stats);
+    check(noAtk.hint.length > 0 && noAtk.hint.indexOf('点自己一艘战舰') >= 0,
+      '★ 未选攻击者 → 非空中文引导（"点自己一艘战舰作为攻击者"）', noAtk.hint);
+    // (b) 已选攻击者：信息条说"可以攻击"（攻击流程本身由 [攻击类断言] 守着）
+    const atk = T.spawnUnit(st, 'player', 'c5'); T.placeUnit(st, 'player', atk, 0); atk.sick = false;
+    const withAtk = V.infoBarView(st, null, null, foeU.uid);
+    check(withAtk.hint.indexOf('可以攻击') >= 0, '★ 已选攻击者 → 信息条说"可以攻击"', withAtk.hint);
+    check(V.boardView(st, 'boss', atk.uid, null)[0].tone === 'tgt', '已选攻击者 → 它同时是 tgt 攻击目标（两者并行）');
+    // (c) 锁链优先：有锁链在场时，点非锁链敌方要把"为什么不能打它"写清
+    const stT = fresh(['c5']);
+    const taunt = T.spawnUnit(stT, 'boss', 'h4'); T.placeUnit(stT, 'boss', taunt, 0);   // 圣龛战列舰 = 锁链
+    const plain = T.spawnUnit(stT, 'boss', 'c5'); T.placeUnit(stT, 'boss', plain, 1);
+    check(V.infoBarView(stT, null, null, plain.uid).hint.indexOf('锁链') >= 0,
+      '★ 有锁链在场 → 点非锁链敌方写明"必须优先攻击带锁链的战舰"', V.infoBarView(stT, null, null, plain.uid).hint);
+    // (d) 待选择期间：信息条仍是 pending 模态（不被"刚点开的敌方"顶掉，铁律③）
+    const stP = fresh(['h3', 'c5']);
+    T.placeUnit(stP, 'boss', T.spawnUnit(stP, 'boss', 'c5'), 0);
+    E.deploy(stP, 'player', 'h3', 1);
+    check(!!stP.pending, '前置：已进入待选择');
+    const foeP = T.spawnUnit(stP, 'boss', 'c5'); T.placeUnit(stP, 'boss', foeP, 2);
+    check(V.infoBarView(stP, null, null, foeP.uid).kind === 'pending',
+      '★ 待选择期间信息条仍是 pending（模态优先），不显示敌方详情', V.infoBarView(stP, null, null, foeP.uid).kind);
+    const slotP = V.boardView(stP, 'boss', null, null)[2];
+    check(slotP.clickable === false, '★ 待选择期间：不在候选里的敌方**不可点**（铁律③）', String(slotP.clickable));
   }
 
   // ---------- ③c 「能不能读」≠「能不能出」（2026-08 用户报：灰卡的技能在手机上无处可看） ----------

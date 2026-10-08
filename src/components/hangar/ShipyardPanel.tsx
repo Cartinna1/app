@@ -2,23 +2,23 @@ import { memo, useCallback, useMemo, useState } from 'react';
 import type { GameState } from '@/types/game';
 import type { BuildQueueRow, ShipyardCardRow, ShipyardLockedTier, ShipyardView } from '@/lib/battle/shipyard';
 import { canCancelBuild, defaultSeriesFilter, filterBySeries, formatBuildCost, dockLevelText, pickSeriesFilter, resolveSeriesFilter, shipyardView } from '@/lib/battle/shipyard';
-import { getBuildingDef } from '@/data/colony/buildings';
-import { getEffectiveMaxCount, getBuildingCostProfile } from '@/lib/colony/costs';
-import { MATERIAL_NAME_MAP } from '@/data/materialNames';
 import ShipCard from '@/components/ship/ShipCard';
 import SeriesChipRow from './SeriesChipRow';
 
 // ============================================================================
 // 机库 · 船坞面板（V1.5 §8「殖民地建筑与战舰生产」/ §9「战舰科技树」）
-//   ① 三级船坞状态：B32/B33/B34 各自的造价、工期、入驻人口、电力 6/10/18、可产稀有度，
-//      以及"已建成 / 建造中 / 还没建"三种状态（没建的直接给殖民地页签的建法指引）；
+//   ① 顶部一行状态（`当前 一级船坞 · 同时可造 2 艘（排队不限）`）；
+//      ⚠ **三级船坞的三张说明卡已按用户 2026-08 口径删除**（那是纯展示：船坞三级是「殖民」页签的
+//        B32/B33/B34，那三张卡上没有任何按钮，建/升级都在殖民地页签做）；
 //   ② 建造队列：**在建 2 格**（同时建造数上限的唯一真值 = MAX_CONCURRENT_BUILDS）+ 排队列表
 //      （§11 #5 排队无限）+ 取消（**只有未开工的排队项可取消**，已开工的一律挡并写明原因）；
+//      ⚠ 队列**空时不显示任何东西**（原「造船台是空的 —— 在下面挑一张卡下单。」已删）；
 //   ③ 可造卡列表：**只列已解锁的卡**（解锁门槛 = 船坞等级 + 科技，判定全在 lib/battle/shipyard.lockGate；
 //      **资源够不够不算门槛** —— 买不起也看得见，只是按钮禁用 + 行内中文原因）。
 //      ⚠ 未解锁的卡**绝不静默隐藏**（AGENTS 第九节）：列表末尾给一行汇总（数量与分档由
-//        shipyard.lockedSummary 从卡牌数据算出，本面板只把里面的科技 id 收成「相应科技」），
-//        另给一句下一档解锁指引（`view.lockHint`）。
+//        shipyard.lockedSummary 从卡牌数据算出，本面板只把里面的科技 id 收成「相应科技」）。
+//      ⚠ 「想造蓝卡：先造…」那句下一档解锁指引（`view.lockHint`）也已按用户口径删除渲染
+//        （模型字段保留，其余消费者仍可读）。
 //
 // 判定与数值**一律来自 lib/battle/shipyard 的纯函数**（lockGate / canBuild / buildCost / buildTurns /
 // requiredDockLevel / dockLevel / advanceQueue / canCancelBuild），本组件只做渲染与转发，不写第二份门槛。
@@ -125,38 +125,6 @@ function QueueRow({
   );
 }
 
-/** 三级船坞状态的一段（已建成 / 建造中 / 还没建） */
-function DockTier({ state, tier }: { state: GameState; tier: ShipyardView['built'][number] }) {
-  const def = getBuildingDef(tier.id);
-  const colony = state.ships[0]?.colony;
-  const buildingCount = colony ? colony.buildings.filter((b) => !b.active && b.defId === tier.id).length : 0;
-  const cost = def && colony ? getBuildingCostProfile(def, colony) : null;
-  const built = tier.count > 0;
-  const status = built ? '已建成' : buildingCount > 0 ? '建造中' : '还没建';
-  const statusClass = built ? 'text-emerald-300' : buildingCount > 0 ? 'text-yellow-300' : 'text-slate-500';
-  const maxCount = def && colony ? getEffectiveMaxCount(def, colony) : undefined;
-  return (
-    <div className={`rounded-lg border px-2 py-1.5 ${built ? 'border-emerald-800/60 bg-emerald-900/10' : 'border-[#2b3550] bg-[#0f1729]'}`}>
-      <div className="flex flex-wrap items-baseline gap-x-2">
-        <b className="text-[12.5px] text-slate-100">{tier.name}</b>
-        <span className={`text-[11px] font-bold ${statusClass}`}>{status}</span>
-        {def ? <span className="text-[10.5px] text-slate-500">可造 {tier.level === 3 ? '紫、橙' : tier.level === 2 ? '蓝' : '白'}卡</span> : null}
-      </div>
-      {def ? (
-        <p className="mt-0.5 text-[10.5px] leading-relaxed text-slate-500">
-          造价 {cost ? `${cost.gold.toLocaleString()} 金币` : `${def.costGold.toLocaleString()} 金币`}
-          {def.costAlloy ? ` + ${def.costAlloy} 合金` : ''}
-          {Object.entries(def.costMaterials || {}).map(([id, n]) => ` + ${n} ${MATERIAL_NAME_MAP[id] || id}`).join('')}
-          {' · '}{cost ? cost.turns : def.buildTurns} 回合
-          {' · '}入驻 {def.minPop}-{def.maxPop} 人
-          {' · '}⚡ {def.powerConsumption}
-          {maxCount ? ` · 上限 ${maxCount} 座` : ''}
-        </p>
-      ) : null}
-    </div>
-  );
-}
-
 interface ShipyardPanelProps {
   /** 整份存档状态：船坞等级（殖民地建筑列表）与队列都在里面 */
   state: GameState;
@@ -218,12 +186,13 @@ function ShipyardPanelBase({ state, onSelect, onBuild, onCancelBuild }: Shipyard
         </span>
       </div>
 
-      {/* ==================== ① 三级船坞状态 ==================== */}
-      <div className="mt-2 grid gap-1.5 md:grid-cols-3">
-        {view.built.map((tier) => (
-          <DockTier key={tier.id} state={state} tier={tier} />
-        ))}
-      </div>
+      {/* ⚠ 用户 2026-08 口径「船坞的指引文字太多了，红框里的都删去」：
+          ① 三级船坞的「已建成 / 可造 白卡 / 造价 … / 上限 1 座」三张信息卡 —— **整块删除**
+             （它们是**纯展示**：船坞三级是「殖民」页签的建筑 B32/B33/B34，这三张卡上**没有任何按钮**，
+              建/升级都在殖民地页签做，所以删掉不影响任何操作）；
+          ② `view.lockHint`（「想造蓝卡：先造「二级船坞」，再研发…」）—— 删除渲染。
+             ⚠ 模型里的 `ShipyardView.lockHint` / `.built` 仍保留（其余消费者与 check 脚本还在读），
+               只是本面板不再显示。 */}
 
       {view.dockLevel === 0 ? (
         <p className="mt-2 rounded-lg border border-dashed border-[#33405f] px-2.5 py-2 text-[11.5px] leading-relaxed text-amber-400">
@@ -232,26 +201,22 @@ function ShipyardPanelBase({ state, onSelect, onBuild, onCancelBuild }: Shipyard
             : '还没有殖民地 —— 先跃迁到一颗星球，在「殖民」页签建立殖民地，再建造船坞。'}
         </p>
       ) : null}
-      {/* 下一档解锁指引：门槛文案（几级船坞 + 哪些科技 + 哪些系列）全部由 shipyard.shipyardView 生成，
-          本面板只渲染 —— UI 里不写第二份等级/科技判断。 */}
-      {view.lockHint ? (
-        <p className="mt-1.5 text-[10.5px] leading-relaxed text-slate-500">{view.lockHint}</p>
-      ) : null}
+      {/* 下一档解锁指引（`view.lockHint`，如「想造蓝卡：先造「二级船坞」，再研发…」）**已按用户 2026-08 口径删除渲染** ——
+          门槛文案仍在 `lib/battle/shipyard.lockHintText` 里（模型不变），只是船坞面板不再显示这一行。 */}
 
       {/* ==================== ② 建造队列（在建 2 格 + 排队列表） ==================== */}
       <div className="mt-3">
         <div className="flex flex-wrap items-baseline gap-2">
           <h4 className="text-[12.5px] font-bold text-slate-200">造船队列</h4>
+          {/* ⚠ 用户口径：删掉「（还有 N 个空位，现在下单立刻开工）/（满位，现在下单会排到队尾）」那句引导，
+              只留「同时建造 x/2 艘 · 排队 y 艘」的**状态**数字。 */}
           <span className="text-[11px] text-slate-500">
             同时建造 {view.queue.building.length}/{view.queue.maxConcurrent} 艘 · 排队 {view.queue.waiting.length} 艘
-            {view.queue.freeSlots > 0 ? `（还有 ${view.queue.freeSlots} 个空位，现在下单立刻开工）` : '（满位，现在下单会排到队尾）'}
           </span>
         </div>
-        {view.queue.building.length === 0 && view.queue.waiting.length === 0 ? (
-          <p className="mt-1.5 text-[11.5px] text-slate-500">
-            {view.dockLevel === 0 ? '还没有船坞，暂时造不了舰。' : '造船台是空的 —— 在下面挑一张卡下单。'}
-          </p>
-        ) : (
+        {/* ⚠ 队列空时**什么都不显示**（原「造船台是空的 —— 在下面挑一张卡下单。」已按用户口径删除）；
+            队列非空时这里的行照常显示（含「在建 · 还剩 N 回合」/「排队中 · 轮到它之后还需 N 回合」）。 */}
+        {view.queue.building.length === 0 && view.queue.waiting.length === 0 ? null : (
           <div className="mt-1.5 space-y-1.5">
             {view.queue.building.map((row) => (
               <QueueRow key={`b-${row.index}`} row={row} onCancel={onCancelBuild} cancelReason={cancelReason} />
@@ -347,16 +312,21 @@ function ShipyardCardLine({
 }) {
   const costText = formatBuildCost(card.price);
   return (
+    /* ⚠ 手机端**竖排**（卡面在上、建造信息在下）—— 用户 2026-08 截图实证：
+       原来"卡面(封顶 280px) + 信息列"并排，390 宽下行内只有 330px ⇒ 信息列只剩 **42px**，
+       「造价 … / 需要一级船坞… / 技能：… / 下单建造 / 入驻人口…」全部**一字一行竖排**。
+       `flex-col sm:flex-row`：手机端两段各拿满整行（信息列 42px → 330px），sm 起恢复并排。 */
     <div
-      className={`flex gap-2 rounded-lg border bg-[#0f1729] px-2 py-1.5 ${rarityBorder(card.rarity)} ${
+      className={`flex flex-col gap-2 rounded-lg border bg-[#0f1729] px-2 py-1.5 sm:flex-row ${rarityBorder(card.rarity)} ${
         selected ? 'border-amber-400 ring-2 ring-amber-400/30' : 'border-[#2b3550]'
       }`}
     >
-      {/* 图位复用**共用卡面**（`components/ship/ShipCard`：卡库 / 船坞 / 战斗部署池同一个组件）；
-          这里用 `layout="row"`（文字在左、图在右）—— 船坞这行是"卡面 + 建造信息"并排，
-          换成卡库那种"图在上"会把每行撑高 ≈2.6 倍且信息列被挤窄；列宽 280 = 图位 162×81 时
-          「攻盾体」仍能一行放下（再窄就会换行）。 */}
-      <div className="w-full max-w-[280px] flex-none">
+      {/* 图位复用**共用卡面**（`components/ship/ShipCard`：卡库 / 船坞 / 战斗部署池同一个组件）。
+          这里用 `layout="row"`（文字在左、图在右 58%）：
+          · 手机端卡面拿满整行（**不加 280 上限**）⇒ 330 宽、图位 191×96、卡内文字列 ≈121px（攻盾体只需 97px ✓）；
+          · `sm` 起才恢复 280 上限 ⇒ 图位 162×81 时卡内文字列仍放得下「攻盾体」，建造信息列另有 ≈268px。
+          （不做"手机端图在上"：那样每行会从 ≈190px 撑到 ≈390px，33 行多滚一倍，而信息列挪到卡片下方已经够读。） */}
+      <div className="w-full flex-none sm:max-w-[280px]">
         <ShipCard
           id={card.id}
           name={card.name}
