@@ -196,12 +196,12 @@ export const ALL_LEADERS: LeaderDef[] = [
 /** 殖民地领袖容量基数（科技 T23/T24 与领袖 leaderCapBonus 在此之上累加）——单一真值，
  *  colonyTurn 结算、colonySetup / useColonyBase 的初始值共用，勿再写裸 3。 */
 export const LEADER_CAP_BASE = 3;
-// 领袖升级费用（**资源成本对象**）：Lv1→2 = 50,000 金币，Lv2→3 = 150 合金。
+// 领袖升级费用（**资源成本对象**）：Lv1→2 = 50,000 金币，Lv2→3 = 100 合金 + 15 星尘。
 // UI 显示与 useColonyLeaders 扣费统一从这里取；校验/扣减走 lib/turn/resourceCost.ts 的 canAfford/firstMissing/payCost，
 // 历史上「UI 写 50/100 星尘、hook 写 20/45」的分叉已收敛至此，勿再就地硬编码。
 export const LEADER_UPGRADE_COST: Record<1 | 2, Record<string, number>> = {
   1: { gold: 50000 },
-  2: { alloy: 150 },
+  2: { alloy: 100, stardust: 15 },
 };
 
 /** 取某级升到下一级所需资源（cost 对象）；level 已达 3（满级）时返回 null。 */

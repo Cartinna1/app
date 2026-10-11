@@ -299,6 +299,49 @@ function auditBoardBreakpoint() {
 }
 auditBoardBreakpoint();
 
+// ---------------------------------------------------------------------------
+// ⑫ 待选择的派发路径（用户 2026-08 实测「心灵干扰舰能选冻结 2 艘，但点敌方选不中」= 软锁）
+//    根因：`tryResolvePending` 的闸门读 `manual.canAct`，而待选择期间 `manualActionView` 恒返回
+//    `canAct: false`（先选完目标）⇒ 点候选永远进不到派发。修法 = 新增 `manual.canChoose`。
+//    判据（都硬失败）：
+//      ① `tryResolvePending` 只许读 `manual.canChoose`，**不许**读 `manual.canAct`；
+//      ② `onBossTarget` / `onPlayerSlot` 里待选择分支（调 `tryResolvePending`）必须在
+//         `manual.canAct` 闸门**之前** —— 敌方候选走前者、己方候选走后者，两边都得留通路。
+// ---------------------------------------------------------------------------
+function auditPendingChoose() {
+  const screen = path.resolve(__dirname, '../src/components/battle/BattleScreen.tsx');
+  console.log('\n=== 待选择：点候选的派发路径（不许被 canAct 闸门吞掉） ===');
+  if (!fs.existsSync(screen)) { issues.push('BattleScreen.tsx 不存在'); return; }
+  const src = stripComments(fs.readFileSync(screen, 'utf8'));
+  const fnBody = (head) => {
+    const esc = head.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const m = src.match(new RegExp(esc + '[\\s\\S]*?\\n  \\};'));
+    return m ? m[0] : '';
+  };
+  const resolve = fnBody('const tryResolvePending = (uid: string): boolean => {');
+  const usesChoose = resolve.indexOf('manual.canChoose') >= 0;
+  const usesAct = resolve.indexOf('manual.canAct') >= 0;
+  const orderOf = (head) => {
+    const b = fnBody(head);
+    return { pending: b.indexOf('tryResolvePending'), act: b.indexOf('manual.canAct') };
+  };
+  const boss = orderOf('const onBossTarget = (ref: string) => {');
+  const slot = orderOf('const onPlayerSlot = (i: number) => {');
+  const bossOk = boss.pending >= 0 && (boss.act < 0 || boss.pending < boss.act);
+  const slotOk = slot.pending >= 0 && (slot.act < 0 || slot.pending < slot.act);
+  console.log('  ① tryResolvePending 读 canChoose：' + (usesChoose ? '✓' : '✗')
+    + '　不读 canAct：' + (usesAct ? '✗' : '✓'));
+  console.log('  ② onBossTarget 待选择在前：' + (bossOk ? '✓' : '✗')
+    + '　onPlayerSlot 待选择在前：' + (slotOk ? '✓' : '✗'));
+  if (!usesChoose || usesAct) {
+    issues.push('tryResolvePending 的闸门不是 manual.canChoose（读 canAct 会在待选择期间恒 false ⇒ 点候选选不上、软锁）');
+  }
+  if (!bossOk || !slotOk) {
+    issues.push('待选择分支不在 manual.canAct 闸门之前 —— 点候选会被回合动作闸门吞掉（敌方候选走 onBossTarget、己方候选走 onPlayerSlot）');
+  }
+}
+auditPendingChoose();
+
 console.log('\n=== 静态 UI 审计结果 ===');
-if (issues.length === 0) console.log('  未发现问题 ✓（组件 memo / 缩略图 / onError / 纯函数分层 / 渲染串无 V1.5 § / 手动闸门唯一真值 / 信息条位置唯一 / 战场断点 / AGENTS.md 体积）');
+if (issues.length === 0) console.log('  未发现问题 ✓（组件 memo / 缩略图 / onError / 纯函数分层 / 渲染串无 V1.5 § / 手动闸门唯一真值 / 信息条位置唯一 / 战场断点 / 待选择派发 / AGENTS.md 体积）');
 else { issues.forEach((i) => console.log('  ⚠ ' + i)); process.exitCode = 1; }

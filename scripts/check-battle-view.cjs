@@ -11,6 +11,7 @@
 const fails = [];
 const fs = require('fs');
 const path = require('path');
+const J = (v) => JSON.stringify(v);
 const check = (ok, label, detail) => {
   if (ok) console.log('  ✓ ' + label);
   else { fails.push(label + (detail ? ' → ' + detail : '')); console.log('  ✗ ' + label + (detail ? '  → ' + detail : '')); }
@@ -276,6 +277,75 @@ const check = (ok, label, detail) => {
   }
 
   // ---------- ④ 舰队池 / BOSS / 墓地 / 结束回合 ----------
+  // ---------- ③e 待选择：点候选必须真的能选上（**真实 reducer 级**）+ 候选不足/为零都不软锁 ----------
+  //  2026-08 用户实测两条：
+  //   ① 上心灵干扰舰（`p2`，入场：选择冻结 2 个敌方战舰）后**点敌方候选选不中** ✗
+  //      根因（`git show HEAD` 证实两处都是旧代码，**不是**"点敌方看信息"那笔改动引入的）：
+  //        `BattleScreen.tryResolvePending` 的闸门读 `manual.canAct`，而 `manualActionView` 在待选择期间
+  //        恒返回 `canAct: false`（先选完目标）⇒ 点候选永远进不到派发 ⇒ 软锁 ✗
+  //      修法：`manualActionView` 拆出 `canChoose`（待选择期间 = true），选择路径只读它。
+  //   ② 对面只有 1 艘 / 一艘都没有时会不会软锁？—— **DEMO 与移植版逐字一致，本来就不会**：
+  //        `if (!pool.length) { log('效果落空'); return null; }`（不挂 pending）+ `need = min(need, 候选数)`
+  //      ⇒ 用真实 reducer 证明：1 艘时需求收敛为 1 且能打完；0 艘时压根没有 pending。
+  console.log('\n[3e] 待选择：点候选能选上（reducer 级）+ 候选不足/为零都不软锁');
+  {
+    const { gameReducer, createInitialGameState } = await import('@/hooks/gameReducer');
+    /** 造一局：敌方摆 foeCount 艘，然后**真部署** p2（心灵干扰舰 = 冻结 2 艘敌方）→ 挂 pending */
+    const mk = (foeCount) => {
+      const bat = E.createBattle({ seed: 11, bossId: 'b2', playerFirst: true });
+      bat.player.pool = ['p2'];          // 池里只有心灵干扰舰（部署要查池子，别忘了）
+      bat.player.cur = 99;
+      for (let i = 0; i < foeCount; i++) T.placeUnit(bat, 'boss', T.spawnUnit(bat, 'boss', 't_grunt'), i);
+      const dep = E.deploy(bat, 'player', 'p2', 0);
+      if (!dep.ok) console.log('  （部署 p2 失败：' + dep.msg + '）');
+      // 包进 GameState 走**真实 reducer**（组件派的也是这条路：BATTLE_ACTION → resolvePending）
+      return { ...createInitialGameState(), battle: bat };
+    };
+    const choose = (gs, uid) => gameReducer(gs, { type: 'BATTLE_ACTION', action: { type: 'resolvePending', unitId: uid } });
+
+    // ---- ① 2 艘候选 / 需求 2：0 → 1 → 2（每次点击都要真的写进状态） ----
+    const g1 = mk(2);
+    check(!!g1.battle.pending && g1.battle.pending.need === 2 && g1.battle.pending.cands.length === 2,
+      '前置：p2 入场 → 待选择需要 2 艘（候选 2）', J(g1.battle.pending));
+    const c1 = g1.battle.pending.cands.slice();
+    const g2 = choose(g1, c1[0]);
+    check(!!g2.battle.pending && g2.battle.pending.picked.length === 1,
+      '★ reducer：点第 1 艘候选 → 已选 1/2（**选择被消费，没被吞**）',
+      'picked=' + (g2.battle.pending ? g2.battle.pending.picked.length : 'null'));
+    const g3 = choose(g2, c1[1]);
+    check(!g3.battle.pending, '★ reducer：点第 2 艘候选 → 待选择完成（pending 清空）', String(g3.battle.pending));
+    check(E.findUnit(g3.battle, c1[0]).frozen > 0 && E.findUnit(g3.battle, c1[1]).frozen > 0,
+      '★ 两艘候选真的被冻结了（效果落地，不只是"选上了"）');
+    check(g1.battle.pending.picked.length === 0, 'reducer 不改 prev（原来那份 pending 还是 0 选）');
+
+    // ---- ② 只有 1 艘候选 / 需求 2：需求收敛为 1，一次点完，之后能打到结束 ----
+    const g4 = mk(1);
+    check(!!g4.battle.pending && g4.battle.pending.need === 1 && g4.battle.pending.cands.length === 1,
+      '★ 候选只有 1 艘 → 需求收敛为 1（min(需求, 候选数)，绝不留"必须选 2 艘"的死结）', J(g4.battle.pending));
+    const g5 = choose(g4, g4.battle.pending.cands[0]);
+    check(!g5.battle.pending, '★ reducer：点那 1 艘即完成（不会再要求第 2 艘）');
+    let g6 = g5, n6 = 0;
+    while (g6.battle && !g6.battle.over && n6++ < 200) g6 = gameReducer(g6, { type: 'BATTLE_ACTION', action: { type: 'autoTurn' } });
+    check(g6.battle.over === true, '★ 1 艘那一局之后能打到结束（不卡在选择态）', g6.battle.reason);
+
+    // ---- ③ 0 艘候选：压根不挂 pending（效果落空），自然也不会软锁 ----
+    const g7 = mk(0);
+    check(g7.battle.pending === null, '★ 敌方场上没有船 → 不产生无法完成的 pending（效果落空）');
+    let g8 = g7, n8 = 0;
+    while (g8.battle && !g8.battle.over && n8++ < 200) g8 = gameReducer(g8, { type: 'BATTLE_ACTION', action: { type: 'autoTurn' } });
+    check(g8.battle.over === true, '★ 0 候选那一局照常能打完', g8.battle.reason);
+
+    // ---- ④ 两个概念（本次的根因防线）：待选择期间 canAct=false 但 canChoose=true ----
+    const mv = V.manualActionView(mk(2).battle, false);
+    check(mv.canAct === false, '待选择期间 canAct = false（部署/攻击/结束回合先放一放）');
+    check(mv.canChoose === true, '★ 待选择期间 canChoose = true（点候选真的要能选上 —— 本次修的就是这条）', J(mv));
+    const b0 = mk(2).battle;
+    check(V.manualActionView({ ...b0, over: true }, false).canChoose === false, '战斗结束 → canChoose = false');
+    check(V.manualActionView({ ...b0, active: 'boss' }, false).canChoose === false, 'BOSS 回合 → canChoose = false');
+    check(V.manualActionView(b0, true).canChoose === false, '自动战斗接管 → canChoose = false（不许手动插手）');
+    check(V.manualActionView({ ...b0, pending: null }, false).canChoose === true, '没有待选择时 canChoose 与 canAct 同步 = true');
+  }
+
   console.log('\n[4] 舰队池 / BOSS 面板 / 墓地 / 结束回合');
   {
     const st = fresh();

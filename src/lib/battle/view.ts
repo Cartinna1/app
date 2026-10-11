@@ -147,10 +147,19 @@ export interface GraveView {
  *   · 手动能不能点 = 「战斗没结束」+「轮到玩家」+「没有待选择」+「没开自动」；
  *   · `auto` 打开时手动确实应当屏蔽（这是对的）—— 错的是它此前由 `busy` 代判；
  *   · 不能操作时**必须给出中文原因**（铁律②：可攻击/已攻击/不能攻击+原因，出牌同理）。
+ *
+ * ⚠ **`canAct` 与 `canChoose` 是两个概念**（2026-08 用户报「上了心灵干扰舰、能选冻结 2 艘，但点敌方选不中」）：
+ *   · `canAct` = 能不能做**回合动作**（部署 / 攻击 / 结束回合）—— 待选择期间**必须**为 false（先选完目标）；
+ *   · `canChoose` = 能不能**完成一次待选择**（点候选单位 / 墓地条）—— 那正是待选择要玩家做的事，
+ *     待选择期间必须是 **true**。
+ *   ⚠ 曾经 `tryResolvePending` 读的是 `canAct` ⇒ 待选择期间恒 false ⇒ **点候选永远选不上（软锁）** ✗。
+ *     凡是"点下去要派发选择"的地方（`onBossTarget` / `onPlayerSlot` 的候选分支）一律读 `canChoose`。
  */
 export interface ManualView {
-  /** 现在能不能手动出牌 / 攻击 / 结束回合 */
+  /** 现在能不能手动出牌 / 攻击 / 结束回合（**待选择期间为 false**：先选完目标） */
   canAct: boolean;
+  /** 现在能不能**完成一次待选择**（点候选单位）；待选择期间为 true，其余与 canAct 同步 */
+  canChoose: boolean;
   /** canAct 为 true 时是操作提示；为 false 时是**点不动的原因**（绝不许为空） */
   reason: string;
   /** 由自动战斗接管时的那句话；未开自动时恒为空串（"没开自动就不许说正在替你行动"） */
@@ -159,18 +168,21 @@ export interface ManualView {
 
 /** 「此刻谁在操作」的唯一真值：手动输入闸门、底部文案、自动提示三处都读它 */
 export function manualActionView(st: BattleState, auto: boolean): ManualView {
-  if (st.over) return { canAct: false, reason: `战斗已结束：${st.reason}`, autoHint: '' };
+  if (st.over) return { canAct: false, canChoose: false, reason: `战斗已结束：${st.reason}`, autoHint: '' };
   if (auto) {
     return {
       canAct: false,
+      canChoose: false,
       reason: '已开启自动战斗，正在替双方行动',
       autoHint: '（自动战斗）正在替你行动…',
     };
   }
-  if (st.pending) return { canAct: false, reason: '请在可选战舰上点选目标', autoHint: '' };
-  if (st.active !== 'player') return { canAct: false, reason: 'BOSS 行动中，请稍候', autoHint: '' };
+  if (st.active !== 'player') return { canAct: false, canChoose: false, reason: 'BOSS 行动中，请稍候', autoHint: '' };
+  // 待选择：回合动作不许做，但**选目标这一步必须能做**（否则就是"点候选没反应"的软锁）
+  if (st.pending) return { canAct: false, canChoose: true, reason: '请在可选战舰上点选目标', autoHint: '' };
   return {
     canAct: true,
+    canChoose: true,
     reason: '点「你的舰队」里的战舰 → 再点自己场上的空格部署；点己方战舰 → 再点敌方目标攻击。',
     autoHint: '',
   };

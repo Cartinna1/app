@@ -190,18 +190,26 @@ function BattleScreenBase({ battle, seed, enemyName, context, onAction, onEnd }:
 
   /** 待选择状态：点任意候选单位即完成一次选择；返回是否消费了这次点击 */
   const tryResolvePending = (uid: string): boolean => {
-    // 待选择**也是手动操作**：自动模式接管时不许手动选（判定同 manualActionView，一处不写第二份）
-    if (!battle.pending || !manual.canAct) return false;
+    /* ⚠ 这里**只能读 `manual.canChoose`**，绝不能读 `canAct`：待选择期间 canAct 恒为 false
+       （部署/攻击/结束回合要先选完目标），若拿 canAct 当闸门，点候选永远进不到派发 ⇒ **软锁** ✗
+       （2026-08 用户实测：上了心灵干扰舰、能选冻结 2 艘，但点敌方"选不中"）。
+       开自动时 `canChoose` 也是 false（不许手动插手），判定仍只有 manualActionView 一处。 */
+    if (!battle.pending || !manual.canChoose) return false;
     setFlash('');
     userAction({ type: 'resolvePending', unitId: uid });
     return true;
   };
 
   const onPlayerSlot = (i: number) => {
-    if (!manual.canAct) { hint(gateHint); return; }
     const u = battle.player.board[i];
-    if (u && tryResolvePending(u.uid)) return;
-    if (battle.pending) { hint('请先点一艘可选的战舰作为目标（这个位置不在候选里）'); return; }
+    /* 待选择优先于回合动作闸门：候选也可能是**己方**单位（如「复制 / 召回」类效果 scope = any）。
+       那一刻 canAct 本来就是 false，若先过 canAct 这一关，点己方候选只会得到一句提示 ⇒ 选择被吞 ✗ */
+    if (battle.pending) {
+      if (u && tryResolvePending(u.uid)) return;
+      hint('请先点一艘可选的战舰作为目标（这个位置不在候选里）');
+      return;
+    }
+    if (!manual.canAct) { hint(gateHint); return; }
     if (selCard && !u) {
       // 部署这一步才判"能不能出"：指挥度不足 / 场上满 → **明确写出原因**，不派发（铁律②同理）。
       const card = cards.find((c) => c.id === selCard);
