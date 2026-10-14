@@ -132,16 +132,26 @@ function BoardSideBase({ side, slots, selUnit, selFoe, onPlayerSlot, onBossTarge
             if (side === 'player') onPlayerSlot(s.i);
             else if (s.unit) onBossTarget(s.unit.uid);
           }}
-          /* 空位在手机上也要看得见、点得动（部署目标）⇒ 给一个最小高度；`sm` 起回到 156px */
-          className={`flex min-h-[46px] min-w-0 items-center justify-center rounded-lg sm:min-h-[156px] ${slotClass(s.tone)}`}
+          /* 空位在手机上也要看得见、点得动（部署目标）⇒ 给一个最小高度；`sm` 起回到 156px。
+             `relative` 供"占用格左上角的槽位号"定位。 */
+          className={`relative flex min-h-[46px] min-w-0 items-center justify-center rounded-lg sm:min-h-[156px] ${slotClass(s.tone)}`}
         >
           {s.unit ? (
-            <UnitCard
-              u={s.unit}
-              selected={side === 'boss' ? !!selFoe && selFoe === s.unit.uid : !!selUnit && selUnit === s.unit.uid}
-            />
+            <>
+              <UnitCard
+                u={s.unit}
+                selected={side === 'boss' ? !!selFoe && selFoe === s.unit.uid : !!selUnit && selUnit === s.unit.uid}
+              />
+              {/* 占用格：左上角一个小数字 = **槽位下标 + 1**（与空位的「空位N」同源、同一份 JSX 两端都渲染）
+                  —— 两艘都占位时也能一眼看出谁与谁相邻（引擎的相邻判据 = 下标 ±1）。 */}
+              <span className="absolute left-1 top-[3px] z-[1] rounded bg-[#0b1020]/85 px-1 text-[9px] font-bold leading-[1.5] text-slate-400">
+                {s.i + 1}
+              </span>
+            </>
           ) : (
-            <span className="text-[11px] text-[#3b4763]">空位</span>
+            /* 空位编号：**按槽位下标 0→5 显示 1→6**（= 引擎 `adjacent` 用的那个下标 ±1）
+               —— 手机 3 列 × 2 行时"2 与 3 相邻"看起来跨了排，编号让规则自洽（规则本身没改）。 */
+            <span className="text-[11px] text-slate-500">空位{s.i + 1}</span>
           )}
         </div>
       ))}

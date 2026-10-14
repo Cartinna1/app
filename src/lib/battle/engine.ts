@@ -60,7 +60,7 @@ const BEHAVIOR: Record<string, CardBehavior> = {
   h7: {
     kw: {},
     fx: {
-      turnStart(u, api) { api.healBody(2); api.allies(u).forEach(a => api.repair(a, 2)); },
+      turnStart(u, api) { api.healBody(2); api.alliesOther(u).forEach(a => api.repair(a, 2)); },
       death(_u, api) { api.healBody(5); },
     },
   },
@@ -166,7 +166,7 @@ function makeSide(id: BattleSide, pool: readonly ShipCardId[], bodyHp: number, s
     lost: [],                    // 已永久损失的舰船
     grave: [],                   // 墓地（供「召回」使用）
     board: new Array(BOARD_SIZE).fill(null),
-    cap: startCap, cur: 0, capBonus: 0, costReduce: 0, overloadNext: 0,
+    cap: startCap, cur: 0, capBonus: 0, costReduce: 0, overloadNext: 0, bossBuffed: false,
     ownTurns: 0, deployed: 0, kills: 0,
   };
 }
@@ -318,11 +318,18 @@ export function deploy(st: BattleState, side: BattleSide, cardId: ShipCardId, sl
   const cost = costOf(st, side, cardId);
   const s = S(st, side);
   const idx = s.pool.indexOf(cardId); s.pool.splice(idx, 1);
+  // 记录「出牌前」的指挥度：入场效果可能需要判"出牌前 ≥N"（g2 雇佣兵炮舰）。
+  // 只把快照挂在 s.manaB 上给 api.manaBefore() 读 —— **不改动 s.cur 与任何调用顺序**，
+  // 所以随机数消耗与旧实现一字不差（旧行为：入场效果读到的是扣费后的剩余）。
+  const curBefore = s.cur;      // 「出牌前」的指挥度，供 api.manaBefore() 读（g2 雇佣兵炮舰）
   s.cur -= cost; s.deployed++;
   const u = spawnUnit(st, side, cardId);
   placeUnit(st, side, u, slot);
   log(st, `${label(side)} 部署 ${u.name}（${cost} 费，${u.atk}/${u.maxShield}/${u.maxStructure}）`);
+  s.manaB = curBefore;
   if (c.fx && c.fx.play) c.fx.play(u, api(st, side));
+  // 过载 N：部署后，你的**下一个**回合开始时指挥度上限 −N，然后清空（"先欠着，下回合还"）
+  if (kwOn(c.kw.overload)) s.overloadNext += (c.kw.overload as number);
   cleanup(st);
   return { ok: true, unit: u };
 }
@@ -452,7 +459,18 @@ function bossTurnStart(st: BattleState, side: BattleSide): void {
     t.forEach(u => api(st, 'boss').freeze(u, 1));
     if (t.length) log(st, `  【头目技能】红胡子冻结 ${t.map(u => u.name).join('、')}`);
   }
-  if (st.bossId === 'b3' && S(st, 'boss').body <= 15) {
+  if (st.bossId === 'b3' && S(st, 'boss').body <= 25) {
+    // 【2026-08 用户裁定】阈值 15 → 25，且 **只加一次**（明确不叠加）：
+    //   +4 攻是"跌破阈值后获得的**状态**"，不是"每个头目回合开始再叠一次"。
+    //   为什么不叠加：触发窗口从 ≤15 前移到 ≤25 后会跨很多个回合，逐回合 +4 会滚成
+    //   +几十攻（实测最高 10~14 攻，见本轮报告），变成"触发即必胜"的滚雪球。
+    //   用 bossBuffed 做一次性标记（不随回血重置，与"状态"语义一致、也可复现）。
+    const bs = S(st, 'boss');
+    if (!bs.bossBuffed) {
+      bs.bossBuffed = true;
+      log(st, `  【头目技能】深海阎王：本体 ${bs.body} ≤25，全体己方 +4 攻（${bs.board.filter(Boolean).length} 艘）`);
+      api(st, 'boss').allies(null).forEach(a => { a.atk += 4; });
+    }
     damageBody(st, 'player', 1);
     log(st, `  【头目技能】深海威压：玩家本体 -1（当前 ${S(st, 'player').body}）`);
   }
@@ -537,8 +555,18 @@ export function api(st: BattleState, side: BattleSide): BattleApi {
   const self: BattleApi = {
     st, side, foe,
     mana: () => S(st, side).cur,
+    // 【新增】出牌前的指挥度（只在 deploy 的入场效果期间有效；效果之外读到的是当前值）。
+    // 为什么需要它：deploy 是"先扣费、再跑入场效果"，故 api.mana() 是**扣费后剩余**，
+    // 判不出「出牌前 ≥4」这种写法。2026-08 用户裁定：g2 判的是**出牌前**。
+    manaBefore: () => (S(st, side).manaB != null ? (S(st, side).manaB as number) : S(st, side).cur),
     friendlyCount: () => unitsOf(st, side).length,
-    allies: (u) => unitsOf(st, side).filter(x => x.uid !== (u && u.uid)),
+    // 【2026-08 用户裁定：卡面写「全体 / 所有」就要**包含自己**】
+    //   旧实现 filter(x => x.uid !== u.uid) 排除自身，与卡面文案不符 → 改行为去对齐文案。
+    //   ⚠ 只动这一处；「相邻」是另一类（adjacent 只看左右槽位，天然不含自己），两者不要合并。
+    allies: (_u) => unitsOf(st, side),
+    // 【2026-08 用户裁定】「其余友舰 / 其他友舰」= **不含自己** 的另一类。
+    //   与上面的 allies（含自己）是**两个语义**，卡面写哪个就用哪个，别在卡里手写 filter 复制一份。
+    alliesOther: (u) => unitsOf(st, side).filter(x => x.uid !== (u && u.uid)),
     enemies: (_u) => unitsOf(st, foe),
     adjacent(u) {
       const b = S(st, side).board, out: BattleUnit[] = [];
@@ -564,7 +592,11 @@ export function api(st: BattleState, side: BattleSide): BattleApi {
     // 「本回合」类加成：记在 tempAtk 上，回合结束时撤销
     buffAtkTemp(u, n) { if (u) { u.atk = Math.max(0, u.atk + n); u.tempAtk = (u.tempAtk || 0) + n; } },
     buffShield(u, n) { if (u) { u.shield = Math.max(0, u.shield + n); if (n > 0) u.maxShield += n; } },
-    repair(u, n) { if (u && u.maxShield > 0) u.shield = Math.min(u.maxShield, u.shield + n); else if (u) u.shield += n; },
+    // 【2026-08 用户裁定，覆盖 V1.5 §1.2 的"卡牌修复可以给 0 护盾的舰加盾"】
+    //   0 护盾上限的单位修复**不生效**：既不 += n，也不抬上限 —— 否则会出现
+    //   「盾 3 / 上限 0」这种当前值超上限的怪状态，而"最多比原始护盾高 2"
+    //   （b2 黑寡妇加固）是按 maxShield 比的，会被这种脏值带偏。
+    repair(u, n) { if (u && u.maxShield > 0) u.shield = Math.min(u.maxShield, u.shield + n); },
     freeze(u, n) { if (u) u.frozen = Math.max(u.frozen, n); },
     gainMana(n) { S(st, side).cur += n; },
     gainManaFoe(n) { S(st, foe).cur += n; },

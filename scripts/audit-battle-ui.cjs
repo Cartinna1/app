@@ -262,6 +262,18 @@ function auditInfoBarPlacement() {
   if (!ordered) {
     issues.push('信息条不在「你的舰队」标题之后、<FleetPool> 卡片列表之前 —— 满编 30 张时用户又得拉到底才能看技能');
   }
+  /* ③ 相邻规则说明（用户 2026-08 逐字）：「相邻数字的空位视为相邻，两排仍遵守此规则」
+        —— 位置 = 标题之后、**信息条之前**（信息条刚被钉在这一段里，别顶掉它）；只许一份；
+           两端同一份 JSX（没有断点条件，桌面/手机都渲染）。纯展示，规则没改。 */
+  const NOTE = '相邻数字的空位视为相邻，两排仍遵守此规则';
+  const noteHits = src.split(NOTE).length - 1;
+  const noteAt = src.indexOf(NOTE);
+  const noteOk = noteHits === 1 && noteAt > title && noteAt < at;
+  console.log('  ③ 相邻规则说明：出现 ' + noteHits + ' 次，标题(' + title + ') → 说明(' + noteAt + ') → 信息条(' + at + ')：'
+    + (noteOk ? '✓' : '✗'));
+  if (!noteOk) {
+    issues.push('相邻规则说明（「' + NOTE + '」）缺失 / 多于一份 / 不在标题之后信息条之前 —— 用户 2026-08 逐字要求的位置');
+  }
 }
 auditInfoBarPlacement();
 
@@ -342,6 +354,38 @@ function auditPendingChoose() {
 }
 auditPendingChoose();
 
+// ---------------------------------------------------------------------------
+// ⑬ 槽位编号（用户 2026-08：「空位标空位1 空位2」+ 占用格也带个小数字）
+//    规则没改：引擎 `adjacent` = **槽位下标 ±1**，与"排"无关（手机 3 列 × 2 行时下标 2/3 看起来跨排）。
+//    判据（都硬失败）：
+//      ① 空位文案必须是 `空位{s.i + 1}`（**编号源 = 槽位下标**，不是自增计数器、不是另一套编号）；
+//      ② 占用格也要有同一个 `{s.i + 1}` 角标（两艘都占位时也能看出谁挨着谁）；
+//      ③ 两端**同一份 JSX**：`空位` 只在 BoardSide 里出现 1 次（没有"手机一份、桌面一份"），
+//         且没有裸 `>空位<`（不带编号的旧文案不许复活）。
+// ---------------------------------------------------------------------------
+function auditSlotNumbering() {
+  const board = path.resolve(__dirname, '../src/components/battle/BoardSide.tsx');
+  console.log('\n=== 槽位编号（空位1…6 = 槽位下标 +1；占用格同源） ===');
+  if (!fs.existsSync(board)) { issues.push('BoardSide.tsx 不存在'); return; }
+  const b = stripComments(fs.readFileSync(board, 'utf8'));
+  const emptyHits = b.split('空位').length - 1;
+  const numbered = b.indexOf('空位{s.i + 1}') >= 0;
+  const stray = /空位<\/span>|空位\{[^}]*\}[^<]*空位/.test(b);
+  const badge = b.split('{s.i + 1}').length - 1;
+  const ok = emptyHits === 1 && numbered && !stray && badge >= 2;
+  console.log('  ① 空位文案 = 空位{s.i + 1}：' + (numbered ? '✓' : '✗')
+    + '　② 占用格角标 {s.i + 1}（共 ' + badge + ' 处）：' + (badge >= 2 ? '✓' : '✗')
+    + '　③ 空位只出现 ' + emptyHits + ' 次（两端同一份）：' + (emptyHits === 1 ? '✓' : '✗'));
+  if (!numbered || stray) {
+    issues.push('空位编号不是 `空位{s.i + 1}`（编号必须与引擎判定相邻用的槽位下标一致；不许自增计数器或裸「空位」）');
+  }
+  if (badge < 2) issues.push('占用格没有槽位号角标 —— 两艘都占位时玩家看不出谁与谁相邻');
+  if (emptyHits !== 1) {
+    issues.push('BoardSide 里「空位」出现 ' + emptyHits + ' 次 —— 编号只许一份 JSX（手机/桌面共用），不许各写一套');
+  }
+}
+auditSlotNumbering();
+
 console.log('\n=== 静态 UI 审计结果 ===');
-if (issues.length === 0) console.log('  未发现问题 ✓（组件 memo / 缩略图 / onError / 纯函数分层 / 渲染串无 V1.5 § / 手动闸门唯一真值 / 信息条位置唯一 / 战场断点 / 待选择派发 / AGENTS.md 体积）');
+if (issues.length === 0) console.log('  未发现问题 ✓（组件 memo / 缩略图 / onError / 纯函数分层 / 渲染串无 V1.5 § / 手动闸门唯一真值 / 信息条位置唯一 / 战场断点 / 待选择派发 / 槽位编号 / AGENTS.md 体积）');
 else { issues.forEach((i) => console.log('  ⚠ ' + i)); process.exitCode = 1; }

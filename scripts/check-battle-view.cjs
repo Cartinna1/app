@@ -346,6 +346,28 @@ const check = (ok, label, detail) => {
     check(V.manualActionView({ ...b0, pending: null }, false).canChoose === true, '没有待选择时 canChoose 与 canAct 同步 = true');
   }
 
+  // ---------- ③f 槽位编号（用户 2026-08：空位标「空位1…空位6」+ 占用格角上给数字） ----------
+  //  规则没改（引擎 adjacent = **槽位下标 ±1**，与"排"无关）：手机 3 列 × 2 行时下标 2/3 看起来跨排，
+  //  所以把**下标**标在格子上，让"相邻数字 = 相邻"自洽。编号源 = `SlotView.i`（= 引擎索引的数组下标）。
+  console.log('\n[3f] 槽位编号：空位 1→6 与 slot 下标一一对应（两端同一份）');
+  {
+    const st = fresh();
+    for (const side of ['player', 'boss']) {
+      const slots = V.boardView(st, side, null, null);
+      check(slots.length === 6, side + '：6 个槽位', String(slots.length));
+      check(J(slots.map((s) => s.i)) === J([0, 1, 2, 3, 4, 5]),
+        side + '：槽位下标按 0→5 顺序给出（编号就是它 +1）', J(slots.map((s) => s.i)));
+      const labels = slots.map((s) => '空位' + (s.i + 1));
+      check(J(labels) === J(['空位1', '空位2', '空位3', '空位4', '空位5', '空位6']),
+        side + '：逐格文案 = 空位1…空位6', J(labels));
+    }
+    const st2 = fresh();
+    const mine = T.spawnUnit(st2, 'player', 'c5'); T.placeUnit(st2, 'player', mine, 2);
+    const s2 = V.boardView(st2, 'player', null, null);
+    check(!!s2[2].unit && s2[2].unit.uid === mine.uid && s2[2].i === 2,
+      '第 3 格放了单位 → i 仍是 2（占用格角标显示 3，与空位编号同源）');
+  }
+
   console.log('\n[4] 舰队池 / BOSS 面板 / 墓地 / 结束回合');
   {
     const st = fresh();

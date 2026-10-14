@@ -215,6 +215,10 @@ export interface BattleSideState {
   costReduce: number;
   /** 下回合指挥度扣减（过载） */
   overloadNext: number;
+  /** 头目「跌破阈值一次性加成」是否已用掉（b3 深海阎王 ≤25 时全体 +4 攻，只加一次） */
+  bossBuffed: boolean;
+  /** 出牌前的指挥度快照（deploy 期间临时写入；manaBefore() 读它） */
+  manaB?: number;
   /** 该方已行动过的回合数 */
   ownTurns: number;
   /** 已部署艘数 */
@@ -275,10 +279,14 @@ export interface BattleApi {
   foe: BattleSide;
   /** 当前剩余指挥度 */
   mana: () => number;
+  /** 出牌前的指挥度（判「出牌前 ≥N」用；见 engine.deploy 的快照注释） */
+  manaBefore: () => number;
   /** 己方场上艘数 */
   friendlyCount: () => number;
-  /** 除 u 之外的己方单位 */
+  /** 己方所有单位（**包含自己**：卡面写「全体 / 所有」的口径，2026-08 用户裁定） */
   allies: (u?: BattleUnit | null) => BattleUnit[];
+  /** 己方**其他**单位（**不含自己**：卡面写「其余友舰」的口径，2026-08 用户裁定） */
+  alliesOther: (u?: BattleUnit | null) => BattleUnit[];
   /** 敌方场上单位 */
   enemies: (u?: BattleUnit | null) => BattleUnit[];
   /** 左右相邻的己方单位 */
