@@ -1,7 +1,10 @@
-import { useState, useRef, useEffect, useCallback, useMemo, memo } from 'react';
+import { useState, useMemo, memo } from 'react';
 import type { Stock, Mothership } from '@/types/game';
 import { getStockFeeMult, getStockSellFeeMult } from '@/data/gameData';
 import { isStockCooling, getStockCooldownHint } from '@/hooks/useStock';
+import { getStockDelistRisk, type StockDelistRiskLevel } from '@/lib/turn/nextTurnHints';
+import { STOCK_DELIST } from '@/lib/turn/priceFluctuation';
+import StockPriceChart from './StockPriceChart';
 import { TrendingUp, TrendingDown, Search, Clock, ArrowLeft } from 'lucide-react';
 
 interface StockMarketProps {
@@ -26,15 +29,67 @@ const SECTOR_COLORS: Record<string, string> = {
   '娱乐服务': 'bg-pink-900/30 text-pink-400 border-pink-700/40',
 };
 
+/** 退市徽章配色（唯一一张表：列表行与详情区共用） */
+const DELIST_BADGE_CLASS: Record<StockDelistRiskLevel, string> = {
+  none: '',
+  mid: 'bg-red-950/60 text-red-400 border-red-700/60',
+  deep: 'bg-red-900/70 text-red-200 border-red-500/70',
+  delisted: 'bg-slate-800 text-slate-400 border-slate-600',
+};
+
+/** 退市徽章（唯一渲染点：列表行、手机卡片、桌面/手机详情区都渲染它）
+ *  判据与概率来自 lib 的 getStockDelistRisk（阈值读 STOCK_DELIST，勿在这里写 -0.65 / 3% / 12% / 5 次）。 */
+function DelistBadge({ stock }: { stock: Stock }) {
+  const risk = getStockDelistRisk(stock);
+  if (risk.level === 'none') return null;
+  const restructureNote =
+    risk.level === 'delisted'
+      ? ''
+      : risk.restructures > 0
+        ? ` · 已重整 ${risk.restructures}/${STOCK_DELIST.MAX_RESTRUCTURES}`
+        : '';
+  const label =
+    risk.level === 'delisted'
+      ? `已退市${risk.permanentlyClosed ? '（不再重整）' : ''}`
+      : `${risk.level === 'deep' ? '高危区' : '退市风险区'} · 每回合 ${Math.round(risk.chance * 100)}%${restructureNote}`;
+  return (
+    <span className={`inline-block align-middle flex-shrink-0 text-[10px] px-1.5 py-0.5 rounded border ${DELIST_BADGE_CLASS[risk.level]}`}>
+      {label}
+    </span>
+  );
+}
+
+/** 退市后果提示（唯一文案出处：桌面与手机详情区共用；概率/残值/重整上限一律读 STOCK_DELIST） */
+function delistNoticeOf(stock: Stock): string {
+  const risk = getStockDelistRisk(stock);
+  const residual = Math.round(STOCK_DELIST.RESIDUAL * 100);
+  if (risk.level === 'delisted') {
+    return risk.permanentlyClosed
+      ? `已退市且不再重整（重整 ${STOCK_DELIST.MAX_RESTRUCTURES}/${STOCK_DELIST.MAX_RESTRUCTURES} 次已用尽），不能再买入或卖出；退市时持仓已按最后价 ${residual}% 残值清算`
+      : `已退市，不能再买入或卖出；退市时持仓已按最后价 ${residual}% 残值清算`;
+  }
+  if (risk.level === 'none') return '';
+  const zone = risk.level === 'deep' ? '高危区' : '退市风险区';
+  const restructure = risk.restructuresLeft > 0
+    ? `；退市后会用尽一次重整机会（已重整 ${risk.restructures}/${STOCK_DELIST.MAX_RESTRUCTURES} 次），重整再上市时价格回到基准价 ${stock.basePrice}，但持仓不恢复，只按残值清算`
+    : `；重整 ${STOCK_DELIST.MAX_RESTRUCTURES} 次已用尽，再退市即彻底关闭（不再上市，原位置补一家新公司）`;
+  return `${zone}：每回合 ${Math.round(risk.chance * 100)}% 概率退市，退市后按最后价 ${residual}% 残值清算${restructure}`;
+}
+
 function StockMarket({ stocks, ship, shipIndex, currentTurn, onBuy, onSell }: StockMarketProps) {
   const [search, setSearch] = useState('');
-  const [selectedStock, setSelectedStock] = useState<Stock | null>(null);
+  // 只存选中的 id：详情区每次渲染按 id 取**当前**数据，否则结束回合后价格/退市标记会停留在点击那一刻
+  const [selectedStockId, setSelectedStockId] = useState<string | null>(null);
   const [activeSector, setActiveSector] = useState<string>('全部');
   const [tradeQty, setTradeQty] = useState(1);
   const [tradeMode, setTradeMode] = useState<'buy' | 'sell'>('buy');
   const [message, setMessage] = useState('');
   const [messageType, setMessageType] = useState<'success' | 'error' | 'profit' | 'loss'>('success');
-  const canvasRef = useRef<HTMLCanvasElement>(null);
+
+  const selectedStock = useMemo(
+    () => (selectedStockId ? stocks.find((s) => s.id === selectedStockId) || null : null),
+    [stocks, selectedStockId]
+  );
 
   const sectors = useMemo(() => {
     const set = new Set(stocks.map((s) => s.sector));
@@ -59,66 +114,6 @@ function StockMarket({ stocks, ship, shipIndex, currentTurn, onBuy, onSell }: St
     }
     return result;
   }, [stocks, activeSector, search, holdings]);
-
-  const drawChart = useCallback(() => {
-    if (!selectedStock || !canvasRef.current) return;
-    const canvas = canvasRef.current;
-    const ctx = canvas.getContext('2d');
-    if (!ctx) return;
-    const prices = selectedStock.prices.slice(-30);
-    const w = canvas.width;
-    const h = canvas.height;
-    const padding = 20;
-    ctx.clearRect(0, 0, w, h);
-    if (prices.length < 2) return;
-    const min = Math.min(...prices) * 0.95;
-    const max = Math.max(...prices) * 1.05;
-    const range = max - min || 1;
-    const getX = (i: number) => padding + (i / (prices.length - 1)) * (w - padding * 2);
-    const getY = (p: number) => h - padding - ((p - min) / range) * (h - padding * 2);
-    ctx.strokeStyle = '#1e293b';
-    ctx.lineWidth = 1;
-    for (let i = 0; i <= 4; i++) {
-      const y = padding + (i / 4) * (h - padding * 2);
-      ctx.beginPath();
-      ctx.moveTo(padding, y);
-      ctx.lineTo(w - padding, y);
-      ctx.stroke();
-    }
-    const isUp = prices[prices.length - 1] >= prices[0];
-    ctx.strokeStyle = isUp ? '#22d3ee' : '#f87171';
-    ctx.lineWidth = 2;
-    ctx.beginPath();
-    prices.forEach((p, i) => {
-      if (i === 0) ctx.moveTo(getX(i), getY(p));
-      else ctx.lineTo(getX(i), getY(p));
-    });
-    ctx.stroke();
-    const gradient = ctx.createLinearGradient(0, padding, 0, h - padding);
-    gradient.addColorStop(0, isUp ? 'rgba(34,211,238,0.15)' : 'rgba(248,113,113,0.15)');
-    gradient.addColorStop(1, 'rgba(0,0,0,0)');
-    ctx.fillStyle = gradient;
-    ctx.beginPath();
-    ctx.moveTo(getX(0), h - padding);
-    prices.forEach((p, i) => ctx.lineTo(getX(i), getY(p)));
-    ctx.lineTo(getX(prices.length - 1), h - padding);
-    ctx.closePath();
-    ctx.fill();
-    prices.forEach((p, i) => {
-      ctx.fillStyle = i === prices.length - 1 ? (isUp ? '#22d3ee' : '#f87171') : '#475569';
-      ctx.beginPath();
-      ctx.arc(getX(i), getY(p), i === prices.length - 1 ? 4 : 2, 0, Math.PI * 2);
-      ctx.fill();
-    });
-    ctx.fillStyle = '#94a3b8';
-    ctx.font = '11px sans-serif';
-    ctx.textAlign = 'right';
-    ctx.fillText(`当前: ${prices[prices.length - 1]}`, w - padding, 14);
-  }, [selectedStock]);
-
-  useEffect(() => {
-    drawChart();
-  }, [drawChart]);
 
   const handleTrade = () => {
     if (!selectedStock || tradeQty <= 0) return;
@@ -208,7 +203,7 @@ function StockMarket({ stocks, ship, shipIndex, currentTurn, onBuy, onSell }: St
             {sectors.map((sector) => (
               <button
                 key={sector}
-                onClick={() => { setActiveSector(sector); setSelectedStock(null); }}
+                onClick={() => { setActiveSector(sector); setSelectedStockId(null); }}
                 className={`flex-shrink-0 px-2.5 py-1 rounded-md text-xs font-bold border transition-all ${
                   activeSector === sector
                     ? 'bg-cyan-600/30 text-cyan-400 border-cyan-500/60'
@@ -252,10 +247,13 @@ function StockMarket({ stocks, ship, shipIndex, currentTurn, onBuy, onSell }: St
                       className={`border-t border-slate-800 cursor-pointer transition-colors ${
                         isSelected ? 'bg-cyan-950/30' : 'hover:bg-slate-800/50'
                       }`}
-                      onClick={() => setSelectedStock(stock)}
+                      onClick={() => setSelectedStockId(stock.id)}
                     >
                       <td className="px-3 py-2">
-                        <div className="font-medium text-slate-200">{stock.name}</div>
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <span className="font-medium text-slate-200">{stock.name}</span>
+                          <DelistBadge stock={stock} />
+                        </div>
                       </td>
                       <td className="px-3 py-2">
                         <span className={`text-xs px-2 py-0.5 rounded border ${sectorColor}`}>{stock.sector}</span>
@@ -303,7 +301,7 @@ function StockMarket({ stocks, ship, shipIndex, currentTurn, onBuy, onSell }: St
                 <button
                   key={stock.id}
                   onClick={() => {
-                    setSelectedStock(stock);
+                    setSelectedStockId(stock.id);
                     setMobileTradeStock(stock);
                   }}
                   className="w-full text-left bg-slate-900/60 border border-slate-700 rounded-xl p-3 flex items-center gap-3 active:bg-slate-800/60"
@@ -312,6 +310,7 @@ function StockMarket({ stocks, ship, shipIndex, currentTurn, onBuy, onSell }: St
                     <div className="flex items-center gap-2 mb-1">
                       <span className="font-medium text-slate-200 text-sm truncate">{stock.name}</span>
                       <span className={`flex-shrink-0 text-[10px] px-1.5 py-0.5 rounded border ${sectorColor}`}>{stock.sector}</span>
+                      <DelistBadge stock={stock} />
                     </div>
                     <div className="flex items-center gap-3 text-xs">
                       <span className="font-mono text-slate-200">{stock.currentPrice}</span>
@@ -342,7 +341,6 @@ function StockMarket({ stocks, ship, shipIndex, currentTurn, onBuy, onSell }: St
               tradeMode={tradeMode}
               message={message}
               messageType={messageType}
-              canvasRef={canvasRef}
               holdings={holdings}
               costs={costs}
               buyTurns={buyTurns}
@@ -423,12 +421,14 @@ function MobileTradePanel({
   };
 
   const sectorColor = SECTOR_COLORS[stock.sector] || 'bg-slate-800 text-slate-400 border-slate-700';
+  const delistNotice = delistNoticeOf(stock);
 
   return (
     <div>
       <div className="flex items-center gap-2 mb-4">
         <h3 className="text-xl font-bold text-white">{stock.name}</h3>
         <span className={`text-xs px-2 py-0.5 rounded border ${sectorColor}`}>{stock.sector}</span>
+        <DelistBadge stock={stock} />
       </div>
       <p className="text-xs text-slate-500 mb-4">{stock.description}</p>
 
@@ -436,6 +436,13 @@ function MobileTradePanel({
         <span className="text-slate-400">当前价格</span>
         <span className="text-xl font-bold text-cyan-400">{stock.currentPrice} 金币</span>
       </div>
+
+      {/* 走势图（手机详情区此前完全没有画布 → 手机上根本看不到走势） */}
+      <StockPriceChart prices={stock.prices} />
+
+      {delistNotice && (
+        <p className="text-xs text-red-300 bg-red-950/40 border border-red-900/60 rounded-lg p-2 mb-4">{delistNotice}</p>
+      )}
 
       {/* 持仓信息 */}
       <div className="bg-slate-800/60 rounded-lg p-3 mb-4 text-sm space-y-1">
@@ -458,39 +465,44 @@ function MobileTradePanel({
         )}
       </div>
 
-      {/* 买卖切换 */}
-      <div className="flex mb-3 bg-slate-800 rounded-lg p-1">
-        <button onClick={() => setTradeMode('buy')} className={`flex-1 py-2 text-sm font-bold rounded transition-colors ${tradeMode === 'buy' ? 'bg-cyan-600 text-white' : 'text-slate-400'}`}>买入</button>
-        <button onClick={() => setTradeMode('sell')} className={`flex-1 py-2 text-sm font-bold rounded transition-colors ${tradeMode === 'sell' ? 'bg-red-600 text-white' : 'text-slate-400'}`}>卖出</button>
-      </div>
+      {/* 已退市：不给买入/卖出入口（动作层另有拦截，界面也不该还提供） */}
+      {!stock.delisted && (
+        <>
+          {/* 买卖切换 */}
+          <div className="flex mb-3 bg-slate-800 rounded-lg p-1">
+            <button onClick={() => setTradeMode('buy')} className={`flex-1 py-2 text-sm font-bold rounded transition-colors ${tradeMode === 'buy' ? 'bg-cyan-600 text-white' : 'text-slate-400'}`}>买入</button>
+            <button onClick={() => setTradeMode('sell')} className={`flex-1 py-2 text-sm font-bold rounded transition-colors ${tradeMode === 'sell' ? 'bg-red-600 text-white' : 'text-slate-400'}`}>卖出</button>
+          </div>
 
-      {/* 数量输入 */}
-      <div className="mb-3">
-        <input
-          type="text"
-          inputMode="numeric"
-          pattern="[0-9]*"
-          value={tradeQty}
-          onChange={(e) => { const v = e.target.value.replace(/[^0-9]/g, ''); if (v === '') { setTradeQty(0); return; } setTradeQty(parseInt(v)); }}
-          disabled={false}
-          className="w-full bg-slate-800 border border-slate-600 rounded-lg px-3 py-2.5 text-sm text-slate-200 focus:outline-none focus:border-cyan-500 disabled:opacity-50"
-        />
-        <div className="text-xs text-slate-500 mt-1">
-          {tradeMode === 'buy'
-            ? `需要: ${Math.round(stock.currentPrice * tradeQty * feeMult).toLocaleString()} 金币${feeMult === 1 ? '（无手续费）' : feeMult > 1 ? '（含手续费）' : '（手续费减免）'}`
-            : `收入: ${Math.round(stock.currentPrice * tradeQty * sellFeeMult).toLocaleString()} 金币${sellFeeMult === 1 ? '（无手续费）' : '（含手续费）'}`
-          }
-        </div>
-      </div>
+          {/* 数量输入 */}
+          <div className="mb-3">
+            <input
+              type="text"
+              inputMode="numeric"
+              pattern="[0-9]*"
+              value={tradeQty}
+              onChange={(e) => { const v = e.target.value.replace(/[^0-9]/g, ''); if (v === '') { setTradeQty(0); return; } setTradeQty(parseInt(v)); }}
+              disabled={false}
+              className="w-full bg-slate-800 border border-slate-600 rounded-lg px-3 py-2.5 text-sm text-slate-200 focus:outline-none focus:border-cyan-500 disabled:opacity-50"
+            />
+            <div className="text-xs text-slate-500 mt-1">
+              {tradeMode === 'buy'
+                ? `需要: ${Math.round(stock.currentPrice * tradeQty * feeMult).toLocaleString()} 金币${feeMult === 1 ? '（无手续费）' : feeMult > 1 ? '（含手续费）' : '（手续费减免）'}`
+                : `收入: ${Math.round(stock.currentPrice * tradeQty * sellFeeMult).toLocaleString()} 金币${sellFeeMult === 1 ? '（无手续费）' : '（含手续费）'}`
+              }
+            </div>
+          </div>
 
-      <button
-        onClick={handleTrade}
-        className={`w-full py-3 rounded-lg font-bold transition-colors ${
-          tradeMode === 'buy' ? 'bg-cyan-600 hover:bg-cyan-500 text-white' : 'bg-red-600 hover:bg-red-500 text-white'
-        }`}
-      >
-        {`${tradeMode === 'buy' ? '买入' : '卖出'} ${tradeQty} 股`}
-      </button>
+          <button
+            onClick={handleTrade}
+            className={`w-full py-3 rounded-lg font-bold transition-colors ${
+              tradeMode === 'buy' ? 'bg-cyan-600 hover:bg-cyan-500 text-white' : 'bg-red-600 hover:bg-red-500 text-white'
+            }`}
+          >
+            {`${tradeMode === 'buy' ? '买入' : '卖出'} ${tradeQty} 股`}
+          </button>
+        </>
+      )}
 
       {message && (
         <p className={`mt-3 text-sm text-center ${
@@ -508,7 +520,6 @@ function TradeDetailPanel({
   tradeMode,
   message,
   messageType,
-  canvasRef,
   holdings,
   costs,
   buyTurns,
@@ -525,7 +536,6 @@ function TradeDetailPanel({
   tradeMode: 'buy' | 'sell';
   message: string;
   messageType: string;
-  canvasRef: React.RefObject<HTMLCanvasElement | null>;
   holdings: Record<string, number>;
   costs: Record<string, number>;
   buyTurns: Record<string, number>;
@@ -539,21 +549,26 @@ function TradeDetailPanel({
 }) {
   const sectorColor = SECTOR_COLORS[stock.sector] || 'bg-slate-800 text-slate-400 border-slate-700';
   const cd = getCooldownStatus(stock.id);
+  const delistNotice = delistNoticeOf(stock);
 
   return (
     <div className="bg-slate-900/60 border border-slate-700 rounded-xl p-4">
-      <div className="flex items-center gap-2 mb-1">
+      <div className="flex items-center gap-2 mb-1 flex-wrap">
         <h3 className="text-lg font-bold text-slate-100">{stock.name}</h3>
         <span className={`text-[10px] px-1.5 py-0.5 rounded border ${sectorColor}`}>{stock.sector}</span>
+        <DelistBadge stock={stock} />
       </div>
       <p className="text-xs text-slate-500 mb-3">{stock.description}</p>
 
-      <canvas ref={canvasRef} width={280} height={140} className="w-full rounded-lg bg-slate-950 mb-4" />
+      <StockPriceChart prices={stock.prices} />
 
       <div className="flex justify-between text-sm mb-3">
         <span className="text-slate-400">当前价格</span>
         <span className="text-xl font-bold text-cyan-400">{stock.currentPrice} 金币</span>
       </div>
+      {delistNotice && (
+        <p className="text-xs text-red-300 bg-red-950/40 border border-red-900/60 rounded-lg p-2 mb-3">{delistNotice}</p>
+      )}
       <div className="flex justify-between text-sm mb-3">
         <span className="text-slate-400">手续费</span>
         <span className="text-slate-300">
@@ -586,37 +601,42 @@ function TradeDetailPanel({
         )}
       </div>
 
-      <div className="flex mb-3 bg-slate-800 rounded-lg p-1">
-        <button onClick={() => setTradeMode('buy')} className={`flex-1 py-1.5 text-sm font-bold rounded transition-colors ${tradeMode === 'buy' ? 'bg-cyan-600 text-white' : 'text-slate-400 hover:text-slate-200'}`}>买入</button>
-        <button onClick={() => setTradeMode('sell')} className={`flex-1 py-1.5 text-sm font-bold rounded transition-colors ${tradeMode === 'sell' ? 'bg-red-600 text-white' : 'text-slate-400 hover:text-slate-200'}`}>卖出</button>
-      </div>
+      {/* 已退市：不给买入/卖出入口（动作层另有拦截，界面也不该还提供） */}
+      {!stock.delisted && (
+        <>
+          <div className="flex mb-3 bg-slate-800 rounded-lg p-1">
+            <button onClick={() => setTradeMode('buy')} className={`flex-1 py-1.5 text-sm font-bold rounded transition-colors ${tradeMode === 'buy' ? 'bg-cyan-600 text-white' : 'text-slate-400 hover:text-slate-200'}`}>买入</button>
+            <button onClick={() => setTradeMode('sell')} className={`flex-1 py-1.5 text-sm font-bold rounded transition-colors ${tradeMode === 'sell' ? 'bg-red-600 text-white' : 'text-slate-400 hover:text-slate-200'}`}>卖出</button>
+          </div>
 
-      <div className="mb-3">
-        <input
-          type="text"
-          inputMode="numeric"
-          pattern="[0-9]*"
-          value={tradeQty}
-          onChange={(e) => { const v = e.target.value.replace(/[^0-9]/g, ''); if (v === '') { setTradeQty(0); return; } setTradeQty(parseInt(v)); }}
-          disabled={false}
-          className="w-full bg-slate-800 border border-slate-600 rounded-lg px-3 py-2 text-sm text-slate-200 focus:outline-none focus:border-cyan-500 disabled:opacity-50"
-        />
-        <div className="text-xs text-slate-500 mt-1">
-          {tradeMode === 'buy'
-            ? `需要: ${Math.round(stock.currentPrice * tradeQty * feeMult).toLocaleString()} 金币${feeMult === 1 ? '（无手续费）' : feeMult > 1 ? '（含手续费）' : '（手续费减免）'}`
-            : `收入: ${Math.round(stock.currentPrice * tradeQty * sellFeeMult).toLocaleString()} 金币${sellFeeMult === 1 ? '（无手续费）' : '（含手续费）'}`
-          }
-        </div>
-      </div>
+          <div className="mb-3">
+            <input
+              type="text"
+              inputMode="numeric"
+              pattern="[0-9]*"
+              value={tradeQty}
+              onChange={(e) => { const v = e.target.value.replace(/[^0-9]/g, ''); if (v === '') { setTradeQty(0); return; } setTradeQty(parseInt(v)); }}
+              disabled={false}
+              className="w-full bg-slate-800 border border-slate-600 rounded-lg px-3 py-2 text-sm text-slate-200 focus:outline-none focus:border-cyan-500 disabled:opacity-50"
+            />
+            <div className="text-xs text-slate-500 mt-1">
+              {tradeMode === 'buy'
+                ? `需要: ${Math.round(stock.currentPrice * tradeQty * feeMult).toLocaleString()} 金币${feeMult === 1 ? '（无手续费）' : feeMult > 1 ? '（含手续费）' : '（手续费减免）'}`
+                : `收入: ${Math.round(stock.currentPrice * tradeQty * sellFeeMult).toLocaleString()} 金币${sellFeeMult === 1 ? '（无手续费）' : '（含手续费）'}`
+              }
+            </div>
+          </div>
 
-      <button
-        onClick={handleTrade}
-        className={`w-full py-2.5 rounded-lg font-bold transition-colors ${
-          tradeMode === 'buy' ? 'bg-cyan-600 hover:bg-cyan-500 text-white' : 'bg-red-600 hover:bg-red-500 text-white'
-        }`}
-      >
-        {`${tradeMode === 'buy' ? '买入' : '卖出'} ${tradeQty} 股`}
-      </button>
+          <button
+            onClick={handleTrade}
+            className={`w-full py-2.5 rounded-lg font-bold transition-colors ${
+              tradeMode === 'buy' ? 'bg-cyan-600 hover:bg-cyan-500 text-white' : 'bg-red-600 hover:bg-red-500 text-white'
+            }`}
+          >
+            {`${tradeMode === 'buy' ? '买入' : '卖出'} ${tradeQty} 股`}
+          </button>
+        </>
+      )}
 
       {message && (
         <p className={`mt-2 text-sm text-center ${messageType === 'error' ? 'text-red-400' : messageType === 'profit' ? 'text-cyan-400' : messageType === 'loss' ? 'text-red-400' : 'text-green-400'}`}>{message}</p>

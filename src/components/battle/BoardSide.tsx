@@ -43,7 +43,7 @@ function slotClass(tone: SlotView['tone']): string {
 
 // ---------------- 单位卡 ----------------
 
-function UnitCardBase({ u, selected }: { u: UnitView | null; selected: boolean }) {
+function UnitCardBase({ u, selected, slotNo }: { u: UnitView | null; selected: boolean; slotNo: number }) {
   if (!u) return null;
   return (
     <div
@@ -54,7 +54,7 @@ function UnitCardBase({ u, selected }: { u: UnitView | null; selected: boolean }
         selected ? 'border-amber-400 ring-2 ring-amber-400/25' : ''
       } ${unitStateClass(u.attackState)}`}
     >
-      {/* 徽章（右上角） */}
+      {/* 徽章（右上角）—— 位置与改前一致（绝对定位，不参与排版） */}
       <div className="absolute right-1 top-[3px] flex gap-[3px]">
         {u.badges.map((b) => (
           <i
@@ -66,8 +66,17 @@ function UnitCardBase({ u, selected }: { u: UnitView | null; selected: boolean }
         ))}
       </div>
       <div className="flex min-w-0 flex-1 flex-col justify-center px-1.5 py-1 sm:flex-none sm:justify-start sm:px-0 sm:py-0">
-        <div className="overflow-hidden text-ellipsis whitespace-nowrap text-[11px] font-bold leading-tight">
-          {u.name}
+        {/* 名字行 = **[编号 chip] 名字**（同一行的前后关系 ⇒ **永远不可能重叠** ✗✗ 曾经的坑：
+            编号绝对定位在卡面左上角、名字本来也在左上角 ⇒ 手机 111px 格宽下数字正压住名字前两个字）。
+            ⚠ 编号 `flex-none` 自带宽度把名字挤开；名字 `min-w-0 flex-1 truncate` ⇒ 过长的名字只出省略号
+              （不换行、不撑破卡片）；**不给卡片加左内边距腾地方**（那会白掉一块本就很窄的宽度）。 */}
+        <div className="flex min-w-0 items-baseline gap-1">
+          <span className="flex-none rounded bg-[#0b1020]/85 px-1 text-[9px] font-bold leading-[1.5] text-slate-400">
+            {slotNo}
+          </span>
+          <span className="min-w-0 flex-1 overflow-hidden text-ellipsis whitespace-nowrap text-[11px] font-bold leading-tight">
+            {u.name}
+          </span>
         </div>
         <div className="mt-1 flex flex-wrap items-baseline gap-x-[9px] gap-y-0.5 text-[13px] md:text-base">
           <span className="whitespace-nowrap text-[#fca5a5]">
@@ -132,22 +141,16 @@ function BoardSideBase({ side, slots, selUnit, selFoe, onPlayerSlot, onBossTarge
             if (side === 'player') onPlayerSlot(s.i);
             else if (s.unit) onBossTarget(s.unit.uid);
           }}
-          /* 空位在手机上也要看得见、点得动（部署目标）⇒ 给一个最小高度；`sm` 起回到 156px。
-             `relative` 供"占用格左上角的槽位号"定位。 */
-          className={`relative flex min-h-[46px] min-w-0 items-center justify-center rounded-lg sm:min-h-[156px] ${slotClass(s.tone)}`}
+          /* 空位在手机上也要看得见、点得动（部署目标）⇒ 给一个最小高度；`sm` 起回到 156px。 */
+          className={`flex min-h-[46px] min-w-0 items-center justify-center rounded-lg sm:min-h-[156px] ${slotClass(s.tone)}`}
         >
           {s.unit ? (
-            <>
-              <UnitCard
-                u={s.unit}
-                selected={side === 'boss' ? !!selFoe && selFoe === s.unit.uid : !!selUnit && selUnit === s.unit.uid}
-              />
-              {/* 占用格：左上角一个小数字 = **槽位下标 + 1**（与空位的「空位N」同源、同一份 JSX 两端都渲染）
-                  —— 两艘都占位时也能一眼看出谁与谁相邻（引擎的相邻判据 = 下标 ±1）。 */}
-              <span className="absolute left-1 top-[3px] z-[1] rounded bg-[#0b1020]/85 px-1 text-[9px] font-bold leading-[1.5] text-slate-400">
-                {s.i + 1}
-              </span>
-            </>
+            /* 占用格：编号**不是**绝对定位的小角标（那会压住名字），而是交给卡面、排在名字前面（见 UnitCard） */
+            <UnitCard
+              u={s.unit}
+              slotNo={s.i + 1}
+              selected={side === 'boss' ? !!selFoe && selFoe === s.unit.uid : !!selUnit && selUnit === s.unit.uid}
+            />
           ) : (
             /* 空位编号：**按槽位下标 0→5 显示 1→6**（= 引擎 `adjacent` 用的那个下标 ±1）
                —— 手机 3 列 × 2 行时"2 与 3 相邻"看起来跨了排，编号让规则自洽（规则本身没改）。 */

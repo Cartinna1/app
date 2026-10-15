@@ -1,5 +1,6 @@
 import type { Mothership, Stock, RawMaterial, Product, Recipe } from '@/types/game';
 import { createGalaxyState } from './galaxy/nodes';
+import type { StockRefillDef } from './stockRefills';
 
 // ==================== 母舰数据 ====================
 
@@ -285,15 +286,24 @@ export const INITIAL_STOCKS: Omit<Stock, 'prices' | 'currentPrice'>[] = [
   { id: 's100', name: '美容整形医院', description: '跨物种外形改造医疗美容', sector: '娱乐服务', basePrice: 298, volatility: 0.38 },
 ];
 
+/** 静态股票定义 / 补位公司定义 → 带初始走势的 Stock（**唯一**的"新股票怎么生成"出口）
+ *  ⚠ 补位新公司也必须走这里（`createStockRefill`），别在 priceFluctuation 里另写一套初始价。 */
+export function buildStock(def: StockRefillDef): Stock {
+  const prices = generateInitialPrices(def.basePrice, def.volatility, 10);
+  return {
+    ...def,
+    prices,
+    currentPrice: prices[prices.length - 1],
+  };
+}
+
 export function createStocks(): Stock[] {
-  return INITIAL_STOCKS.map((s) => {
-    const prices = generateInitialPrices(s.basePrice, s.volatility, 10);
-    return {
-      ...s,
-      prices,
-      currentPrice: prices[prices.length - 1],
-    };
-  });
+  return INITIAL_STOCKS.map(buildStock);
+}
+
+/** 补位新公司（永久退市占位后的"全新公司"）：定义来自 data/stockRefills.ts，价格走同一份 buildStock */
+export function createStockRefill(def: StockRefillDef): Stock {
+  return buildStock(def);
 }
 
 function generateInitialPrices(base: number, volatility: number, count: number): number[] {

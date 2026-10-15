@@ -1,6 +1,7 @@
 import { useCallback } from 'react';
 import type { GameState } from '@/types/game';
 import { getStockFeeMult, getStockSellFeeMult } from '@/data/gameData';
+import { STOCK_DELIST } from '@/lib/turn/priceFluctuation';
 import { pushGoldLog } from '@/lib/turn/goldLog';
 
 /** 股票 T+1 冷却判定（**唯一真值**）：买入当回合不能卖，`买入回合 + 1` 起可卖。
@@ -31,6 +32,7 @@ export function useStock(
           if (ship.gold <= 0) { result = { error: '金币不足无法买入' }; return prev; }
           const stock = prev.stocks.find((s) => s.id === stockId);
           if (!stock) { result = { error: '股票不存在' }; return prev; }
+          if (stock.delisted) { result = { error: `「${stock.name}」已退市，无法买入` }; return prev; }
 
           // 买入手续费走唯一真值 getStockFeeMult（与 StockMarket 显示同源）
           const feeMult = getStockFeeMult(ship);
@@ -70,6 +72,7 @@ export function useStock(
           if (bt !== undefined && isStockCooling(bt, prev.turn)) { result = { error: `买入后需等待：${getStockCooldownHint(bt, prev.turn)}` }; return prev; }
           const stock = prev.stocks.find((s) => s.id === stockId);
           if (!stock) { result = { error: '股票不存在' }; return prev; }
+          if (stock.delisted) { result = { error: `「${stock.name}」已退市，持仓已按 ${Math.round(STOCK_DELIST.RESIDUAL * 100)}% 残值清算` }; return prev; }
           const hold = ship.stockHoldings[stockId] || 0;
           if (hold < quantity) { result = { error: '持仓不足' }; return prev; }
 

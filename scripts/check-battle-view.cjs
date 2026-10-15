@@ -365,7 +365,19 @@ const check = (ok, label, detail) => {
     const mine = T.spawnUnit(st2, 'player', 'c5'); T.placeUnit(st2, 'player', mine, 2);
     const s2 = V.boardView(st2, 'player', null, null);
     check(!!s2[2].unit && s2[2].unit.uid === mine.uid && s2[2].i === 2,
-      '第 3 格放了单位 → i 仍是 2（占用格角标显示 3，与空位编号同源）');
+      '第 3 格放了单位 → i 仍是 2（占用格编号显示 3，与空位编号同源）');
+    /* 几何（编号改成"名字前的 chip"后，名字还剩多少宽 —— 用户截图那次正是这里被压住的）：
+       手机 390：棋盘 346 → 3 列 gap 6 ⇒ 格 111.3；卡边框 2 + 文字块 `px-1.5` 12 ⇒ 名字行 97.3；
+                chip（`px-1` + 9px 数字）≈13.5 + gap 4 ⇒ **名字 ≈79.8px ≈ 7.2 个 11px 汉字**（过长出省略号）；
+       桌面 xl 1280：面板 988 → 6 列 gap 30 ⇒ 格 159.7；卡边框 2 + `sm:px-1.5` 12 ⇒ **名字 ≈128.2px ≈ 11.6 字**。
+       ⚠ 这里只是"可复现的算账"；结构判据（chip `flex-none` + 名字 `min-w-0 flex-1 truncate` ⇒ 盒子不相交）在审计 ⑬。 */
+    const CARDS = (await import('@/data/battle/cards')).BATTLE_CARDS;
+    const names = Object.values(CARDS).map((c) => c.name);
+    const widest = names.reduce((a, b) => (b.length > a.length ? b : a), '');
+    check(widest.length >= 5, '数据里最长舰名 ≥5 字（手机 79.8px 那档靠省略号收尾，不溢出）',
+      widest + '（' + widest.length + ' 字 ≈ ' + widest.length * 11 + 'px @11px）');
+    console.log('  （几何）手机名字位 ≈79.8px / 桌面 ≈128.2px；最长舰名「' + widest + '」'
+      + widest.length + ' 字 ≈ ' + widest.length * 11 + 'px');
   }
 
   console.log('\n[4] 舰队池 / BOSS 面板 / 墓地 / 结束回合');

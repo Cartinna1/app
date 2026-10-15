@@ -16,6 +16,7 @@
 | 投资与黑市倍率（固定 8000 金币→+1 声望、每回合 10 次；黑市默认 3.2、浮动 1.3） | `data/exchangeRates.ts` → `INVEST_GOLD_PER_REP` / `INVEST_MAX_PER_TURN` / `BLACK_MARKET_DEFAULT` / `BLACK_MARKET_SPREAD` |
 | 股票买卖手续费 | `data/gameData.ts` → `getStockFeeMult`（买入）/ `getStockSellFeeMult`（卖出），费率由同一个 `STOCK_FEE_RATE=0.03` 派生（黄金集团 0、万众一心减半 = 0.985）。**显示侧禁止再用 `2 − 买入费率` 反推卖出倍率**（会得到 1.015，与实收差 4.6%） |
 | 股票 T+1 冷却 | `hooks/useStock.ts` → `isStockCooling(buyTurn, turn)` / `getStockCooldownHint`（结算 + 桌面/移动面板共用） |
+| 股票地板 / 退市概率 / 残值 / 重整上限 | `lib/turn/priceFluctuation.ts` → 常量块 + 导出 `STOCK_DELIST = { DEEP: −0.85, MID: −0.65, P_DEEP: 0.12, P_MID: 0.03, RESIDUAL: 0.1, MAX_RESTRUCTURES: 5 }`（地板 = 基准价 2%）；判据出口 = `lib/turn/nextTurnHints.ts` → `getStockDelistRisk`（含 `restructures` / `restructuresLeft` / `permanentlyClosed`）；补位公司 = `data/stockRefills.ts`（取号 `getStockRefill`）+ `data/gameData.ts` → `createStockRefill`（初始价与开局 `createStocks` 同一份 `generateInitialPrices`）。**UI 与预告都读 `STOCK_DELIST`，勿硬编码阈值/概率/次数** |
 | 金币流水写入与上限 | `lib/turn/goldLog.ts` → `pushGoldLog(ship, turn, amount, reason)`（内部裁到 `GOLD_LOG_LIMIT=200`）。**调用前必须已经改完金币**（函数读当前金币作为 balanceAfter） |
 | 事件日志上限 | `data/gameData.ts` → `EVENT_LOG_LIMIT=100`（reducer 与 useTurn 的回合日志都按它裁剪） |
 | 破产/饥荒倒计时 | `lib/turn/shipTurn.ts` → `BANKRUPT_TURNS` / `FAMINE_TURNS`（=10） |

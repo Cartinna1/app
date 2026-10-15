@@ -9,8 +9,12 @@
 //   绝不在这里重写一遍，否则会出现"提示说断电、实际没断"这种显示与结算分叉。
 //
 // 不做预测的东西：股价/原料价波动、随机事件的抽取 —— 都无法预知，硬报等于撒谎。
+//   唯一的例外（**不是预测**）：股票"退市概率"是 priceFluctuation 里定死的**已知参数**，
+//   只取决于当前价格落在哪个区间（跌破基准 65% → 每回合 3%，85% → 12%，见 STOCK_DELIST）；
+//   报它是"把已知参数说给玩家听"，与预测下回合股价怎么走是两件事（见 A7）。
+//   重整（退市后再上市，上限 5 次）同样是已知参数，走 getStockRestructureInfo。
 
-import type { GameState } from '@/types/game';
+import type { GameState, Stock } from '@/types/game';
 import { computeCrewFoodCost } from '@/lib/turn/shipTurn';
 import { getShipPerTurnIncome } from '@/lib/turn/shipIncome';
 import { computeColonyPower } from '@/lib/colony/economy';
@@ -27,6 +31,7 @@ import { getArchaeologySite } from '@/data/galaxy/archaeology';
 import { getPermaBonusValue } from '@/data/galaxy/permaBonuses';
 import { FACTIONS } from '@/data/factions';
 import { raidHintLines } from '@/lib/battle/raid';
+import { STOCK_DELIST } from '@/lib/turn/priceFluctuation';
 
 export type HintSeverity = 'danger' | 'warn' | 'info';
 
@@ -34,6 +39,41 @@ export interface NextTurnHint {
   id: string;
   severity: HintSeverity;
   text: string;
+}
+
+/** 股票退市风险等级：none = 安全区；mid / deep = 退市风险区；delisted = 已退市 */
+export type StockDelistRiskLevel = 'none' | 'mid' | 'deep' | 'delisted';
+
+export interface StockDelistRisk {
+  level: StockDelistRiskLevel;
+  /** 该股每回合的退市概率（不在风险区、或已退市时为 0） */
+  chance: number;
+  /** 该股已重整再上市的次数（缺失 = 0） */
+  restructures: number;
+  /** 是否已彻底关闭（重整次数用尽仍退市，永不再上市；仅 delisted 时可能为 true） */
+  permanentlyClosed: boolean;
+  /** 还能重整几次（0 = 再退市就是彻底关闭）；已退市时为剩余次数 */
+  restructuresLeft: number;
+}
+
+/** 重整进度（**唯一真值**）：上限一律读 priceFluctuation 的 STOCK_DELIST.MAX_RESTRUCTURES
+ *  （股票面板的徽章/提示与"下一回合预告"共用，勿在这里另写 5）。 */
+export function getStockRestructureInfo(stock: Stock): { used: number; left: number; permanentlyClosed: boolean } {
+  const used = stock.restructures || 0;
+  return { used, left: Math.max(0, STOCK_DELIST.MAX_RESTRUCTURES - used), permanentlyClosed: stock.permanentlyClosed === true };
+}
+
+/** 退市风险判据（**唯一真值**）：阈值与概率一律读 priceFluctuation 的 STOCK_DELIST
+ *  （与结算侧的退市判定同一份常量，勿在这里另写数字）。
+ *  下一回合预告（A7）与股票面板（components/StockMarket）的警示徽章共用本函数，
+ *  勿再各写一份 `(currentPrice - basePrice) / basePrice` 的区间比较。 */
+export function getStockDelistRisk(stock: Stock): StockDelistRisk {
+  const info = getStockRestructureInfo(stock);
+  if (stock.delisted) return { level: 'delisted', chance: 0, restructures: info.used, permanentlyClosed: info.permanentlyClosed, restructuresLeft: info.left };
+  const dev = (stock.currentPrice - stock.basePrice) / stock.basePrice;
+  if (dev < STOCK_DELIST.DEEP) return { level: 'deep', chance: STOCK_DELIST.P_DEEP, restructures: info.used, permanentlyClosed: false, restructuresLeft: info.left };
+  if (dev < STOCK_DELIST.MID) return { level: 'mid', chance: STOCK_DELIST.P_MID, restructures: info.used, permanentlyClosed: false, restructuresLeft: info.left };
+  return { level: 'none', chance: 0, restructures: info.used, permanentlyClosed: false, restructuresLeft: info.left };
 }
 
 const factionNameOf = (id: string) => FACTIONS.find((f) => f.id === id)?.name || id;
@@ -156,6 +196,40 @@ export function getNextTurnHints(state: GameState): NextTurnHint[] {
   // A6 破产倒计时（结算：gold<0 才会真的破产；gold 回正会清空倒计时）
   if (ship.bankruptTimer === 1 && ship.gold < 0) {
     out.push({ id: 'bankrupt_countdown', severity: 'danger', text: `破产倒计时只剩 1 回合，金币仍为 ${ship.gold}，下回合舰队将解散` });
+  }
+
+  // A7 持仓股票退市风险（**已知参数的风险提示，不是预测**）：退市概率是 priceFluctuation 里定死的常量
+  //    （跌破基准价 65% → 每回合 3%，85% → 12%），只看**当前**价格落在哪个区间，与股价随机波动无关；
+  //    本文件依旧不报"下回合股价会怎么走"，这里报的是"你现在持有风险区的股票、这个区间的后果是什么"。
+  //    判据复用 getStockDelistRisk（与股票面板的警示徽章同一份），数据只用 ship.stockHoldings + state.stocks。
+  //    重整次数（上限 5）也一并说明：还剩次数 → 退市后重整再上市（价格回基准价，但**持仓不恢复**，只按 10% 残值清算）；
+  //    次数用尽 → 该股彻底关闭（原位置补一家新公司）。
+  const riskyStocks: { name: string; risk: StockDelistRisk }[] = [];
+  for (const [stockId, qty] of Object.entries(ship.stockHoldings || {})) {
+    if (qty <= 0) continue;
+    const stock = state.stocks.find((s) => s.id === stockId);
+    if (!stock) continue;
+    const risk = getStockDelistRisk(stock);
+    if (risk.level === 'mid' || risk.level === 'deep') riskyStocks.push({ name: stock.name, risk });
+  }
+  if (riskyStocks.length > 0) {
+    const deep = riskyStocks.filter((r) => r.risk.level === 'deep');
+    const mid = riskyStocks.filter((r) => r.risk.level === 'mid');
+    const namesOf = (list: { name: string }[]) => list.map((r) => r.name).join('、');
+    const parts: string[] = [];
+    if (deep.length > 0) parts.push(`高危区 ${deep.length} 只（${namesOf(deep)}）已跌破基准价 ${Math.round(-STOCK_DELIST.DEEP * 100)}%，每回合 ${Math.round(STOCK_DELIST.P_DEEP * 100)}% 概率退市`);
+    if (mid.length > 0) parts.push(`风险区 ${mid.length} 只（${namesOf(mid)}）已跌破基准价 ${Math.round(-STOCK_DELIST.MID * 100)}%，每回合 ${Math.round(STOCK_DELIST.P_MID * 100)}% 概率退市`);
+    const restructured = riskyStocks.filter((r) => r.risk.restructures > 0);
+    const exhausted = restructured.filter((r) => r.risk.restructuresLeft === 0);
+    const willRestructure = restructured.length - exhausted.length;
+    let restructureNote = '';
+    if (exhausted.length > 0) restructureNote += `；${namesOf(exhausted)} 已重整 ${STOCK_DELIST.MAX_RESTRUCTURES}/${STOCK_DELIST.MAX_RESTRUCTURES} 次，再退市将彻底关闭（不再上市）`;
+    if (willRestructure > 0) restructureNote += `；${willRestructure} 只退市后会重整再上市（价格回基准价、持仓不恢复）`;
+    out.push({
+      id: 'stock_delist_risk',
+      severity: 'danger',
+      text: `持仓中 ${riskyStocks.length} 只股票处于退市风险区：${parts.join('；')}。退市后按最后价 ${Math.round(STOCK_DELIST.RESIDUAL * 100)}% 残值清算${restructureNote}`,
+    });
   }
 
   // ==================== B. 提醒级：不处理会错过机会 ====================

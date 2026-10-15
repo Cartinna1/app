@@ -356,30 +356,41 @@ auditPendingChoose();
 
 // ---------------------------------------------------------------------------
 // ⑬ 槽位编号（用户 2026-08：「空位标空位1 空位2」+ 占用格也带个小数字）
-//    规则没改：引擎 `adjacent` = **槽位下标 ±1**，与"排"无关（手机 3 列 × 2 行时下标 2/3 看起来跨排）。
+//    ⚠ **第二版**（用户截图：编号正压住舰名前两个字）—— 占用格的编号从"绝对定位的左上角小角标"
+//      改成 **名字行里的 `[编号 chip] 名字`**（同一行的前后关系 ⇒ 结构上不可能重叠；
+//      名字 `min-w-0 flex-1 truncate` ⇒ 过长只出省略号、不换行不撑破）。
+//    规则没改：编号 = **槽位下标 + 1**（= 引擎 `adjacent` 用的那个下标，与"排"无关）。
 //    判据（都硬失败）：
-//      ① 空位文案必须是 `空位{s.i + 1}`（**编号源 = 槽位下标**，不是自增计数器、不是另一套编号）；
-//      ② 占用格也要有同一个 `{s.i + 1}` 角标（两艘都占位时也能看出谁挨着谁）；
-//      ③ 两端**同一份 JSX**：`空位` 只在 BoardSide 里出现 1 次（没有"手机一份、桌面一份"），
-//         且没有裸 `>空位<`（不带编号的旧文案不许复活）。
+//      ① 空位文案 = `空位{s.i + 1}`（编号源 = 槽位下标，不是自增计数器）；
+//      ② 占用格把同一个 `s.i + 1` 交给卡面（`slotNo={s.i + 1}`）；
+//      ③ 卡面里编号是**名字前的 chip**：chip `flex-none` + 名字 `min-w-0 flex-1` + `text-ellipsis`
+//         ⇒ 两者占据不相交的盒子（这就是"不重叠"的可复现判据，不靠肉眼）；
+//      ④ **绝对定位的编号必须消失**（`absolute left-1 top-[3px]` 那版就是压名字的元凶）；
+//      ⑤ `空位` 只在 BoardSide 里出现 1 次（两端同一份 JSX，不许手机/桌面各写一套）。
 // ---------------------------------------------------------------------------
 function auditSlotNumbering() {
   const board = path.resolve(__dirname, '../src/components/battle/BoardSide.tsx');
-  console.log('\n=== 槽位编号（空位1…6 = 槽位下标 +1；占用格同源） ===');
+  console.log('\n=== 槽位编号（空位1…6 = 槽位下标 +1；占用格 = 名字前的 chip） ===');
   if (!fs.existsSync(board)) { issues.push('BoardSide.tsx 不存在'); return; }
   const b = stripComments(fs.readFileSync(board, 'utf8'));
   const emptyHits = b.split('空位').length - 1;
-  const numbered = b.indexOf('空位{s.i + 1}') >= 0;
-  const stray = /空位<\/span>|空位\{[^}]*\}[^<]*空位/.test(b);
-  const badge = b.split('{s.i + 1}').length - 1;
-  const ok = emptyHits === 1 && numbered && !stray && badge >= 2;
-  console.log('  ① 空位文案 = 空位{s.i + 1}：' + (numbered ? '✓' : '✗')
-    + '　② 占用格角标 {s.i + 1}（共 ' + badge + ' 处）：' + (badge >= 2 ? '✓' : '✗')
-    + '　③ 空位只出现 ' + emptyHits + ' 次（两端同一份）：' + (emptyHits === 1 ? '✓' : '✗'));
-  if (!numbered || stray) {
-    issues.push('空位编号不是 `空位{s.i + 1}`（编号必须与引擎判定相邻用的槽位下标一致；不许自增计数器或裸「空位」）');
+  const emptyOk = b.indexOf('空位{s.i + 1}') >= 0;
+  const passOk = b.indexOf('slotNo={s.i + 1}') >= 0;
+  const chipOk = b.indexOf('flex-none rounded bg-[#0b1020]/85 px-1 text-[9px]') >= 0
+    && b.indexOf('min-w-0 flex-1 overflow-hidden text-ellipsis whitespace-nowrap text-[11px] font-bold') >= 0;
+  const noAbs = b.indexOf('absolute left-1 top-[3px]') < 0;
+  console.log('  ① 空位文案 = 空位{s.i + 1}：' + (emptyOk ? '✓' : '✗')
+    + '　② 占用格 slotNo={s.i + 1}：' + (passOk ? '✓' : '✗')
+    + '　③ 名字前的 chip + 名字 truncate：' + (chipOk ? '✓' : '✗')
+    + '　④ 绝对定位编号已消失：' + (noAbs ? '✓' : '✗')
+    + '　⑤ 空位只出现 ' + emptyHits + ' 次：' + (emptyHits === 1 ? '✓' : '✗'));
+  if (!emptyOk || !passOk) {
+    issues.push('槽位编号不是 `s.i + 1`（编号必须与引擎判定相邻用的槽位下标一致；不许自增计数器）');
   }
-  if (badge < 2) issues.push('占用格没有槽位号角标 —— 两艘都占位时玩家看不出谁与谁相邻');
+  if (!chipOk) {
+    issues.push('占用格的编号不是"名字前的 chip + 名字 truncate"形态 —— 会压住名字或撑破卡片（手机 111px 格宽实测过）');
+  }
+  if (!noAbs) issues.push('绝对定位的槽位号又回来了（`absolute left-1 top-[3px]`）—— 它会压住左上角的舰名');
   if (emptyHits !== 1) {
     issues.push('BoardSide 里「空位」出现 ' + emptyHits + ' 次 —— 编号只许一份 JSX（手机/桌面共用），不许各写一套');
   }

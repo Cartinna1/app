@@ -74,6 +74,12 @@ export interface Stock {
   volatility: number;
   prices: number[];
   currentPrice: number;
+  /** 已退市：价格冻结、不可交易；退市当回合按最后价 10% 清算给持仓者（见 priceFluctuation.ts） */
+  delisted?: boolean;
+  /** 已重整再上市的次数（上限 5，见 priceFluctuation 的 STOCK_DELIST.MAX_RESTRUCTURES）；缺失 = 从未重整过 */
+  restructures?: number;
+  /** 彻底关闭：重整次数用尽后仍退市，永不再上市（原位置已由 data/stockRefills.ts 的全新公司补位） */
+  permanentlyClosed?: boolean;
 }
 
 export interface RawMaterial {
