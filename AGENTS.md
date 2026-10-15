@@ -7,7 +7,7 @@
 ## 〇、工作副本与验证流程（先读这条）
 
 - **协作者不跑构建**：不执行 `npm run build` / `tsc` / `npm install`（本机没有 Node）。改完做逻辑级自检——通读改动文件、grep 核对每处符号引用与 import——构建由用户验证。
-- 自检最容易漏的（都吃过构建失败）：**① 新增 hook 导出时同步它的显式返回类型接口**（如 `useEvent` 的 `UseEventReturn`，漏了报 TS2353/TS2339）；**② 删改 JSX 分支后不留未读局部变量与未用 import**（`noUnusedLocals`/`noUnusedParameters` 全开）；**③ 新增返回字段时确认消费方的返回类型是否要求额外字段**（如 `gatherIntel` 要求 `goldChange`）；**④ 数组字面量的元组推断**：`[['星球',1],['领袖',2]].map(([k,v]) => …)` 的 `v` 被推断成 `string | number` → TS2345，必须先把字面量标注成 `Array<[string, number]>` 再 map；**⑤ 重构后失去用途的参数要一并处理**：`getSpecialtySellRevenue(factionId, …)` 的 `factionId` 不再被读 → TS6133，要么删参数并同步调用点，要么前缀 `_`。
+- 自检最容易漏的（都吃过构建失败）：**① 新增 hook 导出时同步它的显式返回类型接口**（如 `useEvent` 的 `UseEventReturn`，漏了报 TS2353/TS2339）；**② 删改 JSX 分支后不留未读局部变量与未用 import**（`noUnusedLocals`/`noUnusedParameters` 全开）；**③ 新增返回字段时确认消费方的返回类型是否要求额外字段**（如 `gatherIntel` 要求 `goldChange`）；**④ 数组字面量的元组推断**：`[['星球',1],['领袖',2]].map(([k,v]) => …)` 的 `v` 被推断成 `string | number` → TS2345，必须先把字面量标注成 `Array<[string, number]>` 再 map；**⑤ 重构后失去用途的参数要一并处理**：`getSpecialtySellRevenue(factionId, …)` 的 `factionId` 不再被读 → TS6133，要么删参数并同步调用点，要么前缀 `_`；**⑥ 给已有局部变量"后来才需要重新赋值"时，声明必须从 `const` 改成 `let`**：`const stocks = prev.stocks.map(…)` 之后再 `stocks = nextStocks` → TS2588（"Cannot assign to 'stocks' because it is a constant"，2026-10 股票重整改动踩到）。**机械自检法**：对每个改动/新增的代码块，grep 出所有 `^\s*(const|let)\s+名字` 的声明，再看该名字在后续行是否有 `名字 = ` 形式的**单独赋值**——有而声明是 `const` 就是错。
 - **grep 类自检查不出类型错误**：数组 / map / 函数签名 / 新字段接进已有联合类型的改动必须人工再过一遍类型判断。
 - 改动逐条过源码确认，不接受"大概没问题"。
 

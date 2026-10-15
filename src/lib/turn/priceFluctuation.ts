@@ -63,7 +63,7 @@ export function computePriceFluctuation(prev: GameState): GameState {
   });
 
   // 2. 股票波动（四因子：基础随机 + 均值回归 + 动量 + 板块联动 + 供需）
-  const stocks = prev.stocks.map((s) => {
+  let stocks = prev.stocks.map((s) => {
     if (s.delisted) return s;                                    // 已退市：价格冻结，不再参与波动
     const baseChange = (Math.random() - 0.5) * 2 * s.volatility;
     const deviation = (s.currentPrice - s.basePrice) / s.basePrice;
