@@ -156,6 +156,7 @@ function App() {
           activeEvent={activeEvent}
           eventDodged={eventDodged}
           onBuyStock={buyStock}
+          onSellStock={sellStock}
           onBuyMaterial={buyMaterial}
           onStartProduction={startProduction}
           onSellProductQty={sellProductQty}

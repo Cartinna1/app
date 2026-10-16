@@ -1,4 +1,4 @@
-import { Component, type ReactNode } from 'react';
+import { Component, type ErrorInfo, type ReactNode } from 'react';
 
 /**
  * 渲染期错误边界（全库唯一）：React 19 下渲染期未捕获异常会卸载整棵根树 → 整屏白屏（只剩 body 底色）。
@@ -83,12 +83,13 @@ function ErrorCard({ title, showStack, fallbackStack, error, onRetry }: ErrorCar
 class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
   state: ErrorBoundaryState = { error: null, componentStack: '' };
 
-  // 参数与返回值都不写类型注解：由 React.Component 基类上下文推断，签名上不做任何断言
-  static getDerivedStateFromError(error) {
+  // ⚠ 本机没有 node_modules（构建在用户侧），参数类型必须写死：React 基类签名是
+  //    static getDerivedStateFromError(error: any) / componentDidCatch(error: Error, errorInfo: ErrorInfo)
+  static getDerivedStateFromError(error: Error) {
     return { error };
   }
 
-  componentDidCatch(error, errorInfo) {
+  componentDidCatch(error: Error, errorInfo: ErrorInfo) {
     console.error('[ErrorBoundary] 渲染出错：', error);
     console.error('[ErrorBoundary] 组件栈：', errorInfo.componentStack);
     this.setState({ componentStack: errorInfo.componentStack || '' });
