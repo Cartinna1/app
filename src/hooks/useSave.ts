@@ -1,6 +1,17 @@
 import { useCallback } from 'react';
 import type { GameState } from '@/types/game';
 import { SAVE_KEY, validateSaveData, buildSaveData, stateFromSave } from '@/lib/save';
+import { reportSaveError, clearSaveError } from '@/lib/saveStatus';
+
+/**
+ * 是否"存档空间已满"：QuotaExceededError（Firefox 曾用 NS_ERROR_DOM_QUOTA_REACHED）。
+ * 名字判断同时覆盖 DOMException 与非 DOMException（部分环境抛的是普通 Error）。
+ */
+function isQuotaError(e: unknown): boolean {
+  if (typeof e !== 'object' || e === null || !('name' in e)) return false;
+  const name = String((e as { name?: unknown }).name);
+  return name === 'QuotaExceededError' || name === 'NS_ERROR_DOM_QUOTA_REACHED';
+}
 
 export function useSave(
   /** 当前状态：仅 exportSave 需要——导出的是**此刻**的状态，而不是 localStorage 里上一次自动存档 */
@@ -17,9 +28,15 @@ export function useSave(
       updater: (prev) => {
         try {
           localStorage.setItem(SAVE_KEY, JSON.stringify(buildSaveData(prev)));
+          clearSaveError();
         } catch (e) {
-          // localStorage 超容量等场景：至少留下痕迹，避免存档静默丢失
+          // localStorage 超容量等场景：留下痕迹（console）+ 让玩家看得见（顶部警示条），避免存档静默丢失
           console.warn('[存档] 自动存档失败：', e);
+          reportSaveError(
+            isQuotaError(e)
+              ? '存档空间已满，最近的进度可能没有保存成功（建议清理浏览器数据或导出存档）'
+              : '自动存档失败，最近的进度可能没有保存成功（建议在存档页导出存档备份）'
+          );
         }
         return prev;
       },

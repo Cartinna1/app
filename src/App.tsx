@@ -2,7 +2,31 @@ import { useGameState } from '@/hooks/useGameState';
 import ShipSelection from '@/components/ShipSelection';
 import GameScreen from '@/components/GameScreen';
 import GameOverScreen from '@/components/GameOverScreen';
+import ErrorBoundary from '@/components/ErrorBoundary';
+import { useSaveError, clearSaveError } from '@/lib/saveStatus';
 import './App.css';
+
+/**
+ * 自动存档失败警示条（运行时状态，不进存档）：仅在 useSaveError() 非空时出现。
+ * 手机上 console.warn 等于不存在，「存档没写进去」必须让玩家看得见。
+ */
+function SaveErrorBanner() {
+  const saveError = useSaveError();
+  if (!saveError) return null;
+
+  return (
+    <div className="sticky top-0 z-50 flex items-start gap-2 border-b border-amber-700/70 bg-amber-900/90 px-3 py-2 text-[11.5px] leading-relaxed text-amber-100 md:text-xs">
+      <span className="flex-1">{saveError}</span>
+      <button
+        type="button"
+        onClick={clearSaveError}
+        className="shrink-0 font-bold text-amber-200 underline hover:text-white"
+      >
+        关闭
+      </button>
+    </div>
+  );
+}
 
 function App() {
   const {
@@ -96,121 +120,120 @@ function App() {
     getShipTotalAssets,
   } = useGameState();
 
-  if (gameState.phase === 'select') {
-    return (
-      <ShipSelection
-        onSelect={selectShips}
-        onLoad={loadSave}
-        hasSave={hasSave()}
-      />
-    );
-  }
-
-  if (gameState.gameWon) {
-    return (
-      <GameOverScreen
-        reason={`🎉 奇观「${gameState.wonWonderName}」建设完成！你赢得了胜利！`}
-        turn={gameState.turn}
-        onRestart={resetGame}
-        isVictory
-      />
-    );
-  }
-
-  if (gameState.phase === 'ended') {
-    const lastEvent = gameState.eventLog[0];
-    return (
-      <GameOverScreen
-        reason={lastEvent?.detail || '游戏结束'}
-        turn={gameState.turn}
-        onRestart={resetGame}
-      />
-    );
-  }
-
+  // 顶层兜底：渲染期未捕获异常原本会卸载整棵根树（手机端整屏白屏）。
+  // 自动存档失败警示条放在边界之外，即使内容崩了照样看得见。
   return (
-    <GameScreen
-      gameState={gameState}
-      activeEvent={activeEvent}
-      eventDodged={eventDodged}
-      onBuyStock={buyStock}
-      onSellStock={sellStock}
-      onBuyMaterial={buyMaterial}
-      onStartProduction={startProduction}
-      onSellProductQty={sellProductQty}
-      onNextTurn={nextTurn}
-      onDrawEvent={drawEvent}
-      onChooseEventOption={chooseEventOption}
-      onApplyEventResources={applyEventResources}
-      onLogEvent={logEventEntry}
-      onClearActiveEvent={clearActiveEvent}
-      onClearEventDodged={clearEventDodged}
-      onTakeLoan={takeLoan}
-      onRepayLoan={repayLoan}
-      onTravelToNode={travelToNode}
-      onBuySpecialty={buySpecialty}
-      onSellSpecialty={sellSpecialty}
-      onExploreFaction={exploreFaction}
-      onInvestFaction={investFaction}
-      onGatherIntel={gatherIntel}
-      onAcceptContract={acceptContract}
-      onCompleteContract={completeContract}
-      onBlackMarketBuy={blackMarketBuy}
-      onStartExcavation={startExcavation}
-      onContinueExcavation={continueExcavation}
-      onResolveExcavationChoice={resolveExcavationChoice}
-      onSteadyExcavation={steadyExcavation}
-      onChangeExcavationLeader={changeExcavationLeader}
-      onAbandonExcavation={abandonExcavation}
-      onInstallModule={installModule}
-      onUseManualModule={useManualModule}
-      onFoundColony={foundColony}
-      onBuildColonyBuilding={buildColonyBuilding}
-      onRecruitPop={recruitPop}
-      onAssignPop={assignPop}
-      onStartResearch={startResearch}
-      onRecruitLeader={recruitLeader}
-      onUpgradeLeader={upgradeLeader}
-      onRollAndRecruit={rollAndRecruit}
-      onCancelBuilding={cancelBuilding}
-      onDemolishBuilding={demolishBuilding}
-      onSelectWonder={selectWonder}
-      onSubmitWonderResources={submitWonderResources}
-      onCompleteWonder={completeWonder}
-      canStartWonder={canStartWonder}
-      onStartExpedition={startExpedition}
-      onPayExpeditionNode={payExpeditionNode}
-      onUnlockUltimate={unlockUltimate}
-      onBuyAlloy={buyAlloy}
-      onBuyFood={buyFood}
-      onBuyRelic={buyRelic}
-      onBuyRandomMats={buyRandomMats}
-      onBuySellBonus={buySellBonus}
-      onBuyGoldWithStardust={buyGoldWithStardust}
-      onRerollPolicy={rerollPolicy}
-      onBuyFoodWithStardust={buyFoodWithStardust}
-      onRedeemCode={redeemCode}
-      onExportSave={exportSave}
-      onImportSave={importSave}
-      onResetGame={resetGame}
-      getShipTotalAssets={getShipTotalAssets}
-      fleets={gameState.fleets}
-      cardLibrary={gameState.cardLibrary}
-      onStartBattleExpedition={startBattleExpedition}
-      onStartExpeditionBattle={startExpeditionBattle}
-      onStartRaidBattle={startRaidBattle}
-      onCancelBattleExpedition={cancelBattleExpedition}
-      onBattleAction={battleAction}
-      onEndBattle={endBattle}
-      onCreateBattleFleet={createBattleFleet}
-      onEnqueueBuild={enqueueBuild}
-      onCancelBuild={cancelBuild}
-      onDeleteBattleFleet={deleteBattleFleet}
-      onRenameBattleFleet={renameBattleFleet}
-      onAddShipToFleet={addShipToFleet}
-      onRemoveShipFromFleet={removeShipFromFleet}
-      onToggleFleetDefending={toggleFleetDefending}
-    />
+    <ErrorBoundary>
+      <SaveErrorBanner />
+      {gameState.phase === 'select' && (
+        <ShipSelection
+          onSelect={selectShips}
+          onLoad={loadSave}
+          hasSave={hasSave()}
+        />
+      )}
+
+      {gameState.phase !== 'select' && gameState.gameWon && (
+        <GameOverScreen
+          reason={`🎉 奇观「${gameState.wonWonderName}」建设完成！你赢得了胜利！`}
+          turn={gameState.turn}
+          onRestart={resetGame}
+          isVictory
+        />
+      )}
+
+      {gameState.phase === 'ended' && (
+        <GameOverScreen
+          reason={gameState.eventLog[0]?.detail || '游戏结束'}
+          turn={gameState.turn}
+          onRestart={resetGame}
+        />
+      )}
+
+      {gameState.phase !== 'select' && !gameState.gameWon && gameState.phase !== 'ended' && (
+        <GameScreen
+          gameState={gameState}
+          activeEvent={activeEvent}
+          eventDodged={eventDodged}
+          onBuyStock={buyStock}
+          onBuyMaterial={buyMaterial}
+          onStartProduction={startProduction}
+          onSellProductQty={sellProductQty}
+          onNextTurn={nextTurn}
+          onDrawEvent={drawEvent}
+          onChooseEventOption={chooseEventOption}
+          onApplyEventResources={applyEventResources}
+          onLogEvent={logEventEntry}
+          onClearActiveEvent={clearActiveEvent}
+          onClearEventDodged={clearEventDodged}
+          onTakeLoan={takeLoan}
+          onRepayLoan={repayLoan}
+          onTravelToNode={travelToNode}
+          onBuySpecialty={buySpecialty}
+          onSellSpecialty={sellSpecialty}
+          onExploreFaction={exploreFaction}
+          onInvestFaction={investFaction}
+          onGatherIntel={gatherIntel}
+          onAcceptContract={acceptContract}
+          onCompleteContract={completeContract}
+          onBlackMarketBuy={blackMarketBuy}
+          onStartExcavation={startExcavation}
+          onContinueExcavation={continueExcavation}
+          onResolveExcavationChoice={resolveExcavationChoice}
+          onSteadyExcavation={steadyExcavation}
+          onChangeExcavationLeader={changeExcavationLeader}
+          onAbandonExcavation={abandonExcavation}
+          onInstallModule={installModule}
+          onUseManualModule={useManualModule}
+          onFoundColony={foundColony}
+          onBuildColonyBuilding={buildColonyBuilding}
+          onRecruitPop={recruitPop}
+          onAssignPop={assignPop}
+          onStartResearch={startResearch}
+          onRecruitLeader={recruitLeader}
+          onUpgradeLeader={upgradeLeader}
+          onRollAndRecruit={rollAndRecruit}
+          onCancelBuilding={cancelBuilding}
+          onDemolishBuilding={demolishBuilding}
+          onSelectWonder={selectWonder}
+          onSubmitWonderResources={submitWonderResources}
+          onCompleteWonder={completeWonder}
+          canStartWonder={canStartWonder}
+          onStartExpedition={startExpedition}
+          onPayExpeditionNode={payExpeditionNode}
+          onUnlockUltimate={unlockUltimate}
+          onBuyAlloy={buyAlloy}
+          onBuyFood={buyFood}
+          onBuyRelic={buyRelic}
+          onBuyRandomMats={buyRandomMats}
+          onBuySellBonus={buySellBonus}
+          onBuyGoldWithStardust={buyGoldWithStardust}
+          onRerollPolicy={rerollPolicy}
+          onBuyFoodWithStardust={buyFoodWithStardust}
+          onRedeemCode={redeemCode}
+          onExportSave={exportSave}
+          onImportSave={importSave}
+          onResetGame={resetGame}
+          getShipTotalAssets={getShipTotalAssets}
+          fleets={gameState.fleets}
+          cardLibrary={gameState.cardLibrary}
+          onStartBattleExpedition={startBattleExpedition}
+          onStartExpeditionBattle={startExpeditionBattle}
+          onStartRaidBattle={startRaidBattle}
+          onCancelBattleExpedition={cancelBattleExpedition}
+          onBattleAction={battleAction}
+          onEndBattle={endBattle}
+          onCreateBattleFleet={createBattleFleet}
+          onEnqueueBuild={enqueueBuild}
+          onCancelBuild={cancelBuild}
+          onDeleteBattleFleet={deleteBattleFleet}
+          onRenameBattleFleet={renameBattleFleet}
+          onAddShipToFleet={addShipToFleet}
+          onRemoveShipFromFleet={removeShipFromFleet}
+          onToggleFleetDefending={toggleFleetDefending}
+        />
+      )}
+    </ErrorBoundary>
   );
 }
 

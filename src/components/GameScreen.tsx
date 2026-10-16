@@ -55,6 +55,7 @@ import { computeCrewFoodCost, famineHalveGold } from '@/lib/turn/shipTurn';
 import { getNextTurnHints } from '@/lib/turn/nextTurnHints';
 import { endTurnView } from '@/lib/battle/expedition';
 import { MATERIAL_NAME_MAP } from '@/data/materialNames';
+import ErrorBoundary from './ErrorBoundary';
 
 // 背景音乐曲目列表（放 public/ 目录下，按顺序自动循环播放）
 const BGM_LIST = ['/bgm1.mp3', '/bgm2.mp3', '/bgm3.mp3'];
@@ -587,6 +588,12 @@ export default function GameScreen({
               </button>
             </div>
           )}
+          {/* ===== 页签内容区（17 个页签全部常驻挂载，靠 hidden 切换）=====
+              整块只加一个错误边界：某个页签渲染抛错时只显示一张紧凑错误卡，不再把整棵根树带走（白屏）。
+              ⚠ key={activeTab}：切页签即自动重建边界、恢复正常；「重试」按钮用于同一页签内恢复。
+              ⚠ 不要改成 activeTab === 'x' ? <X/> : null 的条件渲染：各页签内部状态
+                （如机库的 selectedCardId / selectedFleetId）需要跨页签切换保留。 */}
+          <ErrorBoundary key={activeTab} title="这个页面出错了" showStack={false}>
           <div className={activeTab === 'overview' ? '' : 'hidden'}>
             <OverviewTab gameState={gameState} ship={currentShip} getShipTotalAssets={getShipTotalAssets} nextHints={nextHints} />
           </div>
@@ -782,6 +789,7 @@ export default function GameScreen({
               onReset={onResetGame}
             />
           </div>
+          </ErrorBoundary>
         </main>
       </div>
 
