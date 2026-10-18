@@ -1,11 +1,13 @@
 // ==================== 星图与考古类型 ====================
-// 星图：50 个固定节点（10 势力 / 10 殖民地 / 10 遗迹 / 20 空星系），布局固定，仅开局停泊点随机。
+// 星图：50 个固定节点（10 势力 / 10 殖民地 / 10 遗迹 / 15 空星系 / 5 海盗老巢），布局固定，仅开局停泊点随机。
 // 考古：10 处遗迹，每处 3~5 个阶段，需 1 名领袖驻守；阶段与奖励数据在 data/galaxy/archaeology.ts。
 
 import type { PlanetTypeId } from './colony';
 import type { PirateBossId } from './battle';
 
-export type GalaxyNodeType = 'faction' | 'colony' | 'ruin' | 'empty';
+/** 节点类型 —— **"这是什么"的唯一权威**：`pirateLair` = 海盗老巢，`empty` = 真空星系（无内容）。
+ *  以节点类型为键的配色 / 标签表都在 lib/galaxy/nodeStyle.ts，新增类型必须同步那几张表。 */
+export type GalaxyNodeType = 'faction' | 'colony' | 'ruin' | 'empty' | 'pirateLair';
 
 /** 星图节点（固定布局；坐标为 SVG viewBox 1000×700 内的位置） */
 export interface GalaxyNode {
@@ -21,10 +23,13 @@ export interface GalaxyNode {
   planetId?: PlanetTypeId;
   /** type='ruin' 时为遗迹 id（→ data/galaxy/archaeology.ts） */
   siteId?: string;
-  /** 海盗老巢 BOSS id（→ types/battle.ts 的 PirateBossId / data/battle/pirates.ts）。
-   *  只有 5 个空星系节点带此字段（V1.5 §7.1）；出征的耗时与可出兵判定见 lib/battle/expedition.ts。
-   *  ⚠ 这 5 个节点的 `name` 是**玩家可见的展示名**（统一写「海盗老巢·<BOSS 简称>」，让星图信息卡也能说明是谁的老巢），
-   *     不许再写回「空星系·NN」；信息卡的类型标签另按本字段取「海盗老巢」四个字（GalaxyMapPanel.nodeLabel）。
+  /** 海盗老巢承载的 BOSS id（→ types/battle.ts 的 PirateBossId / data/battle/pirates.ts）。
+   *  ⚠ **`type` 才是"这是什么"的唯一权威**：老巢节点的 `type` 是 `'pirateLair'`，`'empty'` 只剩真空星系；
+   *     本字段**只承载"哪个 BOSS"**，不参与节点分类判断（分类看 `type`，别再用 `!!node.pirateLair` 代替）。
+   *     当前 5 个老巢节点带此字段（V1.5 §7.1：e06→b1 / e11→b3 / e12→b2 / e16→b5 / e20→b4）；
+   *     出征的耗时与可出兵判定见 lib/battle/expedition.ts，掠夺的老巢账本见 lib/battle/raid.ts。
+   *  这 5 个节点的 `name` 是**玩家可见的展示名**（统一写「海盗老巢·<BOSS 简称>」，让星图信息卡也能说明是谁的老巢），
+   *     不许再写回「空星系·NN」；类型标签由 lib/galaxy/nodeStyle 的 `TYPE_LABEL.pirateLair` 给「海盗老巢」。
    *     未探明时可见名仍由 lib/galaxy/knowledge.getNodeDisplayName 压成「未探测星系」（迷雾）。 */
   pirateLair?: PirateBossId;
 }

@@ -152,6 +152,20 @@ export function validateGalaxy(): GalaxyValidationResult {
     if (lane.a === lane.b) errors.push(`航道两端相同：${lane.a}`);
   }
 
+  // 节点类型与 `pirateLair` 标记必须自洽（**`type` 是"这是什么"的唯一权威**，`pirateLair` 只承载 BOSS id）：
+  //   ① 5 个海盗老巢必须是 `pirateLair` 类型并挂着 BOSS id（信息卡 / 配图 / 出征都靠它）；
+  //   ② 反过来，非老巢类型不许挂 BOSS id（否则会落回「空星系」文案与灰点配色）。
+  // 注意这里**不断言各类节点的数量**（分类数量随玩法调整，写死 15/5 只会变成绊脚石）——
+  // 真正要守的是"老巢不再借用 empty、标记与类型不分叉"这条口径。
+  for (const node of GALAXY_NODES) {
+    if (node.type === 'pirateLair' && !node.pirateLair) {
+      errors.push(`海盗老巢节点缺少 pirateLair BOSS id：${node.id}`);
+    }
+    if (node.type !== 'pirateLair' && node.pirateLair) {
+      errors.push(`非 pirateLair 类型却挂了 pirateLair 标记：${node.id}（类型=${node.type}）`);
+    }
+  }
+
   const isolated = ids.filter((id) => (ADJACENCY[id] || []).length === 0);
   if (isolated.length) errors.push(`孤立节点（无任何航道）：${isolated.join('、')}`);
 

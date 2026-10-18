@@ -441,8 +441,19 @@ function GalaxyMapPanel({ ship, factionReputation, onTravelToNode }: GalaxyMapPa
           );
         })()}
 
+        {/* 海盗老巢（`type === 'pirateLair'`）：老巢不再是空星系，**不许出现"暂无内容/后续更新"这类话**。
+            这里只说是什么（还有哪些操作），出征入口按页签职责边界留在「战斗」页签，不在星图里加操作。 */}
+        {node.type === 'pirateLair' && (
+          <p className="text-xs text-slate-400">
+            海盗的力量盘踞在这片深空，此处没有可供交易的设施。出征与清剿在「战斗」页签中进行。
+          </p>
+        )}
+
+        {/* 真空星系（`type === 'empty'`）：**只有真空星系落到这里** —— 海盗老巢已自成 `pirateLair` 类型，
+            不再进这个分支（老巢的类型标签、配图与跃迁区都在上面按各自类型渲染）。
+            文案必须是游戏内口吻，不许出现"后续更新"这种开发注记（玩家界面不写开发计划）。 */}
         {node.type === 'empty' && (
-          <p className="text-xs text-slate-400">此地暂未发现任何内容，后续更新。</p>
+          <p className="text-xs text-slate-400">扫描未发现可交互目标，只有沉寂的星尘。</p>
         )}
 
         {/* 节点配图：可殖民星球用星球地貌图、遗迹用其图鉴封面、势力用势力景观图、海盗老巢用老巢图

@@ -43,7 +43,8 @@ const J = (v) => JSON.stringify(v);
   // ---------- ① 老巢标记与数据形状 ----------
   console.log('\n[1] 老巢标记（pirateLair）与节点类型');
   check(lairs.length === 5, '5 个海盗老巢节点', String(lairs.length));
-  check(lairs.every((n) => n.type === 'empty'), '老巢节点的 type 都是 empty（配色才需要特判）');
+  check(lairs.every((n) => n.type === 'pirateLair'), '老巢节点的 type 都是 pirateLair（2026-10 起独立类型，不再借用 empty）');
+  check(lairs.every((n) => typeof n.pirateLair === 'string'), '老巢节点都带 BOSS id（pirateLair 字段）');
   check(ship != null, '拿到母舰（读 ship.galaxy.visitedNodes 作迷雾判据）');
 
   // ---------- ② 迷雾复核：未探明的老巢 == 普通未探明节点（核心断言） ----------
