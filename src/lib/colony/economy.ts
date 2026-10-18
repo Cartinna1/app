@@ -14,8 +14,8 @@ import { getPermaBonusValue } from '@/data/galaxy/permaBonuses';
 
 /** 遗物「空白神像」：全部建筑产出 +10%（与领袖全员加成同口径，加算） */
 const BLANK_IDOL_PCT = 10;
-/** 遗物「未完成的镜」：每回合 +2 科研点（计入 relicPerTurn 明细，避免总览漏显） */
-const UNFINISHED_MIRROR_RESEARCH = 2;
+/** 遗物「未完成的镜」：每回合 +20 科研点（计入 relicPerTurn 明细，避免总览漏显） */
+const UNFINISHED_MIRROR_RESEARCH = 20;
 
 /** 单个电力建筑实例的发电明细（供 UI 展示加成来源）。
  *  ⚠ 所有 `*Pct` 字段一律是**小数**（0.15 = +15%），与 BuildingEconomyEntry 口径一致；

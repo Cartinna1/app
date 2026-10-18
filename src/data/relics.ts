@@ -19,7 +19,7 @@ export const RELIC_BARGAIN_AI = 'r_015';         // 讨价还价AI机器人：�
 
 // ===== 考古专属遗物（只能通过遗迹发掘获得，见 data/galaxy/archaeology.ts） =====
 export const RELIC_RESONANCE_FORK = 'r_016';     // 共鸣音叉：每回合+3星尘
-export const RELIC_UNFINISHED_MIRROR = 'r_017';  // 未完成的镜：每回合+2科研点
+export const RELIC_UNFINISHED_MIRROR = 'r_017';  // 未完成的镜：每回合+20科研点
 export const RELIC_DEEP_DRILL = 'r_018';         // 深层钻头：所有原料建筑产出+1
 export const RELIC_ARBITRAGE_NOTE = 'r_019';     // 套利凭证：卖出特产+5%金币
 export const RELIC_SEVENTH_LAYER = 'r_020';      // 第七层手稿：考古阶段成功率+10%
@@ -157,7 +157,7 @@ export const ARCHAEOLOGY_RELICS: Relic[] = [
     id: RELIC_UNFINISHED_MIRROR,
     name: '未完成的镜',
     description: '磨镜者留下的最后一面镜坯，表面只磨到了一半，却已经能照出结论',
-    effect: '每回合 +2 科研点',
+    effect: '每回合 +20 科研点',
     stardustCost: 0,
   },
   {
