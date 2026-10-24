@@ -1,4 +1,4 @@
-'use strict';
+﻿'use strict';
 /* ============================================================================
    P6 验收：机库（卡库聚合 / 舰队视图 / 编成守卫 / reducer 不许动出征舰队 / 内部标签模型）
    用法：node --import ./scripts/register-ts.mjs scripts/check-battle-hangar.cjs
@@ -516,8 +516,8 @@ const J = (v) => JSON.stringify(v);
 
     // ⑤ 筛「虫群」→ 只剩虫群行；每系列内费用升序（沿用 lib 的排序）
     const qRows = S.filterBySeries(rows, '虫群');
-    check(qRows.length === 1 && qRows[0].id === 'q1' && qRows[0].name === '噬星幼虫',
-      '★ 筛「虫群」→ 行 = 噬星幼虫（q1）', J(qRows.map((r) => r.id)));
+    check(qRows.length === 1 && qRows[0].id === 'q1' && qRows[0].name === '孢子浮囊',
+      '★ 筛「虫群」→ 行 = 孢子浮囊（q1）', J(qRows.map((r) => r.id)));
     const st2 = build(['q5', 'q1', 'q3'], [[]]);
     const q2Rows = S.filterBySeries(H.fleetEditorRows(st2, st2.fleets[0].id), '虫群');
     check(J(q2Rows.map((r) => r.cost)) === J([1, 3, 5]), '★ 同系列内按**费用升序**（1→3→5，不另排）',
@@ -544,3 +544,4 @@ const J = (v) => JSON.stringify(v);
   console.error('验收脚本自身出错：', e && e.stack ? e.stack.split('\n').slice(0, 10).join('\n') : e);
   process.exitCode = 2;
 });
+

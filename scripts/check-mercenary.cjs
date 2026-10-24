@@ -1,4 +1,4 @@
-﻿'use strict';
+'use strict';
 /* ============================================================================
    雇佣兵协会 · 第 2a 步验收（数据表 + 批次生成 + 冷却 + 期限 + 文案，纯函数层）
    用法：node --import ./scripts/register-ts.mjs scripts/check-mercenary.cjs
@@ -445,21 +445,21 @@ const eq = (a, b) => J(a) === J(b);
 
   // 四池 30 张
   const bossIds = ['m01', 'm02', 'm03', 'm04'];
-  check(bossIds.every((b) => MP.MERCENARY_POOLS[b] && MP.MERCENARY_POOLS[b].length === 30),
-    '四个敌池各 30 张', J(bossIds.map((b) => (MP.MERCENARY_POOLS[b] || []).length)));
+  check(bossIds.every((b) => MP.MERCENARY_POOLS[b] && MP.MERCENARY_POOLS[b].length === 18),
+    '四个敌池各 18 张（6×3）', J(bossIds.map((b) => (MP.MERCENARY_POOLS[b] || []).length)));
   check(bossIds.every((b) => {
     const pool = MP.MERCENARY_POOLS[b];
     const counts = {};
     for (const id of pool) counts[id] = (counts[id] || 0) + 1;
-    return Object.keys(counts).length === 6 && Object.values(counts).every((n) => n === 5);
-  }), '每个敌池 = 那 6 张各 5 份');
+    return Object.keys(counts).length === 6 && Object.values(counts).every((n) => n === 3);
+  }), '每个敌池 = 那 6 张各 3 份');
 
   // 四编队 26 艘 + 合计
   const sums = (list) => list.reduce((acc, id) => {
     const c = BC[id] || EN.CARDS[id] || {};
     return { atk: acc.atk + (c.atk || 0), shield: acc.shield + (c.shield || 0), structure: acc.structure + (c.structure || 0) };
   }, { atk: 0, shield: 0, structure: 0 });
-  const ANCHOR = { m01: [111, 98, 36], m02: [102, 105, 40], m03: [88, 110, 49], m04: [95, 113, 45] };
+  const ANCHOR = { m01: [111, 98, 47], m02: [102, 105, 40], m03: [88, 110, 49], m04: [95, 113, 53] };
   const STARTER = sums(FL.FLEET_STARTER);
   const starterTotal = STARTER.atk + STARTER.shield + STARTER.structure;
   for (const b of bossIds) {
@@ -487,9 +487,9 @@ const eq = (a, b) => J(a) === J(b);
   for (const b of bossIds) {
     const created = BB.createBountyBattle(b, ['h1', 'c1'], 7);
     const pool = created.boss.pool;
-    const okPool = pool.length === 30 && pool.every((id) => BC[id] && BC[id].series === DR.BOSS_SERIES[b]);
+    const okPool = pool.length === 18 && pool.every((id) => BC[id] && BC[id].series === DR.BOSS_SERIES[b]);
     check(created.bossId === b && created.boss.body === EN.BOSSES[b].hp && created.boss.bodyMax === EN.BOSSES[b].hp && okPool,
-      `${b} 建场正确（bossId/本体血量/30 张本系列敌池）`,
+      `${b} 建场正确（bossId/本体血量/18 张本系列敌池）`,
       J({ bossId: created.bossId, body: created.boss.body, pool: pool.length }));
   }
 
@@ -508,7 +508,7 @@ const eq = (a, b) => J(a) === J(b);
   const lib2 = DR.mergeDrops(lib1, ['q1']);
   check(lib1.length === 2 && lib2.length === 3 && lib2.filter((id) => id === 'q1').length === 2,
     '同一张卡掉两次 = 卡库两份（份数累加，不是去重）', J(lib2));
-  check(DR.bossDropText(['q1', 'q1']).includes('噬星幼虫 ×2') && DR.bossDropText(['q1']).includes('不可建造'),
+  check(DR.bossDropText(['q1', 'q1']).includes('孢子浮囊 ×2') && DR.bossDropText(['q1']).includes('不可建造'),
     '掉落文案写明张数与「不可建造」', DR.bossDropText(['q1', 'q1']));
 
   // 不可建造（ENEMY_SERIES 三处接线）
@@ -521,6 +521,26 @@ const eq = (a, b) => J(a) === J(b);
   const TU = await import('@/lib/battle/techUnlocks');
   const allUnlockIds = Object.values(TU.techUnlockList ? TU.techUnlockList() : {}).flatMap((x) => x.cardIds || []);
   check(!allUnlockIds.some((id) => mercIds.includes(id)), '科技解锁清单里不出现任何敌方卡', String(allUnlockIds.length));
+  // 24 张的 kw / fx 覆盖率（按 docs/03 §4.2~§4.5 的机制列）
+  {
+    const kwOf = (id) => EN.CARDS[id].kw || {};
+    const fxOf = (id) => EN.CARDS[id].fx || {};
+    check(kwOf('q6').taunt === true && typeof fxOf('q6').death === 'function',
+      'q6 = 锁链 + 亡语群伤（death 钩子）');
+    check(typeof fxOf('y4').play === 'function' && typeof fxOf('y1').play === 'function',
+      'y1/y4 入场冻结（y4 两次 freeze）');
+    check(kwOf('z6').taunt === true && typeof fxOf('z6').turnStart === 'function',
+      'z6 = 锁链 + 回合开始减攻（turnStart 钩子）');
+    check(kwOf('v6').pierce === true && kwOf('v6').recoil === 1 && typeof fxOf('v6').death === 'function',
+      'v6 = 贯穿 + 反噬 1 + 亡语群伤');
+    check(kwOf('z5').pierce === true && kwOf('z5').recoil === 1 && kwOf('z3').overload === 1,
+      'z3 过载 1 / z5 贯穿 + 反噬 1');
+    check(kwOf('v1').berserk === 2 && kwOf('q2').berserk === 2 && kwOf('y3').subm === true && kwOf('z2').brk === true,
+      'v1/q2 狂怒 2、y3 潜航、z2 破甲');
+    check(typeof fxOf('q5').play === 'function' && typeof fxOf('q4').turnEnd === 'function'
+      && typeof fxOf('v4').turnEnd === 'function' && typeof fxOf('z1').play === 'function',
+      'q5/v3 入场加息、q4/z4/y3 亡语补盾、v4 相邻修复、z1 入场加指挥度');
+  }
   // ---------- ⑮ A3：5 个头目技能各一条行为断言 ----------
   console.log('\n[15] 头目技能（m01~m05）：每支各一条"确实生效"的行为断言');
   {
@@ -528,9 +548,9 @@ const eq = (a, b) => J(a) === J(b);
     const { createBattle: CB, endTurn, spawnUnit, placeUnit } = ENG;
     // m01：开场自带 2 艘噬星幼虫
     const b1 = CB({ seed: 3, bossId: 'm01', playerFirst: false });
-    check(b1.boss.board.filter(Boolean).length === 2
+    check(b1.boss.board.filter(Boolean).length === 1
       && b1.boss.board.filter(Boolean).every((u) => u && u.cardId === 'q1'),
-      'm01 开场自带 2 艘噬星幼虫（q1）', J(b1.boss.board.filter(Boolean).map((u) => u && u.cardId)));
+      'm01 开场自带 1 艘噬星幼虫（q1）', J(b1.boss.board.filter(Boolean).map((u) => u && u.cardId)));
     // m05：开场自带 1 艘海盗杂兵
     const b5 = CB({ seed: 3, bossId: 'm05', playerFirst: false });
     check(b5.boss.board.filter(Boolean).length === 1
@@ -539,11 +559,11 @@ const eq = (a, b) => J(a) === J(b);
 
     // m02 / m03：机制在 engine 的按 id 分支里（与 DEMO 一字不差，由 audit-battle-port 严格相等覆盖）；
     // 这里只断数据侧文案与生成物一致，行为面用 m04 的"确实掉血"代表（同一批分支、同一处回合入口）。
-    check(ENG.BOSSES.m02.skill.includes('攻击 +1') && ENG.BOSSES.m03.skill.includes('2 艘'),
+    check(ENG.BOSSES.m02.skill.includes('攻击 +1') && ENG.BOSSES.m03.skill.includes('1 艘'),
       'm02/m03 的技能文案与生成物一致（机制分支由 audit 严格相等覆盖）',
       J([ENG.BOSSES.m02.skill, ENG.BOSSES.m03.skill]));
-    check(ENG.BOSSES.m01.hp === 30 && ENG.BOSSES.m04.hp === 30 && ENG.BOSSES.m05.hp === 18,
-      '五个头目的血量来自生成物（m01 30 / m04 30（A4 从 34 下调）/ m05 18）', J(ENG.BOSSES.m01.hp));
+    check(ENG.BOSSES.m01.hp === 24 && ENG.BOSSES.m04.hp === 24 && ENG.BOSSES.m05.hp === 18,
+      '五个头目的血量来自生成物（m01 24 / m04 24 / m05 18，A8 各下调 6）', J(ENG.BOSSES.m01.hp));
   }
   // ---------- ⑯ 卡库门槛（requireCardCount）真的被守卫读了 ----------
   console.log('\n[16] 接取门槛：卡库 18 艘被拒 / 20 艘可接 / 出击也拦 / 艘数只有一个来源');
@@ -607,13 +627,25 @@ const eq = (a, b) => J(a) === J(b);
       bodyMin = Math.min(bodyMin, m4.player.body);
     }
     check(bodyMin === body0, 'm04 第 1~6 回合玩家本体始终不掉血', J({ before: body0, min: bodyMin }));
+
+    // m04 盾是**一次性**：第 3 回合的护盾总和不再增长（只验"不进每回合叠盾"这条语义）
+    {
+      const m4b = CB({ seed: 11, bossId: 'm04', playerFirst: true });
+      const board = m4b.boss.board;
+      const u = ENG2.spawnUnit(m4b, 'boss', 'v2');
+      ENG2.placeUnit(m4b, 'boss', u, 0);
+      const sumOf = () => m4b.boss.board.filter(Boolean).reduce((n, x) => n + (x ? x.shield : 0), 0);
+      const s1 = sumOf();
+      m4b.round = 3; m4b.active = 'boss'; ET(m4b);
+      check(sumOf() === s1, 'm04 第 3 回合盾不再增长（一次性 +2，不是每回合）', J({ r1: s1, r3: sumOf() }));
+    }
     check(!m03seg.includes('damageBody') && !src.includes("st.round % 2 === 0"), 'm04 的 damageBody 分支已删干净');
-    check(PB2.m04.skill === '己方全体护盾 +2' && !PB2.m04.skill.includes('本体'),
-      'm04 文案 =「己方全体护盾 +2」且不含「本体」', J(PB2.m04.skill));
+    check(PB2.m04.skill === '开场：己方全体护盾 +2' && !PB2.m04.skill.includes('本体'),
+      'm04 文案 =「开场：己方全体护盾 +2」且不含「本体」（不是每回合）', J(PB2.m04.skill));
     // ② m03：实现换成冻结（`randomEnemy` + `freeze`），不再有 capBonus 压制
     
     check(!m03seg.includes('capBonus'), 'm03 不再压指挥度（分支里没有 capBonus）');
-    check(PB2.m03.skill === '每回合开始：随机冻结玩家 2 艘战舰', 'm03 文案 =「每回合开始：随机冻结玩家 2 艘战舰」',
+    check(PB2.m03.skill === '每回合开始：随机冻结玩家 1 艘战舰', 'm03 文案 =「每回合开始：随机冻结玩家 1 艘战舰」',
       J(PB2.m03.skill));
     // ③ 冻结语义（b1 与 m03 共用同一套 api）：冻结后该单位本回合不能行动
     const fz = CB({ seed: 3, bossId: 'm03', playerFirst: true });
@@ -661,6 +693,13 @@ const eq = (a, b) => J(a) === J(b);
   console.error('脚本异常：', e);
   process.exitCode = 1;
 });
+
+
+
+
+
+
+
 
 
 

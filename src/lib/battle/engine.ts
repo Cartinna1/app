@@ -125,35 +125,35 @@ const BEHAVIOR: Record<string, CardBehavior> = {
   t_wreck: { kw: {} },
   t_grunt: { kw: {} },
 
-  // —— 雇佣兵协会：四支敌对势力（24 张，逐字搬自 DEMO 的 def(...)，只用现有 kw、无 fx）——
+  // —— 雇佣兵协会：四支敌对势力（24 张，逐字搬自 DEMO 的 def(...)，与 docs/03 §4.2~§4.5 一致）——
   // 噬星虫群
-  q1: { kw: { taunt: true } },
-  q2: { kw: { rush: true } },
-  q3: { kw: { desper: 2 } },
-  q4: { kw: { pierce: true } },
-  q5: { kw: { bloodlust: true } },
-  q6: { kw: { overload: 2 } },
+  q1: { kw: {}, fx: { death(_u, api) { const a = api.randomAlly(); if (a) api.buffAtk(a, 1); } } },
+  q2: { kw: { berserk: 2 } },
+  q3: { kw: { pierce: true } },
+  q4: { kw: {}, fx: { turnEnd(u, api) { api.allies(u).forEach(a => api.buffShield(a, 1)); } } },
+  q5: { kw: {}, fx: { play(u, api) { api.allies(u).forEach(a => api.buffAtkTemp(a, 2)); } } },
+  q6: { kw: { taunt: true }, fx: { death(u, api) { api.enemies(u).forEach(e => api.damage(e, 1)); } } },
   // 残响智械
-  z1: { kw: { brk: true } },
-  z2: { kw: { taunt: true } },
-  z3: { kw: { pierce: true } },
-  z4: { kw: { recoil: 1 } },
-  z5: { kw: { berserk: 3 } },
-  z6: { kw: { overload: 1 } },
+  z1: { kw: {}, fx: { play(_u, api) { api.gainMana(1); } } },
+  z2: { kw: { brk: true } },
+  z3: { kw: { overload: 1 }, fx: { play(u, api) { api.buffAtk(u, 2); } } },
+  z4: { kw: {}, fx: { death(u, api) { api.allies(u).forEach(a => api.buffShield(a, 1)); } } },
+  z5: { kw: { pierce: true, recoil: 1 } },
+  z6: { kw: { taunt: true }, fx: { turnStart(_u, api) { const e = api.randomEnemy(); if (e) api.buffAtk(e, -2); } } },
   // 忆潮灵能者
-  y1: { kw: { subm: true } },
-  y2: { kw: { desper: 2 } },
-  y3: { kw: { recoil: 1 } },
-  y4: { kw: { brk: true } },
-  y5: { kw: { plunder: 2 } },
-  y6: { kw: { bloodlust: true } },
+  y1: { kw: {}, fx: { play(_u, api) { const e = api.randomEnemy(); if (e) api.freeze(e, 1); } } },
+  y2: { kw: { taunt: true } },
+  y3: { kw: { subm: true }, fx: { death(u, api) { api.allies(u).forEach(a => api.buffShield(a, 1)); } } },
+  y4: { kw: {}, fx: { play(_u, api) { for (let i = 0; i < 2; i++) { const e = api.randomEnemy(); if (e) api.freeze(e, 1); } } } },
+  y5: { kw: {}, fx: { play(u, api) { api.allies(u).forEach(a => api.buffShield(a, 2)); } } },
+  y6: { kw: {}, fx: { play(_u, api) { api.beginSteal(2); } } },
   // 旧律军团
-  v1: { kw: { taunt: true } },
-  v2: { kw: { recoil: 1 } },
-  v3: { kw: { pierce: true } },
-  v4: { kw: { rush: true } },
-  v5: { kw: { desper: 3 } },
-  v6: { kw: { berserk: 2 } },
+  v1: { kw: { berserk: 2 } },
+  v2: { kw: { taunt: true } },
+  v3: { kw: {}, fx: { play(u, api) { api.allies(u).forEach(a => api.buffAtkTemp(a, 1)); } } },
+  v4: { kw: { taunt: true }, fx: { turnEnd(u, api) { api.adjacent(u).forEach(a => api.repair(a, 1)); } } },
+  v5: { kw: { pierce: true }, fx: { play(_u, api) { const e = api.randomEnemy(); if (e) api.damage(e, 2); } } },
+  v6: { kw: { pierce: true, recoil: 1 }, fx: { death(u, api) { api.enemies(u).forEach(e => api.damage(e, 2)); } } },
 };
 
 /** 空关键词（数据层没有 kw，运行期按空对象处理——与 DEMO def() 的默认值一致） */
@@ -250,11 +250,11 @@ export function createBattle(opts?: CreateBattleOptions): BattleState {
   }
   // 【雇佣兵协会】头目开场（m01 召唤幼虫 / m05 召唤海盗杂兵）
   if (bossId === 'm01') {
-    for (let i = 0; i < 2; i++) {
+    for (let i = 0; i < 1; i++) {
       const u0 = spawnUnit(st, 'boss', 'q1');
       placeUnit(st, 'boss', u0, firstEmpty(st.boss.board));
     }
-    log(st, '【头目技能】噬星母巢开场自带 2 艘噬星幼虫');
+    log(st, '【头目技能】噬星母巢开场自带 1 艘噬星幼虫');
   }
   if (bossId === 'm05') {
     const u5 = spawnUnit(st, 'boss', 't_grunt');
@@ -550,7 +550,7 @@ function bossTurnStart(st: BattleState, side: BattleSide): void {
   // 【雇佣兵协会】m03：每回合开始随机冻结玩家 2 艘战舰（各 1 回合；写法照 b1 的冻结）
   if (st.bossId === 'm03') {
     const picked: BattleUnit[] = [];
-    for (let i = 0; i < 2; i++) {
+    for (let i = 0; i < 1; i++) {
       const cand = api(st, 'boss').randomEnemy();
       if (!cand) break;                      // 玩家场上没有战舰
       if (picked.indexOf(cand) >= 0) break;  // 抽到已选中的那艘 → 只剩它可选，停
@@ -565,9 +565,11 @@ function bossTurnStart(st: BattleState, side: BattleSide): void {
     }
   }
   // 【雇佣兵协会】m04：每回合开始己方全体 +2 护盾
-  if (st.bossId === 'm04') {
+  // 【雇佣兵协会】m04：**开场一次性**己方全体 +2 护盾（落在第 1 个 BOSS 回合开始；
+  // 因为 createBattle 那一刻 BOSS 场上还没有单位，所以「一次性」只能在这一刻兑现；不新增状态字段）
+  if (st.bossId === 'm04' && st.round <= 1) {
     api(st, 'boss').allies(null).forEach(a => { a.shield += 2; });
-    log(st, '  【头目技能】旧律裁决官：己方全体 +2 护盾');
+    log(st, '  【头目技能】旧律裁决官：开场己方全体 +2 护盾（仅一次）');
   }
 }
 export function endTurn(st: BattleState): void {

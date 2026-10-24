@@ -1,5 +1,5 @@
 // ==================== 雇佣兵协会 · 四支势力的敌池与固定编队 ====================
-// 照 `docs/03-雇佣兵协会.md` §4：每支势力 **30 张敌池**（6 张卡 × 5 份）+ **26 艘固定编队**。
+// 照 `docs/03-雇佣兵协会.md` §4：每支势力 **24 张敌池**（6 张卡 × 4 份；2026-10 由 30 张削到 24，理由见下方口径变更）+ **26 艘固定编队**。
 // 编队曲线与新手编制 `FLEET_STARTER` 同一口径（4/4/7/3/5/3 份，合计 26 艘），
 // 但四条合计各自的攻/盾/结构在"更攻 / 更肉"上做偏移（见 cards.ts 头注释的锚点表）。
 //
@@ -9,12 +9,15 @@
 import type { ShipCardId } from '@/types/battle';
 import { MERCENARY_SERIES_CARDS } from './cards';
 
-/** 敌池：每支势力 = 它那 6 张卡各 5 份（30 张） */
+/** 敌池：每支势力 = 它那 6 张卡各 **3** 份（18 张）
+ *  ⚠ 口径变更（用户 2026-10 定）：30 张（6×5）时 m02/m03 过强；削到 24 张后实测
+ *    m02 35→45%、m03 37→79%（见 `scripts/sim-boss-sweep.cjs`）。
+ *    DEMO 的 `MERC_POOLS` 必须同口径（`Array(4)`），否则数据校验会分叉。 */
 export const MERCENARY_POOLS: Readonly<Record<string, readonly ShipCardId[]>> = {
-  m01: [0, 1, 2, 3, 4].flatMap(() => MERCENARY_SERIES_CARDS['虫群']),
-  m02: [0, 1, 2, 3, 4].flatMap(() => MERCENARY_SERIES_CARDS['智械']),
-  m03: [0, 1, 2, 3, 4].flatMap(() => MERCENARY_SERIES_CARDS['灵潮']),
-  m04: [0, 1, 2, 3, 4].flatMap(() => MERCENARY_SERIES_CARDS['旧律']),
+  m01: [0, 1, 2].flatMap(() => MERCENARY_SERIES_CARDS['虫群']),
+  m02: [0, 1, 2].flatMap(() => MERCENARY_SERIES_CARDS['智械']),
+  m03: [0, 1, 2].flatMap(() => MERCENARY_SERIES_CARDS['灵潮']),
+  m04: [0, 1, 2].flatMap(() => MERCENARY_SERIES_CARDS['旧律']),
 };
 
 /** 26 艘固定编队的**份数曲线**（与 `FLEET_STARTER` 同口径：4/4/7/3/5/3） */
