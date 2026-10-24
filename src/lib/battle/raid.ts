@@ -40,6 +40,7 @@ import { PIRATE_BOSSES } from '@/data/battle/pirates';
 import { LAIR_BOSS_IDS_FROM_NODES } from './lairIds';
 import { raidLootItems } from './rewards';
 import { colonyNodeId } from './expedition';
+import { libraryShipCount } from './hangar';
 
 // ---------------- 数值锚点（V1.5 §10.2 + 用户 2026-08 裁定） ----------------
 
@@ -364,7 +365,9 @@ export function tickRaid(raid: BattleRaidState): BattleRaidState {
  * `colony.phase !== 'inactive'` 且星球类型能落到殖民地节点），**没有殖民地时永远不掷**。
  */
 function canRaid(state: GameState): boolean {
-  if (state.cardLibrary.length < RAID_MIN_SHIPS) return false;
+  // 艘数走 hangar.libraryShipCount（卡库总艘数的唯一真值，与接单门槛/机库汇总同源）；
+  // 今天它就是 cardLibrary.length，但未来卡库若改成"按 id 合并 + 份数"，这里不会掉队。
+  if (libraryShipCount(state.cardLibrary) < RAID_MIN_SHIPS) return false;
   return colonyNodeId(state) !== null;
 }
 

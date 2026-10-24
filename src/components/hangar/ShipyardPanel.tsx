@@ -2,6 +2,9 @@ import { memo, useCallback, useMemo, useState } from 'react';
 import type { GameState } from '@/types/game';
 import type { BuildQueueRow, ShipyardCardRow, ShipyardLockedTier, ShipyardView } from '@/lib/battle/shipyard';
 import { canCancelBuild, defaultSeriesFilter, filterBySeries, formatBuildCost, dockLevelText, pickSeriesFilter, resolveSeriesFilter, shipyardView } from '@/lib/battle/shipyard';
+import { BUILDING_DOCK_1, getBuildingDef } from '@/data/colony/buildings';
+import { getBuildingCostProfile } from '@/lib/colony/costs';
+import { getMaterialName } from '@/data/materialNames';
 import ShipCard from '@/components/ship/ShipCard';
 import SeriesChipRow from './SeriesChipRow';
 
@@ -141,6 +144,25 @@ function ShipyardPanelBase({ state, onSelect, onBuild, onCancelBuild }: Shipyard
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const view = useMemo(() => shipyardView(state), [state]);
 
+  /** 「还没有船坞」那句里的数字**一律从数据算**，不许手写（旧写法把一级船坞写成
+   *  「8000 金币 + 100 合金，2 回合，用电 6」——实测 10 种星球里 8 种是错的：
+   *  海洋/高山/热带实付 9600 金 + 120 合金，极地/草原/遗落要 3 回合，沙漠/海洋/遗落耗电 7~8）。
+   *  · 金币/合金/原料/工期 = `getBuildingCostProfile`（与殖民地页签显示、实扣同源，含星球与领袖修正）；
+   *  · 耗电只报**基础值**：单座建筑的实际耗电无法独立摊算（领袖的 `powerUseReduction` 是作用在
+   *    殖民地**总耗电**上的，见 `economy.computeColonyPower`），所以这里标「基础用电」，
+   *    既不说谎也不复制那份合计公式。 */
+  const dockHint = useMemo(() => {
+    const def = getBuildingDef(BUILDING_DOCK_1);
+    const colony = state.ships[0]?.colony;
+    if (!def || !colony) return '';
+    const prof = getBuildingCostProfile(def, colony);
+    const parts = [`${prof.gold} 金币`, `${prof.alloy} 合金`];
+    for (const [matId, amount] of Object.entries(prof.materials)) {
+      parts.push(`${getMaterialName(matId)} ${amount}`);
+    }
+    return `${def.name} ${parts.join(' + ')}，${prof.turns} 回合，基础用电 ${def.powerConsumption || 0}`;
+  }, [state]);
+
   /** 可造列表的系列筛选：**默认 = 第一个"有已解锁卡"的系列**（用户 2026-08 二次口径，
    *  进面板就只看该系列；以前是"默认不筛选"，已废）。初值由 `shipyard.defaultSeriesFilter` 算，
    *  **不硬编码系列名**——将来换卡/换档也不会开出空列表。
@@ -197,7 +219,7 @@ function ShipyardPanelBase({ state, onSelect, onBuild, onCancelBuild }: Shipyard
       {view.dockLevel === 0 ? (
         <p className="mt-2 rounded-lg border border-dashed border-[#33405f] px-2.5 py-2 text-[11.5px] leading-relaxed text-amber-400">
           {view.hasColony
-            ? '还没有船坞 —— 去「殖民」页签的「建造新建筑」里造一座（一级船坞 8000 金币 + 100 合金，2 回合，用电 6）。船坞建成后的下一个回合就能在这里下单造舰。'
+            ? `还没有船坞 —— 去「殖民」页签的「建造新建筑」里造一座${dockHint ? `（${dockHint}）` : ''}。船坞建成后的下一个回合就能在这里下单造舰。`
             : '还没有殖民地 —— 先跃迁到一颗星球，在「殖民」页签建立殖民地，再建造船坞。'}
         </p>
       ) : null}

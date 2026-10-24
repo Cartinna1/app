@@ -14,6 +14,7 @@ import {
   fleetRows,
   hangarOverview,
   libraryRows,
+  libraryShipCount,
 } from '@/lib/battle/hangar';
 import type { HangarTabId } from '@/lib/battle/hangar';
 import { expeditionView } from '@/lib/battle/expedition';
@@ -409,7 +410,7 @@ function HangarTabBase({
               新建舰队
             </button>
             <span className="text-[11px] text-slate-500">
-              卡库共 {cardLibrary.length} 艘 · 船坞{dock === 0 ? '未建' : ` ${dock} 级`}
+              卡库共 {libraryShipCount(cardLibrary)} 艘 · 船坞{dock === 0 ? '未建' : ` ${dock} 级`}
             </span>
           </div>
           <div className="mt-2">

@@ -13,6 +13,7 @@ import {
   travelTurnsText,
 } from '@/lib/battle/expedition';
 import { raidCardView } from '@/lib/battle/raid';
+import { libraryShipCount } from '@/lib/battle/hangar';
 import { LAIR_REWARD_GOLD, LAIR_REWARD_STARDUST } from '@/lib/battle/rewards';
 import BattleScreen from './BattleScreen';
 import type { BattleScreenContext } from './BattleScreen';
@@ -501,14 +502,14 @@ function BattleTabBase({
           </p>
         )}
 
-        {cardLibrary.length === 0 && (
+        {libraryShipCount(cardLibrary) === 0 && (
           <p className="mt-2 text-xs leading-relaxed text-slate-500">
             卡库是空的 —— 去机库页签的船坞面板建成船坞、下单造舰，完工后自动进卡库。
           </p>
         )}
 
         <p className="mt-2 text-[11px] leading-relaxed text-slate-500">
-          卡库共 {cardLibrary.length} 艘 · 留守（带「防守」标签）{defenders.length} 支
+          卡库共 {libraryShipCount(cardLibrary)} 艘 · 留守（带「防守」标签）{defenders.length} 支
         </p>
       </div>
         </>

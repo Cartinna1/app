@@ -10,7 +10,7 @@ import {
   manualActionView,
   poolView,
 } from '@/lib/battle/view';
-import { TURN_LIMIT } from '@/lib/battle/engine';
+import { TURN_LIMIT, BOARD_SIZE } from '@/lib/battle/engine';
 import { useStableActions } from '@/hooks/useGameState';
 import BoardSide from './BoardSide';
 import BossPanel from './BossPanel';
@@ -172,7 +172,7 @@ function BattleScreenBase({ battle, seed, enemyName, context, onAction, onEnd }:
   const deployBlockReason = (card: CardView): string =>
     card.cost > battle.player.cur
       ? `指挥度不够（需要 ${card.cost}，现有 ${battle.player.cur}）`
-      : '场上没有空位了（上限 6 艘）';
+      : `场上没有空位了（上限 ${BOARD_SIZE} 艘）`;
 
   const onPoolClick = (cid: string) => {
     // 唯一的输入闸门：读 lib 的 manualActionView（未开自动 + 轮到玩家 + 无待选择）。被拦时说出原因。

@@ -42,7 +42,7 @@ import { ALL_CARDS } from './cardIndex';
 import { getBuildingDef } from '@/data/colony/buildings';
 import { getTechById } from '@/data/colony/techs';
 import { RESOURCE_LABELS } from '@/data/colony/expeditions';
-import { firstMissing, flattenCost } from '@/lib/turn/resourceCost';
+import { firstMissing, flattenCost, refundFromPaid } from '@/lib/turn/resourceCost';
 import { getThumbPath } from '@/lib/assetThumb';
 // ⚠ 系列 chip 的**唯一实现**（颜色表 + 筛选判定），船坞与卡库共用；本文件只转发"已解锁卡"
 import type { SeriesGroup } from '@/lib/battle/seriesFilter';
@@ -627,21 +627,12 @@ export function canCancelBuild(queue: BuildQueueItem[], index: number): { ok: bo
   return { ok: true };
 }
 
-/** 取消排队项 / 拆除建筑的返还比例（与殖民地建造一致：金币 ×0.4、合金与原料 ×0.7）。
- *  按**实付成本**算（`BuildQueueItem.cost`），返回既有 cost 对象形状，供 payCost 的反向入账用。 */
-export const BUILD_REFUND_GOLD_RATIO = 0.4;
-export const BUILD_REFUND_MATERIAL_RATIO = 0.7;
-
+/** 取消排队项的返还：**按实付成本**（`BuildQueueItem.cost`）算，返回 cost 对象形状供反向入账。
+ *  ⚠ 比例与取整口径的唯一真值 = `lib/turn/resourceCost.refundFromPaid`（金币 ×0.4、合金与原料 ×0.7），
+ *    与殖民地"取消建造 / 拆除建筑"（`lib/colony/costs.getBuildingRefundProfile`）共用同一份——
+ *    历史上这里另写过一对 `BUILD_REFUND_*_RATIO` 常量，改一处就会分叉。 */
 export function buildRefund(item: BuildQueueItem): { gold: number; alloy: number; materials: Record<string, number> } {
-  const materials: Record<string, number> = {};
-  for (const [matId, amount] of Object.entries(item.cost.materials || {})) {
-    materials[matId] = Math.floor(amount * BUILD_REFUND_MATERIAL_RATIO);
-  }
-  return {
-    gold: Math.floor((item.cost.gold || 0) * BUILD_REFUND_GOLD_RATIO),
-    alloy: item.cost.alloy ? Math.floor(item.cost.alloy * BUILD_REFUND_MATERIAL_RATIO) : 0,
-    materials,
-  };
+  return refundFromPaid(item.cost);
 }
 
 // ---------------- 队列推进 ----------------

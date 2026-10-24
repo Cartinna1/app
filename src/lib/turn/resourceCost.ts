@@ -79,3 +79,32 @@ export function flattenCost(cost: {
 export function formatCost(cost: Record<string, number>): string {
   return Object.entries(cost).map(([k, v]) => `${RESOURCE_LABELS[k] || k}×${v}`).join(' + ');
 }
+
+// ==================== 取消/拆除的返还比例（唯一真值） ====================
+// 两个消费方必须同源：殖民地取消建造 / 拆除建筑（lib/colony/costs.getBuildingRefundProfile）
+// 与船坞取消造舰（lib/battle/shipyard.buildRefund）。历史上两处各写一遍 0.4 / 0.7，
+// 注释都写着"与殖民地一致"——一致性靠人记着，改一处就分叉。
+// ⚠ 一律按**实付成本**算（含星球/领袖修正），不是基础价：按基础价会在低倍率配置下产生套利。
+
+/** 金币返还比例 */
+export const REFUND_GOLD_RATIO = 0.4;
+/** 合金与原料返还比例 */
+export const REFUND_MATERIAL_RATIO = 0.7;
+
+/** 按**实付** cost 对象算返还（金币/合金/原料逐项向下取整）。
+ *  `paid` 必须是玩家真正付出去的数额（如 `getBuildingCostProfile` 的结果、`BuildQueueItem.cost`）。 */
+export function refundFromPaid(paid: {
+  gold?: number;
+  alloy?: number;
+  materials?: Record<string, number>;
+}): { gold: number; alloy: number; materials: Record<string, number> } {
+  const materials: Record<string, number> = {};
+  for (const [matId, amount] of Object.entries(paid.materials || {})) {
+    materials[matId] = Math.floor(amount * REFUND_MATERIAL_RATIO);
+  }
+  return {
+    gold: Math.floor((paid.gold || 0) * REFUND_GOLD_RATIO),
+    alloy: paid.alloy ? Math.floor(paid.alloy * REFUND_MATERIAL_RATIO) : 0,
+    materials,
+  };
+}

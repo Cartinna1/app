@@ -14,6 +14,7 @@ import { RELIC_DECIPHERER } from '@/data/relics';
 import { famineHalveGold, BANKRUPT_TURNS } from '@/lib/turn/shipTurn';
 import { getSpecialtyBuyUnitPrice, getSpecialtySellRevenue, getBlackMarketTotal } from '@/lib/turn/tradePrice';
 import { pushGoldLog } from '@/lib/turn/goldLog';
+import { clampRep } from '@/lib/turn/reputation';
 import { PENDING_EVENT_TRAVEL_BLOCK } from '@/lib/turn/pendingEvent';
 import {
   getExploreReward,
@@ -54,7 +55,7 @@ export function useTrade(
     const applied = delta > 0 ? Math.min(delta, cap - cur) : delta;
     if (applied === 0) return null;
     log[logKey] = cur + applied;
-    rep[factionId] = Math.max(-100, Math.min(100, (rep[factionId] || 0) + applied));
+    rep[factionId] = clampRep((rep[factionId] || 0) + applied);
     // 零和传导：敌人惩罚（按动作类型区分单次值与回合上限）
     const enemyConf: Record<string, { per: number; cap: number | null }> = {
       buy: { per: -4, cap: -4 },
@@ -73,7 +74,7 @@ export function useTrade(
           if (eApplied >= 0) continue;
         }
         log[enemyLogKey] = eCur + eApplied;
-        rep[enemyId] = Math.max(-100, Math.min(100, (rep[enemyId] || 0) + eApplied));
+        rep[enemyId] = clampRep((rep[enemyId] || 0) + eApplied);
       }
     }
     return { factionReputation: rep, factionRepLog: log };
@@ -483,7 +484,8 @@ export function useTrade(
           if (!hasDecipherer && roll > SMUGGLING_SUCCESS_RATE) {
             contracts.splice(idx, 1);
             const rep = ((prev.factionReputation || {})[contract.factionId] || 0) - 5;
-            const factionReputation = { ...(prev.factionReputation || {}), [contract.factionId]: Math.max(-100, rep) };
+            // 夹取的唯一真值 = lib/turn/reputation.clampRep（这一条只做减法，上限本就碰不到）
+            const factionReputation = { ...(prev.factionReputation || {}), [contract.factionId]: clampRep(rep) };
             result = { success: false, message: `走私失败！声望-5（当前${rep}）` };
             return { ...prev, factionContracts: contracts, ships, factionReputation };
           }

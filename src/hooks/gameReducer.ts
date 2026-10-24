@@ -36,6 +36,7 @@ import {
 import type { RaidLootLoss } from '@/lib/battle/raid';
 import { flattenCost, payCost } from '@/lib/turn/resourceCost';
 import { pushGoldLog } from '@/lib/turn/goldLog';
+import { clampRep } from '@/lib/turn/reputation';
 import { lairDisplayName, readyExpedition, tickExpedition } from '@/lib/battle/expedition';
 import { canAddShip, canDeleteFleet, canRemoveShip, canRenameFleet, canToggleDefending, isFleetOnExpedition } from '@/lib/battle/hangar';
 import { buildRefund, buildCost, canCancelBuild, canEnqueue, enqueueBuild } from '@/lib/battle/shipyard';
@@ -260,7 +261,7 @@ function applyRaidReward(
   if (!reward.factionId || reward.reputation <= 0) return { ships, factionReputation: state.factionReputation };
   const factionId = reward.factionId;
   const current = state.factionReputation[factionId] || 0;
-  const clamped = Math.max(-100, Math.min(100, current + reward.reputation));
+  const clamped = clampRep(current + reward.reputation);
   return { ships, factionReputation: { ...state.factionReputation, [factionId]: clamped } };
 }
 

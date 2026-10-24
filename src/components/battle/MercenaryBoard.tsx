@@ -11,6 +11,8 @@ import type { BattleFleet } from '@/types/battle';
 import type { GameState } from '@/types/game';
 import {
   BOUNTY_MAX_ACTIVE,
+  BOUNTY_REFRESH_TURNS,
+  BOUNTY_REST_TURNS,
   bountyEnemyId,
   bountyExpiryText,
   bountyRewardText,
@@ -67,7 +69,7 @@ function MercenaryBoardBase({ state, fleets, onAccept, onAbandon, onStart }: Mer
     <div>
       <p className="mb-2 text-[11px] leading-relaxed text-slate-500">
         接单后<b className="text-slate-300">当场出击</b>，不跃迁、不计耗时。同时最多 {BOUNTY_MAX_ACTIVE} 条
-        （当前 {totalActive} 条）· 榜单每 10 回合换一批 · **打赢任意一条后统一休息 6 回合**。
+        （当前 {totalActive} 条）· 榜单每 {BOUNTY_REFRESH_TURNS} 回合换一批 · <b className="text-slate-300">打赢任意一条后统一休息 {BOUNTY_REST_TURNS} 回合</b>。
       </p>
 
       {bountyRestRemaining(state) > 0 ? (

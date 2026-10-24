@@ -7,6 +7,7 @@ import type { BuildingDef, Colony } from '@/types/colony';
 import { getBuildingDef } from '@/data/colony/buildings';
 import { getLeaderDef } from '@/data/colony/leaders';
 import { ALL_PLANETS } from '@/data/colony/planets';
+import { refundFromPaid } from '@/lib/turn/resourceCost';
 
 /** 招募人口基础单价（唯一锚点，勿在 UI/hook 就地硬编码） */
 export const RECRUIT_BASE_COST = 2000;
@@ -90,14 +91,6 @@ export function getBuildingRefundProfile(
   def: BuildingDef,
   colony: Colony
 ): { gold: number; alloy: number; materials: Record<string, number> } {
-  const paid = getBuildingCostProfile(def, colony);
-  const materials: Record<string, number> = {};
-  for (const [matId, amt] of Object.entries(paid.materials)) {
-    materials[matId] = Math.floor(amt * 0.7);
-  }
-  return {
-    gold: Math.floor(paid.gold * 0.4),
-    alloy: paid.alloy ? Math.floor(paid.alloy * 0.7) : 0,
-    materials,
-  };
+  // 比例与取整口径的唯一真值 = lib/turn/resourceCost.refundFromPaid（船坞取消造舰也用它）
+  return refundFromPaid(getBuildingCostProfile(def, colony));
 }
