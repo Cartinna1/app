@@ -65,6 +65,12 @@ interface GameScreenProps {
   gameState: GameState;
   activeEvent: import('@/types/game').ChoiceEvent | null;
   eventDodged: DodgeReason;
+  /** 事件结果卡复位信号（useEvent.eventCardResetSignal 原样下发，事件面板监听它自增后清空结果卡） */
+  eventCardResetSignal: number;
+  /** 是否有未处理事件（唯一判据 = useGameState 的 hasUnresolvedEvent，与 useTrade.travelToNode 的
+   *  同步守卫同一份）。用途只有两处：① 星图跃迁按钮置灰 + 原因 ② 结束回合提示（只提示、不拦）。
+   *  ⚠ 别在这里改写判据（比如判 activeEvent），UI 不许有第二份「事件处理完了没有」的判断。 */
+  hasPendingEvent: boolean;
   onBuyStock: (shipIndex: number, stockId: string, qty: number) => { error: string | null };
   onSellStock: (shipIndex: number, stockId: string, qty: number) => { error: string | null; profit?: number; profitRate?: number };
   onBuyMaterial: (shipIndex: number, matId: string, qty: number) => string | null;
@@ -193,6 +199,8 @@ export default function GameScreen({
   gameState,
   activeEvent,
   eventDodged,
+  eventCardResetSignal,
+  hasPendingEvent,
   onBuyStock,
   onSellStock,
   onBuyMaterial,
@@ -274,7 +282,12 @@ export default function GameScreen({
   const [activeTab, setActiveTab] = useState<TabId>('overview');
   const [showConfirmNext, setShowConfirmNext] = useState(false);
   // 下一回合预告（唯一真值 lib/turn/nextTurnHints；确认弹窗与总览共用同一份）
-  const nextHints = useMemo(() => getNextTurnHints(gameState), [gameState]);
+  // 「未处理事件会消失」那条的判据不在 GameState 里（activeEvent 是组件态），由 useGameState 的
+  // hasPendingEvent 传入 —— 与跃迁守卫同一份，这里不许另判。
+  const nextHints = useMemo(
+    () => getNextTurnHints(gameState, { hasPendingEvent }),
+    [gameState, hasPendingEvent]
+  );
   /** 「结束回合」按钮的渲染模型（唯一真值 lib/battle/expedition.endTurnView）：
    *  战斗进行中时 useTurn 的守卫会**直接挡住**结束回合（回合数、倒计时、市场全都不动），
    *  所以这里不让按钮变成"点了没反应"——改成「回到战斗」并给出可见原因（用户 2026-08 报的
@@ -590,10 +603,13 @@ export default function GameScreen({
           )}
           {/* ===== 页签内容区（17 个页签全部常驻挂载，靠 hidden 切换）=====
               整块只加一个错误边界：某个页签渲染抛错时只显示一张紧凑错误卡，不再把整棵根树带走（白屏）。
-              ⚠ key={activeTab}：切页签即自动重建边界、恢复正常；「重试」按钮用于同一页签内恢复。
+              ⚠ **不要给这个 ErrorBoundary 加 key={activeTab}**：key 变化会让 React 卸载重挂整棵页签子树，
+                页签里所有 useState 都会被清空（事件结果卡、机库选中项、子标签……），与下面"跨页签保留状态"的
+                意图直接冲突（2026-08 就是上一轮加的 key 造成的事件面板回归）。
+                恢复能力由错误卡上的「重试」提供：ErrorBoundary 的 retry 清掉自身 error state 后原样重渲染。
               ⚠ 不要改成 activeTab === 'x' ? <X/> : null 的条件渲染：各页签内部状态
                 （如机库的 selectedCardId / selectedFleetId）需要跨页签切换保留。 */}
-          <ErrorBoundary key={activeTab} title="这个页面出错了" showStack={false}>
+          <ErrorBoundary title="这个页面出错了" showStack={false}>
           <div className={activeTab === 'overview' ? '' : 'hidden'}>
             <OverviewTab gameState={gameState} ship={currentShip} getShipTotalAssets={getShipTotalAssets} nextHints={nextHints} />
           </div>
@@ -657,6 +673,7 @@ export default function GameScreen({
               onLogEvent={onLogEvent}
               onClearActiveEvent={onClearActiveEvent}
               onClearDodged={onClearEventDodged}
+              eventCardResetSignal={eventCardResetSignal}
             />
           </div>
           {currentShip && (
@@ -679,6 +696,7 @@ export default function GameScreen({
             <GalaxyMapPanel
               ship={currentShip}
               factionReputation={gameState.factionReputation || EMPTY_REPUTATION}
+              hasPendingEvent={hasPendingEvent}
               onTravelToNode={onTravelToNode}
             />
           </div>

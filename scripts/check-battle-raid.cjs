@@ -455,7 +455,12 @@ const J = (v) => JSON.stringify(v);
     check(lairIds.length === 5, '老巢来自 GALAXY_NODES 的 `pirateLair` 标记（当前 5 个）', String(lairIds.length));
     check(J(R.LAIR_BOSS_IDS_FROM_NODES) === J(lairIds), 'LAIR_BOSS_IDS_FROM_NODES 逐项 = 星图标记（不是硬编码的 b1..b5）', J(R.LAIR_BOSS_IDS_FROM_NODES));
     const raidSrc = fs.readFileSync(path.resolve(__dirname, '../src/lib/battle/raid.ts'), 'utf8');
-    check(/GALAXY_NODES[\s\S]{0,120}pirateLair/.test(raidSrc), '名字判据确实读 GALAXY_NODES 的 pirateLair（源码级核对）');
+    // ⚠ 派生点已下沉到 lib/battle/lairIds.ts（rewards.ts 也要用它判"老巢战利品"，
+    //   而 raid.ts 已 import rewards.ts —— 留在 raid.ts 会形成循环 import）。
+    //   故源码级核对改看**唯一派生点**，并顺带守住"raid.ts 不许自己再派生一份"。
+    const lairIdSrc = fs.readFileSync(path.resolve(__dirname, '../src/lib/battle/lairIds.ts'), 'utf8');
+    check(/GALAXY_NODES[\s\S]{0,120}pirateLair/.test(lairIdSrc), '名字判据确实读 GALAXY_NODES 的 pirateLair（源码级核对：唯一派生点 lairIds.ts）');
+    check(!/import\s*\{[^}]*GALAXY_NODES/.test(raidSrc), 'raid.ts 不再自己从星图派生（唯一真值 = lairIds.ts，只 import + re-export）');
     const fresh = setup({});
     check(R.raidEnemyName(fresh) === PIRATE_BOSSES.raid.name && R.RAID_ENEMY_NAME === PIRATE_BOSSES.raid.name,
       '未打光老巢 → 名字 = 数据里的静态名「海盗旗舰（掠夺队）」（不另抄一份字面量）', R.raidEnemyName(fresh));

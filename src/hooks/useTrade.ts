@@ -14,6 +14,7 @@ import { RELIC_DECIPHERER } from '@/data/relics';
 import { famineHalveGold, BANKRUPT_TURNS } from '@/lib/turn/shipTurn';
 import { getSpecialtyBuyUnitPrice, getSpecialtySellRevenue, getBlackMarketTotal } from '@/lib/turn/tradePrice';
 import { pushGoldLog } from '@/lib/turn/goldLog';
+import { PENDING_EVENT_TRAVEL_BLOCK } from '@/lib/turn/pendingEvent';
 import {
   getExploreReward,
   applyFamineToReward,
@@ -27,7 +28,13 @@ import { createUid } from '@/lib/id';
 
 export function useTrade(
   gameState: GameState,
-  dispatch: React.Dispatch<{ type: 'FUNCTIONAL_UPDATE'; updater: (state: GameState) => GameState }>
+  dispatch: React.Dispatch<{ type: 'FUNCTIONAL_UPDATE'; updater: (state: GameState) => GameState }>,
+  /**
+   * 「是否有未处理事件」的守卫，由组合点 `hooks/useGameState` 注入
+   * （useEvent 与 useTrade **不许互相 import**，判据本体见 `lib/turn/pendingEvent.hasUnresolvedEvent`）。
+   * 必须是**调用时**求值的函数而不是布尔值：事件卡是 useEvent 的组件态，闭包里存的旧布尔值会过期。
+   */
+  hasUnresolvedEvent: () => boolean
 ) {
   /** 应用声望变化（带回合上限管控和零和传导）。纯函数：返回更新后的字段，无变化返回 null */
   function applyRepChange(
@@ -78,6 +85,12 @@ export function useTrade(
   // 跃迁（目标可以是任意星系节点；回合数由星图最短路给出）
   const travelToNode = useCallback(
     (shipIndex: number, targetNodeId: string): { success: boolean; message: string } => {
+      // ⚠ 有未处理事件时**禁止跃迁**，且必须拦在 dispatch **之前**（AGENTS 第九节「交互与 dispatch」）：
+      //   事件卡是 useEvent 的组件态（activeEvent），派发之后在 updater 里读不到，也拦不住了；
+      //   放行则玩家可以"跃迁走 → 回来再选"，事件照常结算、跃迁回合照常花，用户判定为不合逻辑。
+      //   判据唯一来源 = 第三个参数（组合点注入的 hasUnresolvedEvent），与星图按钮置灰、结束回合提示同一份；
+      //   文案唯一来源 = lib/turn/pendingEvent.PENDING_EVENT_TRAVEL_BLOCK。
+      if (hasUnresolvedEvent()) return { success: false, message: PENDING_EVENT_TRAVEL_BLOCK };
       const targetNode = getGalaxyNode(targetNodeId);
       if (!targetNode) return { success: false, message: '目标星系不存在' };
       // 宿敌势力封锁边境：不可进入
@@ -156,7 +169,7 @@ export function useTrade(
         },
       });
       return result;
-    }, [gameState, dispatch]);
+    }, [gameState, dispatch, hasUnresolvedEvent]);
 
   /** 贸易操作前置守卫：跃迁中不可操作，且必须停泊在势力星系 */
   const requireFactionHere = (ship: Mothership | undefined): string | null => {

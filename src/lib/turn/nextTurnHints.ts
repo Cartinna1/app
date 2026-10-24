@@ -13,6 +13,10 @@
 //   只取决于当前价格落在哪个区间（跌破基准 65% → 每回合 3%，85% → 12%，见 STOCK_DELIST）；
 //   报它是"把已知参数说给玩家听"，与预测下回合股价怎么走是两件事（见 A7）。
 //   重整（退市后再上市，上限 5 次）同样是已知参数，走 getStockRestructureInfo。
+//
+// **唯一一处非 GameState 输入**：ctx.hasPendingEvent（"有未处理事件"）。事件卡 activeEvent 是 useEvent 的
+//   useState，**不在 GameState 上**、也不进存档，本文件读不到，所以只能由调用方（GameScreen，读
+//   useGameState 的同一份判据）传进来。传进来只用于"要不要多一行提示"，本文件照样只读、不写、不加存档字段。
 
 import type { GameState, Stock } from '@/types/game';
 import { computeCrewFoodCost } from '@/lib/turn/shipTurn';
@@ -79,8 +83,17 @@ export function getStockDelistRisk(stock: Stock): StockDelistRisk {
 const factionNameOf = (id: string) => FACTIONS.find((f) => f.id === id)?.name || id;
 const leaderNameOf = (id: string) => getLeaderDef(id)?.name || id;
 
+/** 调用方传入的**运行时**输入（只有一项，不是 GameState 的一部分，见文件头注释） */
+export interface NextTurnHintContext {
+  /**
+   * 是否有未处理事件（判据唯一来源 = `lib/turn/pendingEvent.hasUnresolvedEvent`，由 useGameState 下发）。
+   * 省略 = 视为没有（scripts 里的离线回放只传 state，不该因为缺这个参数报错）。
+   */
+  hasPendingEvent?: boolean;
+}
+
 /** 下回合（turn+1）将发生的事：危险（会掉资源）→ 提醒（会错过机会）→ 信息（进度播报） */
-export function getNextTurnHints(state: GameState): NextTurnHint[] {
+export function getNextTurnHints(state: GameState, ctx: NextTurnHintContext = {}): NextTurnHint[] {
   const ship = state.ships[0];
   if (!ship) return [];
   const next = state.turn + 1;
@@ -233,6 +246,14 @@ export function getNextTurnHints(state: GameState): NextTurnHint[] {
   }
 
   // ==================== B. 提醒级：不处理会错过机会 ====================
+
+  // B0 有未处理的事件（**只提示、不拦**：结束回合照常可以按，用户明确要求不拦）。
+  //    判据不在 state 上 —— 事件卡是 useEvent 的组件态，由调用方传入（见 NextTurnHintContext），
+  //    这里只负责分级与文案，不推导、不缓存、不写字段。
+  //    口径：回合号一变 useEvent 就在 useLayoutEffect 里清掉 activeEvent，所以这条不是"会结算"而是"会消失"。
+  if (ctx.hasPendingEvent) {
+    out.push({ id: 'pending_event', severity: 'warn', text: '有 1 个事件尚未处理，结束回合后它会消失' });
+  }
 
   const currentFid = getCurrentFactionId(ship);
   // 跃迁中禁止贸易操作（useTrade.requireFactionHere 同源判定），此时不该提醒"你还能探索/打探"

@@ -1,4 +1,4 @@
-import { useState, memo } from 'react';
+import { useState, useEffect, useRef, useCallback, memo } from 'react';
 import type { ChoiceEvent, EventOption, ResourceChange, EventSubChoice, EventLogEntry } from '@/types/game';
 import type { ChooseResult, EventResult, DodgeReason } from '@/hooks/useEvent';
 import { famineHalveGold } from '@/lib/turn/shipTurn';
@@ -25,6 +25,12 @@ interface EventPanelProps {
   onLogEvent: (event: string, detail: string) => void;
   onClearActiveEvent: () => void;
   onClearDodged: () => void;
+  /**
+   * 结果卡复位信号（useEvent.eventCardResetSignal）：每次自增即清空本面板的结果卡相关状态。
+   * 读档成功后由 App 层调 useEvent.clearEventCard() 触发——结果卡状态留在本面板（组件态），
+   * 信号只是"让它复位"的扳机，因此不需要把五个 useState 整体提升到 useEvent。
+   */
+  eventCardResetSignal: number;
 }
 
 const categoryConfig = {
@@ -39,6 +45,7 @@ const categoryConfig = {
 function EventPanel({
   activeEvent, eventDodged, eventProcessedThisTurn, eventLog, currentTurn, shipFood,
   eventTriggeredThisTurn, onDrawEvent, onChooseOption, onApplyResources, onLogEvent, onClearActiveEvent, onClearDodged,
+  eventCardResetSignal,
 }: EventPanelProps) {
   // 最终结果展示
   const [result, setResult] = useState<EventResult | null>(null);
@@ -50,6 +57,37 @@ function EventPanel({
   const [pendingResources, setPendingResources] = useState<ResourceChange>({});
   // 选择路径记录（用于日志）
   const [choicePath, setChoicePath] = useState<string[]>([]);
+
+  /**
+   * 清空结果卡相关的**全部**本地状态（只清展示态，绝不 dispatch）。
+   * 只有两个触发点：① 回合变化 ② 读档成功（eventCardResetSignal 自增）。
+   * 少清任何一项都会出现"旧卡片挂在屏上、数字还是旧回合的"。
+   */
+  const clearCard = useCallback((): void => {
+    setResult(null);
+    setGoldHalved(false);
+    setChoiceStack([]);
+    setPendingResources({});
+    setChoicePath([]);
+  }, []);
+
+  // ① 回合变化 → 清结果卡。useEvent 在同一时刻会清 activeEvent（它只清自己的状态），
+  //    结果卡是本面板的组件态，必须自己清，否则跨回合一直挂着。
+  const prevTurnRef = useRef<number>(currentTurn);
+  useEffect(() => {
+    if (prevTurnRef.current === currentTurn) return;
+    prevTurnRef.current = currentTurn;
+    clearCard();
+  }, [currentTurn, clearCard]);
+
+  // ② 读档成功 → useEvent 的 clearEventCard() 自增信号 → 这里复位。
+  //    初值与信号相等，所以挂载/普通重渲染都不会误清。
+  const prevResetSignalRef = useRef<number>(eventCardResetSignal);
+  useEffect(() => {
+    if (prevResetSignalRef.current === eventCardResetSignal) return;
+    prevResetSignalRef.current = eventCardResetSignal;
+    clearCard();
+  }, [eventCardResetSignal, clearCard]);
 
   const currentLevel = choiceStack.length;
   const currentChoice = currentLevel > 0 ? choiceStack[currentLevel - 1] : null;
@@ -110,8 +148,8 @@ function EventPanel({
   };
 
   const handleContinue = () => {
-    setResult(null);
-    setChoicePath([]);
+    // 与上面两个 effect 共用同一份清理（只清本地展示态），再按既有语义清 activeEvent
+    clearCard();
     onClearActiveEvent();
   };
 

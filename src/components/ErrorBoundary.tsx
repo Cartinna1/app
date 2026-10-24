@@ -4,8 +4,11 @@ import { Component, type ErrorInfo, type ReactNode } from 'react';
  * 渲染期错误边界（全库唯一）：React 19 下渲染期未捕获异常会卸载整棵根树 → 整屏白屏（只剩 body 底色）。
  * 用法：
  *   · 顶层兜底（main.tsx）：完整版，带可复制的 componentStack
- *   · 页签内容区（GameScreen.tsx）：紧凑版 + key={activeTab}，切页签即自动重置
- * ⚠ 本组件不自己写 key 逻辑，重置时机由调用方决定（Task 的 key 是唯一重置手段）。
+ *   · 页签内容区（GameScreen.tsx）：紧凑版，**不传 key**
+ * 恢复方式 = 错误卡上的「重试」（清自身 error state 后重渲染）。
+ * ⚠ 不要用 key={activeTab} 之类的方式重挂页签区来"顺手恢复"：key 变化会卸载重挂整棵子树，
+ *   把页签内的 useState（事件结果卡、机库选中项……）全清空（2026-08 的回归原因）。
+ *   本组件自己也不写 key 逻辑，重置时机由调用方决定。
  */
 
 interface ErrorBoundaryProps {

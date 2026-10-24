@@ -1,9 +1,12 @@
 // ==================== 战斗战利品（V1.5 §〇 战利品 / §10.2 掠夺） ====================
 // 主游戏侧「打赢之后给什么」的唯一真值。规则出处：
-//   · 出征打老巢（b1~b5）赢 → **固定 100000 金币 + 40 星尘**（§〇 / §10.2）→ battleRewards / grantBattleRewards
+//   · 出征打老巢（**白名单**：星图上带 `pirateLair` 的节点，当前 b1~b5）赢
+//     → **固定 100000 金币 + 40 星尘**（§〇 / §10.2）→ battleRewards / grantBattleRewards
 //   · 掠夺战（bossId === 'raid'）赢 → **随机获得星尘 / 原料 / 金币 / 某势力声望**（§10.2）
 //     → rollRaidReward / grantRaidReward（**本文件下半部分**；battleRewards 对它恒返回 0/0，语义不变）
 //   · 打输 → 不给任何奖励（永久损失由 gameReducer 的 END_BATTLE 按 P3 规则写回，不在本文件）
+//   · 既不是掠夺队、也不在老巢白名单里的 id（将来的悬赏头目等）→ **0 奖励 + console.warn**，
+//     **绝不抛异常**（战斗必须能正常收尾；白名单外绝不许发老巢战利品）
 // ⚠ 本文件只做纯计算：不 mutate 传入对象，不读随机数（随机数由调用方传进来），不 dispatch。
 // ⚠ 金币收益**必须**过 lib/turn/shipTurn.ts 的 famineHalveGold（AGENTS-附录.md 10.2：新增金币收益都要问饥荒减半），
 //   并按 AGENTS 第三节写 pushGoldLog（**调用前必须先改完金币**）。
@@ -15,21 +18,38 @@ import { pushGoldLog } from '@/lib/turn/goldLog';
 import { ALL_MATERIAL_IDS, getMaterialName } from '@/data/materialNames';
 import { FACTIONS } from '@/data/factions';
 import { getKnownFactionIds } from '@/lib/galaxy/knowledge';
+// 老巢白名单（唯一真值：从星图 `pirateLair` 派生，见该文件顶部"为什么不是从 raid.ts 取"）
+import { LAIR_BOSS_IDS_FROM_NODES } from './lairIds';
 
 /** 老巢战利品（§〇 / §10.2）：固定 100000 金币 + 40 星尘 */
 export const LAIR_REWARD_GOLD = 100000;
 export const LAIR_REWARD_STARDUST = 40;
 
 /**
- * 本场战斗的**基础**战利品（未过饥荒减半）。
- * 掠夺队与打输的战斗一律 0/0 —— 这是 P5 起就定下的语义，**不要改**（验收脚本按它断言）。
- * 掠夺战的随机奖励走本文件下半部分的 rollRaidReward / grantRaidReward（§10.2）。
+ * 本场战斗的**基础**战利品（未过饥荒减半）。三个分支（**判据 = 老巢白名单**）：
+ *   ① `bossId === 'raid'` → 掠夺队：恒 0/0（随机四类走 rollRaidReward / grantRaidReward，§10.2）；
+ *   ② `bossId` 在**老巢白名单**里（`lairIds.LAIR_BOSS_IDS_FROM_NODES` = 星图上带 `pirateLair`
+ *      的节点，**数据驱动、不硬编码 b1~b5**）→ 老巢战利品 100000 金币 + 40 星尘（§〇 / §10.2）；
+ *   ③ 其它任何 id（打输 / 还没配奖励的新头目，例如下一步要加的悬赏 m01~m05）
+ *      → 全 0 + console.warn，**绝不抛异常**（战斗必须能正常收尾）。
+ * ⚠ 旧写法是"`bossId === 'raid'` 之外**一律**给老巢战利品"：只有 5 个老巢时看不出来，
+ *   一加悬赏头目就会"打赢一场悬赏白送 10 万金"。**别再改回三目分支**。
+ * ⚠ 语义与签名冻结（AGENTS 第三节）：掠夺队与打输恒 0/0、老巢恒 100000/40，一个数字都不许动。
  */
 export function battleRewards(battle: BattleState): { gold: number; stardust: number } {
-  // 掠夺战（bossId === 'raid'）的奖励**不在这里**：§10.2 是"随机获得四类之一"，形状与本函数的
+  // ① 掠夺战（bossId === 'raid'）的奖励**不在这里**：§10.2 是"随机获得四类之一"，形状与本函数的
   // {gold, stardust} 不同（还可能是原料 / 声望），故另开一组函数，见下方「掠夺战利品」段。
-  if (battle.bossId === 'raid' || battle.winner !== 'player') return { gold: 0, stardust: 0 };
-  return { gold: LAIR_REWARD_GOLD, stardust: LAIR_REWARD_STARDUST };
+  if (battle.bossId === 'raid') return { gold: 0, stardust: 0 };
+  // 打输（含未结束）一律 0 —— 与上面同一句返回，保持 P5 起"打输恒 0/0"的既有语义。
+  if (battle.winner !== 'player') return { gold: 0, stardust: 0 };
+  // ② 老巢白名单（唯一真值 = lib/battle/lairIds.ts，与 raid.ts 的 allLairsDefeated 同源）
+  if (LAIR_BOSS_IDS_FROM_NODES.includes(battle.bossId)) {
+    return { gold: LAIR_REWARD_GOLD, stardust: LAIR_REWARD_STARDUST };
+  }
+  // ③ 白名单外：**不给老巢战利品**，只喊一声便于开发期发现漏配。
+  //    ⚠ 绝不 throw：本函数在 END_BATTLE 里同步调用，抛异常会让战斗收不了尾。
+  console.warn(`[rewards] bossId=${battle.bossId} 既不是掠夺队也不在老巢白名单里：本场不发战利品（新增头目请先配奖励）`);
+  return { gold: 0, stardust: 0 };
 }
 
 /**

@@ -33,6 +33,14 @@ interface UseEventReturn {
   logEvent: (event: string, detail: string) => void;
   clearActiveEvent: () => void;
   clearDodged: () => void;
+  /**
+   * 结果卡复位信号：每次 clearEventCard() 自增。
+   * 结果卡状态（result / goldHalved / choiceStack / pendingResources / choicePath）是 EventPanel 的组件态，
+   * 本 hook 不持有它，只发信号让面板复位（避免把整份展示态提升到这里）。
+   */
+  eventCardResetSignal: number;
+  /** 清空事件结果卡（读档成功后由 App 层调用；面板看到信号自增即复位） */
+  clearEventCard: () => void;
 }
 
 function isRewardOutcome(res: ResourceChange): boolean {
@@ -325,6 +333,12 @@ export function useEvent(
     setActiveEvent(null);
   }, []);
 
+  // 结果卡的复位扳机（见 UseEventReturn.eventCardResetSignal）：只自增一个数，不碰任何游戏状态
+  const [eventCardResetSignal, setEventCardResetSignal] = useState<number>(0);
+  const clearEventCard = useCallback((): void => {
+    setEventCardResetSignal((n: number) => n + 1);
+  }, []);
+
   return {
     activeEvent,
     eventDodged,
@@ -343,5 +357,7 @@ export function useEvent(
     },
     clearActiveEvent,
     clearDodged,
+    eventCardResetSignal,
+    clearEventCard,
   };
 }

@@ -479,9 +479,50 @@ const check = (ok, label, detail) => {
     check(f0.stardust - fBefore.sd === 40, '星尘不受饥荒影响', '+' + (f0.stardust - fBefore.sd));
   }
 
-  // 掠夺战本阶段不给奖励
-  const rr = RW.battleRewards(E.createBattle({ seed: 5, bossId: 'raid' }));
-  check(rr.gold === 0 && rr.stardust === 0, '掠夺队本阶段不给奖励（V1.5 §10.2 随机奖励属后续）', JSON.stringify(rr));
+  // ---------- ⑥ 战利品判据 = 老巢白名单（用户 2026-08：把"非掠夺即老巢"改成白名单）----------
+  // 三条断言：① raid → 掠夺队奖励；② 白名单里每个老巢 id → 老巢战利品；
+  //          ③ 既不是 raid 也不在白名单里的假 id → 全 0 且不抛异常（**本 bug 的回归测试**）
+  console.log('\n[6] 战利品判据 = 老巢白名单（raid / 每个老巢 / 未知 id）');
+  const anyBattle = E.createBattle({ seed: 5, bossId: 'raid' });
+  /** 只改 bossId / 胜负的"伪造战斗"：battleRewards 只读这两个字段（不碰引擎状态） */
+  const winBattleOf = (bossId) => ({ ...anyBattle, bossId, winner: 'player' });
+
+  // ① 掠夺队：battleRewards 恒 0/0（§10.2 的随机四类奖励走 rollRaidReward / grantRaidReward）
+  const rr = RW.battleRewards(winBattleOf('raid'));
+  check(rr.gold === 0 && rr.stardust === 0, 'raid → 掠夺队奖励（battleRewards 恒 0/0，金额与现状一致）', JSON.stringify(rr));
+
+  // ② 老巢白名单里**每一个** id → 固定战利品（白名单从星图派生，不硬编码 5）
+  const lairIds = (nodes.GALAXY_NODES || []).filter((n) => n.pirateLair).map((n) => n.pirateLair);
+  check(lairIds.length > 0, '星图里有老巢节点（白名单的数据来源）', String(lairIds.length));
+  for (const bossId of lairIds) {
+    const lr = RW.battleRewards(winBattleOf(bossId));
+    check(lr.gold === 100000 && lr.stardust === 40, `老巢 ${bossId} → 老巢战利品 100000 金币 + 40 星尘`, JSON.stringify(lr));
+  }
+
+  // ③ 回归测试：白名单外的新 id（将来加的雇佣兵悬赏 m01~m04 / 弱海盗 m05 就是这一档）
+  //    → **全 0，且绝不抛异常**。旧写法只判 `bossId === 'raid'`，这里会白送 10 万金币。
+  let fakeOut = null;
+  let fakeErr = '';
+  try {
+    fakeOut = RW.battleRewards(winBattleOf('m99'));
+  } catch (err) {
+    fakeErr = err && err.message ? err.message : String(err);
+  }
+  check(fakeErr === '' && !!fakeOut && fakeOut.gold === 0 && fakeOut.stardust === 0,
+    '未知 bossId（m99）→ 全 0 且**不抛异常**（老巢白名单回归测试）', fakeErr || JSON.stringify(fakeOut));
+  // 结算侧同一条口径：白名单外 = 没有收益 → grantBattleRewards 原样返回同一艘母舰（不改金币、不写流水）
+  {
+    const plainShip = createMotherships()[0];
+    let granted = null;
+    let grantErr = '';
+    try {
+      granted = RW.grantBattleRewards(plainShip, winBattleOf('m99'), 1);
+    } catch (err) {
+      grantErr = err && err.message ? err.message : String(err);
+    }
+    check(grantErr === '' && granted === plainShip,
+      '未知 bossId → grantBattleRewards 原样返回同一艘母舰（不给奖励 / 不写流水 / 不抛异常）', grantErr || '返回了新对象');
+  }
 
   console.log('\n=== P5 验收结果 ===');
   if (fails.length === 0) console.log('  全部通过 ✓');

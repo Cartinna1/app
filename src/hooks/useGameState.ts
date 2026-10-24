@@ -19,6 +19,7 @@ import { useColony } from './useColony';
 import { getRelicById } from '@/data/relics';
 import { rollPolicy, POLICY_EFFECTS } from '@/data/factions';
 import { pushGoldLog } from '@/lib/turn/goldLog';
+import { hasUnresolvedEvent } from '@/lib/turn/pendingEvent';
 
 /**
  * 游戏主 Hook —— 整合所有子 Hook，对外保持接口兼容
@@ -62,10 +63,46 @@ export function useGameState() {
   // 子 Hook（dispatch 引用稳定，不会导致函数重建）
   const { buyStock, sellStock } = useStock(dispatch);
   const { buyMaterial, startProduction, sellProduct, sellProductQty } = useProduction(gameState, dispatch);
-  const { activeEvent, eventDodged, drawEvent, chooseOption: chooseEventOption, applyResources: applyEventResources, logEvent: logEventEntry, clearActiveEvent, clearDodged: clearEventDodged } = useEvent(gameState, dispatch);
+  const { activeEvent, eventDodged, drawEvent, chooseOption: chooseEventOption, applyResources: applyEventResources, logEvent: logEventEntry, clearActiveEvent, clearDodged: clearEventDodged, eventCardResetSignal, clearEventCard } = useEvent(gameState, dispatch);
+  /**
+   * 「是否有未处理事件」的**唯一运行时判据**（判据本体在 `lib/turn/pendingEvent.hasUnresolvedEvent`）。
+   * 这里只做一件事：把 useEvent 的组件态（activeEvent）翻译成它的入参 —— useEvent 与 useTrade
+   * **不许互相 import**，组合只在本文件（组合点）发生。三处消费同一份判据：
+   *   ① 注入给 useTrade，在 travelToNode 的 dispatch **之前**同步拦截跃迁；
+   *   ② 星图跃迁按钮置灰 + 原因（经 props 下发，UI 不自己判事件）；
+   *   ③ 结束回合弹窗的提示（只提示、不拦）。
+   * ⚠ 剧情链卡上线后，这里要把 `visionChain.pendingStage !== null` 一起并进来（同一判据，不要再开第二个）：
+   *   只改这行的入参（`visionChainStage: ...`），别在星图/贸易/预告里另写判断。
+   * ⚠ 必须用 useCallback 包住并进 travelToNode 的依赖数组：事件卡是组件态，闭包里的旧值会让守卫失效。
+   */
+  const hasUnresolvedEventGuard = useCallback(
+    (): boolean => hasUnresolvedEvent({ activeEvent: activeEvent !== null }),
+    [activeEvent]
+  );
   const { takeLoan, repayLoan } = useLoan(gameState, dispatch);
-  const { travelToNode, buySpecialty, sellSpecialty, exploreFaction, investFaction, gatherIntel, acceptContract, completeContract, blackMarketBuy } = useTrade(gameState, dispatch);
+  const { travelToNode, buySpecialty, sellSpecialty, exploreFaction, investFaction, gatherIntel, acceptContract, completeContract, blackMarketBuy } = useTrade(gameState, dispatch, hasUnresolvedEventGuard);
   const { autoSave, hasSave, loadSave, exportSave, importSave, resetGame } = useSave(gameState, dispatch);
+  /**
+   * 读档 / 导入存档成功 → 顺手清掉事件结果卡。
+   * ⚠ useEvent 与 useSave 之间**不许互相 import**，所以只在这里（App 层的组合点）把两者串起来：
+   *   结果卡是 EventPanel 的组件态，useEvent 只能发 eventCardResetSignal 信号，面板看到自增即复位。
+   *   不清的话，读档后屏上会留着一张旧档的结果卡（数字还是上一局的）。
+   * ⚠ **两个入口都要过这里**：`loadSave`（存档页载入）与 `importSave`（存档页导入文件）都会
+   *   dispatch `LOAD_SAVE`，只包一个就等于"换个入口就忘了清"。清理口径只有这一份
+   *   （都是 `clearEventCard()`），不许在任一入口里另写"清哪些字段"的逻辑。
+   */
+  const loadSaveAndClearEventCard = useCallback((): boolean => {
+    const ok = loadSave();
+    if (ok) clearEventCard();
+    return ok;
+  }, [loadSave, clearEventCard]);
+  /** 导入存档走同一个清理口径（返回 Promise，签名为 `(file: File) => Promise<boolean>`，与 save 页的 prop 一致） */
+  const importSaveAndClearEventCard = useCallback((file: File): Promise<boolean> => {
+    return importSave(file).then((ok) => {
+      if (ok) clearEventCard();
+      return ok;
+    });
+  }, [importSave, clearEventCard]);
   const { redeemCode } = useRedeem(gameState, dispatch);
   const { installModule, useManualModule } = useModule(dispatch);
   const { foundColony, buildColonyBuilding, recruitPop, assignPop, startResearch, recruitLeader, upgradeLeader, rollAndRecruit, clearRecruitPool, cancelBuilding, demolishBuilding, selectWonder, submitWonderResources, canStartWonder, completeWonder, startExpedition, payExpeditionNode, unlockUltimate } = useColony(gameState, dispatch);
@@ -447,6 +484,7 @@ export function useGameState() {
     logEventEntry,
     clearActiveEvent,
     clearEventDodged,
+    clearEventCard,
 
     // 贷款
     takeLoan: (...args: Tail<Parameters<typeof takeLoan>>) => takeLoan(0, ...args),
@@ -526,9 +564,9 @@ export function useGameState() {
     // 存档
     autoSave,
     hasSave,
-    loadSave,
+    loadSave: loadSaveAndClearEventCard,
     exportSave,
-    importSave,
+    importSave: importSaveAndClearEventCard,
     resetGame,
 
     // 计算
@@ -540,6 +578,15 @@ export function useGameState() {
     gameState,
     activeEvent,
     eventDodged,
+    /** 事件结果卡复位信号（EventPanel 监听它自增后清空本地结果卡状态） */
+    eventCardResetSignal,
+    /**
+     * 是否有未处理事件（唯一判据 = 上面的 hasUnresolvedEventGuard，与 useTrade.travelToNode 的同步守卫同一份）。
+     * 消费方只有两处，都不许自己判断「事件处理完了没有」：
+     *   · 星图跃迁按钮（置灰 + 原因，文案 = lib/turn/pendingEvent.PENDING_EVENT_TRAVEL_BLOCK）
+     *   · 结束回合弹窗的提示（只提示、不拦）
+     */
+    hasPendingEvent: hasUnresolvedEventGuard(),
     ...actions,
   };
 }

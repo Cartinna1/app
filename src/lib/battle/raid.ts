@@ -37,7 +37,7 @@ import type { GameState } from '@/types/game';
 import type { BattleRaidState, PirateBossId, ShipCardId } from '@/types/battle';
 import { BATTLE_TUNING } from '@/data/battle/tuning';
 import { PIRATE_BOSSES } from '@/data/battle/pirates';
-import { GALAXY_NODES } from '@/data/galaxy/nodes';
+import { LAIR_BOSS_IDS_FROM_NODES } from './lairIds';
 import { raidLootItems } from './rewards';
 import { colonyNodeId } from './expedition';
 
@@ -160,12 +160,14 @@ export function raidStatus(state: GameState): RaidStatusView {
 
 /**
  * 老巢 BOSS id 全集（**数据驱动**：星图里带 `pirateLair` 标记的节点，当前 5 个）。
+ * ⚠ **派生点在 `lib/battle/lairIds.ts`（唯一真值）**：本文件只 import 再 re-export，
+ *   **不在这里自己算第二份** —— rewards.ts 也要用它判"老巢战利品"，而本文件已经 import 了
+ *   rewards.ts（`raidLootItems`），派生若留在这里就会形成循环 import（见 lairIds.ts 顶部说明）。
+ * ⚠ 导出面保持不变：既有消费方 / check 脚本仍可从 raid.ts 取到本符号。
  * ⚠ 判据不许硬编码 5：老巢就是挂在星图节点上的标记（data/galaxy/nodes.ts），
  *   与 lib/battle/expedition.ts 的 LAIR_NODE_BY_BOSS 读的是同一份数据。
  */
-export const LAIR_BOSS_IDS_FROM_NODES: readonly PirateBossId[] = GALAXY_NODES
-  .map((n) => n.pirateLair)
-  .filter((id): id is PirateBossId => !!id);
+export { LAIR_BOSS_IDS_FROM_NODES };
 
 /** 掠夺队平时的名字（= 数据里的静态名「海盗旗舰（掠夺队）」；**不在这里另写一份字面量**） */
 export const RAID_ENEMY_NAME: string = PIRATE_BOSSES['raid']?.name ?? '海盗旗舰（掠夺队）';

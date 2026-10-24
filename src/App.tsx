@@ -33,6 +33,8 @@ function App() {
     gameState,
     activeEvent,
     eventDodged,
+    eventCardResetSignal,
+    hasPendingEvent,
     selectShips,
     buyStock,
     sellStock,
@@ -155,6 +157,8 @@ function App() {
           gameState={gameState}
           activeEvent={activeEvent}
           eventDodged={eventDodged}
+          eventCardResetSignal={eventCardResetSignal}
+          hasPendingEvent={hasPendingEvent}
           onBuyStock={buyStock}
           onSellStock={sellStock}
           onBuyMaterial={buyMaterial}

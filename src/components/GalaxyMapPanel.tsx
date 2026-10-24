@@ -32,11 +32,15 @@ import {
 import { FACTIONS } from '@/data/factions';
 import { getArchaeologySite } from '@/data/galaxy/archaeology';
 import { ALL_PLANETS } from '@/data/colony/planets';
+import { PENDING_EVENT_TRAVEL_BLOCK } from '@/lib/turn/pendingEvent';
 import { Rocket, Lock, HelpCircle, MapPin } from 'lucide-react';
 
 interface GalaxyMapPanelProps {
   ship: Mothership;
   factionReputation: Record<string, number>;
+  /** 是否有未处理事件（唯一判据 = useGameState 的 hasUnresolvedEvent，与 useTrade.travelToNode 的
+   *  同步守卫同一份）。本组件**不许**自己判断事件处理完了没有，只按这个布尔值渲染置灰按钮与原因。 */
+  hasPendingEvent: boolean;
   onTravelToNode: (targetNodeId: string) => { success: boolean; message: string };
 }
 
@@ -67,7 +71,7 @@ const MAX_PAN_Y = 1050;
 
 interface ViewState { scale: number; x: number; y: number }
 
-function GalaxyMapPanel({ ship, factionReputation, onTravelToNode }: GalaxyMapPanelProps) {
+function GalaxyMapPanel({ ship, factionReputation, hasPendingEvent, onTravelToNode }: GalaxyMapPanelProps) {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [msg, setMsg] = useState('');
   const [msgType, setMsgType] = useState<'success' | 'error'>('success');
@@ -283,6 +287,26 @@ function GalaxyMapPanel({ ship, factionReputation, onTravelToNode }: GalaxyMapPa
     }
     if (!route) {
       return <p className="text-xs text-red-400">无法抵达：航线被封锁的势力割断，可先提升相关势力声望或选择其他路线。</p>;
+    }
+    // 有未处理事件 → 本来要出现的跃迁按钮改成**置灰 + 旁边同一句原因**（不能让按钮"点了没反应"）。
+    // 判据是 useGameState 下发的 props（与 useTrade.travelToNode 的同步守卫同一份），本组件不自己判断有没有事件；
+    // 文案唯一来源 = lib/turn/pendingEvent.PENDING_EVENT_TRAVEL_BLOCK。
+    // ⚠ 只拦跃迁，不拦结束回合（用户口径）：玩家可以带着事件结束回合，只是事件会消失（弹窗里有提示）。
+    if (hasPendingEvent) {
+      return (
+        <div>
+          <button
+            type="button"
+            disabled
+            className="px-4 py-2 rounded-lg font-bold text-slate-400 text-sm flex items-center gap-2 min-h-[40px] bg-slate-700/60 cursor-not-allowed"
+          >
+            <Rocket size={14} /> {isTollRoute
+              ? `付费途经（${travel.tollTurns} 回合 · 过路费 ${travel.tollGold.toLocaleString()} 金币）`
+              : `跃迁（${travel.turns} 回合）`}
+          </button>
+          <p className="text-[10px] md:text-xs text-amber-400/90 mt-2">{PENDING_EVENT_TRAVEL_BLOCK}</p>
+        </div>
+      );
     }
     // 首次探索奖励预览：判定（未到访才算）、档位与数额（含饥荒减半）全部来自
     // lib/galaxy/exploreReward.ts，与 useTrade 起跳处的实发同源；已到访返回 null → 不显示这一行。
