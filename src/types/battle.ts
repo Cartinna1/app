@@ -7,8 +7,11 @@ import type { Rng } from '@/lib/battle/rng';
 
 // ---------------- 静态数据 ----------------
 
-/** 系列（5 个玩家系列 + 海盗；海盗为 PvE 专属，玩家永远不可获得） */
-export type BattleSeries = '圣辉' | '铁血' | '灵能' | '财团' | '通用' | '海盗';
+/** 系列（5 个玩家系列 + 海盗 + 雇佣兵协会的四支敌对势力）。
+ *  ⚠ `海盗` / `虫群` / `智械` / `灵潮` / `旧律` 都是 **PvE 专属**：玩家永远不可建造，
+ *    判据是 `lib/battle/shipyard.ENEMY_SERIES`（**唯一清单**，别在别处另写 `series === '海盗'`）；
+ *    它们唯一的合法来源是悬赏头目的掉落（写进 `cardLibrary`）。 */
+export type BattleSeries = '圣辉' | '铁血' | '灵能' | '财团' | '通用' | '海盗' | '虫群' | '智械' | '灵潮' | '旧律';
 
 /** 稀有度：只作为建造门槛（一级/二级/三级船坞 + 对应科技）与视觉标识。
  *  衍生单位（token）永不建造，其 rarity 由导出脚本统一写成 '白'，语义用 `token: true` 表达 */
@@ -33,8 +36,12 @@ export interface ShipCardDef {
   token?: boolean;
 }
 
-/** 敌人 id：5 个老巢 BOSS + 掠夺队（无头目技能、20 血） */
-export type PirateBossId = 'b1' | 'b2' | 'b3' | 'b4' | 'b5' | 'raid';
+/** 敌人 id：5 个老巢 BOSS + 掠夺队（无头目技能、20 血）+ 雇佣兵协会的敌人。
+ *  ⚠ `m01`~`m05` 属于雇佣兵协会（数据在 `data/mercenary/bosses.ts`）：本步只落 `m05`
+ *    （弱海盗杂兵头目），`m01`~`m04` 的敌人定义留到阶段 2/3；**类型先放开**，因为
+ *    悬赏数据表（`data/mercenary/bounties.ts`）的 `enemyId` 已经引用了它们。
+ *  ⚠ 它们**不是老巢**：不在 `LAIR_BOSS_IDS` 里，所以 `battleRewards` 的白名单不会给它们发老巢战利品。 */
+export type PirateBossId = 'b1' | 'b2' | 'b3' | 'b4' | 'b5' | 'raid' | 'm01' | 'm02' | 'm03' | 'm04' | 'm05';
 
 export interface PirateBossDef {
   id: PirateBossId;

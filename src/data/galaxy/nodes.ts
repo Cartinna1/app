@@ -45,12 +45,18 @@ export const GALAXY_NODES: GalaxyNode[] = [
   { id: 'ruin_lighthouse', type: 'ruin', name: '掌灯者灯塔基座', x: 30, y: 430, siteId: 'lighthouse' },
   { id: 'ruin_idols', type: 'ruin', name: '空白神像厅', x: 30, y: 180, siteId: 'idols' },
 
-  // ==================== 深空 20 节点：15 空星系 + 5 海盗老巢 ====================
+  // ==================== 深空 20 节点：14 空星系 + 5 海盗老巢 + 1 雇佣兵协会 ====================
   // ⚠ 其中 5 个是**海盗老巢，有自己的节点类型 `'pirateLair'`**（V1.5 §7.1；用户 2026-08 裁定：
   //   "这已经不算空星系了"，故不再借用 `empty` 类型）。节点 id / 坐标 / 航道一律没动 ——
   //   动了星图校验与贸易距离折价都会变，故 validateGalaxy() 的结果与本次改动前逐字一致。
   //   **`type` 是"这是什么"的唯一权威**（`pirateLair` = 海盗老巢、`empty` = 真空星系），
   //   `pirateLair: 'bX'` 字段只承载"哪个 BOSS"；出征 / 掠夺逻辑仍只读该字段，未受影响。
+  // ⚠ 另有 1 个是**银河雇佣兵协会，类型 `'guild'`**（`e13`；与老巢同构：从 `empty` 改过来，
+  //   **坐标 / 航道一个都没动**，所以 `getGalaxyTurns` 与贸易折价不变，`validateGalaxy()` 逐字一致）。
+  //   它的 `name` 是玩家可见的展示名（信息卡 / 星图名称文字 / 下一回合预告都读
+  //   `knowledge.getNodeDisplayName` → `node.name`），统一写「银河雇佣兵协会」；
+  //   未探明时那条路径仍压成「未探测星系」（迷雾），配图也由 `nodeImage` 的守卫拦住。
+  //   协会**没有**任何标记字段（全图恰好一个，靠 `type === 'guild'` 判定）。
   //   ⚠ **老巢的 `name` 是玩家可见的展示名**（出征卡片走 lib/battle/expedition.discoveredLairs → node.name；
   //     星图信息卡、下一回合预告、贸易目的地走 lib/galaxy/knowledge.getNodeDisplayName → node.name），
   //     统一写「海盗老巢·<BOSS 简称>」，仍叫「空星系·NN」会让玩家看到"黑寡妇玛拉的老巢 = 空星系·12"（截图实证 ✗）。
@@ -80,7 +86,7 @@ export const GALAXY_NODES: GalaxyNode[] = [
   { id: 'e10', type: 'empty', name: '空星系·10', x: 700, y: 240 },
   { id: 'e11', type: 'pirateLair', name: '海盗老巢·巴罗萨', x: 240, y: 120, pirateLair: 'b3' },
   { id: 'e12', type: 'pirateLair', name: '海盗老巢·玛拉', x: 900, y: 80, pirateLair: 'b2' },
-  { id: 'e13', type: 'empty', name: '空星系·13', x: 80, y: 250 },
+  { id: 'e13', type: 'guild', name: '银河雇佣兵协会', x: 80, y: 250 },
   { id: 'e14', type: 'empty', name: '空星系·14', x: 600, y: 540 },
   { id: 'e15', type: 'empty', name: '空星系·15', x: 330, y: 240 },
   { id: 'e16', type: 'pirateLair', name: '海盗老巢·塞壬', x: 760, y: 560, pirateLair: 'b5' },

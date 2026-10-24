@@ -16,7 +16,8 @@
 
 import type { GameState } from '@/types/game';
 import type { ShipCardId, ShipCardDef } from '@/types/battle';
-import { BATTLE_CARDS, BATTLE_CARD_IDS } from '@/data/battle/cards';
+import { BATTLE_CARD_IDS } from '@/data/battle/cards';
+import { ALL_CARDS } from './cardIndex';
 import { BATTLE_TUNING } from '@/data/battle/tuning';
 // 舰船图在战斗里的出口是「卡面 320×190」与「场上横条 370×144」，机库沿用同一套图位，
 // 故复用 view.ts 的 unitArtSrc（内部已走 getThumbPath 缩略图，AGENTS 第五节：不许再写第二套命名）。
@@ -134,9 +135,10 @@ export interface HangarCheck {
 
 // ---------------- 基础取值 ----------------
 
-/** 卡牌定义；未知 id 返回 undefined（调用方兜底，不抛） */
+/** 卡牌定义；未知 id 返回 undefined（调用方兜底，不抛）。
+ *  ⚠ 走 `cardIndex.ALL_CARDS`（玩家卡 + 雇佣兵掉落卡）：掉进卡库的敌舰必须能在机库里被看到、被编队。 */
 function defOf(cardId: ShipCardId): ShipCardDef | undefined {
-  return BATTLE_CARDS[cardId];
+  return ALL_CARDS[cardId];
 }
 
 /** 卡库里有几份这张卡（按份数比较，不按"存在与否"） */

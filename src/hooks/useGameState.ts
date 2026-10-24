@@ -426,6 +426,22 @@ export function useGameState() {
     dispatch({ type: 'START_RAID_BATTLE' });
   }, []);
 
+  // ===== 银河雇佣兵协会（阶段 1）：接单 / 放弃 / 当场出击 =====
+  // ⚠ 三个都是**窄回调**：守卫全在 lib/turn/bounties（`canAcceptBounty` / `canStartBountyBattle`），
+  //   与 UI 的按钮可用性同一判据；UI 无从指定敌方 id、编制或 seed（敌方由 BountyDef 决定）。
+  // ⚠ 结算不在这些回调里：完成 / 失败只在 reducer 的 END_BATTLE（结算唯一入口）。
+  const acceptBounty = useCallback((defId: string) => {
+    dispatch({ type: 'ACCEPT_BOUNTY', defId });
+  }, []);
+
+  const abandonBounty = useCallback((defId: string) => {
+    dispatch({ type: 'ABANDON_BOUNTY', defId });
+  }, []);
+
+  const startBountyBattle = useCallback((defId: string, fleetId: string) => {
+    dispatch({ type: 'START_BOUNTY_BATTLE', defId, fleetId });
+  }, []);
+
   const battleAction = useCallback((action: BattleAction) => {
     dispatch({ type: 'BATTLE_ACTION', action });
   }, []);
@@ -554,6 +570,10 @@ export function useGameState() {
     cancelBattleExpedition,
     startExpeditionBattle,
     startRaidBattle,
+    // 雇佣兵协会（阶段 1）：接单 / 放弃 / 当场出击
+    acceptBounty,
+    abandonBounty,
+    startBountyBattle,
     battleAction,
     endBattle,
     tickBattleState,

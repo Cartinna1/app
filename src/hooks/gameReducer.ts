@@ -12,8 +12,10 @@ import {
   RAID_LOOT_EVENT,
   grantBattleRewards,
   grantRaidReward,
+  grantRepeatLairRewards,
   rollRaidReward,
 } from '@/lib/battle/rewards';
+import { LAIR_COOLDOWN_TURNS, isLairBoss, recordLairCleared } from '@/lib/battle/lairCooldown';
 import type { RaidReward } from '@/lib/battle/rewards';
 import {
   RAID_ARRIVED_TURNS,
@@ -32,9 +34,23 @@ import {
 import type { RaidLootLoss } from '@/lib/battle/raid';
 import { flattenCost, payCost } from '@/lib/turn/resourceCost';
 import { pushGoldLog } from '@/lib/turn/goldLog';
-import { readyExpedition, tickExpedition } from '@/lib/battle/expedition';
+import { lairDisplayName, readyExpedition, tickExpedition } from '@/lib/battle/expedition';
 import { canAddShip, canDeleteFleet, canRemoveShip, canRenameFleet, canToggleDefending, isFleetOnExpedition } from '@/lib/battle/hangar';
 import { buildRefund, buildCost, canCancelBuild, canEnqueue, enqueueBuild } from '@/lib/battle/shipyard';
+import {
+  BOSS_COOLDOWN_TURNS,
+  bountyEnemyId,
+  canAcceptBounty,
+  canStartBountyBattle,
+  getBountyDef,
+  grantBountyRewards,
+  newBountyProgress,
+  withActiveBounty,
+  withBossCooldown,
+  withoutActiveBounty,
+} from '@/lib/turn/bounties';
+import { createBountyBattle } from '@/lib/battle/bountyBattle';
+import { bossDropText, mergeDrops, rollBossDrop } from '@/lib/turn/bossDrops';
 
 // ==================== 初始状态（单一真值：新开局/重置/选船共用，勿另抄一份） ====================
 
@@ -87,6 +103,16 @@ export function createInitialGameState(): GameState {
     // 船坞与科技（V1.5 §8.2 / §8.3）：造船队列初始为空。
     // ⚠ 这个初值必须与 lib/save.ts 的 stateFromSave 兜底**逐一一致**（都是 []）。
     buildQueue: [],
+    // ===== 银河雇佣兵协会（v9，字段地基：暂时没有任何读写方）=====
+    // 初值与 lib/save.ts 的 stateFromSave 兜底**逐一一致**，但**这里必须是新建的字面量**：
+    //   空批次（batchTurn 0 = 还没生成过）+ 空榜单 + 空进行中 + 空冷却表。
+    //   不共享对象引用，避免"新开局的空板"与"读档后的空板"是同一个对象（改一处两处都变）。
+    bounties: { batchTurn: 0, offered: [], active: [], bossCooldown: {} },
+    // 老巢清剿计时器：新开局一个老巢都没被清剿过（= 没有冷却，全部可打）。
+    // ⚠ 与 `defeatedLairs` 语义不同：那个是"打赢过没有"的账本，这个是"最近一次回合"的计时器。
+    lairClearedTurn: {},
+    // 悬赏战斗归属（**运行期字段，不进存档**）：null = 当前这场战斗不是悬赏战。
+    bountyBattleId: null,
   };
 }
 
@@ -98,6 +124,18 @@ export function createInitialGameState(): GameState {
 /** 只替换目标舰队的编成：其余舰队原样返回，被改的那支新建对象（不 mutate prev） */
 function withFleetShipIds(fleets: BattleFleet[], fleetId: string, shipIds: ShipCardId[]): BattleFleet[] {
   return fleets.map((f) => (f.id === fleetId ? { ...f, shipIds } : f));
+}
+
+/**
+ * 往事件记录里塞一条（reducer 内部工具）。
+ * 用在"悬赏被拒 / 接单 / 放弃 / 结算"这类**必须让玩家看见**的节点上：被拒不许静默返回，
+ * 否则玩家点了按钮什么都没发生（AGENTS 第九节「交互与 dispatch」与"原因必须可见"）。
+ */
+function withEventLog(state: GameState, event: string, detail: string): GameState {
+  return {
+    ...state,
+    eventLog: [{ id: createUid('bounty'), turn: state.turn, event, detail }, ...state.eventLog].slice(0, EVENT_LOG_LIMIT),
+  };
 }
 
 /**
@@ -395,7 +433,12 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
       //   · 出征战结束 → 这场出征结束（打赢可再次出征；输了未被击毁的舰带回），**不动掠夺状态**
       //   · 掠夺战结束 → 收掉掠夺倒计时并给免疫（打赢还给随机奖励），**不动在途的出征**
       //     （V1.5 §10.1：出征期间殖民地被掠夺，只能靠留守的防守舰队接战）
-      const isRaid = battle.bossId === 'raid';
+      // ⚠ **悬赏战的判据必须排在掠夺战之前**：头目档这一版用 `ELITE_PLACEHOLDER_BOSS = 'raid'` 占位，
+      //   若先判 `bossId === 'raid'`，悬赏战会被当成"殖民地防守战"收尾（发掠夺奖励 + 给 20 回合免疫），
+      //   那是错的。判据只看 `bountyBattleId`（运行期字段，进战斗时写入、收尾时清空）。
+      const bountyId = state.bountyBattleId ?? null;
+      const isBountyBattle = !!bountyId;
+      const isRaid = !isBountyBattle && battle.bossId === 'raid';
       const raidWin = isRaid && battle.winner === 'player';
       // 第一场的参战编制：**必须在移除永久损失之前**取 —— 2 支掠夺队连打第二场时用它筛出幸存舰
       const raidPoolBefore = raidWin ? raidDefensePool(state) : [];
@@ -403,6 +446,51 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
       // （V1.5 §1.1 / §11 第 6 条）。
       const { cardLibrary, fleets } = removeLostShips(state.cardLibrary, state.fleets, battle.player.lost);
       const base: GameState = { ...state, cardLibrary, fleets };
+
+      // ---------------- 悬赏战收尾（阶段 1；**结算唯一入口**，别在别处再判一次） ----------------
+      if (isBountyBattle) {
+        const def = getBountyDef(bountyId as string);
+        // 数据缺失（改档 / 删了条目）→ 只收尾，不发奖也不崩
+        if (!def) return { ...base, battle: null, bountyBattleId: null };
+        const won = battle.winner === 'player';
+        // 胜 / 败**都**从 active 移除：赢了是完成，输了是作废（都不留残档）
+        const bountiesAfter = withoutActiveBounty(base.bounties, def.id);
+        const lead = base.ships[0];
+        // 报酬只在胜利时发；金币由 lib 过 famineHalveGold 并写 pushGoldLog（与老巢战利品同款写法）。
+        // ⚠ **不**走 grantBattleRewards：那是老巢战利品，悬赏的收益来自 BountyDef。
+        const rewarded = won && lead ? grantBountyRewards(lead, def, state.turn, Math.random()) : null;
+        const ships = rewarded ? [rewarded.ship, ...base.ships.slice(1)] : base.ships;
+        // 头目档掉落（文档 §2.7）：打赢 → 1~2 艘该头目那 6 张里的卡，**份数 +1 写进 cardLibrary**。
+        // 掉落是敌方卡**唯一**的合法来源（它们不可建造，见 shipyard.ENEMY_SERIES）。
+        // 随机数在这里取（与其余结算同一口径：reducer 取随机数，lib 只做纯计算）。
+        const drops = won && def.kind === 'elite'
+          ? rollBossDrop(bountyEnemyId(def), Math.random(), Math.random())
+          : [];
+        const nextLibrary = mergeDrops(base.cardLibrary, drops);
+        // 头目档打赢 → 写冷却（键 = **该条的敌方 id**，不是占位常量 'raid'）
+        const bounties = won && def.kind === 'elite'
+          ? withBossCooldown(bountiesAfter, def.enemyId, state.turn)
+          : bountiesAfter;
+        const dropText = bossDropText(drops);
+        const detail = won
+          ? `${def.title}：${rewarded ? rewarded.text : '报酬为 0'}`
+            + (def.kind === 'elite' ? `；该头目 ${BOSS_COOLDOWN_TURNS} 回合后可再接` : '')
+            + (dropText ? `；${dropText}` : '')
+          : `${def.title}：舰队被击退，委托作废（不发奖、不扣声望）`;
+        return {
+          ...base,
+          ships,
+          cardLibrary: nextLibrary,
+          bounties,
+          battle: null,
+          bountyBattleId: null,
+          // 显示出口 = 事件记录（与掠夺同一条口径：战斗页签不放结算行）
+          eventLog: [
+            { id: createUid('bounty'), turn: state.turn, event: won ? '悬赏完成' : '悬赏失败', detail },
+            ...state.eventLog,
+          ].slice(0, EVENT_LOG_LIMIT),
+        };
+      }
 
       // ---------------- 掠夺战收尾（V1.5 §10.2） ----------------
       if (isRaid) {
@@ -482,29 +570,97 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
       }
 
       // ---------------- 出征战收尾（V1.5 §10.1） ----------------
-      // 战利品：唯一真值 lib/battle/rewards.ts。出征战打赢老巢 → 金币 100000 + 星尘 40（V1.5 §〇 / §10.2）；
-      // 金币过 famineHalveGold（饥荒减半）并按 AGENTS 第三节写 pushGoldLog（rewards 内部先改金币再记账）。
-      // 掠夺战（bossId 'raid'）的随机奖励走上面那一段（rollRaidReward），battleRewards 对 raid 恒 0/0。
-      // 打输一律无奖励（永久损失照上面的 removeLostShips 写回，仍按 P3 规则）。
-      // 写回仓位的口径：**只影响首个母舰**（金币/星尘/流水都挂在 ships[0]，单舰队）；
-      // 奖励为 0 时 ships 原样返回（不打了一场空仗也照样换对象）。
+      // 战利品两档（用户 2026-08 裁定：老巢**保留可重复打**，但要"冷却 + 递减"）：
+      //   · **首胜档** 100,000 金币 + 40 星尘（`grantBattleRewards`，语义与签名冻结，一个数都没动）；
+      //   · **重复档** 25,000 金币 + 10 星尘（`grantRepeatLairRewards`，数值在 rewards.ts 一处）。
+      // 判据 = `state.lairClearedTurn[bossId] === undefined`（**计时器**，不是 `defeatedLairs` 那个账本）。
+      // 金币一律过 famineHalveGold 并写 pushGoldLog（两个函数内部同一条写回路径）。
+      // 掠夺战（bossId 'raid'）与悬赏战的奖励走上面两段（各自 return），到不了这里。
+      const wonLair = battle.winner === 'player' && isLairBoss(battle.bossId);
+      const firstClear = wonLair && state.lairClearedTurn[battle.bossId] === undefined;
       const lead = state.ships[0];
-      const rewarded = lead ? grantBattleRewards(lead, battle, state.turn) : null;
+      const rewarded = lead
+        ? (wonLair && !firstClear
+            ? grantRepeatLairRewards(lead, battle.bossId, state.turn)
+            : grantBattleRewards(lead, battle, state.turn))
+        : null;
       const ships = rewarded && rewarded !== lead ? [rewarded, ...state.ships.slice(1)] : state.ships;
       // 老巢账本（**唯一写入点**，用户 2026-08 裁定）：打赢才算打败 —— 判据就是既有的
-      // `battle.winner === 'player'`（与上面那条发奖路径同一次胜负判定：battleRewards 对打输恒 0/0），
-      // **不新造一套胜负判断**。写入幂等（lib/battle/raid.recordDefeatedLair：已在账本里就原样返回）。
-      // 效果：5 个老巢全被打败后掠夺队改名「海盗残兵」；掠夺本身**永远存在**，不受它影响。
+      // `battle.winner === 'player'`（与上面那条发奖路径同一次胜负判定）。
+      // ⚠ 语义分工不许混：`defeatedLairs` = "打赢过没有"（只增不减，决定掠夺队改名）；
+      //   `lairClearedTurn` = "最近一次清剿的回合"（冷却判据，见 lib/battle/lairCooldown）。
       const defeatedLairs = battle.winner === 'player'
         ? recordDefeatedLair(state.defeatedLairs, battle.bossId)
         : state.defeatedLairs;
+      const lairClearedTurn = wonLair
+        ? recordLairCleared(state.lairClearedTurn, battle.bossId, state.turn)
+        : state.lairClearedTurn;
+      const result: GameState = { ...base, ships, battle: null, expedition: null, defeatedLairs, lairClearedTurn };
+      if (!wonLair) return result;                       // 打输：无奖励、不写冷却（也没账本可写）
+      // 事件记录写明"首胜 / 重复"与**实际到手**的金额（饥荒减半后就是减半后的数）
+      const goldGained = lead ? (ships[0] ? ships[0].gold - lead.gold : 0) : 0;
+      const stardustGained = lead ? (ships[0] ? ships[0].stardust - lead.stardust : 0) : 0;
+      const detail = `清剿完成（${firstClear ? '首胜' : '重复'}）｜${lairDisplayName(battle.bossId)}：`
+        + `金币 ${goldGained}、星尘 ${stardustGained}`
+        + (firstClear ? '' : `；该老巢 ${LAIR_COOLDOWN_TURNS} 回合后可再战`);
       return {
-        ...base,
-        ships,
-        battle: null,
-        expedition: null,
-        defeatedLairs,
+        ...result,
+        eventLog: [
+          { id: createUid('lair'), turn: state.turn, event: '清剿完成', detail },
+          ...state.eventLog,
+        ].slice(0, EVENT_LOG_LIMIT),
       };
+    }
+
+    // ==================== 银河雇佣兵协会（阶段 1：接单 / 放弃 / 当场出击）====================
+    // 三条铁律（改这里之前先读）：
+    //  ① **结算唯一**：完成 / 失败判定只在 `END_BATTLE` 的非掠夺分支里做一次；
+    //     这三个 action 只管"接 / 放弃 / 开打"，**不判胜负、不发奖**。
+    //  ② **精英占位必须显式**：头目档的敌人走 `lib/turn/bounties.ELITE_PLACEHOLDER_BOSS`（具名常量 + TODO），
+    //     这里**不许**出现字面量 `'raid'` 来表达"头目档的敌人"。
+    //  ③ 守卫全部来自 `lib/turn/bounties` 的 `canAcceptBounty` / `canStartBountyBattle`（与 UI 同一判据），
+    //     被拒时**原样返回 state + 一条事件记录**（不静默失败）。
+    case 'ACCEPT_BOUNTY': {
+      const check = canAcceptBounty(state, action.defId);
+      const def = getBountyDef(action.defId);
+      if (!check.ok || !def) return withEventLog(state, '悬赏被拒', check.reason || '这条悬赏不存在');
+      const bounties = withActiveBounty(state.bounties, newBountyProgress(def, state.turn));
+      return withEventLog(
+        { ...state, bounties },
+        '接取悬赏',
+        `${def.title}（期限 ${def.deadlineTurns} 回合，到期回合 ${state.turn + def.deadlineTurns}）`
+      );
+    }
+
+    case 'ABANDON_BOUNTY': {
+      const progress = state.bounties.active.find((p) => p.defId === action.defId);
+      if (!progress) return state;                       // 没接这条：无事发生，不写日志噪音
+      if (state.battle) return withEventLog(state, '放弃悬赏被拒', '战斗还没打完');
+      if (state.bountyBattleId === action.defId) {
+        return withEventLog(state, '放弃悬赏被拒', '这条悬赏的战斗还没结束');
+      }
+      const def = getBountyDef(action.defId);
+      const bounties = withoutActiveBounty(state.bounties, action.defId);
+      // 不扣钱、不扣声望、不扣资源（文档 §1.4 的失败口径同样适用于主动放弃）
+      return withEventLog({ ...state, bounties }, '放弃悬赏', `${def ? def.title : action.defId}：委托退回，未扣任何东西`);
+    }
+
+    case 'START_BOUNTY_BATTLE': {
+      // **当场开战**（悬赏不涉及星图：没有出征、没有倒计时、不扣回合）。
+      // 能不能打由 lib/turn/bounties.canStartBountyBattle 判（已接 / 未过期 / 没在打 / 舰队可用），
+      // 与 UI 上「出击」按钮的可用性是同一份判据。
+      const check = canStartBountyBattle(state, action.defId, action.fleetId);
+      const def = getBountyDef(action.defId);
+      if (!check.ok || !def) return withEventLog(state, '出击被拒', check.reason || '这条悬赏不存在');
+      const fleet = state.fleets.find((f) => f.id === action.fleetId);
+      if (!fleet) return state;                          // canStart 已挡，这里只是类型收窄
+      // 建场收在 `lib/battle/bountyBattle.createBountyBattle`：engine 的敌表是脚本生成的
+      // （只有老巢 + 掠夺队），雇佣兵敌人（m05）不在里面，需要那一层按 id 补血量与卡池。
+      // ⚠ 敌方 id 由 `bountyEnemyId` 给（头目档走具名占位常量），reducer 不写死任何敌人。
+      const battle = createBountyBattle(bountyEnemyId(def), fleet.shipIds, Date.now());
+      // `bountyBattleId` 是**运行期字段**（不进存档）：只回答"这场仗算哪条委托"，
+      // 有没有战斗一律读 `battle`（`battleBoard`）。
+      return { ...state, battle, bountyBattleId: def.id };
     }
 
     case 'START_RAID': {

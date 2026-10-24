@@ -166,6 +166,20 @@ export function validateGalaxy(): GalaxyValidationResult {
     }
   }
 
+  // 银河雇佣兵协会（`guild`）：**全图有且只有一个**，且与海盗老巢互斥 ——
+  //   ① 恰好 1 个：`lib/turn/bounties.isAtGuildNode` 只看类型，"有一堆协会节点"会让"接单要去哪"变得含糊；
+  //   ② 不得带 `pirateLair`：两者是互斥的功能节点（协会发委托、老巢是出征目标），
+  //      且 `nodeImage` 的 guild 分支排在老巢分支之前 —— 一个节点同时带两者等于让配图规则打架。
+  const guildNodes = GALAXY_NODES.filter((n) => n.type === 'guild');
+  if (guildNodes.length !== 1) {
+    errors.push(`guild（雇佣兵协会）节点必须恰好 1 个，实际 ${guildNodes.length} 个：${guildNodes.map((n) => n.id).join('、') || '无'}`);
+  }
+  for (const node of guildNodes) {
+    if (node.pirateLair) {
+      errors.push(`guild 节点不得同时挂 pirateLair 标记（互斥）：${node.id}`);
+    }
+  }
+
   const isolated = ids.filter((id) => (ADJACENCY[id] || []).length === 0);
   if (isolated.length) errors.push(`孤立节点（无任何航道）：${isolated.join('、')}`);
 

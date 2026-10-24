@@ -21,13 +21,20 @@ export const LAIR_STROKE = '#f87171';
 /** 海盗老巢的类型标签（**绝不许写「空星系」**；老巢自成 `pirateLair` 类型，不再借用 empty） */
 export const LAIR_LABEL = '海盗老巢';
 
-/** 节点半径（按类型；老巢与空星系同尺寸层级 = 12，**不放大**） */
+/** 银河雇佣兵协会（`guild` 类型专属；青绿，与势力青 / 殖民绿 / 遗迹紫 / 老巢红并列）。
+ *  它是**公开功能节点**（不是藏起来的老巢），所以图例里有它一行。 */
+export const GUILD_FILL = '#0f766e';
+export const GUILD_STROKE = '#5eead4';
+export const GUILD_LABEL = '雇佣兵协会';
+
+/** 节点半径（按类型；老巢与空星系同尺寸层级 = 12，**不放大**；协会比空星系大一圈 = 16） */
 export const NODE_RADIUS: Record<GalaxyNode['type'], number> = {
   faction: 20,
   colony: 17,
   ruin: 17,
   empty: 12,
   pirateLair: 12,
+  guild: 16,
 };
 /** 已探明节点的填充色 */
 export const NODE_FILL: Record<GalaxyNode['type'], string> = {
@@ -36,6 +43,7 @@ export const NODE_FILL: Record<GalaxyNode['type'], string> = {
   ruin: '#6d28d9',
   empty: '#334155',
   pirateLair: LAIR_FILL,
+  guild: GUILD_FILL,
 };
 /** 已探明节点的描边色 */
 export const NODE_STROKE: Record<GalaxyNode['type'], string> = {
@@ -44,18 +52,20 @@ export const NODE_STROKE: Record<GalaxyNode['type'], string> = {
   ruin: '#a78bfa',
   empty: '#64748b',
   pirateLair: LAIR_STROKE,
+  guild: GUILD_STROKE,
 };
 /** 未探明节点的固定配色（**老巢也不例外**） */
 export const UNDISCOVERED_FILL = '#1e293b';
 export const UNDISCOVERED_STROKE = '#475569';
 
-/** 类型标签（信息卡与图例共用；老巢那一行就是 `LAIR_LABEL`，两处同源） */
+/** 类型标签（信息卡与图例共用；老巢那一行就是 `LAIR_LABEL`，协会那一行就是 `GUILD_LABEL`，两处同源） */
 export const TYPE_LABEL: Record<GalaxyNode['type'], string> = {
   faction: '势力星系',
   colony: '可殖民星球',
   ruin: '遗迹星系',
   empty: '空星系',
   pirateLair: LAIR_LABEL,
+  guild: GUILD_LABEL,
 };
 
 /** 节点圆圈的渲染样式（半径 + 填充 + 描边） */
@@ -77,6 +87,8 @@ export function nodeStyle(node: GalaxyNode, discovered: boolean): GalaxyNodeStyl
   if (!discovered) return { r: NODE_RADIUS[node.type], fill: UNDISCOVERED_FILL, stroke: UNDISCOVERED_STROKE };
   // 老巢判据：`type === 'pirateLair'` 是**唯一权威**；`!!node.pirateLair` 只是历史数据兜底
   //（"empty 节点挂 pirateLair 标记"的老写法照样上红色）——两条判据在现数据上同真，配色不变。
+  // ⚠ `guild` 不走这条分支：它有自己的 fill/stroke（GUILD_FILL / GUILD_STROKE），
+  //   绝不能被 `empty` 的灰或老巢的红吞掉（类型键表里已经有它，直接按 type 取即可）。
   const isLair = node.type === 'pirateLair' || !!node.pirateLair;
   return {
     // 老巢半径与空星系同尺寸层级（12），上红色但不放大 —— 与其它深空节点同一个尺寸层级

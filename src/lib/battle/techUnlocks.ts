@@ -15,7 +15,7 @@
 
 import type { BattleRarity, ShipCardDef, ShipCardId } from '@/types/battle';
 import { BATTLE_CARDS, BATTLE_CARD_IDS } from '@/data/battle/cards';
-import { requiredTechId } from '@/lib/battle/shipyard';
+import { requiredTechId, ENEMY_SERIES } from '@/lib/battle/shipyard';
 
 /** 稀有度的展示顺序（与 data/battle/cards.ts 的 series→rarity 排列一致：白 → 蓝 → 紫 → 橙） */
 const RARITY_ORDER: readonly BattleRarity[] = ['白', '蓝', '紫', '橙'];
@@ -33,9 +33,10 @@ export interface TechShipUnlock {
   cardIds: ShipCardId[];
 }
 
-/** 某张卡会不会出现在船坞的可造列表里（海盗系 PvE 专属、衍生单位不进卡库 —— 同 shipyard.isBuildableCard 口径） */
+/** 某张卡会不会出现在船坞的可造列表里（敌方系列 PvE 专属、衍生单位不进卡库 —— 与
+ *  `shipyard.isBuildableCard` 同一口径：读 `shipyard.ENEMY_SERIES` 那份**唯一清单**）。 */
 function buildable(card: ShipCardDef): boolean {
-  return !card.token && card.series !== '海盗';
+  return !card.token && !ENEMY_SERIES.includes(card.series);
 }
 
 /**

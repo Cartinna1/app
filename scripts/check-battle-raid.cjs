@@ -559,7 +559,8 @@ const J = (v) => JSON.stringify(v);
   //    · 打输 / 阶段 B 超时被抢 → `event: '殖民地被掠夺'`，`detail` 逐项列出**实际扣到**的资源与数量
   //      （扣 0 的项不列；什么都没扣到就给一句完整的话）；扣减与 detail 同源（同一份 raidLootLoss）。
   //  战斗页签与战斗结算画面**都不放**结算行；曾经的 `lastRaidSettlement` 快照字段与它的三个展示字段
-  //  已整个删除（仓库硬规矩：不留死字段），旧档里残留的同名键**被忽略**且 `SAVE_VERSION` 保持 8。
+  //  已整个删除（仓库硬规矩：不留死字段），旧档里残留的同名键**被忽略**（当时 `SAVE_VERSION` 停在 8；
+  //  v9 起版本号已被雇佣兵协会的 `bounties` / `lairClearedTurn` 抬到 9，与本条无关）。
   //  另：原料数量 = 40；声望**只**从 `getKnownFactionIds(ship)` 里挑，0 已探明时回退金币（不发空奖励）。
   console.log('\n[11] 用户 2026-08 裁定（显示出口 = 事件记录 / 原料 40 / 声望只给已探明势力）');
   {
@@ -872,10 +873,10 @@ const J = (v) => JSON.stringify(v);
     const stillThere = removedExports.filter((k) => RW[k] !== undefined);
     check(stillThere.length === 0, '**已删除的导出一个不剩**（raidRewardView / raidLootView / raidSettlementLostText / raidLootDetailEmpty / RAID_NO_LOOT_TEXT / RAID_LOOT_PREFIX / EMPTY_RAID_LOOT_DETAIL）', J(stillThere));
 
-    // ---- 存档：SAVE_VERSION 保持 8；掠夺结算不再有独立字段；旧档照常读 ----
-    check(SAVE_VERSION === 8, '**SAVE_VERSION 保持 8 不动**（本次只是少读一个字段）', String(SAVE_VERSION));
+    // ---- 存档：掠夺结算不再有独立字段；旧档照常读（v9 起版本号由雇佣兵协会的字段抬到 9）----
+    check(SAVE_VERSION === 9, '**SAVE_VERSION = 9**（v9 是雇佣兵协会的 bounties/lairClearedTurn；掠夺结算字段仍不存在）', String(SAVE_VERSION));
     const save = buildSaveData(afterWin);
-    check(save.saveVersion === 8 && !('lastRaidSettlement' in save) && !('lastRaidReward' in save),
+    check(save.saveVersion === 9 && !('lastRaidSettlement' in save) && !('lastRaidReward' in save),
       'buildSaveData 不再写掠夺结算字段（存档清单干净）', J(Object.keys(save).filter((k) => /Raid/i.test(k))));
     const roundTrip = migrateSave(stateFromSave(JSON.parse(JSON.stringify(save))));
     check(roundTrip.eventLog.length === afterWin.eventLog.length && roundTrip.eventLog[0].detail === afterWin.eventLog[0].detail,

@@ -102,6 +102,10 @@ function App() {
     startBattleExpedition,
     startExpeditionBattle,
     startRaidBattle,
+    // 银河雇佣兵协会（阶段 1）：接单 / 放弃 / 当场出击（守卫全在 lib/turn/bounties）
+    acceptBounty,
+    abandonBounty,
+    startBountyBattle,
     cancelBattleExpedition,
     battleAction,
     endBattle,
@@ -225,6 +229,9 @@ function App() {
           onStartBattleExpedition={startBattleExpedition}
           onStartExpeditionBattle={startExpeditionBattle}
           onStartRaidBattle={startRaidBattle}
+          onAcceptBounty={acceptBounty}
+          onAbandonBounty={abandonBounty}
+          onStartBountyBattle={startBountyBattle}
           onCancelBattleExpedition={cancelBattleExpedition}
           onBattleAction={battleAction}
           onEndBattle={endBattle}

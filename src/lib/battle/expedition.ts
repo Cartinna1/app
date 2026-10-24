@@ -11,6 +11,7 @@ import { GALAXY_NODES, getGalaxyNode } from '@/data/galaxy/nodes';
 import { PIRATE_BOSSES } from '@/data/battle/pirates';
 import { getGalaxyTurns } from '@/lib/galaxy/graph';
 import { getBlockedNodeIds } from '@/lib/galaxy/access';
+import { canFightLair } from './lairCooldown';
 
 // ==================== 节点查询（数据层只列一次，勿在别处再扫一遍 GALAXY_NODES） ====================
 
@@ -152,6 +153,11 @@ export function canStartExpedition(
   if (!isLairDiscovered(state, bossId)) return { ok: false, reason: '这个老巢还没探明 —— 先去星图探索' };
   if (state.expedition) return { ok: false, reason: '已有出征在途，同时只能出征 1 个老巢' };
   if (state.battle) return { ok: false, reason: '战斗进行中，无法发起新的出征' };
+  // 同一老巢清剿后有 10 回合冷却（用户裁定：保留可重复打，但要冷却 + 递减奖励）。
+  // ⚠ 判据只有 `lib/battle/lairCooldown.canFightLair` 一份，**且只在这里读** —— 不放进 readyExpedition
+  //   （那会让"已抵达的舰队正好撞上冷却"变成永远打不了的死状态）。
+  const cooldown = canFightLair(state, bossId);
+  if (!cooldown.ok) return { ok: false, reason: cooldown.reason };
   const fleet = state.fleets.find((f) => f.id === fleetId);
   if (!fleet) return { ok: false, reason: '请先选择出征舰队' };
   if (fleet.defending) return { ok: false, reason: '带「防守」标签的舰队留守，不能出征' };

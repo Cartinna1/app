@@ -1,4 +1,4 @@
-'use strict';
+﻿'use strict';
 /* ============================================================================
    校验 src/data/battle/*.ts 与 carddemo/engine.js 逐字段一致（0 差异）
    用法：node scripts/verify-battle-data.cjs
@@ -20,15 +20,23 @@ function loadTs(file) {
   return require(path.join(DATA, file));
 }
 
+/** 加载 `src/data/mercenary/*.ts`（雇佣兵协会的数据不在 data/battle 下） */
+function loadMerc(file) {
+  return require(path.join(APP, 'src/data/mercenary', file));
+}
+
 const fails = [];
 const check = (ok, label, detail) => { if (!ok) fails.push(label + (detail ? ' → ' + detail : '')); };
 
 // ---------------- cards ----------------
+// 本脚本比对的是 **DEMO ↔ 生成数据**（`E` = carddemo/engine.js）。雇佣兵协会的 24 张敌人专属卡
+// **不进 DEMO、不进 data/battle/cards.ts**，所以这里不参与比对 ——
+// "引擎（移植版）确实认识这 24 张卡 + m01~m05" 由 `check-mercenary.cjs` 断言。
 const cards = loadTs('cards.ts');
-const engIds = Object.keys(E.CARDS);
-check(Object.keys(cards.BATTLE_CARDS).length === engIds.length,
-  '卡牌数量一致', Object.keys(cards.BATTLE_CARDS).length + ' vs ' + engIds.length);
-for (const id of engIds) {
+const genIds = Object.keys(cards.BATTLE_CARDS);
+check(genIds.length === Object.keys(E.CARDS).length, '卡牌数量一致',
+  genIds.length + ' vs ' + Object.keys(E.CARDS).length);
+for (const id of genIds) {
   const a = E.CARDS[id], b = cards.BATTLE_CARDS[id];
   if (!b) { fails.push('缺卡：' + id); continue; }
   for (const k of ['name', 'cost', 'atk', 'shield', 'structure', 'text']) {
@@ -41,8 +49,9 @@ for (const id of engIds) {
 }
 
 // ---------------- pirates ----------------
+// 本脚本比对 **DEMO ↔ 生成数据**；雇佣兵的 m01~m05 不在 DEMO 里（由 check-mercenary.cjs 断言）。
 const pir = loadTs('pirates.ts');
-for (const id of Object.keys(E.BOSSES)) {
+for (const id of Object.keys(pir.PIRATE_BOSSES)) {
   const a = E.BOSSES[id], b = pir.PIRATE_BOSSES[id];
   if (!b) { fails.push('缺敌人：' + id); continue; }
   check(a.name === b.name, `敌人 ${id}.name`);
@@ -70,7 +79,7 @@ check(tun.fleetSize === 30, 'tuning 编制上限 30');
 check(tun.raidHp === E.BOSSES.raid.hp, 'tuning.raidHp 与 raid 敌人血量一致');
 
 console.log('=== 数据校验：src/data/battle vs carddemo/engine.js ===');
-console.log('  卡牌 ' + engIds.length + ' 张 / 敌人 ' + Object.keys(E.BOSSES).length + ' 个 / 新手编制 ' + E.FLEET_STARTER.length + ' 艘');
+console.log('  卡牌 ' + genIds.length + ' 张 / 敌人 ' + Object.keys(E.BOSSES).length + ' 个 / 新手编制 ' + E.FLEET_STARTER.length + ' 艘');
 if (fails.length === 0) {
   console.log('  结果：逐字段一致（0 差异）✓');
 } else {

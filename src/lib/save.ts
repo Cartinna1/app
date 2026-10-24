@@ -43,8 +43,15 @@ export const BGM_MUTED_KEY = 'bgm_muted';
  *       v8 存档里若还留着 `lastRaidSettlement` 键，**直接忽略**；v7 的 `lastRaidReward`、v6 及更早的缺失
  *       同样无所谓 → **旧档一律照常读入，不需要任何迁移分支**（少读一个纯展示字段不改任何既有字段的
  *       结构与语义，也不影响游戏进度）。刻意**不**回退版本号：回退会让"已在用户机器上的 v8 档"
- *       看起来比 `SAVE_VERSION` 还新，反而给读档加不必要的歧义。 */
-export const SAVE_VERSION = 8;
+ *       看起来比 `SAVE_VERSION` 还新，反而给读档加不必要的歧义。
+ *  9：银河雇佣兵协会（`docs/03-雇佣兵协会.md`）的**存档地基**：新增 `bounties`（悬赏板：本批榜单 /
+ *     进行中 / 头目冷却）与 `lairClearedTurn`（每个老巢**最近一次**被清剿的回合，用于"同一老巢
+ *     10 回合冷却"）。
+ *     ⚠ 同样**只新增字段、不改任何既有字段的结构与语义** → **无需 v8→v9 结构迁移**：
+ *       老档缺这两项由 stateFromSave **字段级**兜底成空板 / 空对象（= 没有悬赏、没有清剿记录，
+ *       与"旧档不该凭空多出一批委托、也不该凭空多出一条冷却"一致）。
+ *     ⚠ 本版只让字段**先存在**，暂时没有任何读写方（业务逻辑在后续步骤接入）。 */
+export const SAVE_VERSION = 9;
 
 /** 存档结构校验（防止损坏/恶意存档导致崩溃） */
 export function validateSaveData(data: unknown): data is Record<string, unknown> {
@@ -99,6 +106,9 @@ export function buildSaveData(prev: GameState): SaveData {
     //   （「直接放事件记录好了哇，打赢也一样」），旧档里残留的同名键在 stateFromSave 里被**忽略**。
     // 船坞与科技（v4）：造船队列
     buildQueue: prev.buildQueue,
+    // 银河雇佣兵协会（v9）：整体带出，不逐字段展开（字段增减只改 types + 兜底）
+    bounties: prev.bounties,
+    lairClearedTurn: prev.lairClearedTurn,
   };
 }
 
@@ -185,6 +195,18 @@ export function stateFromSave(d: Record<string, any>): GameState {
     // v4 新增字段的**唯一兜底点**（v3 及更早的存档没有这个字段，一律在这里补默认值）。
     // ⚠ 这个默认值必须与 gameReducer.createInitialGameState 的初值**逐一一致**（都是 []）。
     buildQueue: d.buildQueue || [],
+    // ===== 银河雇佣兵协会（v9 新增，纯字段地基）=====
+    // 字段级兜底在此**唯一一处**（老档没有这两项）。字面量四个键都给全：
+    // 空批次（batchTurn 0 = 还没生成过）+ 空榜单 + 空进行中 + 空冷却表。
+    // ⚠ 兜底值必须与 gameReducer.createInitialGameState 的初值**逐一一致**，但**不能共享同一个对象**
+    //   （那里每次调用都新建字面量，这里也新建，避免"读档后的空板"与"新开局的空板"是同一引用）。
+    bounties: d.bounties || { batchTurn: 0, offered: [], active: [], bossCooldown: {} },
+    // 老巢清剿计时器：缺失 = 一个老巢都没被清剿过（= 没有冷却，全部可打）。
+    lairClearedTurn: d.lairClearedTurn || {},
+    // **运行期字段**（不进存档）：与 `battle: null` 同一条规则 —— 读档一律没有"正在打的悬赏战"。
+    // 按 AGENTS 第四节，不进档的字段也必须在 stateFromSave 里给初值，否则读档后是 undefined，
+    // 各处 `state.bountyBattleId` 的判空会与 `null` 语义混淆。
+    bountyBattleId: null,
   };
 }
 
@@ -206,7 +228,10 @@ export function stateFromSave(d: Record<string, any>): GameState {
  *    读出来即"一个老巢都没打败"（掠夺队仍叫「海盗旗舰（掠夺队）」、掠夺照常可触发）。
  *  v7：新增掠夺战利品快照 `lastRaidReward`（用户 2026-08 裁定「把奖励显著地显示出来」）
  *  → **同样无需 v6→v7 结构迁移**：老档缺该字段由 stateFromSave 兜底成 `null`（没有可显示的战利品），
- *    不给旧档凭空补一条战利品文案。 */
+ *    不给旧档凭空补一条战利品文案。
+ *  v9：只**新增**银河雇佣兵协会的两个字段（`bounties` / `lairClearedTurn`）
+ *  → **同样无需 v8→v9 结构迁移**：老档缺这两项由 stateFromSave 兜底成空板 / 空对象
+ *    （读出来即"没有悬赏、没有清剿记录"），本函数没有对应分支也不该有。 */
 export function migrateSave(loaded: GameState): GameState {
   // 兼容旧存档：补充破产/饥荒/叛乱字段（这几个字段不在 stateFromSave 的清单里，故仍需在此兜底）
   if (loaded.ships) {

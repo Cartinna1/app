@@ -5,9 +5,10 @@
 import type { PlanetTypeId } from './colony';
 import type { PirateBossId } from './battle';
 
-/** 节点类型 —— **"这是什么"的唯一权威**：`pirateLair` = 海盗老巢，`empty` = 真空星系（无内容）。
- *  以节点类型为键的配色 / 标签表都在 lib/galaxy/nodeStyle.ts，新增类型必须同步那几张表。 */
-export type GalaxyNodeType = 'faction' | 'colony' | 'ruin' | 'empty' | 'pirateLair';
+/** 节点类型 —— **"这是什么"的唯一权威**：`pirateLair` = 海盗老巢，`guild` = 银河雇佣兵协会，
+ *  `empty` = 真空星系（无内容）。以节点类型为键的配色 / 标签表都在 lib/galaxy/nodeStyle.ts，
+ *  新增类型必须同步那几张表。*/
+export type GalaxyNodeType = 'faction' | 'colony' | 'ruin' | 'empty' | 'pirateLair' | 'guild';
 
 /** 星图节点（固定布局；坐标为 SVG viewBox 1000×700 内的位置） */
 export interface GalaxyNode {
@@ -32,6 +33,9 @@ export interface GalaxyNode {
    *     不许再写回「空星系·NN」；类型标签由 lib/galaxy/nodeStyle 的 `TYPE_LABEL.pirateLair` 给「海盗老巢」。
    *     未探明时可见名仍由 lib/galaxy/knowledge.getNodeDisplayName 压成「未探测星系」（迷雾）。 */
   pirateLair?: PirateBossId;
+  /** ⚠ `guild` 类型（银河雇佣兵协会）**不需要任何标记字段**：全图**恰好一个**，
+   *  靠 `type === 'guild'` 判定（`lib/turn/bounties.isAtGuildNode` / `lib/galaxy/nodeImage`）。
+   *  不许为它加 `guildNode?: true` 之类的冗余标记（那会变成第二套分类权威）。 */
 }
 
 /** 航道（无向）；跃迁回合数由两端坐标距离推导，见 lib/galaxy/graph.ts 的 TURN_UNIT */

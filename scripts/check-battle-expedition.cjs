@@ -524,6 +524,90 @@ const check = (ok, label, detail) => {
       '未知 bossId → grantBattleRewards 原样返回同一艘母舰（不给奖励 / 不写流水 / 不抛异常）', grantErr || '返回了新对象');
   }
 
+  // ---------- ⑦ 老巢重复清剿：两档奖励 + 10 回合冷却 ----------
+  console.log('\n[7] 老巢重复清剿（首胜 100000/40 · 重复 25000/10 · 同老巢冷却 10 回合）');
+  const LC = await import('@/lib/battle/lairCooldown');
+  /** 账本 / 计时的相等比较（对象直接比 JSON，键顺序在两侧同源） */
+  const eqLairs = (a, b) => J(a) === J(b);
+  /** 造一个"已建殖民地 + 全探明 + 一场老巢战已结束"的状态 */
+  const lairBattleState = (turn, bossId, winner, extra) => {
+    const st = withColony('terran', (nodes.GALAXY_NODES || []).map((n) => n.id), { gold: 1000, stardust: 0, food: 10 });
+    const battle = { ...E.createBattle({ seed: 1, bossId }), winner };
+    return {
+      ...st,
+      turn,
+      fleets: [{ id: 'f1', name: '测试队', shipIds: ['h1'], defending: false }],
+      battle,
+      ...(extra || {}),
+    };
+  };
+
+  // ① 首胜档
+  const first = D(lairBattleState(20, 'b1', 'player'), { type: 'END_BATTLE' });
+  check(first.ships[0].gold === 101000 && first.ships[0].stardust === 40,
+    '首胜（lairClearedTurn 无记录）→ 100,000 金币 + 40 星尘',
+    J({ gold: first.ships[0].gold, stardust: first.ships[0].stardust }));
+  check(first.lairClearedTurn['b1'] === 20, '首胜后 lairClearedTurn[b1] = 当前回合（20）', J(first.lairClearedTurn));
+  check(!!first.eventLog[0] && first.eventLog[0].event === '清剿完成'
+    && first.eventLog[0].detail.includes('首胜') && first.eventLog[0].detail.includes('100000'),
+    '首胜写一条事件记录（标注「首胜」+ 实收金额）', J(first.eventLog[0]));
+  check(first.defeatedLairs.includes('b1'), 'defeatedLairs 记下"打赢过 b1"（账本语义不变）', J(first.defeatedLairs));
+
+  // ② 重复档（同一老巢、冷却已过的回合里再打赢一次）
+  const repeatState = lairBattleState(35, 'b1', 'player', {
+    lairClearedTurn: { b1: 20 },
+    defeatedLairs: first.defeatedLairs,
+  });
+  const repeat = D(repeatState, { type: 'END_BATTLE' });
+  check(repeat.ships[0].gold === repeatState.ships[0].gold + 25000,
+    '重复清剿 → 25,000 金币（不是 100,000）', J({ before: repeatState.ships[0].gold, after: repeat.ships[0].gold }));
+  check(repeat.ships[0].stardust === 10, '重复清剿 → 10 星尘', J(repeat.ships[0].stardust));
+  check(repeat.lairClearedTurn['b1'] === 35, '重复清剿后 lairClearedTurn[b1] 被覆盖成新回合（35）', J(repeat.lairClearedTurn));
+  check(!!repeat.eventLog[0] && repeat.eventLog[0].detail.includes('重复')
+    && repeat.eventLog[0].detail.includes(`${LC.LAIR_COOLDOWN_TURNS} 回合后可再战`),
+    '重复那条事件写明「重复」与「N 回合后可再战」', J(repeat.eventLog[0]));
+  check(eqLairs(repeat.defeatedLairs, first.defeatedLairs),
+    '**语义分离**：重复清剿不改 defeatedLairs（幂等账本），只改 lairClearedTurn', J(repeat.defeatedLairs));
+
+  // ③ 冷却判定
+  const cdState = { ...lairBattleState(25, 'b1', 'player'), lairClearedTurn: { b1: 20 } };
+  const cd5 = LC.lairCooldownRemaining(cdState, 'b1');
+  check(cd5 === 5, '第 25 回合看第 20 回合清剿的老巢 → 还剩 5 回合', String(cd5));
+  const cdCheck = LC.canFightLair(cdState, 'b1');
+  check(!cdCheck.ok && /^该老巢已清剿，\d+ 回合后可再战$/.test(cdCheck.reason),
+    '冷却中 canFightLair().ok=false，reason = 「该老巢已清剿，N 回合后可再战」', J(cdCheck));
+  check(Number((cdCheck.reason.match(/(\d+) 回合/) || [])[1]) >= 1, 'reason 里的 N ≥ 1（绝不出现 0 回合）',
+    J(cdCheck.reason));
+  const cd1 = LC.canFightLair({ ...cdState, turn: 29 }, 'b1');
+  check(!cd1.ok && cd1.reason === '该老巢已清剿，1 回合后可再战', '冷却最后 1 回合时 N = 1（下限）', J(cd1));
+  check(LC.canFightLair({ ...cdState, turn: 30 }, 'b1').ok === true
+    && LC.canFightLair({ ...cdState, turn: 30 }, 'b1').reason === '',
+    '冷却第 10 回合结束（turn=30）→ 可以再打，reason 为空');
+  check(LC.lairCooldownRemaining({ ...cdState, lairClearedTurn: {} }, 'b1') === 0,
+    '没有清剿记录 → 剩余 0（从未打过，不冷却）');
+
+  // ④ 唯一接入点：canStartExpedition 在冷却期直接给原因（要先清掉"战斗进行中"——那是更靠前的守门）
+  const expBlocked = EXP.canStartExpedition({ ...cdState, battle: null }, 'b1', 'f1');
+  check(!expBlocked.ok && expBlocked.reason === cdCheck.reason,
+    '冷却期 canStartExpedition 被拦，原因与 canFightLair 同一条（唯一接入点）', J(expBlocked));
+
+  // ⑤ 掠夺胜局不写 lairClearedTurn（掠夺队不是老巢）
+  const raidWinState = (() => {
+    const st = withColony('terran', (nodes.GALAXY_NODES || []).map((n) => n.id), { gold: 1000, stardust: 0, food: 10 });
+    const battle = { ...E.createBattle({ seed: 2, bossId: 'raid' }), winner: 'player' };
+    return { ...st, turn: 20, fleets: [{ id: 'f1', name: 'x', shipIds: ['h1'], defending: false }], battle, raid: { ...st.raid, raiders: 1 } };
+  })();
+  const afterRaid = D(raidWinState, { type: 'END_BATTLE' });
+  check(eqLairs(afterRaid.lairClearedTurn, {}), '掠夺队胜局**不写** lairClearedTurn', J(afterRaid.lairClearedTurn));
+  check(afterRaid.lairClearedTurn['raid'] === undefined, 'lairClearedTurn 里不出现 raid 键', J(afterRaid.lairClearedTurn));
+
+  // ⑥ 悬赏战不受影响（bountyBattleId 非空 → 走悬赏分支，判据仍排在掠夺战之前）
+  const bountyLairState = lairBattleState(20, 'b1', 'player', { bountyBattleId: 'bty_p1' });
+  const afterBountyLair = D(bountyLairState, { type: 'END_BATTLE' });
+  check(eqLairs(afterBountyLair.lairClearedTurn, {}),
+    '带 bountyBattleId 的战斗走悬赏分支，**不写** lairClearedTurn', J(afterBountyLair.lairClearedTurn));
+  check(afterBountyLair.bountyBattleId === null, '悬赏分支仍然清空 bountyBattleId');
+
   console.log('\n=== P5 验收结果 ===');
   if (fails.length === 0) console.log('  全部通过 ✓');
   else { console.log('  ' + fails.length + ' 条失败 ✗'); process.exitCode = 1; }

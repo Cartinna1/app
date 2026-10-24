@@ -12,7 +12,7 @@
 //   并按 AGENTS 第三节写 pushGoldLog（**调用前必须先改完金币**）。
 
 import type { Mothership } from '@/types/game';
-import type { BattleState } from '@/types/battle';
+import type { BattleState, PirateBossId } from '@/types/battle';
 import { famineHalveGold } from '@/lib/turn/shipTurn';
 import { pushGoldLog } from '@/lib/turn/goldLog';
 import { ALL_MATERIAL_IDS, getMaterialName } from '@/data/materialNames';
@@ -64,20 +64,71 @@ export function expectedBattleGold(food: number, battle: BattleState): number {
  * 结算并写回战利品：返回**新的 ship**（不改传入的 ship / battle）。
  * 顺序：① 先算实收金币（饥荒减半）→ ② 改金币 → ③ pushGoldLog（读改完后的余额）→ ④ 加星尘。
  * 没有任何收益时原样返回传入的 ship 引用（调用方可据此判断"没变"）。
+ * ⚠ 语义与签名**冻结**（AGENTS 第三节）：它永远发**首胜档**；重复清剿走 `grantRepeatLairRewards`。
  */
 export function grantBattleRewards(ship: Mothership, battle: BattleState, turn: number): Mothership {
-  const { stardust } = battleRewards(battle);
-  const gold = expectedBattleGold(ship.food, battle);
-  if (gold <= 0 && stardust <= 0) return ship;
+  return applyGoldStardust(
+    ship,
+    expectedBattleGold(ship.food, battle),
+    battleRewards(battle).stardust,
+    `出征战利品：${battle.bossId} 老巢`,
+    turn
+  );
+}
 
+/**
+ * 金币 + 星尘的**唯一写回路径**（先改金币，再写流水，最后加星尘）。
+ * 为什么不各写一份：顺序写错（先记账再改金币）会让流水里的"余额"错成加之前的数，
+ * 所以首胜档与重复档都走这里，只有金额与 reason 不同。
+ * 没有收益时原样返回传入的 ship 引用。
+ */
+function applyGoldStardust(
+  ship: Mothership,
+  gold: number,
+  stardust: number,
+  reason: string,
+  turn: number
+): Mothership {
+  if (gold <= 0 && stardust <= 0) return ship;
   const next: Mothership = { ...ship };
   if (gold > 0) {
-    const reason = `出征战利品：${battle.bossId} 老巢`;
     next.gold += gold;                                  // 一、先改金币（pushGoldLog 读的是改完后的余额）
     pushGoldLog(next, turn, gold, reason);              // 二、再记流水（唯一真值 lib/turn/goldLog.ts）
   }
   if (stardust > 0) next.stardust += stardust;           // 三、星尘直接加在母舰上
   return next;
+}
+
+// ==================== 老巢重复清剿（递减档） ====================
+// 用户裁定：老巢**保留可重复打**，但要"同老巢 10 回合冷却 + 递减奖励"（不然它是无限 10 万金币的刷钱口）。
+// 分工：
+//   · **首胜档** = `battleRewards`（100000 / 40，一个数都不许动，签名与语义冻结）；
+//   · **重复档** = 本组常量与函数（25000 / 10，数值只在这里出现一次）；
+//   · **首胜 / 重复的判定在调用方**（`gameReducer` 的 END_BATTLE，判据 =
+//     `state.lairClearedTurn[bossId] === undefined`）—— 本文件不读存档、也不猜。
+
+/** 重复清剿的金币（首胜的 1/4） */
+export const LAIR_REPEAT_REWARD_GOLD = 25000;
+/** 重复清剿的星尘（首胜的 1/4） */
+export const LAIR_REPEAT_REWARD_STARDUST = 10;
+
+/** 重复档奖励（纯函数：给 UI 展示与断言用，不写状态） */
+export function repeatLairRewards(): { gold: number; stardust: number } {
+  return { gold: LAIR_REPEAT_REWARD_GOLD, stardust: LAIR_REPEAT_REWARD_STARDUST };
+}
+
+/** 重复档**实收**金币（= 过饥荒减半），与结算同源 */
+export function expectedRepeatLairGold(food: number): number {
+  return famineHalveGold(food, LAIR_REPEAT_REWARD_GOLD);
+}
+
+/**
+ * 结算并写回**重复清剿**的战利品：与首胜档同一条写回路径（`applyGoldStardust`），只有金额不同。
+ * 调用方必须先判"这是重复"（`lairClearedTurn[bossId] !== undefined`），本函数不判。
+ */
+export function grantRepeatLairRewards(ship: Mothership, bossId: PirateBossId, turn: number): Mothership {
+  const { stardust } = repeatLairRewards();
+  return applyGoldStardust(ship, expectedRepeatLairGold(ship.food), stardust, `重复清剿：${bossId} 老巢`, turn);
 }
 
 // ==================== 掠夺战利品（V1.5 §10.2：打败海盗后随机获得） ====================

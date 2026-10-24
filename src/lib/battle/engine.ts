@@ -31,6 +31,11 @@ import type {
 } from '@/types/battle';
 import { makeRng } from './rng';
 import type { Rng } from './rng';
+// ⚠ 依赖面：`data/battle/*`（脚本从 DEMO 生成）+ 本文件自身。
+//   唯一的例外是 `data/mercenary/pools.ts` 的四个 30 张敌池 —— DEMO 里那四个池是 `createBattle`
+//   内部的局部常量（`MERC_POOLS`），导出脚本不产出它们；而"按 bossId 选池"必须留在引擎里，
+//   所以池子只能从 app 侧数据文件读（池内容与 DEMO 逐字节一致，由 check-mercenary 断言）。
+import { MERCENARY_POOLS } from '@/data/mercenary/pools';
 
 // 随机数发生器同样从引擎出口暴露（对拍脚本会按这个名字取）
 export { makeRng };
@@ -43,6 +48,9 @@ export const MANA_CAP: number = BATTLE_TUNING.manaCap;      // 指挥度上限
 
 // ---------------- 数据层再导出（与 DEMO 的导出面一致） ----------------
 export { FLEET_ALL, FLEET_STARTER, PIRATE_BOSSES, PIRATE_POOL, RAID_POOL };
+
+// 雇佣兵协会的敌人数据（**不再导出**，只在本文件内用：导出面必须与 DEMO 一致，
+// 由 scripts/audit-battle-port.cjs 逐键比对 —— 加导出会当场红）
 
 // ============================================================================
 // 卡牌行为表（kw / fx / dynamicCost）
@@ -116,12 +124,44 @@ const BEHAVIOR: Record<string, CardBehavior> = {
   t_cannon: { kw: {} },
   t_wreck: { kw: {} },
   t_grunt: { kw: {} },
+
+  // —— 雇佣兵协会：四支敌对势力（24 张，逐字搬自 DEMO 的 def(...)，只用现有 kw、无 fx）——
+  // 噬星虫群
+  q1: { kw: { taunt: true } },
+  q2: { kw: { rush: true } },
+  q3: { kw: { desper: 2 } },
+  q4: { kw: { pierce: true } },
+  q5: { kw: { bloodlust: true } },
+  q6: { kw: { overload: 2 } },
+  // 残响智械
+  z1: { kw: { brk: true } },
+  z2: { kw: { taunt: true } },
+  z3: { kw: { pierce: true } },
+  z4: { kw: { recoil: 1 } },
+  z5: { kw: { berserk: 3 } },
+  z6: { kw: { overload: 1 } },
+  // 忆潮灵能者
+  y1: { kw: { subm: true } },
+  y2: { kw: { desper: 2 } },
+  y3: { kw: { recoil: 1 } },
+  y4: { kw: { brk: true } },
+  y5: { kw: { plunder: 2 } },
+  y6: { kw: { bloodlust: true } },
+  // 旧律军团
+  v1: { kw: { taunt: true } },
+  v2: { kw: { recoil: 1 } },
+  v3: { kw: { pierce: true } },
+  v4: { kw: { rush: true } },
+  v5: { kw: { desper: 3 } },
+  v6: { kw: { berserk: 2 } },
 };
 
 /** 空关键词（数据层没有 kw，运行期按空对象处理——与 DEMO def() 的默认值一致） */
 const EMPTY_KW: CardKeywords = {};
 
-/** 卡牌表：数据层 + 行为表（DEMO 的 CARDS） */
+/** 卡牌表：数据层 + 行为表（DEMO 的 CARDS）。
+ *  ⚠ 24 张敌方专属卡现在**就在** `data/battle/cards.ts` 里（A2 起由 DEMO 生成），
+ *    所以这里回到"只遍历 BATTLE_CARDS"的单一来源，不再有合并块。 */
 export const CARDS: CardTable = (() => {
   const out: CardTable = {};
   const ids = Object.keys(BATTLE_CARDS);
@@ -139,7 +179,7 @@ export const CARDS: CardTable = (() => {
   return out;
 })();
 
-/** 敌方表（DEMO 的 BOSSES） */
+/** 敌方表（DEMO 的 BOSSES：5 个老巢 + 掠夺队 + 雇佣兵的 m01~m05） */
 export const BOSSES: PirateBossTable = PIRATE_BOSSES;
 
 // ---------------- 战斗状态 ----------------
@@ -179,7 +219,13 @@ export function createBattle(opts?: CreateBattleOptions): BattleState {
   const fleet: readonly ShipCardId[] = o.fleet === 'all' ? FLEET_ALL : FLEET_STARTER;
   // 掠夺队（raid）用自己的 15 张低阶池（RAID_POOL）；5 个老巢用 30 张的 PIRATE_POOL。
   // 这一行是**逐字搬自 DEMO** 的同一处分支（用户 2026-08 裁定：掠夺队卡组与 BOSS 区分、更弱、减半）。
-  const enemyPool: readonly ShipCardId[] = bossId === 'raid' ? RAID_POOL : PIRATE_POOL;
+  // 敌池三档（判据只在这里）：
+  //   ① 雇佣兵协会的 m01~m04 → `MERCENARY_POOLS[bossId]`（各自的 30 张势力专属池）；
+  //   ② 掠夺队（raid）→ 15 张低阶池 RAID_POOL（用户 2026-08 裁定：更弱、减半）；
+  //   ③ 其余（5 个老巢 + m05 弱海盗）→ 30 张的 PIRATE_POOL。
+  // ⚠ 前两档之一必须排在"其余"之前；`m05` 故意落在 PIRATE_POOL（它是海盗杂兵，不是四支势力）。
+  const enemyPool: readonly ShipCardId[] =
+    MERCENARY_POOLS[bossId] || (bossId === 'raid' ? RAID_POOL : PIRATE_POOL);
   const st: BattleState = {
     rnd,
     bossId,

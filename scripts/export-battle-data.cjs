@@ -74,7 +74,7 @@ const q = (v) => JSON.stringify(v);
   lines.push(`export const RAID_POOL: readonly string[] = ${JSON.stringify(E.RAID_POOL)};`);
   lines.push('');
   lines.push('/** 老巢敌人 id（5 个 BOSS；掠夺队单列） */');
-  lines.push(`export const LAIR_BOSS_IDS: readonly string[] = ${JSON.stringify(bids.filter((b) => b !== 'raid'))};`);
+  lines.push(`export const LAIR_BOSS_IDS: readonly string[] = ${JSON.stringify(bids.filter((b) => /^b\d+$/.test(b)))};`);
   lines.push('');
   fs.writeFileSync(path.join(OUT_DIR, 'pirates.ts'), lines.join('\n'), 'utf8');
   console.log('  pirates.ts  ' + bids.length + ' 个敌人 + 海盗池 ' + E.PIRATE_POOL.length + ' 张 + 掠夺池 ' + E.RAID_POOL.length + ' 张');

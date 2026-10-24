@@ -17,6 +17,7 @@ import { LAIR_REWARD_GOLD, LAIR_REWARD_STARDUST } from '@/lib/battle/rewards';
 import BattleScreen from './BattleScreen';
 import type { BattleScreenContext } from './BattleScreen';
 import { BossAvatar } from './parts';
+import MercenaryBoard from './MercenaryBoard';
 
 // ============================================================================
 // 战斗页签
@@ -58,14 +59,25 @@ interface BattleTabProps {
   onStartExpeditionBattle: () => void;
   /** **掠夺阶段 B 的「开战」**（START_RAID_BATTLE）：同样是无参窄回调。 */
   onStartRaidBattle: () => void;
+  /** 雇佣兵协会：接一条悬赏（守卫 = lib/turn/bounties.canAcceptBounty，与本页签的按钮可用性同源） */
+  onAcceptBounty: (defId: string) => void;
+  /** 雇佣兵协会：放弃一条已接的悬赏（不扣钱、不扣声望） */
+  onAbandonBounty: (defId: string) => void;
+  /** 雇佣兵协会：当场出击（守卫 = canStartBountyBattle；敌方由 BountyDef 决定，UI 不指定） */
+  onStartBountyBattle: (defId: string, fleetId: string) => void;
   onAction: (action: BattleAction) => void;
   onEndBattle: () => void;
   onCreateFleet: (name?: string) => void;
 }
 
+/** 页签内的两个子标签（模块级常量：不在渲染里每次新建） */
+const SUB_TABS: readonly { id: 'expedition' | 'mercenary'; label: string }[] = [
+  { id: 'expedition', label: '出征 / 防守' },
+  { id: 'mercenary', label: '雇佣兵' },
+];
+
 /** 参战舰队的摘要：同型合并计数，按池内出现顺序（出征舰队与防守合并池共用） */
-function summarize(shipIds: ShipCardId[]): { id: string; n: number }[] {
-  const counts: Record<string, number> = {};
+function summarize(shipIds: ShipCardId[]): { id: string; n: number }[] {  const counts: Record<string, number> = {};
   const order: string[] = [];
   for (const id of shipIds) {
     if (counts[id] === undefined) order.push(id);
@@ -85,10 +97,16 @@ function BattleTabBase({
   onCancelExpedition,
   onStartExpeditionBattle,
   onStartRaidBattle,
+  onAcceptBounty,
+  onAbandonBounty,
+  onStartBountyBattle,
   onAction,
   onEndBattle,
   onCreateFleet,
 }: BattleTabProps) {
+  /** 页签内两个子标签：出征/防守（原有内容）与雇佣兵（悬赏板）。
+   *  ⚠ 子标签是**选择态**（允许的 useState），不是"能不能操作"的判据 —— 后者一律在 lib。 */
+  const [subTab, setSubTab] = useState<'expedition' | 'mercenary'>('expedition');
   /** 出征选中的老巢（null = 用列表第一个已探明的老巢，见 activeLair） */
   const [lairBossId, setLairBossId] = useState<PirateBossId | null>(null);
   /** 选中的出征舰队 id（'' = 还没选） */
@@ -215,7 +233,29 @@ function BattleTabBase({
 
   return (
     <div className="mx-auto max-w-4xl">
-      <h2 className="mb-1.5 text-lg font-bold text-slate-100">出征 / 防守</h2>
+      <h2 className="mb-1.5 text-lg font-bold text-slate-100">战斗</h2>
+
+      {/* 子标签（照机库页签的内部标签写法：可点 / 当前项高亮 / 手机端横向滚动不换行）。
+          ⚠ 只是**选择态**：切到「雇佣兵」不影响任何战斗状态；有战斗时上面已经整屏渲染 BattleScreen。 */}
+      <div className="mb-2 flex gap-1.5 overflow-x-auto whitespace-nowrap pb-1 [&::-webkit-scrollbar]:h-1.5 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-slate-600 [&::-webkit-scrollbar-track]:bg-slate-800 [scrollbar-width:thin]">
+        {SUB_TABS.map((t) => {
+          const active = subTab === t.id;
+          return (
+            <button
+              key={t.id}
+              type="button"
+              onClick={() => setSubTab(t.id)}
+              className={`flex-none rounded-[8px] border px-3 py-1.5 text-[12.5px] font-bold transition-colors ${
+                active
+                  ? 'border-cyan-400 bg-cyan-700 text-white'
+                  : 'border-[#33405f] bg-[#161f36] text-slate-400 hover:bg-[#1d2740]'
+              }`}
+            >
+              {t.label}
+            </button>
+          );
+        })}
+      </div>
 
       {/* ⚠ 掠夺奖励 / 被抢的显示出口 = **事件记录**（事件面板底部「事件记录」），本页签**不放任何结算行**
           （用户 2026-08 最终口径：「是不是就相当于事件记录了，那干脆不要再战斗页签加东西了，
@@ -223,6 +263,18 @@ function BattleTabBase({
           打输「殖民地被掠夺：…」）与它们依赖的 `lastRaidSettlement` 快照字段**已全部删除** ——
           事件记录本身就在存档里（`eventLog`），打赢/打输各留一条，内容与实扣值同源。 */}
 
+      {/* 子标签内容：雇佣兵（悬赏板）与出征/防守互斥显示。
+          ⚠ 有战斗时上面已经 return 整屏 BattleScreen，轮不到这两个分支。 */}
+      {subTab === 'mercenary' ? (
+        <MercenaryBoard
+          state={state}
+          fleets={fleets}
+          onAccept={onAcceptBounty}
+          onAbandon={onAbandonBounty}
+          onStart={onStartBountyBattle}
+        />
+      ) : (
+        <>
       {/* ==================== 出征（V1.5 §10.1：本页签唯一的发起入口） ====================
            目标只列**已探明**的老巢（discoveredLairs：未探明的一律不出现，也不做占位提示，
            且没有殖民地 / 航线被封锁时列表为空），耗时与可用性全部来自 lib/battle/expedition。 */}
@@ -459,6 +511,8 @@ function BattleTabBase({
           卡库共 {cardLibrary.length} 艘 · 留守（带「防守」标签）{defenders.length} 支
         </p>
       </div>
+        </>
+      )}
     </div>
   );
 }

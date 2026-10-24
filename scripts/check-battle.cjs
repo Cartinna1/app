@@ -2,7 +2,7 @@
 /* ============================================================================
    舰船卡牌战斗 · 一键复验（改规则/改数据后都跑它）
    用法：node scripts/check-battle.cjs
-   依次跑（14 步）：
+   依次跑（15 步）：
      1. 数据校验    src/data/battle/*.ts ↔ carddemo/engine.js 逐字段
      2. 静态审计    导出面 / 每张卡的 kw·fx / 敌人 / 编制 / 常量 ↔ DEMO
      3. 规则断言    DEMO 的 96 处定点断言跑在【移植版引擎】上
@@ -32,6 +32,7 @@ const STEPS = [
   ['掠夺循环（触发前提 / 8% / 防守池合并 / 损失不为负 / 20 回合免疫 / 可预告）', ['scripts/check-battle-raid.cjs'], true],
   ['船坞与科技（造价 / 船坞等级 / 门槛 / 同时 2 艘+无限排队 / 取消返还 / 电力 6-10-18 / T28-T36）', ['scripts/check-battle-shipyard.cjs'], true],
   ['星图海盗老巢（迷雾：未探明与普通节点逐字节相同 / 已探明才变红 / 标签不出现空星系）', ['scripts/check-galaxy-lair.cjs'], true],
+  ['雇佣兵协会（悬赏 14 条数据 / 批次确定性 / 换批 / 头目冷却 / 期限 / 报酬与剩余回合文案）', ['scripts/check-mercenary.cjs'], true],
 ];
 
 let bad = 0;

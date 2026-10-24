@@ -148,6 +148,12 @@ interface GameScreenProps {
   onStartExpeditionBattle: () => void;
   /** **阶段 B 的「开战」**（START_RAID_BATTLE）：同样是无参窄回调（reducer 侧 readyRaidBattle 组装）。 */
   onStartRaidBattle: () => void;
+  /** 雇佣兵协会：接一条悬赏（ACCEPT_BOUNTY；守卫 = lib/turn/bounties.canAcceptBounty） */
+  onAcceptBounty: (defId: string) => void;
+  /** 雇佣兵协会：放弃一条已接的悬赏（ABANDON_BOUNTY；不扣钱、不扣声望） */
+  onAbandonBounty: (defId: string) => void;
+  /** 雇佣兵协会：**当场出击**（START_BOUNTY_BATTLE；守卫 = canStartBountyBattle，与按钮可用性同源） */
+  onStartBountyBattle: (defId: string, fleetId: string) => void;
   onBattleAction: (action: BattleAction) => void;
   onEndBattle: () => void;
   onCreateBattleFleet: (name?: string) => void;
@@ -268,6 +274,9 @@ export default function GameScreen({
   onCancelBattleExpedition,
   onStartExpeditionBattle,
   onStartRaidBattle,
+  onAcceptBounty,
+  onAbandonBounty,
+  onStartBountyBattle,
   onBattleAction,
   onEndBattle,
   onCreateBattleFleet,
@@ -728,6 +737,9 @@ export default function GameScreen({
               onStartExpedition={onStartBattleExpedition}
               onStartExpeditionBattle={onStartExpeditionBattle}
               onStartRaidBattle={onStartRaidBattle}
+              onAcceptBounty={onAcceptBounty}
+              onAbandonBounty={onAbandonBounty}
+              onStartBountyBattle={onStartBountyBattle}
               onCancelExpedition={onCancelBattleExpedition}
               onAction={onBattleAction}
               onEndBattle={onEndBattle}

@@ -27,11 +27,12 @@ export const NODE_IMAGE_DIR = {
   faction: '/faction-landscape',
   archaeology: '/archaeology',
   lair: '/battle/lairs',
+  guild: '/battle/guild',
 } as const;
 
 /**
  * 返回该节点在星图信息卡里要展示的配图路径；无图返回 null。
- * @param ship 母舰：用于迷雾判定（**四类图位**：未探明节点一律不出图）。
+ * @param ship 母舰：用于迷雾判定（**五类图位**：未探明节点一律不出图）。
  *   不传时按"都没探明"处理 —— 保守方向，不会泄露未探明内容。
  */
 export function getNodeLandscapeImage(node: GalaxyNode, ship?: Mothership): string | null {
@@ -42,6 +43,9 @@ export function getNodeLandscapeImage(node: GalaxyNode, ship?: Mothership): stri
     return site?.galleryImage || null; // 形如 /archaeology/<siteId>/cover.webp
   }
   if (node.type === 'faction') return node.factionId ? `${NODE_IMAGE_DIR.faction}/${node.factionId}.webp` : null;
+  // 银河雇佣兵协会（`type='guild'`，全图恰好一个）：与其它功能节点同规格的 1424×800 立绘。
+  // ⚠ 这一条必须排在上面那道 `isNodeDiscovered` 守卫之后 —— 未探明的协会节点不许出图（迷雾）。
+  if (node.type === 'guild') return `${NODE_IMAGE_DIR.guild}/guild-hall.webp`;
   // 海盗老巢（`type='pirateLair'` 的 5 个节点；路径只取决于承载 BOSS 的 `pirateLair` 字段）
   if (node.pirateLair) return `${NODE_IMAGE_DIR.lair}/${node.pirateLair}.webp`;
   return null;

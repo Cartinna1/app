@@ -50,6 +50,30 @@ export const BATTLE_CARDS: Record<string, ShipCardDef> = {
   "r8": { id: "r8", name: "海盗头目舰", cost: 4, atk: 5, shield: 4, structure: 2, series: "海盗", rarity: "紫", text: "入场：从池外召唤 2 艘钩爪登陆艇（不占池）" },
   "r9": { id: "r9", name: "嗜血旗舰", cost: 5, atk: 6, shield: 5, structure: 3, series: "海盗", rarity: "紫", text: "亡命+2；击毁一艘战舰后可再次攻击（每回合一次）" },
   "r10": { id: "r10", name: "深海阎王号", cost: 6, atk: 7, shield: 7, structure: 3, series: "海盗", rarity: "橙", text: "锁链；入场：召唤 2 艘 2/3/1 海盗炮舰；贯穿" },
+  "q1": { id: "q1", name: "噬星幼虫", cost: 1, atk: 4, shield: 5, structure: 2, series: "虫群", rarity: "白", text: "锁链：对方必须先攻击它。" },
+  "q2": { id: "q2", name: "裂壳虫", cost: 2, atk: 4, shield: 5, structure: 1, series: "虫群", rarity: "白", text: "伏击：部署当回合即可攻击。" },
+  "q3": { id: "q3", name: "掘进虫", cost: 3, atk: 5, shield: 4, structure: 1, series: "虫群", rarity: "蓝", text: "亡命 2：半血时补 2 护盾，受击后攻击 +2。" },
+  "q4": { id: "q4", name: "穿刺者", cost: 4, atk: 6, shield: 3, structure: 2, series: "虫群", rarity: "蓝", text: "贯穿：击毁目标时，溢出伤害打到本体。" },
+  "q5": { id: "q5", name: "群巢母虫", cost: 5, atk: 4, shield: 3, structure: 1, series: "虫群", rarity: "紫", text: "嗜血：击毁目标后可再攻击一次（每回合一次）。" },
+  "q6": { id: "q6", name: "虫潮核心", cost: 6, atk: 2, shield: 2, structure: 2, series: "虫群", rarity: "橙", text: "过载 2：下回合指挥度 -2。" },
+  "z1": { id: "z1", name: "残响哨兵", cost: 1, atk: 4, shield: 4, structure: 1, series: "智械", rarity: "白", text: "破甲：攻击无视护盾。" },
+  "z2": { id: "z2", name: "锈甲机兵", cost: 2, atk: 4, shield: 4, structure: 1, series: "智械", rarity: "白", text: "锁链：对方必须先攻击它。" },
+  "z3": { id: "z3", name: "仲裁机", cost: 3, atk: 5, shield: 5, structure: 3, series: "智械", rarity: "蓝", text: "贯穿：击毁目标时，溢出伤害打到本体。" },
+  "z4": { id: "z4", name: "回声炮台", cost: 4, atk: 4, shield: 5, structure: 1, series: "智械", rarity: "蓝", text: "反噬 1：攻击后自身受到 1 点伤害。" },
+  "z5": { id: "z5", name: "旧日主控", cost: 5, atk: 4, shield: 4, structure: 1, series: "智械", rarity: "紫", text: "狂怒 3：半血时攻击 +3。" },
+  "z6": { id: "z6", name: "残响中枢", cost: 6, atk: 1, shield: 1, structure: 1, series: "智械", rarity: "橙", text: "过载 1：下回合指挥度 -1。" },
+  "y1": { id: "y1", name: "潮忆游鱼", cost: 1, atk: 4, shield: 4, structure: 2, series: "灵潮", rarity: "白", text: "潜航：不能被选为目标，也不参与锁链判定。" },
+  "y2": { id: "y2", name: "回声信徒", cost: 2, atk: 3, shield: 4, structure: 2, series: "灵潮", rarity: "白", text: "亡命 2：半血时补 2 护盾，受击后攻击 +2。" },
+  "y3": { id: "y3", name: "低语者", cost: 3, atk: 3, shield: 4, structure: 2, series: "灵潮", rarity: "蓝", text: "反噬 1：攻击后自身受到 1 点伤害。" },
+  "y4": { id: "y4", name: "忆潮祭司", cost: 4, atk: 4, shield: 5, structure: 1, series: "灵潮", rarity: "蓝", text: "破甲：攻击无视护盾。" },
+  "y5": { id: "y5", name: "夺忆者", cost: 5, atk: 3, shield: 4, structure: 2, series: "灵潮", rarity: "紫", text: "掠夺 2：命中本体时本回合指挥度 +2。" },
+  "y6": { id: "y6", name: "潮心", cost: 6, atk: 4, shield: 5, structure: 2, series: "灵潮", rarity: "橙", text: "嗜血：击毁目标后可再攻击一次（每回合一次）。" },
+  "v1": { id: "v1", name: "旧律执戟者", cost: 1, atk: 4, shield: 5, structure: 1, series: "旧律", rarity: "白", text: "锁链：对方必须先攻击它。" },
+  "v2": { id: "v2", name: "法典侍从", cost: 2, atk: 3, shield: 4, structure: 1, series: "旧律", rarity: "白", text: "反噬 1：攻击后自身受到 1 点伤害。" },
+  "v3": { id: "v3", name: "巡法官", cost: 3, atk: 4, shield: 4, structure: 3, series: "旧律", rarity: "蓝", text: "贯穿：击毁目标时，溢出伤害打到本体。" },
+  "v4": { id: "v4", name: "执令骑士", cost: 4, atk: 4, shield: 4, structure: 1, series: "旧律", rarity: "蓝", text: "伏击：部署当回合即可攻击。" },
+  "v5": { id: "v5", name: "旧律裁判长", cost: 5, atk: 3, shield: 5, structure: 2, series: "旧律", rarity: "紫", text: "亡命 3：半血时补 3 护盾，受击后攻击 +3。" },
+  "v6": { id: "v6", name: "法典本体", cost: 6, atk: 4, shield: 4, structure: 1, series: "旧律", rarity: "橙", text: "狂怒 2：半血时攻击 +2。" },
   "t_monk": { id: "t_monk", name: "修士舰", cost: 0, atk: 1, shield: 1, structure: 0, series: "圣辉", rarity: "白", text: "衍生", token: true },
   "t_wing": { id: "t_wing", name: "僚舰", cost: 0, atk: 1, shield: 1, structure: 1, series: "铁血", rarity: "白", text: "衍生", token: true },
   "t_mirage": { id: "t_mirage", name: "幻象分身", cost: 0, atk: 3, shield: 2, structure: 0, series: "灵能", rarity: "白", text: "衍生", token: true },
@@ -60,7 +84,7 @@ export const BATTLE_CARDS: Record<string, ShipCardDef> = {
 };
 
 /** 卡牌 id 全集（含衍生单位） */
-export const BATTLE_CARD_IDS: readonly string[] = ["h1", "h2", "h3", "h4", "h5", "h6", "h7", "i1", "i2", "i3", "i4", "i5", "i6", "i7", "p1", "p2", "p3", "p4", "p5", "p6", "p7", "g1", "g2", "g3", "g4", "g5", "g6", "c1", "c2", "c3", "c4", "c5", "c6", "r1", "r2", "r3", "r4", "r5", "r6", "r7", "r8", "r9", "r10", "t_monk", "t_wing", "t_mirage", "t_claw", "t_cannon", "t_wreck", "t_grunt"];
+export const BATTLE_CARD_IDS: readonly string[] = ["h1", "h2", "h3", "h4", "h5", "h6", "h7", "i1", "i2", "i3", "i4", "i5", "i6", "i7", "p1", "p2", "p3", "p4", "p5", "p6", "p7", "g1", "g2", "g3", "g4", "g5", "g6", "c1", "c2", "c3", "c4", "c5", "c6", "r1", "r2", "r3", "r4", "r5", "r6", "r7", "r8", "r9", "r10", "q1", "q2", "q3", "q4", "q5", "q6", "z1", "z2", "z3", "z4", "z5", "z6", "y1", "y2", "y3", "y4", "y5", "y6", "v1", "v2", "v3", "v4", "v5", "v6", "t_monk", "t_wing", "t_mirage", "t_claw", "t_cannon", "t_wreck", "t_grunt"];
 
 /** 衍生单位 id（召唤物：不进卡库、被击毁不计入永久损失） */
 export const BATTLE_TOKEN_IDS: readonly string[] = ["t_monk","t_wing","t_mirage","t_claw","t_cannon","t_wreck","t_grunt"];

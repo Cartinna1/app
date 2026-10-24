@@ -30,7 +30,12 @@ const DEMO = require(path.resolve(__dirname, '../../carddemo/engine.js'));
   console.log('=== 卡牌行为对齐（kw / fx / dynamicCost）===');
   const dIds = Object.keys(DEMO.CARDS);
   const pIds = Object.keys(PORT.CARDS || {});
-  if (dIds.length !== pIds.length) fails.push(`卡牌数量 ${dIds.length} vs ${pIds.length}`);
+  // A2 起 DEMO 与移植版**一一对应**，不再有超集例外（24 张敌方专属卡已进 DEMO 并重导出）。
+  // 严格相等：移植版不许有 DEMO 里没有的卡（多出来的必须当场红）。
+  const pOnly = pIds.filter((id) => !DEMO.CARDS[id]);
+  if (pOnly.length !== 0) fails.push(`移植版有 DEMO 里没有的卡：${pOnly.length} 张（${pOnly.slice(0, 8).join(',')}）`);
+  const dOnly = dIds.filter((id) => !(PORT.CARDS || {})[id]);
+  if (dOnly.length !== 0) fails.push(`移植版缺卡：${dOnly.length} 张（${dOnly.slice(0, 8).join(',')}）`);
   let kwDiff = 0, fxDiff = 0, dcDiff = 0, textDiff = 0;
   for (const id of dIds) {
     const a = DEMO.CARDS[id], b = (PORT.CARDS || {})[id];

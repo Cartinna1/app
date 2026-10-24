@@ -37,7 +37,8 @@
 import type { GameState, Mothership } from '@/types/game';
 import type { Colony } from '@/types/colony';
 import type { BattleRarity, ShipCardDef, ShipCardId } from '@/types/battle';
-import { BATTLE_CARDS, BATTLE_CARD_IDS } from '@/data/battle/cards';
+import { BATTLE_CARD_IDS } from '@/data/battle/cards';
+import { ALL_CARDS } from './cardIndex';
 import { getBuildingDef } from '@/data/colony/buildings';
 import { getTechById } from '@/data/colony/techs';
 import { RESOURCE_LABELS } from '@/data/colony/expeditions';
@@ -267,13 +268,24 @@ export interface ShipyardCardRow {
 
 /** 卡牌定义；未知 id 返回 undefined（调用方兜底，不抛） */
 function defOf(cardId: ShipCardId): ShipCardDef | undefined {
-  return BATTLE_CARDS[cardId];
+  return ALL_CARDS[cardId];
 }
 
-/** 玩家能不能造这张卡（海盗系 PvE 专属、衍生单位为 token —— 两者都不进卡库） */
+/** **敌方系列清单**（唯一真值）：这些卡玩家永远不可建造。
+ *  `海盗` = PvE 杂兵/掠夺队；`虫群`/`智械`/`灵潮`/`旧律` = 雇佣兵协会的四支敌对势力。
+ *  ⚠ 三处都读它（`isBuildableCard` / `canBuild` / `techUnlocks.buildable`），别在别处再写 `series === '海盗'`。
+ *  ⚠ 它们**唯一的合法来源** = 悬赏头目打赢后的掉落（写进 `cardLibrary`，见 `lib/turn/bossDrops.ts`）。 */
+export const ENEMY_SERIES: readonly string[] = ['海盗', '虫群', '智械', '灵潮', '旧律'];
+
+/** 这张卡是不是敌方专属（不可建造） */
+export function isEnemySeries(card: ShipCardDef): boolean {
+  return ENEMY_SERIES.includes(card.series);
+}
+
+/** 玩家能不能造这张卡（敌方系列 PvE 专属、衍生单位为 token —— 两者都不进卡库） */
 function isBuildableCard(card: ShipCardDef): boolean {
   if (card.token) return false;
-  if (card.series === '海盗') return false;
+  if (isEnemySeries(card)) return false;
   return true;
 }
 
@@ -478,10 +490,13 @@ export function lockGate(
   const techId = card ? requiredTechId(card) : null;
   if (!card) return { unlocked: false, reason: '数据里找不到这张卡', dockLevel: dockNeed, techId, staffed: false, staffReason: '' };
   if (card.token) return { unlocked: false, reason: '衍生单位不能建造', dockLevel: dockNeed, techId, staffed: false, staffReason: '' };
-  if (card.series === '海盗') {
+  if (isEnemySeries(card)) {
+    // 敌方战利品（悬赏头目掉落）是**唯一**能进卡库的敌方舰：它们躺着可以编队、可以出征，
+    // 但永远不能在建船坞里被复制一艘 —— 这句话就是玩家看到的原因。
+    const isLoot = card.series !== '海盗';
     return {
       unlocked: false,
-      reason: '海盗舰船是 PvE 专属，玩家不能建造',
+      reason: isLoot ? '该舰为敌方战利品，不可建造' : '海盗舰船是 PvE 专属，玩家不能建造',
       dockLevel: dockNeed,
       techId,
       staffed: false,

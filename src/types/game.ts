@@ -302,6 +302,67 @@ export interface EventLogEntry {
   detail: string;
 }
 
+// ==================== 银河雇佣兵协会（悬赏） ====================
+// ⚠ 这一段是**存档地基**（saveVersion 8 → 9）：字段先存在、暂时没有任何读写方
+//   （业务逻辑在后续步骤接入）。形状以 `docs/03-雇佣兵协会.md` §2.1 / §2.6 为准。
+
+/** 三类悬赏（与 UI 分组、报酬档位一一对应）。`BountyDef.kind` 用它；定义表在数据层，不进存档。 */
+export type BountyKind = 'pirate' | 'raid' | 'elite';
+
+/** 材料报酬：随机一份普通原料，或指定某种原料 */
+export interface BountyMaterialReward {
+  mode: 'random' | 'fixed';
+  /** `mode === 'fixed'` 时必填（gold_ore / quantum / silicon / carbon / oil / dark_matter） */
+  materialId?: string;
+  amount: number;
+}
+
+/** 一条悬赏的**静态定义**（数据层 `data/mercenary/bounties.ts`，**不进存档**）。
+ *  ⚠ 不含声望字段（完成不发声望、失败与超时也不扣）；不含任何星图字段（接单后当场开战）。 */
+export interface BountyDef {
+  /** 全表唯一（`bty_p1` 之类） */
+  id: string;
+  kind: BountyKind;
+  /** 标题，玩家看到的第一行 */
+  title: string;
+  /** 目标描述，2~3 句，带味道但不写数值 */
+  desc: string;
+  /** 难度 1~4：只用于展示与徽章配色，**不参与任何结算** */
+  difficulty: 1 | 2 | 3 | 4;
+  /** 战斗目标（`PirateBossId`）。清剿 = 'm05'，截击 = 'raid'，头目 = 'm01'~'m04' */
+  enemyId: PirateBossId;
+  /** 接取之后的完成期限（回合数），8~15 */
+  deadlineTurns: number;
+  rewardGold: number;
+  rewardStardust: number;
+  rewardMaterial: BountyMaterialReward | null;
+  /** 接取门槛：卡库至少这么多艘（可空；头目档用 20） */
+  requireCardCount?: number;
+}
+
+/** 一条悬赏的进行态（存档字段）。两个回合数都是**绝对回合**，不是剩余回合。 */
+export interface BountyProgress {
+  /** 指向静态定义的 id（`BountyDef.id`，定义表在数据层，不进存档） */
+  defId: string;
+  /** 接取时的游戏回合 */
+  acceptedTurn: number;
+  /** 到期回合（含）；剩余回合一律走 `lib/turn/expiry.getTurnsUntil`（下限 0） */
+  expiresTurn: number;
+}
+
+/** 悬赏板状态（存档字段）。旧档缺失时由 `lib/save.stateFromSave` 兜底成空板。 */
+export interface BountyState {
+  /** 本批悬赏的生成回合（= 0 / 10 / 20 …）；0 = 还没生成过第一批 */
+  batchTurn: number;
+  /** 本批可接的悬赏 id（数组顺序即展示顺序） */
+  offered: string[];
+  /** 进行中（"同时最多 3 条"由业务层保证，类型不表达上限） */
+  active: BountyProgress[];
+  /** 每个头目最近一次被打赢的回合（bossId → turn），用于 10 回合冷却；缺失 = 从未打赢过。
+   *  ⚠ 它是 `bounties` 的**子字段**，不是独立的存档字段（存档清单仍只有 bounties / lairClearedTurn 两项）。 */
+  bossCooldown?: Record<string, number>;
+}
+
 export interface GameState {
   phase: 'select' | 'playing' | 'ended';
   turn: number;
@@ -352,9 +413,22 @@ export interface GameState {
   // ===== 船坞与科技（V1.5 §8.2 造船建筑 / §8.3 生产规则 / §9 科技树）=====
   /** 造船队列（同时建造 2 艘 + 排队无限，§11 #5）。完工由 useTurn 每回合调
    *  lib/battle/shipyard.advanceQueue 推进，卡 id 写进 `cardLibrary`（"拥有什么"的唯一真值）。
-   *  ⚠ 存档字段（v4 引入；当前存档版本号见 lib/save.ts 的 SAVE_VERSION —— 掠夺两段窗口把它抬到 5），
-   *  加/改它照 AGENTS 第四节四处同步。 */
+   *  ⚠ 存档字段（v4 引入；当前存档版本号见 lib/save.ts 的 SAVE_VERSION —— v9 是雇佣兵协会的
+   *  `bounties` / `lairClearedTurn`），加/改它照 AGENTS 第四节四处同步。 */
   buildQueue: BuildQueueItem[];
+  // ===== 银河雇佣兵协会（saveVersion 9，与本段一起升级；本版只是字段地基）=====
+  /** 悬赏板状态（本批榜单 + 进行中 + 头目冷却）。
+   *  旧档兜底 = 空板 `{ batchTurn: 0, offered: [], active: [], bossCooldown: {} }`（lib/save.stateFromSave）。 */
+  bounties: BountyState;
+  /** 每个老巢**最近一次被清剿**的回合（bossId → turn），用于"同一老巢 10 回合冷却"。
+   *  ⚠ 与 `defeatedLairs` **语义不同、不许混用**：后者是"打赢过没有"的账本（只增不减，
+   *  决定掠夺队是否改名）；本字段是计时器（会被后一次清剿覆盖，只决定能不能再打）。
+   *  旧档兜底 = `{}`。 */
+  lairClearedTurn: Record<string, number>;
+  /** **运行期字段**：当前这场战斗是为哪条悬赏打的（null / 缺省 = 普通战斗或没有）。
+   *  ⚠ 与 `battle` 同生命周期，**不进存档**（`SaveData` 的 Pick 里没有它，读档一律 `null`）；
+   *  ⚠ 不许拿它当"有没有战斗"的判据 —— 那是 `battle`（`battleBoard(state)`）的事。 */
+  bountyBattleId?: string | null;
 }
 
 export type GameAction =
@@ -395,7 +469,14 @@ export type GameAction =
   // 校验走 lib/battle/shipyard.canEnqueue（内部即 canBuild），扣费走 lib/turn/resourceCost.payCost。
   // 完工由 useTurn 每回合调 advanceQueue 写进 cardLibrary，**没有 REMOVE_BUILT 这类 action**。
   | { type: 'ENQUEUE_BUILD'; cardId: ShipCardId }
-  | { type: 'CANCEL_BUILD'; index: number };
+  | { type: 'CANCEL_BUILD'; index: number }
+  // ===== 银河雇佣兵协会（阶段 1：接单 / 放弃 / 当场出击）=====
+  // ⚠ 三个 action 的守卫全部在 `lib/turn/bounties.ts`（`canAcceptBounty` / `canStartBountyBattle`），
+  //   reducer 与 UI 共用同一份判据；被拒时 reducer **原样返回 state + 一条事件记录**，不静默失败。
+  // ⚠ 完成 / 失败判定**不在** action 层，只在 `END_BATTLE` 的非掠夺分支（结算唯一入口）。
+  | { type: 'ACCEPT_BOUNTY'; defId: string }
+  | { type: 'ABANDON_BOUNTY'; defId: string }
+  | { type: 'START_BOUNTY_BATTLE'; defId: string; fleetId: string };
 
 /**
  * 存档数据形状：与 GameState 持久化字段保持一致（Pick 自 GameState，字段增减自动同步类型）。
@@ -414,4 +495,7 @@ export type SaveData = Pick<
   | 'cardLibrary' | 'fleets' | 'expedition' | 'raid' | 'defeatedLairs'
   // 船坞与科技：造船队列（v4 新增）
   | 'buildQueue'
+  // 银河雇佣兵协会（v9 新增）：悬赏板 + 老巢清剿计时器
+  // ⚠ `bountyBattleId`（运行期字段）**故意不进存档**（与 `battle` 同一条规则）
+  | 'bounties' | 'lairClearedTurn'
 > & { saveVersion: number };

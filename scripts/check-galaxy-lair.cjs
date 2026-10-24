@@ -123,6 +123,52 @@ const J = (v) => JSON.stringify(v);
     check(types.every((t) => S.TYPE_LABEL[t] && S.TYPE_LABEL[t].length > 0), '四类节点都有类型标签（图例用）');
   }
 
+  // ---------- ⑤ 银河雇佣兵协会（guild 类型）----------
+  console.log('\n[5] 银河雇佣兵协会（guild）：类型 / 配色 / 迷雾 / 立绘 / 显示名');
+  {
+    const NI = await import('@/lib/galaxy/nodeImage');
+    const G = await import('@/lib/galaxy/graph');
+    const B = await import('@/lib/turn/bounties');
+    const guilds = ALL.filter((n) => n.type === 'guild');
+    check(guilds.length === 1, 'guild（雇佣兵协会）节点恰好 1 个', String(guilds.length));
+    const guild = guilds[0];
+    check(!!guild && guild.pirateLair === undefined, 'guild 节点没有 pirateLair 标记（两者互斥）');
+    // validateGalaxy 自洽（含新增的两条 guild 断言）
+    const v = G.validateGalaxy();
+    check(v.ok, 'validateGalaxy() 通过（含"guild 恰好 1 个 / 不带 pirateLair"两条新断言）', J(v.errors));
+
+    // 配色 / 半径 / 标签（已探明）
+    const gs = S.nodeStyle(guild, true);
+    check(gs.fill === S.NODE_FILL.guild && gs.stroke === S.NODE_STROKE.guild && gs.r === S.NODE_RADIUS.guild,
+      `已探明协会 = ${S.NODE_FILL.guild} / ${S.NODE_STROKE.guild} / r=${S.NODE_RADIUS.guild}`, J(gs));
+    check(S.NODE_RADIUS.guild === 16 && S.NODE_FILL.guild === '#0f766e' && S.NODE_STROKE.guild === '#5eead4',
+      '协会的半径/填充/描边就是文档 §1.1 的 16 / #0f766e / #5eead4', J({ r: S.NODE_RADIUS.guild }));
+    check(S.nodeTypeLabel(guild) === '雇佣兵协会' && S.TYPE_LABEL.guild === S.TYPE_LABEL.guild,
+      '协会的类型标签是「雇佣兵协会」', J(S.nodeTypeLabel(guild)));
+    // guild 不被 empty / lair 分支吞掉
+    check(gs.fill !== S.NODE_FILL.empty && gs.fill !== S.LAIR_FILL, '协会的配色既不是空星系的灰、也不是老巢的红', J(gs.fill));
+
+    // 迷雾：未探明 → 不出图、不显名；已探明 → 立绘 + 真名
+    check(K.isNodeDiscovered(virgin, guild.id) === false, 'virgin 母舰下协会未探明');
+    check(NI.getNodeLandscapeImage(guild, virgin) === null, '**未探明时不出立绘**（迷雾守卫在 guild 分支之前）',
+      J(NI.getNodeLandscapeImage(guild, virgin)));
+    check(NI.getNodeLandscapeImage(guild, allVisited) === '/battle/guild/guild-hall.webp',
+      '已探明时立绘 = /battle/guild/guild-hall.webp', J(NI.getNodeLandscapeImage(guild, allVisited)));
+    check(NI.NODE_IMAGE_DIR.guild === '/battle/guild', 'NODE_IMAGE_DIR.guild = /battle/guild', J(NI.NODE_IMAGE_DIR.guild));
+    check(K.getNodeDisplayName(virgin, guild.id) === '未探测星系', '未探明时显示名仍是「未探测星系」',
+      J(K.getNodeDisplayName(virgin, guild.id)));
+    check(K.getNodeDisplayName(allVisited, guild.id) === '银河雇佣兵协会', '已探明时显示名 = 银河雇佣兵协会',
+      J(K.getNodeDisplayName(allVisited, guild.id)));
+
+    // 接单守卫按**类型**判定（不依赖节点 id）
+    check(B.isGuildNode(guild.id) === true, 'isGuildNode(guild 节点) → true', J(guild.id));
+    check(B.isGuildNode(plainEmpty[0].id) === false, 'isGuildNode(普通空星系) → false', J(plainEmpty[0].id));
+    const atGuild = { ...ship, galaxy: { ...ship.galaxy, currentNodeId: guild.id } };
+    const atEmpty = { ...ship, galaxy: { ...ship.galaxy, currentNodeId: plainEmpty[0].id } };
+    check(B.isAtGuildNode(atGuild) === true && B.isAtGuildNode(atEmpty) === false,
+      'isAtGuildNode：停在协会 true / 停在空星系 false');
+  }
+
   console.log('\n=== 星图老巢配色 / 迷雾复核 ' + (fails.length ? '未通过 ✗' : '全部通过 ✓') + ' ===');
   if (fails.length) { console.log('失败项：\n - ' + fails.join('\n - ')); process.exitCode = 1; }
 })();

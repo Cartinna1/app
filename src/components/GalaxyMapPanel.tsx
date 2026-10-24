@@ -60,6 +60,8 @@ const LEGEND_ITEMS: ReadonlyArray<{ key: string; label: string; fill: string; st
   { key: 'colony', label: TYPE_LABEL.colony, fill: NODE_FILL.colony, stroke: NODE_STROKE.colony },
   { key: 'ruin', label: TYPE_LABEL.ruin, fill: NODE_FILL.ruin, stroke: NODE_STROKE.ruin },
   { key: 'empty', label: TYPE_LABEL.empty, fill: NODE_FILL.empty, stroke: NODE_STROKE.empty },
+  // 协会是**公开功能节点**（不像老巢要藏），所以图例里明确列一行
+  { key: 'guild', label: TYPE_LABEL.guild, fill: NODE_FILL.guild, stroke: NODE_STROKE.guild },
   { key: 'lair', label: LAIR_LABEL, fill: LAIR_FILL, stroke: LAIR_STROKE },
 ];
 
@@ -486,8 +488,16 @@ function GalaxyMapPanel({ ship, factionReputation, hasPendingEvent, onTravelToNo
           </p>
         )}
 
+        {/* 银河雇佣兵协会（`type === 'guild'`）：**公开功能节点**，不是藏起来的老巢。
+            只说是什么 + 去哪里接单；接单/出击的操作入口按页签职责边界留在「战斗」页签，星图里不加按钮。 */}
+        {node.type === 'guild' && (
+          <p className="text-xs text-slate-400">
+            银河雇佣兵协会在这里设了一处分会所，悬赏榜单挂在正厅。接单与出击都在「战斗」页签的「雇佣兵」里。
+          </p>
+        )}
+
         {/* 真空星系（`type === 'empty'`）：**只有真空星系落到这里** —— 海盗老巢已自成 `pirateLair` 类型，
-            不再进这个分支（老巢的类型标签、配图与跃迁区都在上面按各自类型渲染）。
+            协会已自成 `guild` 类型，两者都不再进这个分支（各自的类型标签、配图与跃迁区按各自类型渲染）。
             文案必须是游戏内口吻，不许出现"后续更新"这种开发注记（玩家界面不写开发计划）。 */}
         {node.type === 'empty' && (
           <p className="text-xs text-slate-400">扫描未发现可交互目标，只有沉寂的星尘。</p>
