@@ -360,7 +360,11 @@ export interface BountyState {
   active: BountyProgress[];
   /** 每个头目最近一次被打赢的回合（bossId → turn），用于 10 回合冷却；缺失 = 从未打赢过。
    *  ⚠ 它是 `bounties` 的**子字段**，不是独立的存档字段（存档清单仍只有 bounties / lairClearedTurn 两项）。 */
-  bossCooldown?: Record<string, number>;
+  /** 全局休息的结束回合（0 = 不在休息）：**打赢任意一条悬赏**后 = 当前回合 + BOUNTY_REST_TURNS（6）。
+   *  ⚠ 旧的每头目冷却 `bossCooldown` 已整体退役（两个计时器并存必然打架，用户 2026-10 裁定）。
+   *    旧 v9 档里残留的 `bossCooldown` 在 stateFromSave 里**被忽略**；缺本字段时兜底 0；
+   *    **存档版本号仍是 9**（v9 内的形状调整，不加迁移分支）。 */
+  restUntilTurn: number;
 }
 
 export interface GameState {
@@ -418,7 +422,7 @@ export interface GameState {
   buildQueue: BuildQueueItem[];
   // ===== 银河雇佣兵协会（saveVersion 9，与本段一起升级；本版只是字段地基）=====
   /** 悬赏板状态（本批榜单 + 进行中 + 头目冷却）。
-   *  旧档兜底 = 空板 `{ batchTurn: 0, offered: [], active: [], bossCooldown: {} }`（lib/save.stateFromSave）。 */
+   *  旧档兜底 = 空板 `{ batchTurn: 0, offered: [], active: [], restUntilTurn: 0 }`（lib/save.stateFromSave）。 */
   bounties: BountyState;
   /** 每个老巢**最近一次被清剿**的回合（bossId → turn），用于"同一老巢 10 回合冷却"。
    *  ⚠ 与 `defeatedLairs` **语义不同、不许混用**：后者是"打赢过没有"的账本（只增不减，

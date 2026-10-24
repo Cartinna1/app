@@ -116,28 +116,82 @@ const eq = (a, b) => J(a) === J(b);
     'ensureBountyBatch 刷新时给出新对象（batchTurn/offered 正确）', J(ensured));
   check(kept.bounties.batchTurn === 20, 'ensureBountyBatch 没 mutate 传入的 state');
 
-  // ---------- ⑤ 头目冷却 ----------
-  console.log('\n[5] 头目冷却（BOSS_COOLDOWN_TURNS = ' + B.BOSS_COOLDOWN_TURNS + '）');
-  const cdState = mkState(30, { batchTurn: 0, offered: [], active: [], bossCooldown: { m01: 25 } });
-  const cdBatch = B.buildBountyBatch(cdState);
-  check(cdBatch.offered.length === 3, '只冷却一支时仍有 3 条', J(cdBatch.offered));
-  check(!cdBatch.offered.includes('bty_e1'), '冷却中的 m01（bty_e1）不在候选池里', J(cdBatch.offered));
-  check(cdBatch.notice === '', '正常批次没有提示文案', J(cdBatch.notice));
-  check(B.bossCooldownRemaining('m01', { m01: 25 }, 30) === 5, '冷却剩余 = 10 - (30-25) = 5');
-  check(B.bossCooldownRemaining('m01', { m01: 20 }, 30) === 0, '冷却到期（10 回合整）→ 0，可再出场');
-  check(B.bossCooldownRemaining('m02', { m01: 25 }, 30) === 0, '没有记录的头目 → 0（从未打赢过）');
-  // 四支全冷却 → 只剩 2 条 + 兜底提示
-  const allCd = mkState(30, {
-    batchTurn: 0, offered: [], active: [],
-    bossCooldown: { m01: 25, m02: 25, m03: 25, m04: 25 },
+  // ---------- ⑤ 全局休息（每头目冷却已退役）----------
+  console.log('\n[5] 全局休息（BOUNTY_REST_TURNS = ' + B.BOUNTY_REST_TURNS + '）');
+  check(B.BOUNTY_REST_TURNS === 6, '全局休息 6 回合（唯一常量）', String(B.BOUNTY_REST_TURNS));
+  // 打赢那一帧写 restUntilTurn = turn + 6；之后 5 个回合依次 5/4/3/2/1，第 6 回合归 0
+  const restBase = mkState(20, { batchTurn: 20, offered: ['bty_p1', 'bty_r1', 'bty_e1'], active: [], restUntilTurn: 26 });
+  const winFrame = B.bountyRestRemaining(restBase);
+  const seq = [21, 22, 23, 24, 25].map((t) => B.bountyRestRemaining({ ...restBase, turn: t }));
+  const afterSix = B.bountyRestRemaining({ ...restBase, turn: 26 });
+  check(winFrame === 6 && eq(seq, [5, 4, 3, 2, 1]) && afterSix === 0,
+    '打赢那一帧剩 6，之后依次 5/4/3/2/1，第 6 回合归 0', J([winFrame].concat(seq, [afterSix])));
+  check(B.bountyRestRemaining(mkState(30, { batchTurn: 0, offered: [], active: [], restUntilTurn: 0 })) === 0,
+    '没有休息记录（旧档 / 从未打赢）→ 0');
+  // 休息期两个入口都拒，且 reason 逐字（在 N = 1 那一帧断言）
+  // ⚠ [5] 早于 [9]，所以这里自带最小夹具（不停靠协会节点会被更靠前的守卫拦掉）
+  const { createMotherships: mkShips } = await import('@/data/gameData');
+  const { gameReducer: RED } = await import('@/hooks/gameReducer');
+  const { GALAXY_NODES: GNODES } = await import('@/data/galaxy/nodes');
+  const gNode = GNODES.find((n) => n.type === 'guild');
+  const restShip = () => {
+    const base = mkShips()[0];
+    return { ...base, gold: 1000, stardust: 0, food: 10, materials: {}, galaxy: { ...base.galaxy, currentNodeId: gNode ? gNode.id : '' } };
+  };
+  const restGuild = (over) => ({
+    ...createInitialGameState(),
+    turn: 25,
+    ships: [restShip()],
+    cardLibrary: Array.from({ length: 20 }, () => 'h1'),
+    bounties: { batchTurn: 20, offered: ['bty_p1', 'bty_r1', 'bty_e1'], active: [], restUntilTurn: 26 },
+    ...(over || {}),
   });
-  const allBatch = B.buildBountyBatch(allCd);
-  check(allBatch.offered.length === 2, '四支全冷却 → 本批只剩 2 条', J(allBatch.offered));
-  check(!allBatch.offered.some((id) => B.getBountyDef(id).kind === 'elite'), '这 2 条里没有头目',
-    J(allBatch.offered));
-  check(allBatch.notice === B.BOUNTY_ALL_COOLING_NOTICE,
-    '兜底提示文案 = 「' + B.BOUNTY_ALL_COOLING_NOTICE + '」', J(allBatch.notice));
-  check(eq(kindsOf(allBatch).slice().sort(), ['pirate', 'raid']), '剩下的 2 条正好是清剿 + 截击', J(kindsOf(allBatch)));
+  const lastRestFrame = restGuild({ bounties: { batchTurn: 20, offered: ['bty_p1', 'bty_r1', 'bty_e1'], active: [{ defId: 'bty_e1', acceptedTurn: 20, expiresTurn: 28 }], restUntilTurn: 26 } });
+  const acceptBlocked = B.canAcceptBounty(lastRestFrame, 'bty_p1');
+  const fleetFrame = { ...lastRestFrame, fleets: [{ id: 'f9', name: 'x', shipIds: ['h1'], defending: false }] };
+  const startBlocked = B.canStartBountyBattle(fleetFrame, 'bty_e1', 'f9');
+  check(!acceptBlocked.ok && acceptBlocked.reason === '悬赏整理中，还差 1 回合',
+    'N=1 那一帧：canAcceptBounty 被拒，reason 逐字「悬赏整理中，还差 1 回合」', J(acceptBlocked));
+  check(!startBlocked.ok && startBlocked.reason === '悬赏整理中，还差 1 回合',
+    'N=1 那一帧：canStartBountyBattle 用**同一句** reason 被拒', J(startBlocked));
+  check(B.canAcceptBounty({ ...lastRestFrame, turn: 26 }, 'bty_p1').ok, '第 6 回合结束（turn+6）→ 可以正常接单');
+  // 批次候选不再按头目过滤（4 支都在，仍是 1+1+1）；休息只拦"接/打"
+  const noFilter = B.buildBountyBatch(mkState(30, { batchTurn: 0, offered: [], active: [], restUntilTurn: 25 }));
+  check(noFilter.offered.length === 3 && eq(kindsOf(noFilter).slice().sort(), ['elite', 'pirate', 'raid']),
+    '休息期只拦"接/打"，榜单照旧发 3 条（候选不再按头目过滤）', J(noFilter.offered));
+
+  // 失败 / 放弃 / 过期三条都**不写** restUntilTurn；只有打赢才写
+  {
+    const start0 = restGuild({
+      fleets: [{ id: 'fl', name: 'x', shipIds: ['h1'], defending: false }],
+      // 这一组要真的接单+开战，所以先不在休息期（默认夹具是 restUntilTurn 26）
+      bounties: { batchTurn: 20, offered: ['bty_p1', 'bty_r1', 'bty_e1'], active: [], restUntilTurn: 0 },
+    });
+    const accepted = RED(start0, { type: 'ACCEPT_BOUNTY', defId: 'bty_p1' });
+    const started = RED(accepted, { type: 'START_BOUNTY_BATTLE', defId: 'bty_p1', fleetId: 'fl' });
+    const lostFrame = { ...started, battle: { ...started.battle, winner: 'boss', over: true, reason: 'test' } };
+    const afterLose = RED(lostFrame, { type: 'END_BATTLE' });
+    check(afterLose.bounties.restUntilTurn === 0, '**打输**不写 restUntilTurn（否则连输会被锁）', J(afterLose.bounties.restUntilTurn));
+    const abandoned = RED(accepted, { type: 'ABANDON_BOUNTY', defId: 'bty_p1' });
+    check(abandoned.bounties.restUntilTurn === 0, '**放弃**不写 restUntilTurn', J(abandoned.bounties.restUntilTurn));
+    const expired = B.expireBounties({ ...accepted, turn: 40 });
+    check(expired.bounties.restUntilTurn === 0, '**过期**不写 restUntilTurn', J(expired.bounties.restUntilTurn));
+    const wonFrame = { ...started, battle: { ...started.battle, winner: 'player', over: true, reason: 'test' } };
+    const afterWinRest = RED(wonFrame, { type: 'END_BATTLE' });
+    check(afterWinRest.bounties.restUntilTurn === 31,
+      '**打赢**才写 restUntilTurn = turn(25) + 6', J(afterWinRest.bounties.restUntilTurn));
+  }
+  // 全库自检：`bossCooldown` 只许出现在注释里（属性写法 `bossCooldown:` 必须归零）
+  {
+    const fs = require('fs');
+    const path = require('path');
+    const files = [
+      'src/types/game.ts', 'src/lib/turn/bounties.ts', 'src/hooks/gameReducer.ts',
+      'src/lib/save.ts', 'src/components/battle/MercenaryBoard.tsx',
+    ];
+    const bad = files.filter((rel) => fs.readFileSync(path.resolve(__dirname, '..', rel), 'utf8').includes('bossCooldown:'));
+    check(bad.length === 0, '全库不再有 `bossCooldown:` 属性写法（只在注释里出现）', J(bad));
+  }
 
   // ---------- ⑥ 期限 ----------
   console.log('\n[6] 期限（expireBounties / isBountyExpired）');
@@ -250,11 +304,11 @@ const eq = (a, b) => J(a) === J(b);
   check(!fullCheck.ok && fullCheck.reason === '同时最多接 3 条悬赏，先完成一条，或者等一条过期',
     '已接满 3 条 → 被拒', J(fullCheck));
 
-  // ⑤ 头目冷却
-  const cdAccept = mkGuild({ bounties: { bossCooldown: { m01: 15 } } });
-  const cdCheck = B.canAcceptBounty(cdAccept, 'bty_e1');
-  check(!cdCheck.ok && cdCheck.reason === '该头目正在冷却，剩 5 回合',
-    '头目冷却中 → 被拒（原因带剩余回合数）', J(cdCheck));
+  // ⑤ 全局休息（每头目冷却已退役：打赢任意一条 → 6 回合不能接）
+  const restAccept = mkGuild({ bounties: { restUntilTurn: 26 } });
+  const restCheck = B.canAcceptBounty(restAccept, 'bty_p1');
+  check(!restCheck.ok && restCheck.reason === '悬赏整理中，还差 6 回合',
+    '休息期（turn 20 / restUntil 26）→ 被拒，原因带剩余回合数', J(restCheck));
 
   // ⑥ 战斗中
   const inBattle = mkGuild({ rest: { battle: { over: false } } });
@@ -344,10 +398,10 @@ const eq = (a, b) => J(a) === J(b);
     J({ before: goldBefore, after: afterFamine.ships[0].gold }));
   // 头目档：冷却写入 + 事件里提到可再接
   const eliteWin = END(winFrom(eliteStarted, 'player'));
-  check(eliteWin.bounties.bossCooldown && eliteWin.bounties.bossCooldown.m01 === 20,
-    '头目档打赢 → bossCooldown[m01] = 当前回合（20）', J(eliteWin.bounties.bossCooldown));
-  check(!!lastLog(eliteWin) && lastLog(eliteWin).detail.includes('回合后可再接'),
-    '头目档的事件文案写了「N 回合后可再接」', J(lastLog(eliteWin) && lastLog(eliteWin).detail));
+  check(eliteWin.bounties.restUntilTurn === 26,
+    '头目档打赢 → restUntilTurn = 当前回合(20) + 6（全局休息）', J(eliteWin.bounties.restUntilTurn));
+  check(!!lastLog(eliteWin) && lastLog(eliteWin).detail.includes('悬赏整理中，6 回合内不能接新委托'),
+    '头目档的事件文案写了「悬赏整理中，6 回合内不能接新委托」', J(lastLog(eliteWin) && lastLog(eliteWin).detail));
 
   // ---------- ⑬ 失败 / 不重复发奖 ----------
   console.log('\n[13] 失败作废 + 结算不重复发奖');
@@ -551,6 +605,7 @@ const eq = (a, b) => J(a) === J(b);
   console.error('脚本异常：', e);
   process.exitCode = 1;
 });
+
 
 
 

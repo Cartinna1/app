@@ -195,12 +195,13 @@ export function stateFromSave(d: Record<string, any>): GameState {
     // v4 新增字段的**唯一兜底点**（v3 及更早的存档没有这个字段，一律在这里补默认值）。
     // ⚠ 这个默认值必须与 gameReducer.createInitialGameState 的初值**逐一一致**（都是 []）。
     buildQueue: d.buildQueue || [],
-    // ===== 银河雇佣兵协会（v9 新增，纯字段地基）=====
+    // ===== 银河雇佣兵协会（v9 新增；`bossCooldown` 已退役 → `restUntilTurn`，属 v9 内的形状调整）=====
+    // ⚠ 旧 v9 档里残留的 `bossCooldown` 键**被忽略**（不迁移、不报错）；缺 `restUntilTurn` 时兜底 0。
     // 字段级兜底在此**唯一一处**（老档没有这两项）。字面量四个键都给全：
     // 空批次（batchTurn 0 = 还没生成过）+ 空榜单 + 空进行中 + 空冷却表。
     // ⚠ 兜底值必须与 gameReducer.createInitialGameState 的初值**逐一一致**，但**不能共享同一个对象**
     //   （那里每次调用都新建字面量，这里也新建，避免"读档后的空板"与"新开局的空板"是同一引用）。
-    bounties: d.bounties || { batchTurn: 0, offered: [], active: [], bossCooldown: {} },
+    bounties: d.bounties || { batchTurn: 0, offered: [], active: [], restUntilTurn: 0 },
     // 老巢清剿计时器：缺失 = 一个老巢都没被清剿过（= 没有冷却，全部可打）。
     lairClearedTurn: d.lairClearedTurn || {},
     // **运行期字段**（不进存档）：与 `battle: null` 同一条规则 —— 读档一律没有"正在打的悬赏战"。

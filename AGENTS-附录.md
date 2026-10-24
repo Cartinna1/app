@@ -69,7 +69,12 @@
 
 ### 10.3 本轮登记的单点魔法数（改前先出前后对比表）
 
-政策时长 3~5 回合（`factionTurn`）、合同档位表 `[16, 26, 30000, 40000]`（`contracts.ts`）、声望阈值表（`factions.REPUTATION_TIERS`）、`RECRUIT_BASE_COST=2000`、`BLACKOUT_GUARD_TURNS=10`、`PRODUCT_SHELF_LIFE=3`、市场区间 500~800 / 500~700、股票费率 3%（万众一心 1.5%、黄金集团 0）、`EXPEDITION_UNLOCK_COUNT=12`、`GOLD_LOG_LIMIT=200` / `EVENT_LOG_LIMIT=100`、考古成功率常数（第七节）。
+政策时长 3~5 回合（`factionTurn`）、合同档位表 `[16, 26, 30000, 40000]`（`contracts.ts`）、声望阈值表（`factions.REPUTATION_TIERS`）、`RECRUIT_BASE_COST=2000`、`BLACKOUT_GUARD_TURNS=10`、`PRODUCT_SHELF_LIFE=3`、市场区间 500~800 / 500~700、股票费率 3%（万众一心 1.5%、黄金集团 0）、`EXPEDITION_UNLOCK_COUNT=12`、`GOLD_LOG_LIMIT=200` / `EVENT_LOG_LIMIT=100`、考古成功率常数（第七节）、`BOUNTY_REST_TURNS=6`（雇佣兵协会全局休息，`lib/turn/bounties.ts`；**取代**已退役的「每头目 10 回合冷却」）、老巢清剿冷却 10 回合（`lib/battle/lairCooldown.ts`）、敌方卡掉落权重 白 100 / 蓝 45 / 紫 15 / 橙 6（`lib/turn/bossDrops.ts`）。
+
+**两条待产品决定 / 约定（2026-10 记）**
+
+- **高影响事件是否置顶或高亮**（殖民地被掠夺、悬赏完成这类）：现状**只在事件记录里**（面板只显示最近 30 条，可能被同回合其它日志挤出视野）。可选方案：① `eventLog` 加 `pinned` 标记并单独置顶一行（要动存档形状）；② 结算当回合在战斗页签顶部给一次性横幅（`eventLog[0].turn === state.turn` 判断，**不新增存档字段**，推荐）；③ 只给这两类事件加粗配色。**都没做，等用户定**。
+- **`_*.md` 是"一次性交接物"**：为把改动落到工作区外（`carddemo/`、`docs/`）而临时生成的补丁文档，**落地即删、不入库**；对应的可复现脚本（`scripts/apply-a3-demo.py` / `scripts/apply-bounty-rest.py`）**留在 `scripts/`**，它们是"补丁怎么落下去"的唯一记录，幂等且重复跑无害。
 
 **掠夺循环（P7，全部在 `lib/battle/raid.ts`）**：触发概率 `RAID_CHANCE=0.08`、预警窗口 `RAID_WARNING_TURNS=5`（§10.2 原文「5 回合后掠夺成功」）、**抵达后待战窗口 `RAID_ARRIVED_TURNS=5`（2026-08 用户口径；与前者语义不同、故意分成两个常量）**、免疫 `RAID_IMMUNE_TURNS=20`、触发门槛 `RAID_MIN_SHIPS=10`（卡库战舰数）、1-2 支的 `RAID_SQUAD_SPLIT=0.5`、防守合并池上限 `RAID_POOL_CAP = BATTLE_TUNING.fleetSize(30)`（§10.2 未给上限，取 §10.1 编制上限锚点）。
 **掠夺队三条裁定（用户 2026-08，优先于 §10.2 原文）**：

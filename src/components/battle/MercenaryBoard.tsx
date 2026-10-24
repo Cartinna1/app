@@ -2,7 +2,7 @@
 // 只做渲染：所有判定与文案都来自 `lib/turn/bounties`（与 reducer 守卫**同一份判据**）：
 //   · `buildBountyBatch(state)`  → 本批榜单 + `notice`（四支全冷却那句）
 //   · `canAcceptBounty` / `canStartBountyBattle` → 按钮可用性 + **不可用原因**（UI 不自己判一遍）
-//   · `bountyRewardText` / `bountyExpiryText` / `bossCooldownRemaining` → 三处文案
+//   · `bountyRewardText` / `bountyExpiryText` / `bountyRestRemaining` → 三处文案
 // ⚠ 回调全部由 GameScreen 从 `useStableActions` 传下来（本组件不接 dispatch、不写 inline 箭头进 memo 子件）。
 // ⚠ 结算不在本组件：打赢/打输的结果只出现在**事件记录**里（与掠夺战同一条口径）。
 
@@ -10,12 +10,11 @@ import { memo, useState } from 'react';
 import type { BattleFleet } from '@/types/battle';
 import type { GameState } from '@/types/game';
 import {
-  BOSS_COOLDOWN_TURNS,
   BOUNTY_MAX_ACTIVE,
   bountyEnemyId,
   bountyExpiryText,
   bountyRewardText,
-  bossCooldownRemaining,
+  bountyRestRemaining,
   buildBountyBatch,
   canAcceptBounty,
   canStartBountyBattle,
@@ -66,8 +65,14 @@ function MercenaryBoardBase({ state, fleets, onAccept, onAbandon, onStart }: Mer
     <div>
       <p className="mb-2 text-[11px] leading-relaxed text-slate-500">
         接单后<b className="text-slate-300">当场出击</b>，不跃迁、不计耗时。同时最多 {BOUNTY_MAX_ACTIVE} 条
-        （当前 {totalActive} 条）· 榜单每 10 回合换一批 · 打赢后头目 {BOSS_COOLDOWN_TURNS} 回合冷却。
+        （当前 {totalActive} 条）· 榜单每 10 回合换一批 · **打赢任意一条后统一休息 6 回合**。
       </p>
+
+      {bountyRestRemaining(state) > 0 ? (
+        <p className="mb-2 rounded-[8px] border border-rose-700/60 bg-rose-950/40 px-2.5 py-2 text-[12px] font-bold leading-relaxed text-rose-200">
+          悬赏整理中，还差 {bountyRestRemaining(state)} 回合
+        </p>
+      ) : null}
 
       {batch.notice ? (
         <p className="mb-2 rounded-[8px] border border-amber-700/60 bg-amber-950/30 px-2.5 py-2 text-[11.5px] leading-relaxed text-amber-300">
@@ -106,7 +111,6 @@ function MercenaryBoardBase({ state, fleets, onAccept, onAbandon, onStart }: Mer
         const progress = actives.find((p) => p.defId === defId) ?? null;
         const acceptCheck = canAcceptBounty(state, defId);
         const startCheck = progress ? canStartBountyBattle(state, defId, effectiveFleetId) : null;
-        const cooldown = bossCooldownRemaining(def.enemyId, state.bounties.bossCooldown, state.turn);
         return (
           <div key={defId} className={`${cardBase} ${progress ? 'border-emerald-800/60' : ''}`}>
             <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
@@ -182,11 +186,7 @@ function MercenaryBoardBase({ state, fleets, onAccept, onAbandon, onStart }: Mer
             )}
 
             {/* 头目档冷却提示（只在冷却中显示；冷却不影响已接的那条，只影响再接） */}
-            {cooldown > 0 ? (
-              <p className="mt-1 text-[10.5px] leading-relaxed text-slate-500">
-                该头目正在冷却，剩 {cooldown} 回合
-              </p>
-            ) : null}
+            {null}
           </div>
         );
       })}

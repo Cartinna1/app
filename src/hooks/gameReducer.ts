@@ -40,7 +40,7 @@ import { lairDisplayName, readyExpedition, tickExpedition } from '@/lib/battle/e
 import { canAddShip, canDeleteFleet, canRemoveShip, canRenameFleet, canToggleDefending, isFleetOnExpedition } from '@/lib/battle/hangar';
 import { buildRefund, buildCost, canCancelBuild, canEnqueue, enqueueBuild } from '@/lib/battle/shipyard';
 import {
-  BOSS_COOLDOWN_TURNS,
+  BOUNTY_REST_TURNS,
   bountyEnemyId,
   canAcceptBounty,
   canStartBountyBattle,
@@ -48,7 +48,7 @@ import {
   grantBountyRewards,
   newBountyProgress,
   withActiveBounty,
-  withBossCooldown,
+  withBountyRest,
   withoutActiveBounty,
 } from '@/lib/turn/bounties';
 import { createBountyBattle } from '@/lib/battle/bountyBattle';
@@ -109,7 +109,7 @@ export function createInitialGameState(): GameState {
     // 初值与 lib/save.ts 的 stateFromSave 兜底**逐一一致**，但**这里必须是新建的字面量**：
     //   空批次（batchTurn 0 = 还没生成过）+ 空榜单 + 空进行中 + 空冷却表。
     //   不共享对象引用，避免"新开局的空板"与"读档后的空板"是同一个对象（改一处两处都变）。
-    bounties: { batchTurn: 0, offered: [], active: [], bossCooldown: {} },
+    bounties: { batchTurn: 0, offered: [], active: [], restUntilTurn: 0 },
     // 老巢清剿计时器：新开局一个老巢都没被清剿过（= 没有冷却，全部可打）。
     // ⚠ 与 `defeatedLairs` 语义不同：那个是"打赢过没有"的账本，这个是"最近一次回合"的计时器。
     lairClearedTurn: {},
@@ -517,9 +517,9 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
           : [];
         const nextLibrary = mergeDrops(base.cardLibrary, drops);
         // 头目档打赢 → 写冷却（键 = **该条的敌方 id**，不是占位常量 'raid'）
-        const bounties = won && def.kind === 'elite'
-          ? withBossCooldown(bountiesAfter, def.enemyId, state.turn)
-          : bountiesAfter;
+        // 打赢**任意档**悬赏 → 全局休息 6 回合（用户 2026-10 裁定：每头目冷却退役）；
+        // 失败 / 放弃 / 过期**都不写**（否则连输三次会被锁 18 回合）。
+        const bounties = won ? withBountyRest(bountiesAfter, state.turn) : bountiesAfter;
         const dropText = bossDropText(drops);
         // 掉落按同型合并成 qty（面板逐行显示「获得战舰：噬星幼虫 ×1」）
         const dropCards = [...new Set(drops)].map((id) => ({
@@ -529,7 +529,7 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
         }));
         const detail = won
           ? `${def.title}：${rewarded ? rewarded.text : '报酬为 0'}`
-            + (def.kind === 'elite' ? `；该头目 ${BOSS_COOLDOWN_TURNS} 回合后可再接` : '')
+            + (won ? `；悬赏整理中，${BOUNTY_REST_TURNS} 回合内不能接新委托` : '')
             + (dropText ? `；${dropText}` : '')
           : `${def.title}：舰队被击退，委托作废（不发奖、不扣声望）`;
         return {

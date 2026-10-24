@@ -50,7 +50,7 @@ const eq = (a, b) => J(a) === J(b);
   const DISPATCH = (st, action) => gameReducer(st, action);
   const EMPTY_RAID = { inTurns: null, arrivedTurns: 0, immuneTurns: 0, raiders: 0, arrived: false };
   /** 空悬赏板（v9 字段的初值/兜底值；四个键都给全） */
-  const EMPTY_BOUNTIES = { batchTurn: 0, offered: [], active: [], bossCooldown: {} };
+  const EMPTY_BOUNTIES = { batchTurn: 0, offered: [], active: [], restUntilTurn: 0 };
   /** 把一场战斗用 autoTurn 打到结束（走 reducer 的 BATTLE_ACTION，全程 clone） */
   const fight = (st) => {
     let s = st, n = 0;
@@ -129,7 +129,7 @@ const eq = (a, b) => J(a) === J(b);
       batchTurn: 20,
       offered: ['bty_p1', 'bty_r2', 'bty_e1'],
       active: [{ defId: 'bty_e1', acceptedTurn: 21, expiresTurn: 29 }],
-      bossCooldown: { m01: 18 },
+      restUntilTurn: 18,
     },
     lairClearedTurn: { b1: 12, b4: 19 },
   };

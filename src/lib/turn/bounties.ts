@@ -7,7 +7,7 @@
 //
 // 三个计时概念（别混）：
 //   · BOUNTY_REFRESH_TURNS —— **整张榜单**几天换一次（批次刷新）；
-//   · BOSS_COOLDOWN_TURNS  —— **单个头目**被打赢后几天不再出现（`bounties.bossCooldown`）；
+//   · BOUNTY_REST_TURNS    —— **全局休息**：打赢任意一条悬赏后 6 回合不能接、不能打（`bounties.restUntilTurn`）；
 //   · 老巢冷却             —— 既有系统，记在 `state.lairClearedTurn`，**不在本文件**（它挡的是出征入口）。
 
 import type { BountyDef, BountyKind, BountyProgress, BountyState, GameState, Mothership } from '@/types/game';
@@ -27,8 +27,8 @@ import { getTurnsUntil } from './expiry';
 /** 整张榜单的刷新周期：每 10 回合换一批 */
 export const BOUNTY_REFRESH_TURNS = 10;
 
-/** 单个头目被打赢后的冷却回合数：10 回合内不进候选池 */
-export const BOSS_COOLDOWN_TURNS = 10;
+/** **全局休息**：打赢任意一条悬赏后，接下来几回合不能接、也不能打（唯一数值位置） */
+export const BOUNTY_REST_TURNS = 6;
 
 /** 每批的构成：清剿 1 条 + 截击 1 条 + 头目 1 条（头目不足时见 buildBountyBatch 的兜底） */
 export const BOUNTY_BATCH_QUOTA: Readonly<Record<BountyKind, number>> = {
@@ -65,18 +65,21 @@ export function getBountyDef(id: string): BountyDef | undefined {
 // ---------------- 头目冷却 ----------------
 
 /**
- * 该头目还剩几回合冷却（0 = 不在冷却，可进候选池）。
- * 判据 = `BOSS_COOLDOWN_TURNS - (turn - 最近一次打赢的回合)`，下限 0。
- * 没有记录（`bossCooldown` 缺该键 / 整个缺省）= 从未打赢过 = 0。
+ * 全局休息还剩几回合（0 = 不在休息，可以接/可以打）。
+ * 判据 = `restUntilTurn - turn`，下限 0；没有记录（旧档 / 从未打赢过）= 0。
  */
-export function bossCooldownRemaining(
-  bossId: string,
-  cooldown: Record<string, number> | undefined,
-  turn: number
-): number {
-  const clearedAt = cooldown ? cooldown[bossId] : undefined;
-  if (clearedAt === undefined) return 0;
-  return Math.max(0, BOSS_COOLDOWN_TURNS - (turn - clearedAt));
+export function bountyRestRemaining(state: GameState): number {
+  return Math.max(0, (state.bounties.restUntilTurn || 0) - state.turn);
+}
+
+/**
+ * 休息期的**唯一原因文案**（接单 / 出击 / UI 共用；N 下限 1，绝不渲染「还差 0 回合」）。
+ * 返回空串 = 不在休息。
+ */
+function restReason(state: GameState): string {
+  const remain = bountyRestRemaining(state);
+  if (remain <= 0) return '';
+  return `悬赏整理中，还差 ${Math.max(1, remain)} 回合`;
 }
 
 // ---------------- 确定性伪随机（不新增依赖、不吃 Math.random）----------------
@@ -150,7 +153,7 @@ export function buildBountyBatch(state: GameState): BountyBatch {
   }
   // 头目：先按冷却过滤（冷却 > 0 的一律不进候选池）
   const elitePool = BOUNTY_DEFS.filter(
-    (d) => d.kind === 'elite' && bossCooldownRemaining(d.enemyId, bounties.bossCooldown, turn) === 0
+    (d) => d.kind === 'elite'
   );
   const elite = pickOne(elitePool, batchIndex, KIND_SALT.elite);
   if (elite) offered.push(elite.id);
@@ -311,8 +314,9 @@ export function canAcceptBounty(state: GameState, defId: string): BountyCheck {
   //    早先它只进了数据与 UI 文案，守卫没读 → 18 艘也能接、也能打（用户 2026-08 报的漏实装）。
   const gate = cardGateReason(state, def);
   if (gate) return deny(gate);
-  const remain = bossCooldownRemaining(def.enemyId, state.bounties.bossCooldown, state.turn);
-  if (remain > 0) return deny(`该头目正在冷却，剩 ${remain} 回合`);
+  // ⑦ 全局休息（打赢任意一条悬赏后的 6 回合内不能接）——与出击共用 `restReason` 这一份判据
+  const rest = restReason(state);
+  if (rest) return deny(rest);
   return CHECK_OK;
 }
 
@@ -332,6 +336,9 @@ export function canStartBountyBattle(state: GameState, defId: string, fleetId: s
   // 卡库门槛与接单**同一份判据**（`cardGateReason`）：接单后被击毁到不足 20 艘，出击也要拦。
   const gate = cardGateReason(state, def);
   if (gate) return deny(gate);
+  // 休息期与接单**同一份判据**（`restReason`）：休息中也不能出击。
+  const rest = restReason(state);
+  if (rest) return deny(rest);
   const fleet = state.fleets.find((f) => f.id === fleetId);
   if (!fleet) return deny('先选一支有战舰的舰队');
   if (fleet.shipIds.length === 0) return deny('这支舰队没有战舰，出击不能空手');
@@ -359,9 +366,9 @@ export function withoutActiveBounty(bounties: BountyState, defId: string): Bount
   return { ...bounties, active: kept };
 }
 
-/** 写入某头目的冷却起点（打赢时调；键是**该条的敌方 id**，不是 `raid` 占位） */
-export function withBossCooldown(bounties: BountyState, bossId: string, turn: number): BountyState {
-  return { ...bounties, bossCooldown: { ...(bounties.bossCooldown || {}), [bossId]: turn } };
+/** 写入全局休息的结束回合（**只在悬赏胜利结算时调一次**；失败/放弃/过期都不写） */
+export function withBountyRest(bounties: BountyState, turn: number): BountyState {
+  return { ...bounties, restUntilTurn: turn + BOUNTY_REST_TURNS };
 }
 
 // ---------------- 发奖（金币必须过饥荒减半 + 写流水）----------------
