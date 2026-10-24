@@ -1,7 +1,7 @@
 import { useCallback } from 'react';
-import type { GameState, Mothership } from '@/types/game';
+import type { GameState, Mothership, EventLogEntry } from '@/types/game';
 import { FACTIONS, getSellPrice, RELATION_MATRIX } from '@/data/factions';
-import { RECIPES } from '@/data/gameData';
+import { RECIPES, EVENT_LOG_LIMIT } from '@/data/gameData';
 import { getContractItemKind, SMUGGLING_SUCCESS_RATE } from '@/lib/turn/contracts';
 import { getBuffMultiplier } from '@/lib/turn/factionTurn';
 import { INVEST_GOLD_PER_REP, INVEST_MAX_PER_TURN, BLACK_MARKET_DEFAULT } from '@/data/exchangeRates';
@@ -14,6 +14,15 @@ import { RELIC_DECIPHERER } from '@/data/relics';
 import { famineHalveGold, BANKRUPT_TURNS } from '@/lib/turn/shipTurn';
 import { getSpecialtyBuyUnitPrice, getSpecialtySellRevenue, getBlackMarketTotal } from '@/lib/turn/tradePrice';
 import { pushGoldLog } from '@/lib/turn/goldLog';
+import {
+  getExploreReward,
+  applyFamineToReward,
+  exploreGoldLogReason,
+  exploreEventDetail,
+  explorePreviewText,
+  EXPLORE_EVENT,
+} from '@/lib/galaxy/exploreReward';
+import { createUid } from '@/lib/id';
 
 
 export function useTrade(
@@ -112,15 +121,38 @@ export function useTrade(
           g.targetNodeId = targetNodeId;
           g.travelTurnsRemaining = turns;
           s.galaxy = g;
-          ships[shipIndex] = s;
-          // 迷雾：未探测过的目的地不暴露名称（抵达后才揭晓）
+          // 迷雾与「首次探索奖励」共用同一个判据：目标不在 visitedNodes 里 = 抵达时必然是首次
+          // （visitedNodes 的唯一写入点是 lib/turn/shipTurn.ts 的抵达分支，跃迁中无法二次起跳）。
+          // 注意：这里只读 visitedNodes，不写；galaxy 写回用的是上面这份当前副本 g，不影响其它字段。
           const targetKnown = (s.galaxy.visitedNodes || []).includes(targetNodeId);
+          // ===== 首次探索奖励（唯一结算点；档位唯一真值 lib/galaxy/exploreReward.ts）=====
+          // 回合数就用刚写进 travelTurnsRemaining 的 turns（付费过境是 plan.tollTurns）：
+          //   全函数只有这一个数，不调 applyTravelReduction、不从倒计时反推，也不看距起点多少。
+          // ⚠ 金币必须先加上、再 pushGoldLog（balanceAfter 读改完的钱）；合金不受饥荒影响，走同一份折算。
+          const exploreReward = targetKnown ? null : applyFamineToReward(getExploreReward(turns), s.food);
+          if (exploreReward) {
+            s.gold += exploreReward.gold;
+            s.alloy += exploreReward.alloy;
+            pushGoldLog(s, prev.turn, exploreReward.gold, exploreGoldLogReason(turns));
+          }
+          ships[shipIndex] = s;
+          // 事件记录：直接在返回的 state 里拼，不在 updater 里 dispatch
+          // （FUNCTIONAL_UPDATE 的 updater 在开发模式下会双跑，dispatch 一次就等于写两条）。
+          // 与 reducer 的 ADD_EVENT_LOG 同形：同样四个字段、同一个上限常量。
+          const eventLog: EventLogEntry[] = exploreReward
+            ? [
+                { id: createUid('explore'), turn: prev.turn, event: EXPLORE_EVENT, detail: exploreEventDetail(turns, exploreReward) },
+                ...prev.eventLog,
+              ].slice(0, EVENT_LOG_LIMIT)
+            : prev.eventLog;
           const tollNote = useToll ? `（途经宿敌 ${plan.hostileVia.length} 处，过路费 ${plan.tollGold.toLocaleString()} 金币）` : '';
           result = {
             success: true,
-            message: (targetKnown ? `开始跃迁，预计${turns}回合后抵达「${targetNode.name}」` : `开始跃迁，预计${turns}回合后抵达目标星系`) + tollNote,
+            message: (targetKnown ? `开始跃迁，预计${turns}回合后抵达「${targetNode.name}」` : `开始跃迁，预计${turns}回合后抵达目标星系`)
+              + tollNote
+              + (exploreReward ? `。${explorePreviewText(exploreReward)}` : ''),
           };
-          return { ...prev, ships, ...(repPatched || {}) };
+          return { ...prev, ships, eventLog, ...(repPatched || {}) };
         },
       });
       return result;

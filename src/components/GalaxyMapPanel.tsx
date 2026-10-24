@@ -17,6 +17,7 @@ const EMPTY_TRAVEL: ShipTravelPlan = { route: null, turns: 0, tollRoute: null, t
 import { getBlockedNodeIds, canEnterNode, HOSTILE_TOLL_GOLD } from '@/lib/galaxy/access';
 import { getKnownFactionIds, getKnownRelation, getNodeDisplayName, isNodeDiscovered } from '@/lib/galaxy/knowledge';
 import { getNodeLandscapeImage } from '@/lib/galaxy/nodeImage';
+import { getExplorePreviewText } from '@/lib/galaxy/exploreReward';
 import {
   LAIR_FILL,
   LAIR_LABEL,
@@ -283,6 +284,14 @@ function GalaxyMapPanel({ ship, factionReputation, onTravelToNode }: GalaxyMapPa
     if (!route) {
       return <p className="text-xs text-red-400">无法抵达：航线被封锁的势力割断，可先提升相关势力声望或选择其他路线。</p>;
     }
+    // 首次探索奖励预览：判定（未到访才算）、档位与数额（含饥荒减半）全部来自
+    // lib/galaxy/exploreReward.ts，与 useTrade 起跳处的实发同源；已到访返回 null → 不显示这一行。
+    const explorePreview = getExplorePreviewText(
+      ship.galaxy.visitedNodes,
+      node.id,
+      isTollRoute ? travel.tollTurns : travel.turns,
+      ship.food
+    );
     return (
       <div>
         <button
@@ -293,6 +302,10 @@ function GalaxyMapPanel({ ship, factionReputation, onTravelToNode }: GalaxyMapPa
             ? `付费途经（${travel.tollTurns} 回合 · 过路费 ${travel.tollGold.toLocaleString()} 金币）`
             : `跃迁（${travel.turns} 回合）`}
         </button>
+        {/* 首次探索奖励预览：只在目标未到访时显示，文案里不带星系名（迷雾） */}
+        {explorePreview !== null && (
+          <p className="text-[10px] md:text-xs text-emerald-400/90 mt-2">{explorePreview}</p>
+        )}
         {/* 付费途经：说清"付什么、路过谁、进不去" */}
         {isTollRoute && (
           <p className="text-[10px] md:text-xs text-amber-400/90 mt-2">
