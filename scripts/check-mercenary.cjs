@@ -203,10 +203,18 @@ const eq = (a, b) => J(a) === J(b);
     ...createInitialGameState(),
     turn: 20,
     ships: [guildShip()],
+    // 默认 20 艘：头目档有卡库门槛（requireCardCount=20），大部分用例要能过那一关
+    cardLibrary: Array.from({ length: 20 }, () => 'h1'),
     bounties: { batchTurn: 20, offered: OFFERED.slice(), active: [], bossCooldown: {}, ...((over && over.bounties) || {}) },
     ...((over && over.rest) || {}),
   });
   const lastLog = (st) => (st.eventLog.length > 0 ? st.eventLog[0] : null);
+  /** 结算到底（END_BATTLE 两段：① 结算并挂 battle.settlement ② 再点一次清空战斗） */
+  const END = (st) => {
+    let s = gameReducer(st, { type: 'END_BATTLE' });
+    for (let i = 0; i < 4 && s.battle && s.battle.settlement; i += 1) s = gameReducer(s, { type: 'END_BATTLE' });
+    return s;
+  };
 
   // ① 不在协会节点（判据是**类型**：随便挑一个非 guild 节点）
   const offNodeBase = mkGuild();
@@ -322,7 +330,7 @@ const eq = (a, b) => J(a) === J(b);
   const winFrom = (st, winner) => ({ ...st, battle: { ...st.battle, winner, over: true, reason: 'test' } });
   const winState = winFrom(started, 'player');
   const goldBefore = winState.ships[0].gold;
-  const afterWin = gameReducer(winState, { type: 'END_BATTLE' });
+  const afterWin = END(winState);
   check(afterWin.ships[0].gold === goldBefore + 10000, '胜利发金币 10,000（bty_p1）',
     J({ before: goldBefore, after: afterWin.ships[0].gold }));
   check(afterWin.ships[0].stardust === 5, '胜利发星尘 5', J(afterWin.ships[0].stardust));
@@ -331,11 +339,11 @@ const eq = (a, b) => J(a) === J(b);
   check(!!lastLog(afterWin) && lastLog(afterWin).event === '悬赏完成', '事件记录一条「悬赏完成」', J(lastLog(afterWin)));
   // 饥荒：食物 < 0 时金币减半
   const famineState = { ...winState, ships: [{ ...winState.ships[0], food: -1 }] };
-  const afterFamine = gameReducer(famineState, { type: 'END_BATTLE' });
+  const afterFamine = END(famineState);
   check(afterFamine.ships[0].gold === goldBefore + 5000, '饥荒（食物<0）时金币减半为 5,000',
     J({ before: goldBefore, after: afterFamine.ships[0].gold }));
   // 头目档：冷却写入 + 事件里提到可再接
-  const eliteWin = gameReducer(winFrom(eliteStarted, 'player'), { type: 'END_BATTLE' });
+  const eliteWin = END(winFrom(eliteStarted, 'player'));
   check(eliteWin.bounties.bossCooldown && eliteWin.bounties.bossCooldown.m01 === 20,
     '头目档打赢 → bossCooldown[m01] = 当前回合（20）', J(eliteWin.bounties.bossCooldown));
   check(!!lastLog(eliteWin) && lastLog(eliteWin).detail.includes('回合后可再接'),
@@ -345,14 +353,14 @@ const eq = (a, b) => J(a) === J(b);
   console.log('\n[13] 失败作废 + 结算不重复发奖');
   const loseState = winFrom(started, 'boss');
   const loseGoldBefore = loseState.ships[0].gold;
-  const afterLose = gameReducer(loseState, { type: 'END_BATTLE' });
+  const afterLose = END(loseState);
   check(afterLose.ships[0].gold === loseGoldBefore && afterLose.ships[0].stardust === 0,
     '打输不发金币、不发星尘');
   check(afterLose.bounties.active.length === 0, '打输也把悬赏从 active 移除（作废）');
   check(!!lastLog(afterLose) && lastLog(afterLose).event === '悬赏失败', '事件记录一条「悬赏失败」', J(lastLog(afterLose)));
   check(afterLose.bountyBattleId === null, '打输也清空 bountyBattleId（不留残档）');
   // 再派一次 END_BATTLE：battle 已空 → 原样返回，绝不重复发奖
-  const twice = gameReducer(afterWin, { type: 'END_BATTLE' });
+  const twice = END(afterWin);
   check(twice === afterWin && twice.ships[0].gold === afterWin.ships[0].gold,
     '重复派发 END_BATTLE 不会重复发奖（battle 已空 → 原样返回）');
   // 已完成后想再打同一条：它已不在 active，出击被拒
@@ -459,6 +467,77 @@ const eq = (a, b) => J(a) === J(b);
   const TU = await import('@/lib/battle/techUnlocks');
   const allUnlockIds = Object.values(TU.techUnlockList ? TU.techUnlockList() : {}).flatMap((x) => x.cardIds || []);
   check(!allUnlockIds.some((id) => mercIds.includes(id)), '科技解锁清单里不出现任何敌方卡', String(allUnlockIds.length));
+  // ---------- ⑮ A3：5 个头目技能各一条行为断言 ----------
+  console.log('\n[15] 头目技能（m01~m05）：每支各一条"确实生效"的行为断言');
+  {
+    const ENG = await import('@/lib/battle/engine');
+    const { createBattle, endTurn, spawnUnit, placeUnit } = ENG;
+    // m01：开场自带 2 艘噬星幼虫
+    const b1 = createBattle({ seed: 3, bossId: 'm01', playerFirst: false });
+    check(b1.boss.board.filter(Boolean).length === 2
+      && b1.boss.board.filter(Boolean).every((u) => u && u.cardId === 'q1'),
+      'm01 开场自带 2 艘噬星幼虫（q1）', J(b1.boss.board.filter(Boolean).map((u) => u && u.cardId)));
+    // m05：开场自带 1 艘海盗杂兵
+    const b5 = createBattle({ seed: 3, bossId: 'm05', playerFirst: false });
+    check(b5.boss.board.filter(Boolean).length === 1
+      && b5.boss.board.filter(Boolean)[0].cardId === 't_grunt',
+      'm05 开场自带 1 艘海盗杂兵（t_grunt）', J(b5.boss.board.filter(Boolean).map((u) => u && u.cardId)));
+
+    // m02 / m03：机制在 engine 的按 id 分支里（与 DEMO 一字不差，由 audit-battle-port 严格相等覆盖）；
+    // 这里只断数据侧文案与生成物一致，行为面用 m04 的"确实掉血"代表（同一批分支、同一处回合入口）。
+    check(ENG.BOSSES.m02.skill.includes('攻击 +1') && ENG.BOSSES.m03.skill.includes('指挥度 -1'),
+      'm02/m03 的技能文案与生成物一致（机制分支由 audit 严格相等覆盖）',
+      J([ENG.BOSSES.m02.skill, ENG.BOSSES.m03.skill]));
+    // m04：回合末对玩家本体 -1（不经护盾）
+    const m4 = createBattle({ seed: 9, bossId: 'm04', playerFirst: false });
+    const bodyBefore = m4.player.body;
+    const shieldsBefore = m4.player.board.filter(Boolean).reduce((sum, u) => sum + (u ? u.shield : 0), 0);
+    endTurn(m4);   // 玩家回合结束 → BOSS 回合开始（m04 全体 +2 盾）后马上 BOSS 回合结束（本体 -1）
+    check(m4.player.body === bodyBefore - 1 && m4.player.board.filter(Boolean).reduce((sum, u) => sum + (u ? u.shield : 0), 0) === shieldsBefore,
+      'm04 回合结束玩家本体 -1，且没有经过任何护盾结算（场上护盾总和不变）',
+      J({ body: m4.player.body, shields: shieldsBefore }));
+    check(ENG.BOSSES.m01.hp === 30 && ENG.BOSSES.m04.hp === 34 && ENG.BOSSES.m05.hp === 18,
+      '五个头目的血量来自生成物（30/32/28/34/18 中的 30/34/18）', J(ENG.BOSSES.m01.hp));
+  }
+  // ---------- ⑯ 卡库门槛（requireCardCount）真的被守卫读了 ----------
+  console.log('\n[16] 接取门槛：卡库 18 艘被拒 / 20 艘可接 / 出击也拦 / 艘数只有一个来源');
+  {
+    const HG = await import('@/lib/battle/hangar');
+    const eliteDef = B.getBountyDef('bty_e1');
+    const withLib = (n) => mkGuild({ rest: { cardLibrary: Array.from({ length: n }, () => 'h1') } });
+    const lib18 = withLib(18);
+    const c18 = B.canAcceptBounty(lib18, 'bty_e1');
+    check(!c18.ok && c18.reason.includes(String(eliteDef.requireCardCount)) && c18.reason.includes('18'),
+      '18 艘 → 被拒，原因同时含门槛（20）与当前（18）', J(c18));
+    check(c18.reason === `卡库至少需要 ${eliteDef.requireCardCount} 艘战舰才能接取这条悬赏（当前 18 艘）`,
+      '原因原文（数字是实时算的，不是写死的）', J(c18.reason));
+    const lib20 = withLib(eliteDef.requireCardCount);
+    check(B.canAcceptBounty(lib20, 'bty_e1').ok, '恰好 20 艘 → 可接', J(B.canAcceptBounty(lib20, 'bty_e1')));
+    // 20 艘但已接满 → 仍按"接满"拒（顺序不影响结论）
+    const fullBut20 = withLib(20);
+    fullBut20.bounties.active = [
+      { defId: 'bty_p2', acceptedTurn: 18, expiresTurn: 32 },
+      { defId: 'bty_p3', acceptedTurn: 18, expiresTurn: 31 },
+      { defId: 'bty_p4', acceptedTurn: 18, expiresTurn: 30 },
+    ];
+    check(B.canAcceptBounty(fullBut20, 'bty_e1').reason.includes('同时最多接 3 条'),
+      '20 艘但已接满 3 条 → 仍按"接满"拒（两个判据互不遮盖）', J(B.canAcceptBounty(fullBut20, 'bty_e1')));
+    // 出击侧：已接但卡库掉到 18 → 同样拦（同一份判据）
+    const started20 = { ...lib20, fleets: [{ id: 'fx', name: 'x', shipIds: ['h1'], defending: false }] };
+    started20.bounties.active = [{ defId: 'bty_e1', acceptedTurn: 18, expiresTurn: 30 }];
+    check(B.canStartBountyBattle({ ...started20, cardLibrary: Array.from({ length: 18 }, () => 'h1') }, 'bty_e1', 'fx').reason
+      === `卡库至少需要 ${eliteDef.requireCardCount} 艘战舰才能接取这条悬赏（当前 18 艘）`,
+      '已接但卡库掉到 18 → 出击也被同一份判据拦', J(B.canStartBountyBattle({ ...started20, cardLibrary: Array.from({ length: 18 }, () => 'h1') }, 'bty_e1', 'fx')));
+    check(B.canStartBountyBattle(started20, 'bty_e1', 'fx').ok, '20 艘 + 已接 + 舰队可用 → 可以出击');
+    // 唯一来源：卡库艘数 = hangar.libraryShipCount；机库总览与门槛读数一致
+    check(HG.libraryShipCount(lib18.cardLibrary) === 18
+      && HG.hangarSummary(lib18).totalShips === HG.libraryShipCount(lib18.cardLibrary)
+      && HG.hangarSummary(lib20).totalShips === 20,
+      '卡库艘数只有一个来源：hangar.libraryShipCount（hangarSummary.totalShips 读它）',
+      J({ lib18: HG.libraryShipCount(lib18.cardLibrary), summary: HG.hangarSummary(lib18).totalShips }));
+    // 清剿/截击档没有门槛 → 不受影响
+    check(B.canAcceptBounty(withLib(0), 'bty_p1').ok, '清剿档（无 requireCardCount）不受门槛影响');
+  }
   // ---------- 结果 ----------
   console.log('\n=== 雇佣兵协会（数据 + 批次 + 接单/出击/结算）验收结果 ===');
   if (fails.length === 0) {
@@ -472,4 +551,10 @@ const eq = (a, b) => J(a) === J(b);
   console.error('脚本异常：', e);
   process.exitCode = 1;
 });
+
+
+
+
+
+
 

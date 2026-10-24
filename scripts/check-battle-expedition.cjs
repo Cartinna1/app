@@ -1,4 +1,4 @@
-'use strict';
+﻿'use strict';
 /* ============================================================================
    P5 验收：出征闭环（老巢数据 / 出征耗时对文档 / 探明门槛 / 全流程 / 战利品 / 回合守卫）
    用法：node --import ./scripts/register-ts.mjs scripts/check-battle-expedition.cjs
@@ -32,6 +32,12 @@ const check = (ok, label, detail) => {
   const J = (x) => JSON.stringify(x);
 
   const D = (st, a) => gameReducer(st, a);
+  /** 结算到底：END_BATTLE 现在是两段（① 结算并把明细挂到 battle.settlement ② 再点一次才清空战斗） */
+  const END = (st) => {
+    let s = D(st, { type: 'END_BATTLE' });
+    for (let i = 0; i < 4 && s.battle && s.battle.settlement; i += 1) s = D(s, { type: 'END_BATTLE' });
+    return s;
+  };
   const fight = (st) => {
     let s = st, n = 0;
     while (s.battle && !s.battle.over && n++ < 200) s = D(s, { type: 'BATTLE_ACTION', action: { type: 'autoTurn' } });
@@ -459,7 +465,7 @@ const check = (ok, label, detail) => {
     check(rw.gold === 100000 && rw.stardust === 40, '老巢战利品 = 100000 金币 + 40 星尘（V1.5 §〇/§10.2）', JSON.stringify(rw));
     check(w.ships[0].food >= 0, '这一场结算时不是饥荒（食物 ≥ 0）', String(w.ships[0].food));
     const before = { gold: w.ships[0].gold, sd: w.ships[0].stardust, log: (w.ships[0].goldLog || []).length };
-    const after = D(w, { type: 'END_BATTLE' });
+    const after = END(w);
     const s0 = after.ships[0];
     check(s0.gold - before.gold === 100000, '金币 +100000（不饥荒时）', '+' + (s0.gold - before.gold));
     check(s0.stardust - before.sd === 40, '星尘 +40', '+' + (s0.stardust - before.sd));
@@ -474,7 +480,7 @@ const check = (ok, label, detail) => {
     f = fight(f);
     check(f.ships[0].food < 0, '这一场结算时确实处于饥荒（食物 < 0）', String(f.ships[0].food));
     const fBefore = { gold: f.ships[0].gold, sd: f.ships[0].stardust };
-    const f0 = D(f, { type: 'END_BATTLE' }).ships[0];
+    const f0 = END(f).ships[0];
     check(f0.gold - fBefore.gold === 50000, '**饥荒时金币收益减半**（famineHalveGold）', '+' + (f0.gold - fBefore.gold));
     check(f0.stardust - fBefore.sd === 40, '星尘不受饥荒影响', '+' + (f0.stardust - fBefore.sd));
   }
@@ -543,7 +549,7 @@ const check = (ok, label, detail) => {
   };
 
   // ① 首胜档
-  const first = D(lairBattleState(20, 'b1', 'player'), { type: 'END_BATTLE' });
+  const first = END(lairBattleState(20, 'b1', 'player'));
   check(first.ships[0].gold === 101000 && first.ships[0].stardust === 40,
     '首胜（lairClearedTurn 无记录）→ 100,000 金币 + 40 星尘',
     J({ gold: first.ships[0].gold, stardust: first.ships[0].stardust }));
@@ -558,7 +564,7 @@ const check = (ok, label, detail) => {
     lairClearedTurn: { b1: 20 },
     defeatedLairs: first.defeatedLairs,
   });
-  const repeat = D(repeatState, { type: 'END_BATTLE' });
+  const repeat = END(repeatState);
   check(repeat.ships[0].gold === repeatState.ships[0].gold + 25000,
     '重复清剿 → 25,000 金币（不是 100,000）', J({ before: repeatState.ships[0].gold, after: repeat.ships[0].gold }));
   check(repeat.ships[0].stardust === 10, '重复清剿 → 10 星尘', J(repeat.ships[0].stardust));
@@ -597,17 +603,97 @@ const check = (ok, label, detail) => {
     const battle = { ...E.createBattle({ seed: 2, bossId: 'raid' }), winner: 'player' };
     return { ...st, turn: 20, fleets: [{ id: 'f1', name: 'x', shipIds: ['h1'], defending: false }], battle, raid: { ...st.raid, raiders: 1 } };
   })();
-  const afterRaid = D(raidWinState, { type: 'END_BATTLE' });
+  const afterRaid = END(raidWinState);
   check(eqLairs(afterRaid.lairClearedTurn, {}), '掠夺队胜局**不写** lairClearedTurn', J(afterRaid.lairClearedTurn));
   check(afterRaid.lairClearedTurn['raid'] === undefined, 'lairClearedTurn 里不出现 raid 键', J(afterRaid.lairClearedTurn));
 
   // ⑥ 悬赏战不受影响（bountyBattleId 非空 → 走悬赏分支，判据仍排在掠夺战之前）
   const bountyLairState = lairBattleState(20, 'b1', 'player', { bountyBattleId: 'bty_p1' });
-  const afterBountyLair = D(bountyLairState, { type: 'END_BATTLE' });
+  const afterBountyLair = END(bountyLairState);
   check(eqLairs(afterBountyLair.lairClearedTurn, {}),
     '带 bountyBattleId 的战斗走悬赏分支，**不写** lairClearedTurn', J(afterBountyLair.lairClearedTurn));
   check(afterBountyLair.bountyBattleId === null, '悬赏分支仍然清空 bountyBattleId');
 
+  // ---------- ⑦b 本场得失（battle.settlement，用户 2026-08 新口径：结算面板上直接看得见） ----------
+  console.log('\n[7b] 本场得失：老巢首胜/重复两档 + 失败局 + 读档不残留');
+  {
+    const { buildSaveData, stateFromSave } = await import('@/lib/save');
+    const firstSettled = D(lairBattleState(20, 'b1', 'player'), { type: 'END_BATTLE' });
+    const s1 = firstSettled.battle && firstSettled.battle.settlement;
+    check(!!s1 && s1.gold === 100000 && s1.stardust === 40 && (s1.lostShips || 0) === 0,
+      '老巢首胜：settlement = 金币 100000 / 星尘 40 / 永久损失 0', J(s1));
+    check(!!s1 && !s1.cards, '老巢不给掉落卡（cards 缺省）', J(s1 && s1.cards));
+    // 第二段（再点一次）才清空战斗
+    const firstClosed = D(firstSettled, { type: 'END_BATTLE' });
+    check(firstSettled.battle !== null && firstClosed.battle === null && firstClosed.bountyBattleId === null,
+      'END_BATTLE 两段：① 结算并保留战斗（面板显示得失）② 再点一次清空', J({ stage1: !!firstSettled.battle, stage2: firstClosed.battle }));
+    const repeatSettled = D(lairBattleState(35, 'b1', 'player', {
+      lairClearedTurn: { b1: 20 },
+      defeatedLairs: firstSettled.defeatedLairs,
+    }), { type: 'END_BATTLE' });
+    const s2 = repeatSettled.battle && repeatSettled.battle.settlement;
+    check(!!s2 && s2.gold === 25000 && s2.stardust === 10, '老巢重复：settlement = 金币 25000 / 星尘 10', J(s2));
+    const lossSettled = D(lairBattleState(20, 'b1', 'boss'), { type: 'END_BATTLE' });
+    const s3 = lossSettled.battle && lossSettled.battle.settlement;
+    check(!!s3 && !s3.gold && !s3.stardust && !s3.cards && (s3.materials || []).length === 0
+      && s3.summary.includes('无奖励'),
+      '失败局：settlement 存在但没有奖励（summary 写明「本场无奖励」）', J(s3));
+    // 读档语义：battle 不进存档 → 结算明细不会残留
+    check(stateFromSave(buildSaveData(firstSettled)).battle === null,
+      '读档后 battle 为空 → 结算面板与 settlement 一起消失（不是新存档字段）');
+  }
+  // ---------- ⑧ 忽略掠夺 → 阶段 B 归零 → 必须结算并留下事件（用户 2026-08 报障的回归） ----------
+  console.log('\n[8] 忽略掠夺：阶段 B 倒计时归零那一帧必须结算损失 + 写一条 RAID_LOOT_EVENT');
+  {
+    const { planBattleTurn } = await import('@/hooks/battleTurnPlan');
+    const { raidPhase } = await import('@/lib/battle/raid');
+    const { RAID_LOOT_EVENT } = await import('@/lib/battle/rewards');
+    const withRaidBase = () => {
+      const st = withColony('terran', (nodes.GALAXY_NODES || []).map((n) => n.id), {
+        gold: 100000,
+        materials: { gold_ore: 300, quantum: 60 },
+      });
+      return {
+        ...st,
+        turn: 10,
+        cardLibrary: ['h1', 'h1', 'h2', 'h2', 'c1', 'c1', 'c2', 'c2', 'h3', 'h3', 'c3'],
+        fleets: [{ id: 'f1', name: '防守队', shipIds: ['h1', 'h1', 'h2'], defending: true }],
+      };
+    };
+    let st = D(withRaidBase(), { type: 'START_RAID', raiders: 1 });
+    check(raidPhase(st.raid) === 'warning', '掠夺从阶段 A（预警）开始', JSON.stringify(st.raid));
+
+    // 原样回放 useTurn.nextTurn 的战斗派发：plan → TICK → (ARRIVE_RAID | APPLY_RAID_LOOT)
+    let lootedAt = -1;
+    let dispatchedLoot = 0;
+    for (let i = 0; i < 14; i += 1) {
+      const plan = planBattleTurn(st);
+      st = D(st, { type: 'TICK_BATTLE_STATE' });
+      if (plan.raidStep === 'arrived') st = D(st, { type: 'ARRIVE_RAID' });
+      else if (plan.raidStep === 'looted') { st = D(st, { type: 'APPLY_RAID_LOOT' }); dispatchedLoot += 1; lootedAt = i + 1; }
+      st = { ...st, turn: st.turn + 1 };
+    }
+    const lootEntries = st.eventLog.filter((e) => e.event === RAID_LOOT_EVENT);
+    check(dispatchedLoot === 1 && lootedAt === 10, '「忽略」第 10 次结束回合（阶段 B 归零那一帧）派发一次 APPLY_RAID_LOOT',
+      String(lootedAt));
+    check(lootEntries.length === 1, '**恰好一条** RAID_LOOT_EVENT（早先是 0 条 → 用户报的"没有记录"）',
+      String(lootEntries.length));
+    check(!!lootEntries[0] && lootEntries[0].detail.includes('金币 20000')
+      && lootEntries[0].detail.includes('黄金 100') && lootEntries[0].detail.includes('量子簇 20'),
+      'detail 逐项列出实扣（金币 20000 / 黄金 100 / 量子簇 20）', lootEntries[0] ? lootEntries[0].detail : '（无）');
+    check(st.ships[0].gold === 80000 && st.ships[0].materials.gold_ore === 200 && st.ships[0].materials.quantum === 40,
+      '资源确实扣了（金币 −20%、原料各 −1/3），事件里的数字 = 账上真扣的数字',
+      JSON.stringify({ gold: st.ships[0].gold, mats: st.ships[0].materials }));
+    check(raidPhase(st.raid) === 'idle' && st.raid.immuneTurns > 0, '结算后收掉倒计时并进入免疫期', JSON.stringify(st.raid));
+    // 纯函数层的定点断言：归零那一帧 raidResolution 必须是 looted（而不是被 raidPhase 的 idle 吞掉）
+    const zeroFrame = {
+      ...withRaidBase(),
+      raid: { inTurns: null, arrivedTurns: 1, immuneTurns: 0, raiders: 1, arrived: true },
+    };
+    const { raidResolution, tickRaid } = await import('@/lib/battle/raid');
+    check(raidResolution({ ...zeroFrame, raid: tickRaid(zeroFrame.raid) }) === 'looted',
+      '归零那一帧 raidResolution === looted（raidPhase 已塌成 idle 也照样结算）');
+  }
   console.log('\n=== P5 验收结果 ===');
   if (fails.length === 0) console.log('  全部通过 ✓');
   else { console.log('  ' + fails.length + ' 条失败 ✗'); process.exitCode = 1; }
@@ -615,3 +701,5 @@ const check = (ok, label, detail) => {
   console.error('验收脚本自身出错：', e && e.stack ? e.stack.split('\n').slice(0, 10).join('\n') : e);
   process.exitCode = 2;
 });
+
+

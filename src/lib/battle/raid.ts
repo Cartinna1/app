@@ -422,6 +422,13 @@ export function raidDefensePool(state: GameState): ShipCardId[] {
  */
 export function raidResolution(state: GameState, afterTick = false): 'none' | 'arrived' | 'looted' {
   if (state.battle) return 'none';
+  // ⚠ 阶段 B 的"倒计时归零 → 掠夺成功"**必须排在 `raidPhase` 的 idle 判据之前**：
+  //   `raidPhase` 只在 `arrivedTurns > 0` 时算 arrived，于是 `arrivedTurns` 归零的那一帧
+  //   它会塌成 idle（`raidPhase` 的语义是"界面上还剩几回合可迎战"，不是"这波掠夺还在不在"）。
+  //   早先这里先判 idle，那一帧就被当成"没有掠夺"直接丢掉 → **掠夺静默生效/或静默消失，
+  //   事件记录里一个字都没有**（用户 2026-08 原话："被掠夺成功，事件没有记录，也没记录自己损失了什么"）。
+  //   判据用原始字段（`arrived` 标记 + 倒计时），不用塌缩后的 phase。
+  if (state.raid.arrived && state.raid.arrivedTurns <= (afterTick ? 1 : 0)) return 'looted';
   const phase = raidPhase(state.raid);
   if (phase === 'idle') return 'none';
   const threshold = afterTick ? 1 : 0;

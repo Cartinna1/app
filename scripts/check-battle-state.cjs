@@ -1,4 +1,4 @@
-'use strict';
+﻿'use strict';
 /* ============================================================================
    P3 验收：卡牌战斗状态 + 存档三处同步
    用法：node --import ./scripts/register-ts.mjs scripts/check-battle-state.cjs
@@ -320,7 +320,9 @@ const eq = (a, b) => J(a) === J(b);
   check(!!r.battle && r.battle.over, '掠夺战打完了（' + r.battle.round + ' 回合）', r.battle && r.battle.reason);
   const lost = (r.battle.player.lost || []).slice();
   const expBefore = r.expedition;
-  const r2 = DISPATCH(r, { type: 'END_BATTLE' });
+  let r2 = DISPATCH(r, { type: 'END_BATTLE' });
+// END_BATTLE 两段：先结算（battle 保留 + settlement），再点一次才清空战斗
+if (r2.battle && r2.battle.settlement) r2 = DISPATCH(r2, { type: 'END_BATTLE' });
   check(r2.battle === null, 'END_BATTLE 清掉进行中的战斗');
   check(r2.cardLibrary.length === libBefore - lost.length, `卡库按份移除永久损失（-${lost.length}）`, r2.cardLibrary.length + ' vs ' + (libBefore - lost.length));
   check(r2.fleets[0].shipIds.length === fleetBefore - lost.length, `舰队按份移除永久损失（-${lost.length}；同型幸存者留下）`, r2.fleets[0].shipIds.length + ' vs ' + (fleetBefore - lost.length));
@@ -351,3 +353,4 @@ const eq = (a, b) => J(a) === J(b);
   console.error('验收脚本自身出错：', e && e.stack ? e.stack.split('\n').slice(0, 10).join('\n') : e);
   process.exitCode = 2;
 });
+

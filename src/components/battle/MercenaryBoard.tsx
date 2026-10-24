@@ -21,6 +21,8 @@ import {
   canStartBountyBattle,
   getBountyDef,
 } from '@/lib/turn/bounties';
+// 卡库艘数的唯一真值（与接单守卫同一来源：UI 不许自己写 cardLibrary.length）
+import { libraryShipCount } from '@/lib/battle/hangar';
 
 interface MercenaryBoardProps {
   state: GameState;
@@ -119,7 +121,7 @@ function MercenaryBoardBase({ state, fleets, onAccept, onAbandon, onStart }: Mer
             <p className="mt-1 text-[11px] leading-relaxed text-cyan-300">报酬：{bountyRewardText(def)}</p>
             {def.requireCardCount ? (
               <p className="mt-0.5 text-[10.5px] leading-relaxed text-slate-500">
-                接取门槛：卡库至少 {def.requireCardCount} 艘（当前 {state.cardLibrary.length} 艘）
+                接取门槛：卡库至少 {def.requireCardCount} 艘（当前 {libraryShipCount(state.cardLibrary)} 艘）
               </p>
             ) : null}
 

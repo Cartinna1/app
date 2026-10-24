@@ -425,6 +425,36 @@ function BattleScreenBase({ battle, seed, enemyName, context, onAction, onEnd }:
           {context.outcomeText ? (
             <p className="mt-1.5 text-[12px] font-bold text-amber-300">{context.outcomeText}</p>
           ) : null}
+          {/* ==================== 本场得失（用户 2026-08 新口径：结算面板上直接看得到）====================
+              ⚠ 这**推翻**了旧裁定"结算画面不放结算行、只放事件记录"：现在**两处都显示**
+                （事件记录那一份保留不变）。数据来自 `battle.settlement`（挂在 battle 上、不进存档，
+                读档后随战斗一起消失）；扣 0 / 拿 0 的项在 reducer 里就没写进 settlement，故这里不筛。 */}
+          {battle.settlement ? (
+            <div className="mt-2 rounded-[8px] border border-[#2b3550] bg-[#0b1220] px-2.5 py-2">
+              <p className="mb-1 text-[12px] font-bold text-slate-200">本场得失</p>
+              <ul className="space-y-0.5 text-[11.5px] leading-relaxed text-slate-300">
+                {battle.settlement.gold ? <li>金币 +{battle.settlement.gold}</li> : null}
+                {battle.settlement.stardust ? <li>星尘 +{battle.settlement.stardust}</li> : null}
+                {(battle.settlement.materials || []).map((m) => (
+                  <li key={`m-${m.id}`}>{m.name} ×{m.qty}</li>
+                ))}
+                {(battle.settlement.cards || []).map((c) => (
+                  <li key={`c-${c.id}`} className="text-cyan-300">获得战舰：{c.name} ×{c.qty}</li>
+                ))}
+                {battle.settlement.lostShips ? (
+                  <li className="text-red-300">永久损失：{battle.settlement.lostShips} 艘</li>
+                ) : null}
+                {!battle.settlement.gold && !battle.settlement.stardust
+                  && (battle.settlement.materials || []).length === 0
+                  && (battle.settlement.cards || []).length === 0 ? (
+                  <li className="text-slate-400">本场无奖励</li>
+                ) : null}
+              </ul>
+              {battle.settlement.summary ? (
+                <p className="mt-1 text-[10.5px] leading-relaxed text-slate-500">{battle.settlement.summary}</p>
+              ) : null}
+            </div>
+          ) : null}
           <div className="mt-2">
             <button
               type="button"
@@ -433,6 +463,11 @@ function BattleScreenBase({ battle, seed, enemyName, context, onAction, onEnd }:
             >
               结算并返回
             </button>
+            {battle.settlement ? (
+              <p className="mt-1 text-[10.5px] leading-relaxed text-slate-500">
+                本场得失已入账（事件记录里也有同一条）。再点一次返回战斗页签。
+              </p>
+            ) : null}
           </div>
         </div>
       )}

@@ -1,5 +1,7 @@
 import type { GameState, GameAction, Mothership } from '@/types/game';
-import type { BattleAction, BattleFleet, BattleState, ShipCardId } from '@/types/battle';
+import type { BattleAction, BattleFleet, BattleSettlement, BattleState, ShipCardId } from '@/types/battle';
+import { getMaterialName } from '@/data/materialNames';
+import { BATTLE_CARDS } from '@/data/battle/cards';
 import { FACTIONS, POLICY_EFFECTS, refreshFactionPrices, calculateSellMultipliers } from '@/data/factions';
 import { createMotherships, createStocks, createMaterials, createProducts, EVENT_LOG_LIMIT } from '@/data/gameData';
 import { BLACK_MARKET_DEFAULT } from '@/data/exchangeRates';
@@ -209,6 +211,44 @@ function settleRaidLoot(
  * 金币 / 星尘 / 原料在 lib/battle/rewards.grantRaidReward（过 famineHalveGold 与 pushGoldLog）；
  * 声望是 GameState 字段（Mothership 上没有）→ 在这里写回，上限 ±100 与 useTrade.applyRepChange 同口径。
  */
+/**
+ * 本场得失（战斗结束面板「本场得失」的数据）：**只描述已经发出去的东西** ——
+ * 金币取结算前后的差值（所以天然是饥荒减半后的实收）、星尘与原料同理，永久损失取 `battle.player.lost`。
+ * ⚠ 挂在 `battle` 上而不是存档字段：`battle` 不进存档，读档后这份明细随战斗一起消失。
+ */
+function makeSettlement(
+  before: Mothership | undefined,
+  after: Mothership | undefined,
+  lostShips: number,
+  extra: { cards?: BattleSettlement['cards']; summary?: string }
+): BattleSettlement {
+  const gold = before && after ? after.gold - before.gold : 0;
+  const stardust = before && after ? after.stardust - before.stardust : 0;
+  const materials: { id: string; name: string; qty: number }[] = [];
+  if (before && after) {
+    for (const [id, held] of Object.entries(after.materials || {})) {
+      const delta = held - ((before.materials || {})[id] || 0);
+      if (delta > 0) materials.push({ id, name: getMaterialName(id), qty: delta });
+    }
+  }
+  const cards = extra.cards && extra.cards.length > 0 ? extra.cards : undefined;
+  const hasReward = gold > 0 || stardust > 0 || materials.length > 0 || !!cards;
+  const settlement: BattleSettlement = {
+    lostShips,
+    summary: extra.summary || (hasReward ? '本场已有收益入账' : '本场无奖励'),
+  };
+  if (gold > 0) settlement.gold = gold;
+  if (stardust > 0) settlement.stardust = stardust;
+  if (materials.length > 0) settlement.materials = materials;
+  if (cards) settlement.cards = cards;
+  return settlement;
+}
+
+/** 把得失挂到战斗对象上（结算那一帧返回它；玩家再点一次「返回」时 `END_BATTLE` 才清空战斗） */
+function withSettlement(battle: BattleState, settlement: BattleSettlement): BattleState {
+  return { ...battle, settlement };
+}
+
 function applyRaidReward(
   state: GameState,
   reward: RaidReward,
@@ -429,6 +469,16 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
     case 'END_BATTLE': {
       const battle = state.battle;
       if (!battle) return state;
+      // **两段收尾**（用户 2026-08 新口径：结算面板上要直接看到"本场得失"）：
+      //   ① 第一次 END_BATTLE = **结算**（发奖 / 记账 / 写事件），并把明细挂到 `battle.settlement` 上，
+      //      战斗对象**先不销毁** —— 结束面板这一帧就渲染「本场得失」；
+      //   ② 第二次 END_BATTLE（玩家点「返回」）= 只负责关掉结算画面（`battle: null`）。
+      //   ⚠ 明细挂在 `battle` 上、不新增存档字段：`battle` 不进存档，读档后战斗为空 → 明细自然消失。
+      if (battle.settlement) {
+        // ⚠ 只清战斗与悬赏归属，**不动 `expedition`**：掠夺战（防守）本来就不该碰在途的出征（§10.1），
+        //   出征战在第一段结算时已经把 expedition 清掉了。
+        return { ...state, battle: null, bountyBattleId: null };
+      }
       // 掠夺战（防守，敌方恒为 'raid' 海盗旗舰）与出征战（打老巢 b1~b5）的收尾**不一样**：
       //   · 出征战结束 → 这场出征结束（打赢可再次出征；输了未被击毁的舰带回），**不动掠夺状态**
       //   · 掠夺战结束 → 收掉掠夺倒计时并给免疫（打赢还给随机奖励），**不动在途的出征**
@@ -459,8 +509,7 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
         // 报酬只在胜利时发；金币由 lib 过 famineHalveGold 并写 pushGoldLog（与老巢战利品同款写法）。
         // ⚠ **不**走 grantBattleRewards：那是老巢战利品，悬赏的收益来自 BountyDef。
         const rewarded = won && lead ? grantBountyRewards(lead, def, state.turn, Math.random()) : null;
-        const ships = rewarded ? [rewarded.ship, ...base.ships.slice(1)] : base.ships;
-        // 头目档掉落（文档 §2.7）：打赢 → 1~2 艘该头目那 6 张里的卡，**份数 +1 写进 cardLibrary**。
+        const ships = rewarded ? [rewarded.ship, ...base.ships.slice(1)] : base.ships;        // 头目档掉落（文档 §2.7）：打赢 → 1~2 艘该头目那 6 张里的卡，**份数 +1 写进 cardLibrary**。
         // 掉落是敌方卡**唯一**的合法来源（它们不可建造，见 shipyard.ENEMY_SERIES）。
         // 随机数在这里取（与其余结算同一口径：reducer 取随机数，lib 只做纯计算）。
         const drops = won && def.kind === 'elite'
@@ -472,6 +521,12 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
           ? withBossCooldown(bountiesAfter, def.enemyId, state.turn)
           : bountiesAfter;
         const dropText = bossDropText(drops);
+        // 掉落按同型合并成 qty（面板逐行显示「获得战舰：噬星幼虫 ×1」）
+        const dropCards = [...new Set(drops)].map((id) => ({
+          id,
+          name: BATTLE_CARDS[id] ? BATTLE_CARDS[id].name : id,
+          qty: drops.filter((x) => x === id).length,
+        }));
         const detail = won
           ? `${def.title}：${rewarded ? rewarded.text : '报酬为 0'}`
             + (def.kind === 'elite' ? `；该头目 ${BOSS_COOLDOWN_TURNS} 回合后可再接` : '')
@@ -482,7 +537,13 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
           ships,
           cardLibrary: nextLibrary,
           bounties,
-          battle: null,
+          battle: withSettlement(
+            battle,
+            makeSettlement(lead, ships[0], battle.player.lost.length, {
+              cards: dropCards,
+              summary: won ? dropText || '悬赏完成' : '舰队被击退，本场无奖励',
+            })
+          ),
           bountyBattleId: null,
           // 显示出口 = 事件记录（与掠夺同一条口径：战斗页签不放结算行）
           eventLog: [
@@ -532,7 +593,12 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
           return {
             ...base,
             ships,
-            battle: null,
+            battle: withSettlement(
+              battle,
+              makeSettlement(base.ships[0], ships[0], battle.player.lost.length, {
+                summary: noDefenderLeft ? '第一场打赢，但没拦住第二支掠夺队' : '防守战失利，本场无奖励',
+              })
+            ),
             raid: raidOver,
             // **显示出口 = 事件记录**（用户 2026-08 最终口径："直接放事件记录好了哇，打赢也一样"）：
             // 这条 detail 逐项列出**实际扣到**的资源与数量（扣 0 的项不列），与扣减/流水同源。
@@ -546,14 +612,26 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
         // ③ 打赢（单支，或 2 支都打完）→ §10.2「打败海盗后：随机获得星尘 / 原料 / 金币 / 某势力声望」
         //    随机数由这里取（与 SELECT_SHIP 的 rollMarketBuyStock 同一口径：reducer 内取随机数）
         const lead = base.ships[0];
-        if (!lead) return { ...base, battle: null, raid: raidOver };
+        if (!lead) {
+          return {
+            ...base,
+            battle: withSettlement(
+              battle,
+              makeSettlement(undefined, undefined, battle.player.lost.length, { summary: '本场无奖励' })
+            ),
+            raid: raidOver,
+          };
+        }
         const reward = rollRaidReward(lead, Math.random(), Math.random());
         const { ships, factionReputation } = applyRaidReward(base, reward);
         return {
           ...base,
           ships,
           factionReputation,
-          battle: null,
+          battle: withSettlement(
+            battle,
+            makeSettlement(base.ships[0], ships[0], battle.player.lost.length, { summary: reward.text })
+          ),
           raid: raidOver,
           // **显示出口 = 事件记录**（同上）：`detail` 就是奖励路径的原话（`rollRaidReward().text`，
           // 唯一文案产出口）—— 四类各自写明"类型 + 数量"（`缴获 20000 金币` / `缴获 10 星尘` /
@@ -595,7 +673,19 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
       const lairClearedTurn = wonLair
         ? recordLairCleared(state.lairClearedTurn, battle.bossId, state.turn)
         : state.lairClearedTurn;
-      const result: GameState = { ...base, ships, battle: null, expedition: null, defeatedLairs, lairClearedTurn };
+      const result: GameState = {
+        ...base,
+        ships,
+        battle: withSettlement(
+          battle,
+          makeSettlement(state.ships[0], ships[0], battle.player.lost.length, {
+            summary: wonLair ? (firstClear ? '首胜' : '重复清剿') : '舰队被击退，本场无奖励',
+          })
+        ),
+        expedition: null,
+        defeatedLairs,
+        lairClearedTurn,
+      };
       if (!wonLair) return result;                       // 打输：无奖励、不写冷却（也没账本可写）
       // 事件记录写明"首胜 / 重复"与**实际到手**的金额（饥荒减半后就是减半后的数）
       const goldGained = lead ? (ships[0] ? ships[0].gold - lead.gold : 0) : 0;

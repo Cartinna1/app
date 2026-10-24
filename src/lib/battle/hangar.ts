@@ -157,6 +157,13 @@ export function countInFleets(fleets: GameState['fleets'], cardId: ShipCardId): 
   return n;
 }
 
+/** **卡库总艘数（唯一真值）**：悬赏门槛 `BountyDef.requireCardCount`、机库总览、雇佣兵面板的门槛提示
+ *  全部读它 —— 别在任何地方再写 `cardLibrary.length` 或 `Object.values(...).reduce`。
+ *  ⚠ 卡库按**份数**存（同一张卡可以有多份），所以"艘数"就是份数。 */
+export function libraryShipCount(cardLibrary: readonly ShipCardId[]): number {
+  return cardLibrary.length;
+}
+
 /** 一支舰队是否正在出征（唯一判据） */
 export function isFleetOnExpedition(state: GameState, fleetId: string): boolean {
   return state.expedition !== null && state.expedition.fleetId === fleetId;
@@ -378,7 +385,7 @@ export function hangarSummary(state: GameState): HangarSummary {
   for (const f of state.fleets) assignedShips += f.shipIds.length;
   return {
     cardTypes: types.size,
-    totalShips: state.cardLibrary.length,
+    totalShips: libraryShipCount(state.cardLibrary),
     fleetCount: state.fleets.length,
     assignedShips,
   };

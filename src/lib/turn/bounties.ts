@@ -19,7 +19,7 @@ import { getGalaxyNode } from '@/data/galaxy/nodes';
 import { ALL_MATERIAL_IDS, getMaterialName } from '@/data/materialNames';
 import { famineHalveGold } from '@/lib/turn/shipTurn';
 import { pushGoldLog } from '@/lib/turn/goldLog';
-import { isFleetOnExpedition } from '@/lib/battle/hangar';
+import { isFleetOnExpedition, libraryShipCount } from '@/lib/battle/hangar';
 import { getTurnsUntil } from './expiry';
 
 // ---------------- 常量（唯一真值；改数值只改这一段）----------------
@@ -278,10 +278,22 @@ export function bountyBatchOffered(state: GameState): string[] {
   return buildBountyBatch(state).offered;
 }
 
+/** 接取门槛（`BountyDef.requireCardCount`）的**唯一判据**：够不够、缺多少。
+ *  ⚠ 艘数走 `hangar.libraryShipCount`（卡库总艘数的唯一真值），不许在这里写 `cardLibrary.length`；
+ *  ⚠ 数字全部实时算（不写死 20/18），原因文案里两个数都要给出来。
+ *  返回空串 = 达标。 */
+function cardGateReason(state: GameState, def: BountyDef): string {
+  const need = def.requireCardCount;
+  if (!need) return '';
+  const have = libraryShipCount(state.cardLibrary);
+  if (have >= need) return '';
+  return `卡库至少需要 ${need} 艘战舰才能接取这条悬赏（当前 ${have} 艘）`;
+}
+
 /**
  * 能不能接这条悬赏（**UI 与 reducer 共用**）。判据顺序 = 玩家最容易撞上的先判：
  * ① 不在协会节点 ② 战斗中 ③ 不在本批榜单（等价于"已过接取窗口"，这一版两者同一判据）
- * ④ 已接 ⑤ 已接满 3 条 ⑥ 头目在冷却。
+ * ④ 已接 ⑤ 已接满 3 条 ⑥ **卡库门槛** ⑦ 头目在冷却。
  */
 export function canAcceptBounty(state: GameState, defId: string): BountyCheck {
   const def = getBountyDef(defId);
@@ -295,6 +307,10 @@ export function canAcceptBounty(state: GameState, defId: string): BountyCheck {
   if (state.bounties.active.length >= BOUNTY_MAX_ACTIVE) {
     return deny('同时最多接 3 条悬赏，先完成一条，或者等一条过期');
   }
+  // ⑥ 卡库门槛（`requireCardCount`）：**接单与出击共用这一份判据**（`cardGateReason`），
+  //    早先它只进了数据与 UI 文案，守卫没读 → 18 艘也能接、也能打（用户 2026-08 报的漏实装）。
+  const gate = cardGateReason(state, def);
+  if (gate) return deny(gate);
   const remain = bossCooldownRemaining(def.enemyId, state.bounties.bossCooldown, state.turn);
   if (remain > 0) return deny(`该头目正在冷却，剩 ${remain} 回合`);
   return CHECK_OK;
@@ -313,6 +329,9 @@ export function canStartBountyBattle(state: GameState, defId: string, fleetId: s
   if (isBountyExpired(progress, state.turn)) return deny('这条悬赏已经过期了');
   if (state.battle) return deny('战斗还没打完');
   if (state.bountyBattleId) return deny('这条悬赏的战斗还没结束');
+  // 卡库门槛与接单**同一份判据**（`cardGateReason`）：接单后被击毁到不足 20 艘，出击也要拦。
+  const gate = cardGateReason(state, def);
+  if (gate) return deny(gate);
   const fleet = state.fleets.find((f) => f.id === fleetId);
   if (!fleet) return deny('先选一支有战舰的舰队');
   if (fleet.shipIds.length === 0) return deny('这支舰队没有战舰，出击不能空手');

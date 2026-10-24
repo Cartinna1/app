@@ -248,6 +248,19 @@ export function createBattle(opts?: CreateBattleOptions): BattleState {
     placeUnit(st, 'boss', u, firstEmpty(st.boss.board));
     log(st, `【头目技能】红胡子开场自带 1 艘海盗杂兵 1/2/0`);
   }
+  // 【雇佣兵协会】头目开场（m01 召唤幼虫 / m05 召唤海盗杂兵）
+  if (bossId === 'm01') {
+    for (let i = 0; i < 2; i++) {
+      const u0 = spawnUnit(st, 'boss', 'q1');
+      placeUnit(st, 'boss', u0, firstEmpty(st.boss.board));
+    }
+    log(st, '【头目技能】噬星母巢开场自带 2 艘噬星幼虫');
+  }
+  if (bossId === 'm05') {
+    const u5 = spawnUnit(st, 'boss', 't_grunt');
+    placeUnit(st, 'boss', u5, firstEmpty(st.boss.board));
+    log(st, '【头目技能】海盗杂兵头目开场自带 1 艘海盗杂兵');
+  }
   startTurn(st, st.active);
   return st;
 }
@@ -520,6 +533,34 @@ function bossTurnStart(st: BattleState, side: BattleSide): void {
     damageBody(st, 'player', 1);
     log(st, `  【头目技能】深海威压：玩家本体 -1（当前 ${S(st, 'player').body}）`);
   }
+  // 【雇佣兵协会】m02：全体攻 +1（一次性）+ 结构最低的一艘 +1 护盾
+  if (st.bossId === 'm02') {
+    const bs2 = S(st, 'boss');
+    if (!bs2.bossBuffed) {
+      bs2.bossBuffed = true;
+      api(st, 'boss').allies(null).forEach(a => { a.atk += 1; });
+      log(st, '  【头目技能】残响总控：己方全体攻击 +1');
+    }
+    const units2 = api(st, 'boss').allies(null);
+    if (units2.length) {
+      const low = units2.reduce((a, b) => (a.structure <= b.structure ? a : b));
+      low.shield += 1;
+      log(st, `  【头目技能】残响总控：${low.name} 补 1 护盾`);
+    }
+  }
+  // 【雇佣兵协会】m03：每回合开始按己方灵潮战舰数压玩家指挥度
+  if (st.bossId === 'm03') {
+    const n3 = api(st, 'boss').allies(null).filter(u => u.series === '灵潮').length;
+    if (n3 > 0) {
+      S(st, 'player').capBonus -= n3;
+      log(st, `  【头目技能】忆潮主祭：${n3} 艘灵潮战舰，你方本回合指挥度 -${n3}`);
+    }
+  }
+  // 【雇佣兵协会】m04：每回合开始己方全体 +2 护盾
+  if (st.bossId === 'm04') {
+    api(st, 'boss').allies(null).forEach(a => { a.shield += 2; });
+    log(st, '  【头目技能】旧律裁决官：己方全体 +2 护盾');
+  }
 }
 export function endTurn(st: BattleState): void {
   if (st.over) return;
@@ -536,6 +577,27 @@ export function endTurn(st: BattleState): void {
   for (const u of s.board) if (u && u.tempAtk) { u.atk = Math.max(0, u.atk - u.tempAtk); u.tempAtk = 0; }
   // 头目回合结束技能
   if (side === 'boss') {
+    // 【雇佣兵协会】m01：不足 2 艘时回合末补 1 艘噬星幼虫
+    if (st.bossId === 'm01') {
+      if (s.board.filter(Boolean).length < 2) {
+        const u1 = spawnUnit(st, 'boss', 'q1');
+        placeUnit(st, 'boss', u1, firstEmpty(s.board));
+        log(st, '  【头目技能】噬星母巢：召唤 1 艘噬星幼虫');
+      }
+    }
+    // 【雇佣兵协会】m04：回合结束对玩家本体 1 点（不经护盾）
+    if (st.bossId === 'm04') {
+      damageBody(st, 'player', 1);
+      log(st, `  【头目技能】旧律裁决：你的本体 -1（当前 ${S(st, 'player').body}，无视护盾）`);
+    }
+    // 【雇佣兵协会】m05：不足 2 艘时回合末补 1 艘海盗杂兵
+    if (st.bossId === 'm05') {
+      if (s.board.filter(Boolean).length < 2) {
+        const u6 = spawnUnit(st, 'boss', 't_grunt');
+        placeUnit(st, 'boss', u6, firstEmpty(s.board));
+        log(st, '  【头目技能】海盗杂兵头目：召唤 1 艘海盗杂兵');
+      }
+    }
     if (st.bossId === 'b2') {
       // 【定稿·方案⑪】回合结束：若场上不足 3 艘则补到 3 艘（钩爪登陆艇）；然后全体己方 +1 护盾（每艘最多比原始高 2）
       // 为什么是这两条：原案「召唤 1 艘」实测是自伤（1/2/0 每回合占位，挡住她自己的强卡），

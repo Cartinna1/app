@@ -1,4 +1,4 @@
-'use strict';
+﻿'use strict';
 /* ============================================================================
    P7 验收：掠夺循环（V1.5 §10.2）
    用法：node --import ./scripts/register-ts.mjs scripts/check-battle-raid.cjs
@@ -40,6 +40,12 @@ const J = (v) => JSON.stringify(v);
   if (missing.length) { console.error('raid.ts 缺少导出：' + missing.join(', ') + '（现有：' + Object.keys(R).join(', ') + '）'); process.exit(2); }
 
   const D = (st, a) => gameReducer(st, a);
+  /** 结算到底（END_BATTLE 两段：① 结算并挂 battle.settlement ② 再点一次清空战斗） */
+  const END = (st) => {
+    let s = D(st, { type: 'END_BATTLE' });
+    for (let i = 0; i < 4 && s.battle && s.battle.settlement; i += 1) s = D(s, { type: 'END_BATTLE' });
+    return s;
+  };
   /** 把一场战斗用 autoTurn 打到底（走 reducer 的 BATTLE_ACTION，全程 clone） */
   const fightTo = (st) => {
     let x = st, n = 0;
@@ -491,9 +497,9 @@ const J = (v) => JSON.stringify(v);
     const won = winFight('b2');
     check(!!won, '构造出一场玩家获胜的老巢战（b2 + 26 艘新手编制，200 个 seed 内）');
     if (won) {
-      const after = D(won, { type: 'END_BATTLE' });
+      const after = END(won);
       check(J(after.defeatedLairs) === J(['b2']), '老巢战胜利 → 账本记下这一场的老巢（唯一写入点 = END_BATTLE）', J(after.defeatedLairs));
-      check(D(after, { type: 'END_BATTLE' }) === after, '重复 END_BATTLE（已无战斗）→ 原样返回（不会重复记账）');
+      check(END(after) === after, '重复 END_BATTLE（已无战斗）→ 原样返回（不会重复记账）');
       // 同一个老巢再赢一次 → 账本里仍只有一项
       const wonAgain = winFight('b2');
       if (wonAgain) {
@@ -512,7 +518,7 @@ const J = (v) => JSON.stringify(v);
       raidSt = D(raidSt, { type: 'START_BATTLE', bossId: 'raid', fleet: raidSt.fleets[0].shipIds.slice(), kind: 'defense', seed: 7 });
       raidSt = fightTo(raidSt);
       check(!!raidSt.battle && raidSt.battle.over, '掠夺战能打完（用于验证它不动账本）');
-      check(J(D(raidSt, { type: 'END_BATTLE' }).defeatedLairs) === J([]), '掠夺战结束 → 账本不受影响（掠夺队不是老巢）');
+      check(J(END(raidSt).defeatedLairs) === J([]), '掠夺战结束 → 账本不受影响（掠夺队不是老巢）');
     }
     // 纯函数层：幂等按**引用**表达（重复写入返回同一个数组）
     const ledger = ['b1'];
@@ -662,8 +668,8 @@ const J = (v) => JSON.stringify(v);
       reputation: rollRaidReward(winRaid.ships[0], 0.8, 0.5),
     };
     const raised = (await import('@/lib/battle/rewards')).grantRaidReward(winRaid.ships[0], rewardByKind.material, 1);
-    const afterWin = D({ ...winRaid, ships: [raised, ...winRaid.ships.slice(1)] }, { type: 'END_BATTLE' });
-    check(afterWin.battle === null && afterWin.raid.immuneTurns === R.RAID_IMMUNE_TURNS, '打赢最后一支 → 战斗收起 + 进入免疫期', J(afterWin.raid));
+    const afterWin = END({ ...winRaid, ships: [raised, ...winRaid.ships.slice(1)] });
+    check(afterWin.battle === null && afterWin.raid.immuneTurns === R.RAID_IMMUNE_TURNS, '打赢最后一支 → 战斗收起（再点一次返回） + 进入免疫期', J(afterWin.raid));
     // ⚠ `END_BATTLE` 里的奖励由 reducer 取 `Math.random()` 掷、脚本**无法指定类别** →
     //   真实那一场只断言**形状 ∈ 四类**（见下方 isWinDetailShape），**不许拿"四份确定性样例"
     //   去比**：样例里"原料类"只覆盖了 pickRoll 命中的那一种原料名，随机掷到别的原料就假红
@@ -776,7 +782,7 @@ const J = (v) => JSON.stringify(v);
     // ---- 去重前缀的收尾：打输那条 detail 也不许以 event + '：' 开头 ----
     {
       const forced = { ...richRaid(mkRaidAtOver({})), battle: { ...richRaid(mkRaidAtOver({})).battle, winner: 'boss', over: true } };
-      const log = D(forced, { type: 'END_BATTLE' }).eventLog[0];
+      const log = END(forced).eventLog[0];
       check(log.detail.indexOf(log.event + '：') !== 0, '打输那条 detail 不以 `event + 冒号` 开头（无重复前缀）', J(logLine(log)));
       check(logLine(log).indexOf('殖民地被掠夺：') < 0, '打输那条渲染串里没有重复的「殖民地被掠夺：」', logLine(log));
     }
@@ -791,7 +797,7 @@ const J = (v) => JSON.stringify(v);
       const forced = { ...lostBattle, battle: { ...lostBattle.battle, winner: 'boss', over: true } };
       const expectLoss = raidLootLoss(forced);                          // 扣减用的那一份（同源）
       const before = forced.ships[0];
-      const after = D(forced, { type: 'END_BATTLE' });
+      const after = END(forced);
       const now = after.ships[0];
       const log = after.eventLog[0];
       check(log.event === RAID_LOOT_EVENT, '**防守战打输 → 事件记录 event = 「殖民地被掠夺」**', log.event);
@@ -947,3 +953,9 @@ const J = (v) => JSON.stringify(v);
   console.error('验收脚本自身出错：', e && e.stack ? e.stack.split('\n').slice(0, 10).join('\n') : e);
   process.exitCode = 2;
 });
+
+
+
+
+
+

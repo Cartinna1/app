@@ -251,6 +251,25 @@ export interface BattleSideStat {
   healEvents: number;
 }
 
+/** 本场战斗的**得失明细**（战斗结束面板「本场得失」的数据）。
+ *  ⚠ 挂在 `battle` 上（`BattleState.settlement`），所以**随战斗一起消失**：`battle` 不进存档，
+ *    读档后 `battle` 为 null → 结算面板与这份明细一起没有（不需要任何新存档字段）。
+ *  ⚠ 这里放的是**已经发出去的东西**（金币已过饥荒减半、掉落已写进卡库），不是预览。 */
+export interface BattleSettlement {
+  /** 实收金币（已过 famineHalveGold）；0 / 缺省 = 不显示 */
+  gold?: number;
+  /** 实收星尘 */
+  stardust?: number;
+  /** 实收原料（qty 为实际数量；0 的不进数组） */
+  materials?: { id: string; name: string; qty: number }[];
+  /** 悬赏掉落的战舰（敌方战利品；qty 同型份数） */
+  cards?: { id: string; name: string; qty: number }[];
+  /** 本场**永久损失**的战舰艘数 */
+  lostShips?: number;
+  /** 一行总述（可直接渲染；无奖励时写「本场无奖励」） */
+  summary: string;
+}
+
 /** 一场战斗的完整状态 */
 export interface BattleState {
   rnd: Rng;
@@ -266,6 +285,8 @@ export interface BattleState {
   stat: Record<BattleSide, BattleSideStat>;
   player: BattleSideState;
   boss: BattleSideState;
+  /** 本场得失（结算时填；有它 = 已结算但面板还开着，见 reducer 的 `END_BATTLE`） */
+  settlement?: BattleSettlement;
 }
 
 /** 调用方的动作结果（统一形状，UI 直接读 ok/msg） */
