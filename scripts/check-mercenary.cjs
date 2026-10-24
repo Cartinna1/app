@@ -525,14 +525,14 @@ const eq = (a, b) => J(a) === J(b);
   console.log('\n[15] 头目技能（m01~m05）：每支各一条"确实生效"的行为断言');
   {
     const ENG = await import('@/lib/battle/engine');
-    const { createBattle, endTurn, spawnUnit, placeUnit } = ENG;
+    const { createBattle: CB, endTurn, spawnUnit, placeUnit } = ENG;
     // m01：开场自带 2 艘噬星幼虫
-    const b1 = createBattle({ seed: 3, bossId: 'm01', playerFirst: false });
+    const b1 = CB({ seed: 3, bossId: 'm01', playerFirst: false });
     check(b1.boss.board.filter(Boolean).length === 2
       && b1.boss.board.filter(Boolean).every((u) => u && u.cardId === 'q1'),
       'm01 开场自带 2 艘噬星幼虫（q1）', J(b1.boss.board.filter(Boolean).map((u) => u && u.cardId)));
     // m05：开场自带 1 艘海盗杂兵
-    const b5 = createBattle({ seed: 3, bossId: 'm05', playerFirst: false });
+    const b5 = CB({ seed: 3, bossId: 'm05', playerFirst: false });
     check(b5.boss.board.filter(Boolean).length === 1
       && b5.boss.board.filter(Boolean)[0].cardId === 't_grunt',
       'm05 开场自带 1 艘海盗杂兵（t_grunt）', J(b5.boss.board.filter(Boolean).map((u) => u && u.cardId)));
@@ -543,15 +543,16 @@ const eq = (a, b) => J(a) === J(b);
       'm02/m03 的技能文案与生成物一致（机制分支由 audit 严格相等覆盖）',
       J([ENG.BOSSES.m02.skill, ENG.BOSSES.m03.skill]));
     // m04：回合末对玩家本体 -1（不经护盾）
-    const m4 = createBattle({ seed: 9, bossId: 'm04', playerFirst: false });
+    const m4raw = CB({ seed: 9, bossId: 'm04', playerFirst: false });
+    const m4 = { ...m4raw, round: 2 };   // A4：m04 改为每 2 回合一次，必须验第 2 回合
     const bodyBefore = m4.player.body;
     const shieldsBefore = m4.player.board.filter(Boolean).reduce((sum, u) => sum + (u ? u.shield : 0), 0);
     endTurn(m4);   // 玩家回合结束 → BOSS 回合开始（m04 全体 +2 盾）后马上 BOSS 回合结束（本体 -1）
     check(m4.player.body === bodyBefore - 1 && m4.player.board.filter(Boolean).reduce((sum, u) => sum + (u ? u.shield : 0), 0) === shieldsBefore,
       'm04 回合结束玩家本体 -1，且没有经过任何护盾结算（场上护盾总和不变）',
       J({ body: m4.player.body, shields: shieldsBefore }));
-    check(ENG.BOSSES.m01.hp === 30 && ENG.BOSSES.m04.hp === 34 && ENG.BOSSES.m05.hp === 18,
-      '五个头目的血量来自生成物（30/32/28/34/18 中的 30/34/18）', J(ENG.BOSSES.m01.hp));
+    check(ENG.BOSSES.m01.hp === 30 && ENG.BOSSES.m04.hp === 30 && ENG.BOSSES.m05.hp === 18,
+      '五个头目的血量来自生成物（m01 30 / m04 30（A4 从 34 下调）/ m05 18）', J(ENG.BOSSES.m01.hp));
   }
   // ---------- ⑯ 卡库门槛（requireCardCount）真的被守卫读了 ----------
   console.log('\n[16] 接取门槛：卡库 18 艘被拒 / 20 艘可接 / 出击也拦 / 艘数只有一个来源');
@@ -592,6 +593,53 @@ const eq = (a, b) => J(a) === J(b);
     // 清剿/截击档没有门槛 → 不受影响
     check(B.canAcceptBounty(withLib(0), 'bty_p1').ok, '清剿档（无 requireCardCount）不受门槛影响');
   }
+  // ---------- ⑯b A4 调参后的四条行为断言 ----------
+  console.log('\n[15b] A4 调参：m04 每 2 回合 / m02 叠到 +3 止 / m03 最多 -2 且前 5 回合 / m04 hp 30');
+  {
+    const { createBattle: CB, endTurn: ET, aiTurn: AI, spawnUnit: SU, placeUnit: PU } = await import('@/lib/battle/engine');
+    const { PIRATE_BOSSES: PB } = await import('@/data/battle/pirates');
+    /** 只留技能：把敌方池清空，aiTurn 就不会部署/攻击，能干净地观察回合钩子 */
+    // ⚠ 引擎是**原地改**战斗对象的：每帧都要克隆 player/boss，否则 damage 会跨帧累加
+    const noArmy = (st) => ({ ...st, boss: { ...st.boss, pool: [] }, player: { ...st.player, board: st.player.board.slice() } });
+    // ① m04：第 1 回合末不掉、第 2 回合末 −1、第 4 回合末再 −1
+    const m4 = CB({ seed: 9, bossId: 'm04', playerFirst: true });
+    const body0 = m4.player.body;
+    /** 单帧：把 active 设成 boss 再 endTurn（BOSS 回合结束钩子）→ 返回本体值 */
+    const bodyAt = (round) => { const s = noArmy({ ...m4, round, active: 'boss' }); ET(s); return s.player.body; };
+    const b1v = bodyAt(1);
+    const b2v = bodyAt(2);
+    const b4v = bodyAt(4);
+    check(b1v === body0 && b2v === body0 - 1 && b4v === body0 - 1,
+      'm04 第 1 回合末不掉血、第 2 回合末 −1、第 4 回合末也只 −1（每 2 回合一次）',
+      J({ r1: b1v, r2: b2v, r4: b4v, before: body0 }));
+    // ② m02：第 1/2/3 回合各 +1（共 +3），第 4 回合起不再涨
+    // ⚠ m02 的"+1 上限 +3"没法用公开入口稳定驱动（`bossTurnStart` 不导出、`aiTurn` 的回合编排会跳过它），
+    //   故这一条改为**源码级 + 数据级**断言：实现里必须是 `st.round <= 3` 且文案写「上限 +3」。
+    {
+      const fs = require('fs');
+      const path = require('path');
+      const eng = fs.readFileSync(path.resolve(__dirname, '../src/lib/battle/engine.ts'), 'utf8');
+      const hasCap = /if \(st\.round <= 3\) \{[\s\S]{0,200}?a\.atk \+= 1;/.test(eng);
+      check(hasCap && eng.includes('上限 +3'),
+        'm02 叠层实现 = 第 1/2/3 回合各 +1（`st.round <= 3`），文案写「上限 +3」',
+        J({ hasCap }));
+    }    // ③ m03：5 艘灵潮时也只 −2；第 6 回合起不再压
+    const m3 = CB({ seed: 7, bossId: 'm03', playerFirst: true });
+    const five = noArmy({ ...m3, round: 1 });
+    for (let i = 0; i < 5; i += 1) PU(five, 'boss', SU(five, 'boss', 'y1'), i);
+    const cap0 = five.player.capBonus;
+    AI(five, 'boss');
+    const capCut = five.player.capBonus;
+    const late = noArmy({ ...m3, round: 6 });
+    for (let i = 0; i < 5; i += 1) PU(late, 'boss', SU(late, 'boss', 'y1'), i);
+    late.player.capBonus = 0;
+    AI(late, 'boss');
+    check(capCut === cap0 - 2 && late.player.capBonus === 0,
+      'm03 场上有 5 艘灵潮时也只 −2；第 6 回合起不再压', J({ cap0, capCut, round6: late.player.capBonus }));
+    // ④ 生成物里的 m04：hp 30 + 文案含「每 2 回合」
+    check(PB.m04.hp === 30 && PB.m04.skill.includes('每 2 回合'),
+      'PIRATE_BOSSES.m04.hp === 30 且文案含「每 2 回合」', J({ hp: PB.m04.hp, skill: PB.m04.skill }));
+  }
   // ---------- ⑰ 敌方旗帜（四支势力各一面，唯一映射 + 文件真实存在）----------
   console.log('\n[17] 敌方旗帜：四势力各映射到正确文件，m05/raid 为 null，文件真实存在');
   {
@@ -631,6 +679,13 @@ const eq = (a, b) => J(a) === J(b);
   console.error('脚本异常：', e);
   process.exitCode = 1;
 });
+
+
+
+
+
+
+
 
 
 

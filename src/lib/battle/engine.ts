@@ -533,13 +533,12 @@ function bossTurnStart(st: BattleState, side: BattleSide): void {
     damageBody(st, 'player', 1);
     log(st, `  【头目技能】深海威压：玩家本体 -1（当前 ${S(st, 'player').body}）`);
   }
-  // 【雇佣兵协会】m02：全体攻 +1（一次性）+ 结构最低的一艘 +1 护盾
+  // 【雇佣兵协会】m02：每回合开始全体攻 +1（上限 +3）+ 结构最低的一艘 +1 护盾
   if (st.bossId === 'm02') {
-    const bs2 = S(st, 'boss');
-    if (!bs2.bossBuffed) {
-      bs2.bossBuffed = true;
+    // 每回合开始 +1、上限 +3（第 1/2/3 回合各叠一层；不用 bossBuffed、不新增字段）
+    if (st.round <= 3) {
       api(st, 'boss').allies(null).forEach(a => { a.atk += 1; });
-      log(st, '  【头目技能】残响总控：己方全体攻击 +1');
+      log(st, `  【头目技能】残响总控：己方全体攻击 +1（第 ${st.round}/3 层，上限 +3）`);
     }
     const units2 = api(st, 'boss').allies(null);
     if (units2.length) {
@@ -548,12 +547,13 @@ function bossTurnStart(st: BattleState, side: BattleSide): void {
       log(st, `  【头目技能】残响总控：${low.name} 补 1 护盾`);
     }
   }
-  // 【雇佣兵协会】m03：每回合开始按己方灵潮战舰数压玩家指挥度
+  // 【雇佣兵协会】m03：前 5 回合的每回合开始按己方灵潮数压玩家指挥度（最多 -2）
   if (st.bossId === 'm03') {
     const n3 = api(st, 'boss').allies(null).filter(u => u.series === '灵潮').length;
-    if (n3 > 0) {
-      S(st, 'player').capBonus -= n3;
-      log(st, `  【头目技能】忆潮主祭：${n3} 艘灵潮战舰，你方本回合指挥度 -${n3}`);
+    if (n3 > 0 && st.round <= 5) {
+      const cut = Math.min(2, n3);
+      S(st, 'player').capBonus -= cut;
+      log(st, `  【头目技能】忆潮主祭：${n3} 艘灵潮战舰，你方本回合指挥度 -${cut}（最多 2，仅前 5 回合）`);
     }
   }
   // 【雇佣兵协会】m04：每回合开始己方全体 +2 护盾
@@ -586,9 +586,9 @@ export function endTurn(st: BattleState): void {
       }
     }
     // 【雇佣兵协会】m04：回合结束对玩家本体 1 点（不经护盾）
-    if (st.bossId === 'm04') {
+    if (st.bossId === 'm04' && st.round % 2 === 0) {
       damageBody(st, 'player', 1);
-      log(st, `  【头目技能】旧律裁决：你的本体 -1（当前 ${S(st, 'player').body}，无视护盾）`);
+      log(st, `  【头目技能】旧律裁决：你的本体 -1（第 ${st.round} 回合末，每 2 回合一次；当前 ${S(st, 'player').body}，无视护盾）`);
     }
     // 【雇佣兵协会】m05：不足 2 艘时回合末补 1 艘海盗杂兵
     if (st.bossId === 'm05') {

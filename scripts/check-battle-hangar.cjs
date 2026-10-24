@@ -461,6 +461,82 @@ const J = (v) => JSON.stringify(v);
     check(ship.indexOf('canCancelBuild') >= 0 && ship.indexOf('QueueRow') >= 0, '保留：队列行 + 取消排队');
   }
 
+  // ---------- ⑪ 编队标签的系列 chip（用户 2026-08「编成舰队的时候没有分类…费用从低到高」） ----------
+  //  口径：
+  //    · **与卡库 / 船坞同一个组件**（`SeriesChipRow`）+ 同一份判定（`lib/battle/seriesFilter`）；
+  //    · 档位来自**这份编成列表里出现的卡**（`hangar.fleetEditorRows` = 卡库持有的型 = "已拥有"口径），
+  //      **不硬编码系列清单** —— 雇佣兵协会掉落的 4 个敌方系列（虫群/智械/灵潮/旧律，卡 id q*/z*/y*/v*）
+  //      与通用系（c*）只要卡库里有就必须出现对应 chip；
+  //    · 每系列内**费用从低到高**（`fleetEditorRows` 已按「系列→费用→id」排好，筛选只过滤不重排）。
+  console.log('\n[11] 编队：系列 chip（三处共用组件 + 雇佣兵掉落的敌方系列边界）');
+  {
+    const S = await import('@/lib/battle/seriesFilter');
+    const fs = require('fs');
+    const path = require('path');
+    const code = (p) => fs.readFileSync(path.resolve(__dirname, '../' + p), 'utf8')
+      .replace(/\/\*[\s\S]*?\*\//g, ' ').replace(/\/\/[^\n]*/g, '');
+    const libSrc = code('src/components/hangar/LibraryPanel.tsx');
+    const yardSrc = code('src/components/hangar/ShipyardPanel.tsx');
+    const edSrc = code('src/components/hangar/FleetEditor.tsx');
+
+    // ① 共用同一个 chip 组件（不许各写一份）
+    check(edSrc.indexOf("from './SeriesChipRow'") >= 0 && edSrc.indexOf('<SeriesChipRow') >= 0,
+      '★ 编队页渲染同一个 SeriesChipRow');
+    const users = [libSrc, yardSrc, edSrc].filter((s) => s.indexOf('<SeriesChipRow') >= 0).length;
+    check(users === 3, '★ 卡库 / 船坞 / 编队三处共用同一份 chip 组件', String(users));
+    check(/border-(red|violet|amber|sky|slate)-\d00/.test(edSrc) === false,
+      '★ 编队页没有自己的颜色类（颜色唯一出口 = seriesChipClass）');
+    // ② 档位来自列表出现的卡，不硬编码系列清单
+    check(edSrc.indexOf('seriesGroups(rows)') >= 0, '★ 档位 = seriesGroups(rows)（来自编成列表出现的卡）',
+      '组件必须调 lib，不许自己数系列');
+    const hardcoded = ['圣辉', '铁血', '灵能', '财团'].filter((s) => edSrc.indexOf("'" + s + "'") >= 0);
+    check(hardcoded.length === 0, '★ 组件里没有硬编码系列清单', J(hardcoded));
+
+    // ③ 真实状态：卡库塞 圣辉 + 通用 + 雇佣兵掉落的 4 个敌方系列 → chips 必须全出现
+    const st = build(['h1', 'c1', 'q1', 'z1', 'y1', 'v1'], [[]]);
+    const fleetId = st.fleets[0].id;
+    const rows = H.fleetEditorRows(st, fleetId);
+    const groups = S.seriesGroups(rows);
+    const names = groups.map((g) => g.series);
+    for (const s of ['圣辉', '通用', '虫群', '智械', '灵潮', '旧律']) {
+      check(names.indexOf(s) >= 0, '★ chips 里出现「' + s + '」'
+        + (['虫群', '智械', '灵潮', '旧律'].indexOf(s) >= 0 ? '（雇佣兵掉落系列 = 用户点名的边界）' : ''), J(names));
+    }
+    /* 档位 = **恰好**这 6 个系列（顺序不在这里规定：编成行由 `fleetEditorRows` 按「系列 → 费用 → id」
+       排好（lib 的唯一排序），`seriesGroups` 只按行序收档 ⇒ chip 顺序 = lib 的排序结果，不是硬编码。
+       故这里比"集合"，不比顺序。） */
+    check(names.length === 6 && J(names.slice().sort()) === J(['圣辉', '旧律', '智械', '灵潮', '虫群', '通用'].sort()),
+      'chips 档 = 恰好实际出现的 6 个系列（不是硬编码的 4 个）', J(names));
+    console.log('  （chip 顺序 = `fleetEditorRows` 的系列排序：' + names.join(' / ') + '）');
+    check(groups.every((g) => g.count >= 1), '每档计数 ≥1', J(groups));
+
+    // ④ 默认 = 第一个"有卡的"系列（绝不空列表）
+    const def = S.defaultSeriesFilter(groups);
+    check(def === groups[0].series && def === '圣辉', '★ 默认选中 = 第一个有卡的系列（圣辉）', def);
+
+    // ⑤ 筛「虫群」→ 只剩虫群行；每系列内费用升序（沿用 lib 的排序）
+    const qRows = S.filterBySeries(rows, '虫群');
+    check(qRows.length === 1 && qRows[0].id === 'q1' && qRows[0].name === '噬星幼虫',
+      '★ 筛「虫群」→ 行 = 噬星幼虫（q1）', J(qRows.map((r) => r.id)));
+    const st2 = build(['q5', 'q1', 'q3'], [[]]);
+    const q2Rows = S.filterBySeries(H.fleetEditorRows(st2, st2.fleets[0].id), '虫群');
+    check(J(q2Rows.map((r) => r.cost)) === J([1, 3, 5]), '★ 同系列内按**费用升序**（1→3→5，不另排）',
+      J(q2Rows.map((r) => r.cost)));
+    check(J(q2Rows.map((r) => r.id)) === J(['q1', 'q3', 'q5']), '费用升序时同费按 id（q1/q3/q5）',
+      J(q2Rows.map((r) => r.id)));
+
+    // ⑥ 边界：筛出来的敌方系列卡**能正常编入 / 卸下**（真实 reducer，筛选不影响编成）
+    const canAdd = H.canAddShip(st, fleetId, 'q1');
+    check(canAdd.ok === true, '★ 敌方系列卡可编入（canAddShip 通过）', canAdd.reason || '');
+    const st3 = D(st, { type: 'ADD_SHIP_TO_FLEET', fleetId, shipId: 'q1' });
+    check(st3.fleets[0].shipIds.indexOf('q1') >= 0, '★ reducer：q1 真的编进舰队（筛选不挡编成）');
+    const st4 = D(st3, { type: 'REMOVE_SHIP_FROM_FLEET', fleetId, shipId: 'q1' });
+    check(st4.fleets[0].shipIds.indexOf('q1') < 0, '★ reducer：q1 也能卸下（− 按钮同一条路径）');
+    // ⑦ 每个档位都至少有 1 行（不会出现"chip 有、列表空"）
+    check(groups.every((g) => S.filterBySeries(rows, g.series).length > 0),
+      '★ 每个 chip 都对应 ≥1 行（不出现空列表）');
+  }
+
   console.log('\n=== P6 验收结果 ===');
   if (fails.length === 0) console.log('  全部通过 ✓');
   else { console.log('  ' + fails.length + ' 条失败 ✗'); process.exitCode = 1; }
