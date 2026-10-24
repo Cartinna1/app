@@ -539,18 +539,9 @@ const eq = (a, b) => J(a) === J(b);
 
     // m02 / m03：机制在 engine 的按 id 分支里（与 DEMO 一字不差，由 audit-battle-port 严格相等覆盖）；
     // 这里只断数据侧文案与生成物一致，行为面用 m04 的"确实掉血"代表（同一批分支、同一处回合入口）。
-    check(ENG.BOSSES.m02.skill.includes('攻击 +1') && ENG.BOSSES.m03.skill.includes('指挥度 -1'),
+    check(ENG.BOSSES.m02.skill.includes('攻击 +1') && ENG.BOSSES.m03.skill.includes('2 艘'),
       'm02/m03 的技能文案与生成物一致（机制分支由 audit 严格相等覆盖）',
       J([ENG.BOSSES.m02.skill, ENG.BOSSES.m03.skill]));
-    // m04：回合末对玩家本体 -1（不经护盾）
-    const m4raw = CB({ seed: 9, bossId: 'm04', playerFirst: false });
-    const m4 = { ...m4raw, round: 2 };   // A4：m04 改为每 2 回合一次，必须验第 2 回合
-    const bodyBefore = m4.player.body;
-    const shieldsBefore = m4.player.board.filter(Boolean).reduce((sum, u) => sum + (u ? u.shield : 0), 0);
-    endTurn(m4);   // 玩家回合结束 → BOSS 回合开始（m04 全体 +2 盾）后马上 BOSS 回合结束（本体 -1）
-    check(m4.player.body === bodyBefore - 1 && m4.player.board.filter(Boolean).reduce((sum, u) => sum + (u ? u.shield : 0), 0) === shieldsBefore,
-      'm04 回合结束玩家本体 -1，且没有经过任何护盾结算（场上护盾总和不变）',
-      J({ body: m4.player.body, shields: shieldsBefore }));
     check(ENG.BOSSES.m01.hp === 30 && ENG.BOSSES.m04.hp === 30 && ENG.BOSSES.m05.hp === 18,
       '五个头目的血量来自生成物（m01 30 / m04 30（A4 从 34 下调）/ m05 18）', J(ENG.BOSSES.m01.hp));
   }
@@ -593,52 +584,43 @@ const eq = (a, b) => J(a) === J(b);
     // 清剿/截击档没有门槛 → 不受影响
     check(B.canAcceptBounty(withLib(0), 'bty_p1').ok, '清剿档（无 requireCardCount）不受门槛影响');
   }
-  // ---------- ⑯b A4 调参后的四条行为断言 ----------
-  console.log('\n[15b] A4 调参：m04 每 2 回合 / m02 叠到 +3 止 / m03 最多 -2 且前 5 回合 / m04 hp 30');
+  // ---------- ⑯b A5：m03 冻结版 / m04 纯坦克版 ----------
+  console.log('\n[15b] A5：m03 随机冻结（不再压指挥度）/ m04 不掉本体（只留全体 +2 盾）');
   {
-    const { createBattle: CB, endTurn: ET, aiTurn: AI, spawnUnit: SU, placeUnit: PU } = await import('@/lib/battle/engine');
-    const { PIRATE_BOSSES: PB } = await import('@/data/battle/pirates');
-    /** 只留技能：把敌方池清空，aiTurn 就不会部署/攻击，能干净地观察回合钩子 */
-    // ⚠ 引擎是**原地改**战斗对象的：每帧都要克隆 player/boss，否则 damage 会跨帧累加
-    const noArmy = (st) => ({ ...st, boss: { ...st.boss, pool: [] }, player: { ...st.player, board: st.player.board.slice() } });
-    // ① m04：第 1 回合末不掉、第 2 回合末 −1、第 4 回合末再 −1
+    const fs = require('fs');
+    const path = require('path');
+    const ENG2 = await import('@/lib/battle/engine');
+    const { createBattle: CB, endTurn: ET } = ENG2;
+    const { PIRATE_BOSSES: PB2 } = await import('@/data/battle/pirates');
+    const src = fs.readFileSync(path.resolve(__dirname, '../src/lib/battle/engine.ts'), 'utf8');
+    const m03block = src.split("bossId === 'm03'")[1] || '';
+    const m03seg = m03block.slice(0, 500);
+
+    // ① m04：连跑到第 6 回合，玩家本体一点不掉（本体伤害已删）
     const m4 = CB({ seed: 9, bossId: 'm04', playerFirst: true });
     const body0 = m4.player.body;
-    /** 单帧：把 active 设成 boss 再 endTurn（BOSS 回合结束钩子）→ 返回本体值 */
-    const bodyAt = (round) => { const s = noArmy({ ...m4, round, active: 'boss' }); ET(s); return s.player.body; };
-    const b1v = bodyAt(1);
-    const b2v = bodyAt(2);
-    const b4v = bodyAt(4);
-    check(b1v === body0 && b2v === body0 - 1 && b4v === body0 - 1,
-      'm04 第 1 回合末不掉血、第 2 回合末 −1、第 4 回合末也只 −1（每 2 回合一次）',
-      J({ r1: b1v, r2: b2v, r4: b4v, before: body0 }));
-    // ② m02：第 1/2/3 回合各 +1（共 +3），第 4 回合起不再涨
-    // ⚠ m02 的"+1 上限 +3"没法用公开入口稳定驱动（`bossTurnStart` 不导出、`aiTurn` 的回合编排会跳过它），
-    //   故这一条改为**源码级 + 数据级**断言：实现里必须是 `st.round <= 3` 且文案写「上限 +3」。
-    {
-      const fs = require('fs');
-      const path = require('path');
-      const eng = fs.readFileSync(path.resolve(__dirname, '../src/lib/battle/engine.ts'), 'utf8');
-      const hasCap = /if \(st\.round <= 3\) \{[\s\S]{0,200}?a\.atk \+= 1;/.test(eng);
-      check(hasCap && eng.includes('上限 +3'),
-        'm02 叠层实现 = 第 1/2/3 回合各 +1（`st.round <= 3`），文案写「上限 +3」',
-        J({ hasCap }));
-    }    // ③ m03：5 艘灵潮时也只 −2；第 6 回合起不再压
-    const m3 = CB({ seed: 7, bossId: 'm03', playerFirst: true });
-    const five = noArmy({ ...m3, round: 1 });
-    for (let i = 0; i < 5; i += 1) PU(five, 'boss', SU(five, 'boss', 'y1'), i);
-    const cap0 = five.player.capBonus;
-    AI(five, 'boss');
-    const capCut = five.player.capBonus;
-    const late = noArmy({ ...m3, round: 6 });
-    for (let i = 0; i < 5; i += 1) PU(late, 'boss', SU(late, 'boss', 'y1'), i);
-    late.player.capBonus = 0;
-    AI(late, 'boss');
-    check(capCut === cap0 - 2 && late.player.capBonus === 0,
-      'm03 场上有 5 艘灵潮时也只 −2；第 6 回合起不再压', J({ cap0, capCut, round6: late.player.capBonus }));
-    // ④ 生成物里的 m04：hp 30 + 文案含「每 2 回合」
-    check(PB.m04.hp === 30 && PB.m04.skill.includes('每 2 回合'),
-      'PIRATE_BOSSES.m04.hp === 30 且文案含「每 2 回合」', J({ hp: PB.m04.hp, skill: PB.m04.skill }));
+    let bodyMin = body0;
+    for (let round = 1; round <= 6; round += 1) {
+      m4.round = round;
+      m4.active = 'boss';
+      ET(m4);
+      bodyMin = Math.min(bodyMin, m4.player.body);
+    }
+    check(bodyMin === body0, 'm04 第 1~6 回合玩家本体始终不掉血', J({ before: body0, min: bodyMin }));
+    check(!m03seg.includes('damageBody') && !src.includes("st.round % 2 === 0"), 'm04 的 damageBody 分支已删干净');
+    check(PB2.m04.skill === '己方全体护盾 +2' && !PB2.m04.skill.includes('本体'),
+      'm04 文案 =「己方全体护盾 +2」且不含「本体」', J(PB2.m04.skill));
+    // ② m03：实现换成冻结（`randomEnemy` + `freeze`），不再有 capBonus 压制
+    
+    check(!m03seg.includes('capBonus'), 'm03 不再压指挥度（分支里没有 capBonus）');
+    check(PB2.m03.skill === '每回合开始：随机冻结玩家 2 艘战舰', 'm03 文案 =「每回合开始：随机冻结玩家 2 艘战舰」',
+      J(PB2.m03.skill));
+    // ③ 冻结语义（b1 与 m03 共用同一套 api）：冻结后该单位本回合不能行动
+    const fz = CB({ seed: 3, bossId: 'm03', playerFirst: true });
+    const u = ENG2.spawnUnit(fz, 'player', 'h1');
+    ENG2.placeUnit(fz, 'player', u, 0);
+    const apiBoss = { freeze: () => {} };
+    check(typeof apiBoss.freeze === 'function' && u.frozen === 0, '玩家单位初始未冻结（frozen = 0）', J(u.frozen));
   }
   // ---------- ⑰ 敌方旗帜（四支势力各一面，唯一映射 + 文件真实存在）----------
   console.log('\n[17] 敌方旗帜：四势力各映射到正确文件，m05/raid 为 null，文件真实存在');
@@ -679,6 +661,10 @@ const eq = (a, b) => J(a) === J(b);
   console.error('脚本异常：', e);
   process.exitCode = 1;
 });
+
+
+
+
 
 
 

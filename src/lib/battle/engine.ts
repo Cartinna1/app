@@ -547,13 +547,21 @@ function bossTurnStart(st: BattleState, side: BattleSide): void {
       log(st, `  【头目技能】残响总控：${low.name} 补 1 护盾`);
     }
   }
-  // 【雇佣兵协会】m03：前 5 回合的每回合开始按己方灵潮数压玩家指挥度（最多 -2）
+  // 【雇佣兵协会】m03：每回合开始随机冻结玩家 2 艘战舰（各 1 回合；写法照 b1 的冻结）
   if (st.bossId === 'm03') {
-    const n3 = api(st, 'boss').allies(null).filter(u => u.series === '灵潮').length;
-    if (n3 > 0 && st.round <= 5) {
-      const cut = Math.min(2, n3);
-      S(st, 'player').capBonus -= cut;
-      log(st, `  【头目技能】忆潮主祭：${n3} 艘灵潮战舰，你方本回合指挥度 -${cut}（最多 2，仅前 5 回合）`);
+    const picked: BattleUnit[] = [];
+    for (let i = 0; i < 2; i++) {
+      const cand = api(st, 'boss').randomEnemy();
+      if (!cand) break;                      // 玩家场上没有战舰
+      if (picked.indexOf(cand) >= 0) break;  // 抽到已选中的那艘 → 只剩它可选，停
+      picked.push(cand);
+    }
+    if (picked.length === 0) {
+      log(st, '  【头目技能】忆潮主祭：你场上没有战舰，冻结落空');
+    } else {
+      picked.forEach(u => api(st, 'boss').freeze(u, 1));
+      const suffix = picked.length === 1 ? '（1 回合）' : '（各 1 回合）';
+      log(st, `  【头目技能】忆潮主祭：冻结 ${picked.map(u => u.name).join('、')}${suffix}`);
     }
   }
   // 【雇佣兵协会】m04：每回合开始己方全体 +2 护盾
@@ -584,11 +592,6 @@ export function endTurn(st: BattleState): void {
         placeUnit(st, 'boss', u1, firstEmpty(s.board));
         log(st, '  【头目技能】噬星母巢：召唤 1 艘噬星幼虫');
       }
-    }
-    // 【雇佣兵协会】m04：回合结束对玩家本体 1 点（不经护盾）
-    if (st.bossId === 'm04' && st.round % 2 === 0) {
-      damageBody(st, 'player', 1);
-      log(st, `  【头目技能】旧律裁决：你的本体 -1（第 ${st.round} 回合末，每 2 回合一次；当前 ${S(st, 'player').body}，无视护盾）`);
     }
     // 【雇佣兵协会】m05：不足 2 艘时回合末补 1 艘海盗杂兵
     if (st.bossId === 'm05') {
