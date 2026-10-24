@@ -22,6 +22,8 @@ import {
 } from '@/lib/turn/bounties';
 // 卡库艘数的唯一真值（与接单守卫同一来源：UI 不许自己写 cardLibrary.length）
 import { libraryShipCount } from '@/lib/battle/hangar';
+// 敌方旗帜的唯一映射（敌人 id → 旗帜路径 / 显示名）
+import { enemyFlagLabel, enemyFlagPath } from '@/lib/battle/enemyFlag';
 
 interface MercenaryBoardProps {
   state: GameState;
@@ -111,8 +113,27 @@ function MercenaryBoardBase({ state, fleets, onAccept, onAbandon, onStart }: Mer
         const progress = actives.find((p) => p.defId === defId) ?? null;
         const acceptCheck = canAcceptBounty(state, defId);
         const startCheck = progress ? canStartBountyBattle(state, defId, effectiveFleetId) : null;
+        // 敌方旗帜（四支势力专属）：路径与显示名都来自 `lib/battle/enemyFlag` 的**唯一映射**，
+        // m05（弱海盗）与 raid 返回 null → 整个徽记元素都不渲染（不占位、不塞占位图）。
+        const flagSrc = enemyFlagPath(def.enemyId);
+        const flagLabel = enemyFlagLabel(def.enemyId);
         return (
           <div key={defId} className={`${cardBase} ${progress ? 'border-emerald-800/60' : ''}`}>
+            {flagSrc ? (
+              /* 40×40 圆角徽记：最大出口只有 40px（64px 级）→ 用原图、不走缩略图；
+                 缺失/加载失败直接把元素收起（与项目里"缺图不崩、不留空框"的既有做法一致）。 */
+              <img
+                src={flagSrc}
+                alt={flagLabel || ''}
+                title={flagLabel || undefined}
+                width={40}
+                height={40}
+                loading="lazy"
+                decoding="async"
+                className="float-left mr-2 mb-1 h-10 w-10 rounded-[6px] border border-[#2b3550] object-cover"
+                onError={(e) => { e.currentTarget.style.display = 'none'; }}
+              />
+            ) : null}
             <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
               <span className="rounded bg-[#22304d] px-1.5 py-0.5 text-[10px] text-slate-300">
                 {KIND_LABEL[def.kind] ?? def.kind}

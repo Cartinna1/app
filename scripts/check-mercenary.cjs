@@ -592,6 +592,32 @@ const eq = (a, b) => J(a) === J(b);
     // 清剿/截击档没有门槛 → 不受影响
     check(B.canAcceptBounty(withLib(0), 'bty_p1').ok, '清剿档（无 requireCardCount）不受门槛影响');
   }
+  // ---------- ⑰ 敌方旗帜（四支势力各一面，唯一映射 + 文件真实存在）----------
+  console.log('\n[17] 敌方旗帜：四势力各映射到正确文件，m05/raid 为 null，文件真实存在');
+  {
+    const fs = require('fs');
+    const path = require('path');
+    const F = await import('@/lib/battle/enemyFlag');
+    const want = {
+      m01: '/battle/guild/flag-swarm.webp',
+      m02: '/battle/guild/flag-machine.webp',
+      m03: '/battle/guild/flag-tide.webp',
+      m04: '/battle/guild/flag-codex.webp',
+    };
+    check(Object.keys(want).every((id) => F.enemyFlagPath(id) === want[id]),
+      'm01~m04 各自映射到正确旗帜文件', J(Object.keys(want).map((id) => F.enemyFlagPath(id))));
+    check(F.enemyFlagPath('m05') === null && F.enemyFlagPath('raid') === null,
+      'm05（弱海盗）与 raid（掠夺队）→ null（界面不渲染徽记）', J([F.enemyFlagPath('m05'), F.enemyFlagPath('raid')]));
+    check(F.enemyFlagPath(null) === null && F.enemyFlagPath('b1') === null,
+      '其它敌人 id（老巢 b1 / 空值）也返回 null', J(F.enemyFlagPath('b1')));
+    check(F.enemyFlagLabel('m01') === '噬星虫群' && F.enemyFlagLabel('m04') === '旧律军团'
+      && F.enemyFlagLabel('m05') === null,
+      '显示名：m01「噬星虫群」/ m04「旧律军团」/ m05 为 null', J([F.enemyFlagLabel('m01'), F.enemyFlagLabel('m05')]));
+    const pub = path.resolve(__dirname, '..', 'public');
+    const missing = Object.keys(want).filter((id) => !fs.existsSync(path.join(pub, want[id].replace(/^\//, ''))));
+    check(missing.length === 0, '四个旗帜文件在 public/battle/guild/ 下真实存在（防路径打错后静默隐藏）', J(missing));
+    check(F.ENEMY_FLAG_DIR === '/battle/guild', '旗帜目录常量 = /battle/guild', J(F.ENEMY_FLAG_DIR));
+  }
   // ---------- 结果 ----------
   console.log('\n=== 雇佣兵协会（数据 + 批次 + 接单/出击/结算）验收结果 ===');
   if (fails.length === 0) {
@@ -605,6 +631,7 @@ const eq = (a, b) => J(a) === J(b);
   console.error('脚本异常：', e);
   process.exitCode = 1;
 });
+
 
 
 
