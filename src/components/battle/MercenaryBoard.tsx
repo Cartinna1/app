@@ -130,7 +130,7 @@ function MercenaryBoardBase({ state, fleets, onAccept, onAbandon, onStart }: Mer
                 height={40}
                 loading="lazy"
                 decoding="async"
-                className="float-left mr-2 mb-1 h-10 w-10 rounded-[6px] border border-[#2b3550] object-cover"
+                className="float-left mr-3 mb-2 h-20 w-20 rounded-[8px] border border-[#2b3550] object-cover"
                 onError={(e) => { e.currentTarget.style.display = 'none'; }}
               />
             ) : null}
