@@ -518,27 +518,27 @@ function bossTurnStart(st: BattleState, side: BattleSide): void {
     t.forEach(u => api(st, 'boss').freeze(u, 1));
     if (t.length) log(st, `  【头目技能】红胡子冻结 ${t.map(u => u.name).join('、')}`);
   }
-  if (st.bossId === 'b3' && S(st, 'boss').body <= 25) {
-    // 【2026-08 用户裁定】阈值 15 → 25，且 **只加一次**（明确不叠加）：
-    //   +4 攻是"跌破阈值后获得的**状态**"，不是"每个头目回合开始再叠一次"。
-    //   为什么不叠加：触发窗口从 ≤15 前移到 ≤25 后会跨很多个回合，逐回合 +4 会滚成
-    //   +几十攻（实测最高 10~14 攻，见本轮报告），变成"触发即必胜"的滚雪球。
-    //   用 bossBuffed 做一次性标记（不随回血重置，与"状态"语义一致、也可复现）。
+  // 【2026-10 方案 A】阈值 25 → 22；「本体 -1」从每回合改成**每 3 个 BOSS 回合**一次
+  //   +4 攻仍是"只加一次的状态"（不叠加、不加后来者）；改动只为把胜率拉到 70~80
+  //   （见 scripts/sim-boss-winrates.cjs：starter 43.7% → ~82%）
+  if (st.bossId === 'b3' && S(st, 'boss').body <= 22) {
     const bs = S(st, 'boss');
     if (!bs.bossBuffed) {
       bs.bossBuffed = true;
-      log(st, `  【头目技能】深海阎王：本体 ${bs.body} ≤25，全体己方 +4 攻（${bs.board.filter(Boolean).length} 艘）`);
+      log(st, `  【头目技能】深海阎王：本体 ${bs.body} ≤22，全体己方 +4 攻（${bs.board.filter(Boolean).length} 艘）`);
       api(st, 'boss').allies(null).forEach(a => { a.atk += 4; });
     }
-    damageBody(st, 'player', 1);
-    log(st, `  【头目技能】深海威压：玩家本体 -1（当前 ${S(st, 'player').body}）`);
+    if (bs.ownTurns % 3 === 0) {
+      damageBody(st, 'player', 1);
+      log(st, `  【头目技能】深海威压：玩家本体 -1（当前 ${S(st, 'player').body}）`);
+    }
   }
-  // 【雇佣兵协会】m02：每回合开始全体攻 +1（上限 +3）+ 结构最低的一艘 +1 护盾
+  // 【雇佣兵协会】m02：每回合开始全体攻 +1（上限 +2）+ 结构最低的一艘 +1 护盾
   if (st.bossId === 'm02') {
-    // 每回合开始 +1、上限 +3（第 1/2/3 回合各叠一层；不用 bossBuffed、不新增字段）
-    if (st.round <= 3) {
+    // 【2026-10 方案 A】层数 3 → 2（第 1 层仍落在 BOSS 首次铺场之前，实际生效 +1）
+    if (st.round <= 2) {
       api(st, 'boss').allies(null).forEach(a => { a.atk += 1; });
-      log(st, `  【头目技能】残响总控：己方全体攻击 +1（第 ${st.round}/3 层，上限 +3）`);
+      log(st, `  【头目技能】残响总控：己方全体攻击 +1（第 ${st.round}/2 层，上限 +2）`);
     }
     const units2 = api(st, 'boss').allies(null);
     if (units2.length) {
@@ -564,10 +564,9 @@ function bossTurnStart(st: BattleState, side: BattleSide): void {
       log(st, `  【头目技能】忆潮主祭：冻结 ${picked.map(u => u.name).join('、')}${suffix}`);
     }
   }
-  // 【雇佣兵协会】m04：每回合开始己方全体 +2 护盾
-  // 【雇佣兵协会】m04：**开场一次性**己方全体 +2 护盾（落在第 1 个 BOSS 回合开始；
-  // 因为 createBattle 那一刻 BOSS 场上还没有单位，所以「一次性」只能在这一刻兑现；不新增状态字段）
-  if (st.bossId === 'm04' && st.round <= 1) {
+  // 【雇佣兵协会】m04：**开场一次性**己方全体 +2 护盾（落在 BOSS 的第 2 个回合开始 ——
+  // 第 1 个回合开始时场上还没有单位，原来的 `round <= 1` 实际是空转；改判 ownTurns === 2 才对得上"首回合铺的那批"）
+  if (st.bossId === 'm04' && S(st, 'boss').ownTurns === 2) {
     api(st, 'boss').allies(null).forEach(a => { a.shield += 2; });
     log(st, '  【头目技能】旧律裁决官：开场己方全体 +2 护盾（仅一次）');
   }

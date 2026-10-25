@@ -16,23 +16,15 @@ const SEED0 = Number(process.argv[3] || 1000);
   const { gameReducer, createInitialGameState } = await import('@/hooks/gameReducer');
   const { createBattle } = await import('@/lib/battle/engine');
   const { createMotherships } = await import('@/data/gameData');
-  const { FLEET_STARTER, FLEET_ALL } = await import('@/data/battle/fleets');
-  const { BATTLE_CARDS } = await import('@/data/battle/cards');
+  const { FLEET_STARTER } = await import('@/data/battle/fleets');
   const { PIRATE_BOSSES } = await import('@/data/battle/pirates');
 
-  /** 单张卡的"性价比"：攻 + 盾 + 2×结构，再按费用归一（只用来排序挑弱卡，不参与战斗） */
-  const scoreOf = (id) => {
-    const c = BATTLE_CARDS[id];
-    if (!c) return 0;
-    return (c.atk + c.shield + 2 * c.structure) / Math.max(1, c.cost);
-  };
-  /** 从全集里按性价比从高到低取 n 张 */
-  const pickBest = (n) => [...new Set(FLEET_ALL)].slice().sort((a, b) => scoreOf(b) - scoreOf(a)).slice(0, n);
-
+  /** 两套基准编队（2026-10 方案 A 起）：
+   *  · starter 26 = 设计口径（FLEET_STARTER，4/4/7/3/5/3）
+   *  · 满编 30 = STARTER + i2/c3/i4/i5（4/5/8/4/6/3，保留重复；取代原来那套"按身材 top30"的不科学配法） */
   const FLEETS = [
     { key: 'starter', label: '新手 26 艘', ships: FLEET_STARTER.slice() },
-    { key: 'mid', label: '中期 26 艘', ships: pickBest(26) },
-    { key: 'full', label: '满编 30 艘', ships: pickBest(30) },
+    { key: 'full', label: '满编 30 艘', ships: FLEET_STARTER.concat(['i2', 'c3', 'i4', 'i5']) },
   ];
 
   /** 11 个敌人：五个雇佣兵头目 + 五个老巢 + 掠夺队（顺序即表内顺序） */
@@ -91,11 +83,11 @@ const SEED0 = Number(process.argv[3] || 1000);
   }
   process.stdout.write('\n');
 
-  // ---------------- 汇总（每个敌人跨三套编队） ----------------
+  // ---------------- 汇总（每个敌人跨两套编队） ----------------
   const summary = ENEMIES.map((id) => {
     const per = FLEETS.map((f) => cells.get(id + ':' + f.key).winRate);
     const mean = per.reduce((a, b) => a + b, 0) / per.length;
-    // 分层均值标准误：Var(mean) = (1/F²)·Σ p(1−p)/n（各编队胜率不同，所以不用 900 局的合并二项）
+    // 分层均值标准误：Var(mean) = (1/F²)·Σ p(1−p)/n（各编队胜率不同，所以不用 600 局的合并二项）
     const variance = per.reduce((acc, p) => {
       const q = p / 100;
       return acc + (q * (1 - q)) / N;
@@ -120,17 +112,17 @@ const SEED0 = Number(process.argv[3] || 1000);
   const pad = (s, n) => String(s) + ' '.repeat(Math.max(0, n - width(s)));
 
   console.log('');
-  console.log('全敌人胜率模拟：11 个敌人 × 3 套编队 × 每格 ' + N + ' 局（共 ' + total * N + ' 局）');
+  console.log('全敌人胜率模拟：11 个敌人 × 2 套编队 × 每格 ' + N + ' 局（共 ' + total * N + ' 局）');
   console.log('seed = ' + SEED0 + '..' + (SEED0 + N - 1) + '（所有格子同一序列）· 用时 ' + ((Date.now() - t0) / 1000).toFixed(1) + 's');
   console.log('');
-  console.log(pad('敌人', 26) + pad('血', 5) + pad('新手26', 9) + pad('中期26', 9) + pad('满编30', 9)
+  console.log(pad('敌人', 26) + pad('血', 5) + pad('新手26', 9) + pad('满编30', 9)
     + pad('均值', 8) + pad('±95%', 8) + pad('均回合', 8) + '均剩本体');
-  console.log('-'.repeat(96));
+  console.log('-'.repeat(88));
   for (const r of summary) {
     const label = r.id + ' ' + r.name;
     console.log(
       pad(label, 26) + pad(r.hp == null ? '-' : r.hp, 5)
-      + pad(r.per[0].toFixed(1), 9) + pad(r.per[1].toFixed(1), 9) + pad(r.per[2].toFixed(1), 9)
+      + pad(r.per[0].toFixed(1), 9) + pad(r.per[1].toFixed(1), 9)
       + pad(r.mean.toFixed(1), 8) + pad('±' + r.ci.toFixed(1), 8)
       + pad(r.avgRounds.toFixed(1), 8) + r.avgBody.toFixed(1)
     );
@@ -138,7 +130,7 @@ const SEED0 = Number(process.argv[3] || 1000);
   console.log('');
 
   const sorted = summary.slice().sort((a, b) => a.mean - b.mean);
-  console.log('难度排序（三套编队平均，从难到易）：');
+  console.log('难度排序（两套平均，从难到易）：');
   console.log('  ' + sorted.map((r) => r.id + ' ' + r.mean.toFixed(1) + '%').join('  <  '));
   console.log('');
 
@@ -158,3 +150,4 @@ const SEED0 = Number(process.argv[3] || 1000);
   console.error('模拟脚本出错：', e && e.stack ? e.stack.split('\n').slice(0, 8).join('\n') : e);
   process.exitCode = 1;
 });
+

@@ -1,4 +1,4 @@
-﻿'use strict';
+'use strict';
 /* ============================================================================
    雇佣兵协会 · 第 2a 步验收（数据表 + 批次生成 + 冷却 + 期限 + 文案，纯函数层）
    用法：node --import ./scripts/register-ts.mjs scripts/check-mercenary.cjs
@@ -443,16 +443,17 @@ const eq = (a, b) => J(a) === J(b);
   check(mercIds.every((id) => typeof BC[id].text === 'string' && BC[id].text.length > 0),
     '24 张卡都有技能文案（A2 起与 engine 的 BEHAVIOR 一致）');
 
-  // 四池 30 张
+  // 四池：m01 / m04 = 12 张（6×2），m02 / m03 = 18 张（6×3）—— 2026-10 方案 A
   const bossIds = ['m01', 'm02', 'm03', 'm04'];
-  check(bossIds.every((b) => MP.MERCENARY_POOLS[b] && MP.MERCENARY_POOLS[b].length === 18),
-    '四个敌池各 18 张（6×3）', J(bossIds.map((b) => (MP.MERCENARY_POOLS[b] || []).length)));
+  const POOL_COPIES = { m01: 2, m02: 3, m03: 3, m04: 2 };
+  check(bossIds.every((b) => MP.MERCENARY_POOLS[b] && MP.MERCENARY_POOLS[b].length === 6 * POOL_COPIES[b]),
+    '敌池张数 = 6 张 × 2 份（m01/m04）或 × 3 份（m02/m03）', J(bossIds.map((b) => (MP.MERCENARY_POOLS[b] || []).length)));
   check(bossIds.every((b) => {
     const pool = MP.MERCENARY_POOLS[b];
     const counts = {};
     for (const id of pool) counts[id] = (counts[id] || 0) + 1;
-    return Object.keys(counts).length === 6 && Object.values(counts).every((n) => n === 3);
-  }), '每个敌池 = 那 6 张各 3 份');
+    return Object.keys(counts).length === 6 && Object.values(counts).every((n) => n === POOL_COPIES[b]);
+  }), '每个敌池 = 那 6 张各 2/3 份（按势力）');
 
   // 四编队 26 艘 + 合计
   const sums = (list) => list.reduce((acc, id) => {
@@ -487,9 +488,9 @@ const eq = (a, b) => J(a) === J(b);
   for (const b of bossIds) {
     const created = BB.createBountyBattle(b, ['h1', 'c1'], 7);
     const pool = created.boss.pool;
-    const okPool = pool.length === 18 && pool.every((id) => BC[id] && BC[id].series === DR.BOSS_SERIES[b]);
+    const okPool = pool.length === 6 * POOL_COPIES[b] && pool.every((id) => BC[id] && BC[id].series === DR.BOSS_SERIES[b]);
     check(created.bossId === b && created.boss.body === EN.BOSSES[b].hp && created.boss.bodyMax === EN.BOSSES[b].hp && okPool,
-      `${b} 建场正确（bossId/本体血量/18 张本系列敌池）`,
+      `${b} 建场正确（bossId/本体血量/${6 * POOL_COPIES[b]} 张本系列敌池）`,
       J({ bossId: created.bossId, body: created.boss.body, pool: pool.length }));
   }
 
