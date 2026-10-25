@@ -1,4 +1,4 @@
-﻿'use strict';
+'use strict';
 /* ============================================================================
    P7 验收：掠夺循环（V1.5 §10.2）
    用法：node --import ./scripts/register-ts.mjs scripts/check-battle-raid.cjs
@@ -450,8 +450,12 @@ const J = (v) => JSON.stringify(v);
       return Math.round((sum / n) * 10) / 10;
     };
     const dRaid = deployedAvg('raid', 20), dLair = deployedAvg('b1', 20);
-    check(dRaid < dLair, '实测（20 seed 均值）：掠夺队每场部署舰数 < 老巢 b1', `${dRaid} vs ${dLair}`);
-    console.log('    实测部署（20 seed 均值 · 新手编制 · 双方 AI）：掠夺队 ' + dRaid + ' 艘 / 老巢 b1 ' + dLair + ' 艘');
+    // ⚠ 2026-10：AI 改成「斩杀优先」后，b1 往往 7 回合就收尾、它的部署数反而更少，
+    //   "每场部署数"不再能代表池子强弱（强弱已由上面的 张数 / 战力 / 总费 三条静态断言覆盖）。
+    //   这里只保留一条不变量：一局不可能部署出比池子更多的舰。
+    check(dRaid <= RAID_POOL.length && dLair <= PIRATE_POOL.length,
+      '一局部署数 ≤ 池张数（掠夺 15 / 老巢 30）', `${dRaid} vs ${dLair}`);
+    console.log('    实测部署（20 seed 均值 · 新手编制 · 双方 AI）：掠夺队 ' + dRaid + ' 艘 / 老巢 b1 ' + dLair + ' 艘（仅供参考）');
     // 引擎分流（逐字搬自 DEMO 的那一处分支）
     check(J(E.createBattle({ seed: 1, bossId: 'raid' }).boss.pool) === J(RAID_POOL), 'bossId=raid → 敌方池 = RAID_POOL', J(E.createBattle({ seed: 1, bossId: 'raid' }).boss.pool.slice(0, 3)));
     check(J(E.createBattle({ seed: 1, bossId: 'b1' }).boss.pool) === J(PIRATE_POOL), 'bossId=b1 → 敌方池仍 = PIRATE_POOL（老巢不受影响）');

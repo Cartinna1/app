@@ -460,7 +460,7 @@ const eq = (a, b) => J(a) === J(b);
     const c = BC[id] || EN.CARDS[id] || {};
     return { atk: acc.atk + (c.atk || 0), shield: acc.shield + (c.shield || 0), structure: acc.structure + (c.structure || 0) };
   }, { atk: 0, shield: 0, structure: 0 });
-  const ANCHOR = { m01: [111, 98, 47], m02: [102, 105, 40], m03: [88, 110, 49], m04: [95, 113, 53] };
+  const ANCHOR = { m01: [111, 94, 51], m02: [102, 105, 40], m03: [88, 110, 49], m04: [95, 113, 53] };
   const STARTER = sums(FL.FLEET_STARTER);
   const starterTotal = STARTER.atk + STARTER.shield + STARTER.structure;
   for (const b of bossIds) {

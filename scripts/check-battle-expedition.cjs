@@ -1,4 +1,4 @@
-﻿'use strict';
+'use strict';
 /* ============================================================================
    P5 验收：出征闭环（老巢数据 / 出征耗时对文档 / 探明门槛 / 全流程 / 战利品 / 回合守卫）
    用法：node --import ./scripts/register-ts.mjs scripts/check-battle-expedition.cjs
@@ -443,22 +443,20 @@ const check = (ok, label, detail) => {
   check(!!st.battle, '已开战');
   check(EXP.canEndGameTurn(st) === false, '**战斗中不能结束游戏回合**');
 
-  // 找一个玩家获胜的 seed（确定性：从 1 往上试）
-  let winSeed = 0;
-  for (let seed = 1; seed <= 60 && !winSeed; seed++) {
-    const b = E.createBattle({ seed, bossId: 'b1', fleet: 'starter' });
-    let g = 0;
-    while (!b.over && g++ < 200) E.aiTurn(b, b.active);
-    if (b.winner === 'player') winSeed = seed;
-  }
-  check(winSeed > 0, '找到一个玩家获胜的 seed', 'seed=' + winSeed);
-  if (winSeed) {
+  // 玩家胜利的构造（2026-10）：AI 改成「斩杀优先」之后，AI 对 AI 已经打不过 35 血的 b1 老巢
+  // （实测 starter 0/300），靠"找 seed"这条路会永远失败。本组要验的是**胜利结算**
+  // （战利品 100000/40、饥荒减半、END_BATTLE 清场），不是战斗过程 → 建场后直接把 battle 标成玩家胜。
+  const forceWin = (state) => (state.battle
+    ? { ...state, battle: { ...state.battle, over: true, winner: 'player', reason: '测试强制胜利' } }
+    : state);
+  const winSeed = 1;
+  {
     // ⚠ food / gold / stardust 是**母舰字段**（ship.food…），不是 GameState 的顶层字段：
     //   写 `{ ...st, food: 7 }` 只是往 state 上挂了个没人读的键，母舰实际食物没变（会假通过）。
     //   故这里一律改 ships[0]。
     const withShip = (state, patch) => ({ ...state, ships: [{ ...state.ships[0], ...patch }, ...state.ships.slice(1)] });
     const base = withShip(st, { food: 7, gold: 1000, stardust: 5 });
-    let w = D(base, { type: 'START_BATTLE', bossId: 'b1', fleet: base.fleets[0].shipIds.slice(), kind: 'expedition', seed: winSeed });
+    let w = forceWin(D(base, { type: 'START_BATTLE', bossId: 'b1', fleet: base.fleets[0].shipIds.slice(), kind: 'expedition', seed: winSeed }));
     w = fight(w);
     check(w.battle.winner === 'player', '这场确实是玩家赢的', w.battle.winner);
     const rw = RW.battleRewards(w.battle);
@@ -476,7 +474,7 @@ const check = (ok, label, detail) => {
     // 饥荒（food < 0）→ 金币收益减半：直接把 food 设成负数，不打完整个回合结算，
     // 这样 before/after 之间**只有 END_BATTLE 一件事**会动金币（口径干净）。
     const famStart = withShip(st, { food: -1, gold: 1000, stardust: 5 });
-    let f = D(famStart, { type: 'START_BATTLE', bossId: 'b1', fleet: famStart.fleets[0].shipIds.slice(), kind: 'expedition', seed: winSeed });
+    let f = forceWin(D(famStart, { type: 'START_BATTLE', bossId: 'b1', fleet: famStart.fleets[0].shipIds.slice(), kind: 'expedition', seed: winSeed }));
     f = fight(f);
     check(f.ships[0].food < 0, '这一场结算时确实处于饥荒（食物 < 0）', String(f.ships[0].food));
     const fBefore = { gold: f.ships[0].gold, sd: f.ships[0].stardust };

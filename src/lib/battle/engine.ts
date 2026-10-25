@@ -328,13 +328,8 @@ export function attackReason(st: BattleState, side: BattleSide, u: BattleUnit | 
 // ---------------- 伤害 ----------------
 export function damageUnit(_st: BattleState, u: BattleUnit, amount: number, ignoreShield?: boolean): DamageResult {
   if (amount <= 0) return { dealt: 0, overflow: 0, destroyed: false };
-  // 【边界规则】无视护盾（破甲 / 神罚）打「零结构值」的舰 → 直接击毁：
-  // 这类舰唯一的承伤层就是护盾，护盾被无视了就没有东西能吸收。
-  // 否则会出现「无视了你的护盾、但你毫发无伤」的怪结果（它们结构值恒为 0，扣不动）。
-  if (ignoreShield && (u.maxStructure || 0) <= 0) {
-    u.structure = -1; u.shield = 0;
-    return { dealt: amount, overflow: 0, destroyed: true };
-  }
+  // 【2026-10 方案 B】结构 ≤0 即击毁（见下方下场判据）——原来那条「无视护盾打零结构直接击毁」
+  // 的特例已删除：规则本身覆盖它，且体 0 的卡已经全部改成体 1。
   let left = amount, dealt = 0;
   if (!ignoreShield) { const s = Math.min(u.shield, left); u.shield -= s; left -= s; dealt += s; }
   if (left > 0) { const p = Math.min(u.structure, left); u.structure -= p; left -= p; dealt += p; }
@@ -342,9 +337,9 @@ export function damageUnit(_st: BattleState, u: BattleUnit, amount: number, igno
   if (kwOn(u.kw.desper) && !u.desperDone && u.maxStructure > 0 && u.structure > 0 && u.structure <= u.maxStructure / 2) {
     u.desperDone = true; u.shield += u.kw.desper as number; u.maxShield += u.kw.desper as number;
   }
-  // 下场判据：结构值 ≤0 **且** 护盾 ≤0。
-  // 海盗全体是「零结构值」设计（结构值 0）——护盾一破即下场，这正是「攻击力 > 护盾即下场」。
-  return { dealt, overflow: left, destroyed: u.structure <= 0 && u.shield <= 0 };
+  // 下场判据：**结构值 ≤0 即击毁**（护盾再厚也没用）——
+  // 破甲 / 神罚本来就是用来穿盾打结构的，打穿结构就该下场；护盾只负责吸收普通伤害。
+  return { dealt, overflow: left, destroyed: u.structure <= 0 };
 }
 export function damageBody(st: BattleState, side: BattleSide, amount: number): number {
   if (amount <= 0) return 0;
@@ -456,7 +451,7 @@ export function cleanup(st: BattleState): void {
   for (let pass = 0; pass < 12; pass++) {
     let found: BattleUnit | null = null;
     for (const side of ['player', 'boss'] as const) {
-      for (const u of S(st, side).board) if (u && u.structure <= 0 && u.shield <= 0) { found = u; break; }
+      for (const u of S(st, side).board) if (u && u.structure <= 0) { found = u; break; }
       if (found) break;
     }
     if (!found) return;
@@ -623,10 +618,9 @@ export function endTurn(st: BattleState): void {
       log(st, `  【头目技能】黑寡妇：全体 +1 护盾（最多比原始高 2；本次 ${armorN} 艘）`);
     }
     if (st.bossId === 'b5' || st.bossId === 'b3') { /* 塞壬在下面统一处理 */ }
-    if (st.bossId === 'b5') {
-      // 【定稿·方案 A】回合结束：对随机一艘玩家战舰造成 1 点伤害（不打本体；玩家场上没有战舰时落空）
-      // 为什么：原案「3 点随机分配（含旗舰）」实测玩家胜率仅 1~2%（3 点里约一半打本体，且对弱编制是免费清场），
-      // 且没有任何反制手段；改成 1 点只打战舰后回到 50%（新手）/ 50%（全卡池）。
+    if (st.bossId === 'b5' && S(st, 'boss').ownTurns % 2 === 0) {
+      // 【2026-10 方案 B 补偿】每 2 个 BOSS 回合一次：对随机一艘玩家战舰造成 1 点伤害（不打本体；玩家场上没有战舰时落空）
+      // 为什么：结构≤0 即击毁之后，海盗池的 4 张低体舰变脆，b5 从 60% 掉不下来；改成隔回合后回到 76.7%
       const targets = unitsOf(st, 'player').slice();
       if (!targets.length) {
         log(st, '  【头目技能】苍白歌者：玩家场上没有战舰，伤害落空');
@@ -866,6 +860,25 @@ export function aiTurn(st: BattleState, side: BattleSide): void {
   }
   // 1b) 待选择（玩家指定目标类）：AI 自动选满
   autoResolvePending(st);
+  // 1c) 【2026-10 用户口径】斩杀优先：对方没有锁链、且本回合**全军总攻 ≥ 对方本体**时，
+  //     直接全军打脸（不再"先清场、再看本体"）。锁链在场时规则本身禁止打本体，跳过。
+  //     ⚠ 对双方都生效（BOSS 也会收尾）→ 整体难度上升，不是只让玩家变强。
+  {
+    const foe = other(side);
+    const foeTaunt = enemiesOf(st, side).some(x => kwOn(x.kw.taunt) && !x.subm);
+    if (!foeTaunt && S(st, foe).body > 0) {
+      const atkers = unitsOf(st, side).filter(u => canAttack(st, side, u));
+      const total = atkers.reduce((n, u) => n + effAtk(u), 0);
+      if (total >= S(st, foe).body) {
+        for (const u of atkers) {
+          if (st.over) break;
+          if (!canAttack(st, side, u)) continue;
+          attack(st, u.uid, 'body');
+        }
+        if (st.over) return;
+      }
+    }
+  }
   // 2) 攻击
   guard = 0;
   while (guard++ < 30) {
