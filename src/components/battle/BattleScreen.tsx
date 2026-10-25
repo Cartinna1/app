@@ -442,7 +442,14 @@ function BattleScreenBase({ battle, seed, enemyName, context, onAction, onEnd }:
                   <li key={`c-${c.id}`} className="text-cyan-300">获得战舰：{c.name} ×{c.qty}</li>
                 ))}
                 {battle.settlement.lostShips ? (
-                  <li className="text-red-300">永久损失：{battle.settlement.lostShips} 艘</li>
+                  <>
+                    <li className="text-red-300">永久损失：{battle.settlement.lostShips} 艘</li>
+                    {(battle.settlement.lost || []).length > 0 ? (
+                      <li className="break-words text-[10.5px] leading-relaxed text-red-200/80">
+                        {(battle.settlement.lost || []).map((l) => `${l.name} ×${l.qty}`).join('、')}
+                      </li>
+                    ) : null}
+                  </>
                 ) : null}
                 {!battle.settlement.gold && !battle.settlement.stardust
                   && (battle.settlement.materials || []).length === 0

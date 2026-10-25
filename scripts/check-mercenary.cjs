@@ -1,4 +1,4 @@
-'use strict';
+﻿'use strict';
 /* ============================================================================
    雇佣兵协会 · 第 2a 步验收（数据表 + 批次生成 + 冷却 + 期限 + 文案，纯函数层）
    用法：node --import ./scripts/register-ts.mjs scripts/check-mercenary.cjs
@@ -680,6 +680,33 @@ const eq = (a, b) => J(a) === J(b);
     check(missing.length === 0, '四个旗帜文件在 public/battle/guild/ 下真实存在（防路径打错后静默隐藏）', J(missing));
     check(F.ENEMY_FLAG_DIR === '/battle/guild', '旗帜目录常量 = /battle/guild', J(F.ENEMY_FLAG_DIR));
   }
+  // ---------- ⑱ 永久损失明细（结算面板与事件记录同一串）----------
+  console.log('\n[18] 永久损失明细：settlement.lost 降序 / 文案逐字 / 事件 detail 同串 / 无损失不显示');
+  {
+    const RW = await import('@/lib/battle/rewards');
+    // 造一个"损失 3 种卡、数量 2/4/16"的数组
+    const lostIds = [];
+    for (let i = 0; i < 2; i += 1) lostIds.push('q1');
+    for (let i = 0; i < 4; i += 1) lostIds.push('q2');
+    for (let i = 0; i < 16; i += 1) lostIds.push('q3');
+    const entries = RW.lostShipEntries(lostIds);
+    check(entries.length === 3 && eq(entries.map((e) => e.qty), [16, 4, 2]),
+      'settlement.lost 三项且数量降序 16/4/2', J(entries.map((e) => e.qty)));
+    const wantText = [entries[0], entries[1], entries[2]].map((e) => `${e.name} ×${e.qty}`).join('、');
+    check(RW.lostShipsText(lostIds) === wantText, '明细串逐字（名字 ×数量、顿号分隔）', wantText);
+    check(RW.lostShipsText([]) === '', '无损失 → 空串（出口据此不渲染半句）', J(RW.lostShipsText([])));
+    // 真实结算：悬赏胜利后 settlement.lost 与事件 detail 里的明细必须是同一串
+    const lg = mkGuild({ rest: { cardLibrary: Array.from({ length: 20 }, () => 'h1'), fleets: [{ id: 'fz', name: 'x', shipIds: ['h1'], defending: false }] } });
+    const acc = gameReducer(lg, { type: 'ACCEPT_BOUNTY', defId: 'bty_p1' });
+    const stt = gameReducer(acc, { type: 'START_BOUNTY_BATTLE', defId: 'bty_p1', fleetId: 'fz' });
+    const hurt = { ...stt, battle: { ...stt.battle, winner: 'player', over: true, reason: 'test', player: { ...stt.battle.player, lost: ['q1', 'q3', 'q3'] } } };
+    const done = gameReducer(hurt, { type: 'END_BATTLE' });
+    const st = done.battle && done.battle.settlement;
+    check(!!st && eq((st.lost || []).map((e) => e.qty), [2, 1]) && st.lostShips === 3,
+      '真实结算：settlement.lost = 2/1、lostShips = 3', J(st && { lost: st.lost, n: st.lostShips }));
+    check(!!st && done.eventLog[0].detail.includes(`永久损失 3 艘（${RW.lostShipsText(['q1', 'q3', 'q3'])}）`),
+      '事件 detail 里含同一串「永久损失 3 艘（…）」', J(done.eventLog[0].detail));
+  }
   // ---------- 结果 ----------
   console.log('\n=== 雇佣兵协会（数据 + 批次 + 接单/出击/结算）验收结果 ===');
   if (fails.length === 0) {
@@ -693,6 +720,7 @@ const eq = (a, b) => J(a) === J(b);
   console.error('脚本异常：', e);
   process.exitCode = 1;
 });
+
 
 
 

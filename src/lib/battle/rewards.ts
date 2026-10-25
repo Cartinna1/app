@@ -12,7 +12,7 @@
 //   并按 AGENTS 第三节写 pushGoldLog（**调用前必须先改完金币**）。
 
 import type { Mothership } from '@/types/game';
-import type { BattleState, PirateBossId } from '@/types/battle';
+import type { BattleState, PirateBossId, ShipCardId } from '@/types/battle';
 import { famineHalveGold } from '@/lib/turn/shipTurn';
 import { pushGoldLog } from '@/lib/turn/goldLog';
 import { ALL_MATERIAL_IDS, getMaterialName } from '@/data/materialNames';
@@ -20,6 +20,7 @@ import { FACTIONS } from '@/data/factions';
 import { getKnownFactionIds } from '@/lib/galaxy/knowledge';
 // 老巢白名单（唯一真值：从星图 `pirateLair` 派生，见该文件顶部"为什么不是从 raid.ts 取"）
 import { LAIR_BOSS_IDS_FROM_NODES } from './lairIds';
+import { BATTLE_CARDS } from '@/data/battle/cards';
 
 /** 老巢战利品（§〇 / §10.2）：固定 100000 金币 + 40 星尘 */
 export const LAIR_REWARD_GOLD = 100000;
@@ -309,4 +310,31 @@ export function raidLootItems(detail: RaidLootDetail, sign: '' | '-' = '-'): str
     if (amount > 0) out.push(`${getMaterialName(id)} ${sign}${amount}`);
   }
   return out;
+}
+
+// ==================== 永久损失明细（结算面板与事件记录共用） ====================
+// 用户 2026-10 口径：只写「永久损失 22 艘」玩家不知道丢了哪些船、没法补船 →
+// 一律写「永久损失 22 艘（孢子浮囊 ×2、噬屑蠕体 ×4、甲壳冲角虫 ×16）」。
+// ⚠ 数据源唯一：`battle.player.lost`（cardId 数组，衍生单位不在里面）；名字唯一来源 `BATTLE_CARDS[id].name`。
+// ⚠ 排序：数量降序、同数量按 id 升序（稳定可复现）。
+
+/** 一种被击毁的战舰及其份数 */
+export interface LostShipEntry {
+  id: string;
+  name: string;
+  qty: number;
+}
+
+/** `player.lost` → 按卡聚合的明细（数量降序、同数量按 id 升序） */
+export function lostShipEntries(lost: readonly ShipCardId[]): LostShipEntry[] {
+  const counts = new Map<string, number>();
+  for (const id of lost) counts.set(id, (counts.get(id) || 0) + 1);
+  return [...counts.entries()]
+    .map(([id, qty]) => ({ id, name: BATTLE_CARDS[id] ? BATTLE_CARDS[id].name : id, qty }))
+    .sort((a, b) => (b.qty - a.qty) || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
+}
+
+/** 明细串：`孢子浮囊 ×2、噬屑蠕体 ×4`（无损失 → 空串）——**唯一拼接处**，两处出口都调它 */
+export function lostShipsText(lost: readonly ShipCardId[]): string {
+  return lostShipEntries(lost).map((e) => `${e.name} ×${e.qty}`).join('、');
 }

@@ -266,6 +266,9 @@ export interface BattleSettlement {
   cards?: { id: string; name: string; qty: number }[];
   /** 本场**永久损失**的战舰艘数 */
   lostShips?: number;
+  /** 永久损失的**逐型号明细**（数量降序、同数量按 id；来自 `battle.player.lost` 的聚合）。
+   *  与 `lostShips` 同源：`lostShips === lost.reduce((n, e) => n + e.qty, 0)`。运行期字段、不入档。 */
+  lost?: { id: string; name: string; qty: number }[];
   /** 一行总述（可直接渲染；无奖励时写「本场无奖励」） */
   summary: string;
 }

@@ -1,6 +1,14 @@
 import type { GameState, GameAction, Mothership } from '@/types/game';
 import type { BattleAction, BattleFleet, BattleSettlement, BattleState, ShipCardId } from '@/types/battle';
 import { getMaterialName } from '@/data/materialNames';
+import { lostShipEntries, lostShipsText } from '@/lib/battle/rewards';
+
+/** 事件记录里"永久损失"那一小段（唯一拼接处：明细串由 `rewards.lostShipsText` 产出）：
+ *  有损失 → `；永久损失 22 艘（孢子浮囊 ×2、…）`；无损失 → 空串（不许渲染成半句）。 */
+function lostSuffix(lost: readonly ShipCardId[]): string {
+  const text = lostShipsText(lost);
+  return text ? `；永久损失 ${lost.length} 艘（${text}）` : '';
+}
 import { BATTLE_CARDS } from '@/data/battle/cards';
 import { FACTIONS, POLICY_EFFECTS, refreshFactionPrices, calculateSellMultipliers } from '@/data/factions';
 import { createMotherships, createStocks, createMaterials, createProducts, EVENT_LOG_LIMIT } from '@/data/gameData';
@@ -220,7 +228,7 @@ function settleRaidLoot(
 function makeSettlement(
   before: Mothership | undefined,
   after: Mothership | undefined,
-  lostShips: number,
+  lost: readonly ShipCardId[],
   extra: { cards?: BattleSettlement['cards']; summary?: string }
 ): BattleSettlement {
   const gold = before && after ? after.gold - before.gold : 0;
@@ -234,10 +242,13 @@ function makeSettlement(
   }
   const cards = extra.cards && extra.cards.length > 0 ? extra.cards : undefined;
   const hasReward = gold > 0 || stardust > 0 || materials.length > 0 || !!cards;
+  // 永久损失：艘数与逐型号明细**同源**（明细由 rewards.lostShipEntries 聚合，唯一来源）
+  const lostEntries = lostShipEntries(lost);
   const settlement: BattleSettlement = {
-    lostShips,
+    lostShips: lost.length,
     summary: extra.summary || (hasReward ? '本场已有收益入账' : '本场无奖励'),
   };
+  if (lostEntries.length > 0) settlement.lost = lostEntries;
   if (gold > 0) settlement.gold = gold;
   if (stardust > 0) settlement.stardust = stardust;
   if (materials.length > 0) settlement.materials = materials;
@@ -532,7 +543,8 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
           ? `${def.title}：${rewarded ? rewarded.text : '报酬为 0'}`
             + (won ? `；悬赏整理中，${BOUNTY_REST_TURNS} 回合内不能接新委托` : '')
             + (dropText ? `；${dropText}` : '')
-          : `${def.title}：舰队被击退，委托作废（不发奖、不扣声望）`;
+            + lostSuffix(battle.player.lost)
+          : `${def.title}：舰队被击退，委托作废（不发奖、不扣声望）` + lostSuffix(battle.player.lost);
         return {
           ...base,
           ships,
@@ -540,7 +552,7 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
           bounties,
           battle: withSettlement(
             battle,
-            makeSettlement(lead, ships[0], battle.player.lost.length, {
+            makeSettlement(lead, ships[0], battle.player.lost, {
               cards: dropCards,
               summary: won ? dropText || '悬赏完成' : '舰队被击退，本场无奖励',
             })
@@ -596,7 +608,7 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
             ships,
             battle: withSettlement(
               battle,
-              makeSettlement(base.ships[0], ships[0], battle.player.lost.length, {
+              makeSettlement(base.ships[0], ships[0], battle.player.lost, {
                 summary: noDefenderLeft ? '第一场打赢，但没拦住第二支掠夺队' : '防守战失利，本场无奖励',
               })
             ),
@@ -618,7 +630,7 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
             ...base,
             battle: withSettlement(
               battle,
-              makeSettlement(undefined, undefined, battle.player.lost.length, { summary: '本场无奖励' })
+              makeSettlement(undefined, undefined, battle.player.lost, { summary: '本场无奖励' })
             ),
             raid: raidOver,
           };
@@ -631,7 +643,7 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
           factionReputation,
           battle: withSettlement(
             battle,
-            makeSettlement(base.ships[0], ships[0], battle.player.lost.length, { summary: reward.text })
+            makeSettlement(base.ships[0], ships[0], battle.player.lost, { summary: reward.text })
           ),
           raid: raidOver,
           // **显示出口 = 事件记录**（同上）：`detail` 就是奖励路径的原话（`rollRaidReward().text`，
@@ -642,7 +654,8 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
             //   （它是奖励文案的**唯一产出口**，一个字都不许改），而 EventPanel 是
             //   `第N回合 <event> <detail>` 并排渲染 —— 早先 event 也写「击退海盗」，玩家读到的是
             //   「击退海盗：击退海盗：缴获 10 星尘」（用户 2026-08 报"没奖励"时读的正是这一行）。
-            { id: createUid('raid'), turn: state.turn, event: '掠夺战果', detail: reward.text },
+            // ⚠ 永久损失明细**追加在 detail 尾部**，不改 `reward.text` 本身（那是唯一产出口）。
+            { id: createUid('raid'), turn: state.turn, event: '掠夺战果', detail: reward.text + lostSuffix(battle.player.lost) },
             ...state.eventLog,
           ].slice(0, EVENT_LOG_LIMIT),
         };
@@ -679,7 +692,7 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
         ships,
         battle: withSettlement(
           battle,
-          makeSettlement(state.ships[0], ships[0], battle.player.lost.length, {
+          makeSettlement(state.ships[0], ships[0], battle.player.lost, {
             summary: wonLair ? (firstClear ? '首胜' : '重复清剿') : '舰队被击退，本场无奖励',
           })
         ),
@@ -693,7 +706,8 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
       const stardustGained = lead ? (ships[0] ? ships[0].stardust - lead.stardust : 0) : 0;
       const detail = `清剿完成（${firstClear ? '首胜' : '重复'}）｜${lairDisplayName(battle.bossId)}：`
         + `金币 ${goldGained}、星尘 ${stardustGained}`
-        + (firstClear ? '' : `；该老巢 ${LAIR_COOLDOWN_TURNS} 回合后可再战`);
+        + (firstClear ? '' : `；该老巢 ${LAIR_COOLDOWN_TURNS} 回合后可再战`)
+        + lostSuffix(battle.player.lost);
       return {
         ...result,
         eventLog: [

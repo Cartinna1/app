@@ -219,6 +219,20 @@ function MercenaryBoardBase({ state, fleets, onAccept, onAbandon, onStart }: Mer
           榜单是空的 —— 下个刷新周期再来看看。
         </p>
       ) : null}
+
+      {/* 协会大厅（装饰位，列表最底部）：宽通栏、最大出口 > 600px → **用原图**，
+          不进 gen-thumbs.py（AGENTS 第五节：详情/装饰位不用缩略图）；缺图整块隐藏。 */}
+      <img
+        src="/battle/guild/guild-lobby.webp"
+        alt="银河雇佣兵协会大厅"
+        loading="lazy"
+        decoding="async"
+        className="mt-3 w-full rounded-[10px] border border-[#2b3550] object-cover"
+        onError={(e) => { e.currentTarget.style.display = 'none'; }}
+      />
+      <p className="mt-1 text-[10.5px] leading-relaxed text-slate-500">
+        协会大厅 · 悬赏榜公开，谁都能看
+      </p>
     </div>
   );
 }

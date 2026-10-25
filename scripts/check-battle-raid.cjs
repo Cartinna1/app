@@ -681,11 +681,15 @@ const J = (v) => JSON.stringify(v);
     //   原料 `击退海盗：缴获 <MATERIAL_NAME_MAP 里的原料名> ×40`（6 种都算合法）
     //   声望 `击退海盗：与「<势力名>」的声望 +5`
     const materialNames = Object.values(MATERIAL_NAME_MAP);
-    const isWinDetailShape = (t) =>
-      /^击退海盗：缴获 \d+ 金币$/.test(t)
-      || /^击退海盗：缴获 \d+ 星尘$/.test(t)
-      || new RegExp('^击退海盗：缴获 (' + materialNames.join('|') + ') ×' + RAID_REWARD_MATERIAL_AMOUNT + '$').test(t)
-      || /^击退海盗：与「.+」的声望 \+\d+$/.test(t);
+    // ⚠ 2026-10 起 detail 尾部会追加「；永久损失 N 艘（…）」（用户要求的逐型号明细），
+    //   所以四类形状只锚**前半段**（奖励原话 = rollRaidReward().text 不许改），尾部单独可选。
+    const isWinDetailShape = (t) => {
+      const head = t.split('；永久损失 ')[0];
+      return /^击退海盗：缴获 \d+ 金币$/.test(head)
+        || /^击退海盗：缴获 \d+ 星尘$/.test(head)
+        || new RegExp('^击退海盗：缴获 (' + materialNames.join('|') + ') ×' + RAID_REWARD_MATERIAL_AMOUNT + '$').test(head)
+        || /^击退海盗：与「.+」的声望 \+\d+$/.test(head);
+    };
     const realWinDetail = afterWin.eventLog[0].detail;
     check(isWinDetailShape(realWinDetail),
       '**打赢：事件记录 detail 是四类之一的形状（含类型与数量）**', realWinDetail);
@@ -953,6 +957,7 @@ const J = (v) => JSON.stringify(v);
   console.error('验收脚本自身出错：', e && e.stack ? e.stack.split('\n').slice(0, 10).join('\n') : e);
   process.exitCode = 2;
 });
+
 
 
 
