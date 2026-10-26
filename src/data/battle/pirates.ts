@@ -2,8 +2,6 @@
 // 本文件由 scripts/export-battle-data.cjs 从 carddemo/engine.js 生成 —— **请勿手改**。
 // 改卡牌数据请改 DEMO 引擎（或 V1.5 后同步 DEMO），然后重跑：
 //   node scripts/export-battle-data.cjs && node scripts/verify-battle-data.cjs
-// ⚠ **2026-10 起本文件已手改、与 DEMO 有意分叉**（用户授权）：b1/b3 技能文案对齐实装、
-//   m01 召唤物正名「孢子浮囊」、m01~m04 显示名统一为势力名。重跑导出脚本会**覆盖回滚**这批修复。
 
 import type { PirateBossDef } from '@/types/battle';
 

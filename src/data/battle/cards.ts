@@ -2,8 +2,6 @@
 // 本文件由 scripts/export-battle-data.cjs 从 carddemo/engine.js 生成 —— **请勿手改**。
 // 改卡牌数据请改 DEMO 引擎（或 V1.5 后同步 DEMO），然后重跑：
 //   node scripts/export-battle-data.cjs && node scripts/verify-battle-data.cjs
-// ⚠ **2026-10 起本文件已手改、与 DEMO 有意分叉**（用户授权）：h5/p3 衍生单位身材对齐实值（体 0 清理）、
-//   g3/g5/r5 文案对齐实装（指挥度结转 / 费用减免）。重跑导出脚本会**覆盖回滚**这批修复。
 
 import type { ShipCardDef } from '@/types/battle';
 

@@ -1,4 +1,4 @@
-﻿'use strict';
+'use strict';
 /* ============================================================================
    校验 src/data/battle/*.ts 与 carddemo/engine.js 逐字段一致（0 差异）
    用法：node scripts/verify-battle-data.cjs
@@ -72,7 +72,7 @@ check(JSON.stringify(fl.FLEET_ALL) === JSON.stringify(E.FLEET_ALL), '全集编�
 
 // ---------------- tuning 与文档口径 ----------------
 const tun = loadTs('tuning.ts').BATTLE_TUNING;
-check(tun.bodyHp === 15, 'tuning.bodyHp = 15');
+check(tun.bodyHp === 25, 'tuning.bodyHp = 25（2026-10-26 裁定 15→25，DEMO 已回灌，与移植版一致）');
 check(tun.firstCap === 3 && tun.secondCap === 4, 'tuning 指挥度起点 3/4');
 check(tun.manaCap === 10 && tun.boardSize === 6 && tun.turnLimit === 20, 'tuning 上限 10 / 场上 6 / 回合 20');
 check(tun.fleetSize === 30, 'tuning 编制上限 30');
