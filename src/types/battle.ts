@@ -47,7 +47,7 @@ export type PirateBossId = 'b1' | 'b2' | 'b3' | 'b4' | 'b5' | 'raid' | 'm01' | '
 export interface PirateBossDef {
   id: PirateBossId;
   name: string;
-  /** 敌方本体结构值（玩家本体固定 15） */
+  /** 敌方本体结构值（玩家本体固定 25，唯一真值 tuning.bodyHp） */
   hp: number;
   /** 头目技能文案（掠夺队为空技能） */
   skill: string;

@@ -303,7 +303,7 @@ const eq = (a, b) => J(a) === J(b);
   const src = E.createBattle({ seed: 777, bossId: 'b2', fleet: 'starter' });
   const cp = E.cloneBattleState(src);
   cp.round = 99; cp.player.body = 1; cp.log.push('只该出现在副本里'); cp.player.board[0] = null;
-  check(src.round === 1 && src.player.body === 15, '改副本不影响原对象（标量）');
+  check(src.round === 1 && src.player.body === 25, '改副本不影响原对象（标量）');
   check(src.log.indexOf('只该出现在副本里') < 0, '改副本的 log 不影响原对象');
   check(typeof cp.rnd === 'function', '副本保留了 rnd 函数');
   cp.rnd();

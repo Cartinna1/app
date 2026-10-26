@@ -243,7 +243,7 @@ const J = (v) => JSON.stringify(v);
     const one = D(st, { type: 'START_BATTLE', bossId: 'raid', fleet: pool, kind: 'defense', seed: 7 });
     check(!!one.battle && one.battle.bossId === 'raid', '能开掠夺战');
     check(one.battle.boss.body === 20, '掠夺队本体 = 20 结构值（§10.2：无头目技能、无护盾）', String(one.battle.boss.body));
-    check(one.battle.player.body === 15, '玩家本体 15 血（BODY_HP）', String(one.battle.player.body));
+    check(one.battle.player.body === 25, '玩家本体 25 血（BODY_HP，2026-10 用户调整 15→25）', String(one.battle.player.body));
     check(one.battle.player.pool.length === pool.length, '参战池 = 防守池', J(one.battle.player.pool));
     // 连打两场：第二场的编制由 raidBattleFleet 决定（阶段 B = arrivedTurns>0）
     const two = R.raidBattleFleet({ ...st, raid: raidState({ arrivedTurns: 5, arrived: true, raiders: 2 }) }, pool);

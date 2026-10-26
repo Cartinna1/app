@@ -5,8 +5,8 @@
 import type { BattleTuning } from '@/types/battle';
 
 export const BATTLE_TUNING: BattleTuning = {
-  /** §1.1：本体就是玩家本人，15 点结构值，无护盾无攻击，不会消失，每场战斗后回满 */
-  bodyHp: 15,
+  /** §1.1：本体就是玩家本人，25 点结构值（**2026-10 用户调整：15 → 25**），无护盾无攻击，不会消失，每场战斗后回满 */
+  bodyHp: 25,
   /** §1.1：指挥度先手第 1 回合 3 点 */
   firstCap: 3,
   /** §1.1：后手第 1 回合 4 点（后手 +1 补偿） */

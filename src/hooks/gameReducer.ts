@@ -573,9 +573,9 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
         const raidOver = { ...idleRaidState(), immuneTurns: RAID_IMMUNE_TURNS };
 
         // ① 2 支掠夺队 = **连续打两场**：赢下第一场后**立刻**进入第二场，第一场未被击毁的舰带进第二场。
-        // ⚠ 本体"一条血，不重置"（§10.2）→ 第二场的玩家本体血量直接抄第一场结束时的
-        //   `battle.player.body`，**绝不回满 15**；文档明说"1 号旗舰被打败就换 2 号旗舰、血量回满"
-        //   的旧机制**已取消**，别实现它。
+        // ⚠ 本体血量（用户 2026-10 新裁定，覆盖 2026-08 的"一条血，不重置"口径）：第二场**回满**——
+        //   建场不覆盖 body，即 createBattle 的 BODY_HP 满值；"1 号旗舰被打败就换 2 号旗舰、血量回满"
+        //   的机制恢复。第一场未被击毁的舰带进第二场不变（raidBattleFleet 筛幸存）。
         // ⚠ seed 用 Date.now()：与 START_BATTLE 的口径一致（战斗不进存档，读档回到战斗前）。
         if (raidWin && state.raid.raiders > 1) {
           const nextFleet = raidBattleFleet(base, raidPoolBefore);
@@ -583,7 +583,7 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
             const created = createBattle({ seed: Date.now(), bossId: 'raid' });
             const nextBattle: BattleState = {
               ...created,
-              player: { ...created.player, pool: nextFleet, body: battle.player.body },
+              player: { ...created.player, pool: nextFleet },
             };
             return {
               ...base,
