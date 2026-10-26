@@ -1,4 +1,4 @@
-'use strict';
+﻿'use strict';
 /* ============================================================================
    雇佣兵协会 · 第 2a 步验收（数据表 + 批次生成 + 冷却 + 期限 + 文案，纯函数层）
    用法：node --import ./scripts/register-ts.mjs scripts/check-mercenary.cjs
@@ -481,8 +481,8 @@ const eq = (a, b) => J(a) === J(b);
   check(mercIds.every((id) => EN.CARDS[id].series === BC[id].series), '引擎里的 series 与数据一致');
   check(['m01', 'm02', 'm03', 'm04', 'm05'].every((b) => !!EN.BOSSES[b] && EN.BOSSES[b].hp > 0),
     '引擎 BOSSES 认得 m01~m05', J(['m01', 'm02', 'm03', 'm04', 'm05'].map((b) => EN.BOSSES[b] && EN.BOSSES[b].hp)));
-  check(FL.FLEET_ALL.length === 33 && !FL.FLEET_ALL.some((id) => mercIds.includes(id)),
-    'FLEET_ALL 仍是 33 张，且不含任何敌方卡', String(FL.FLEET_ALL.length));
+  check(FL.FLEET_ALL.length === 41 && !FL.FLEET_ALL.some((id) => mercIds.includes(id)),
+    'FLEET_ALL 是 41 张（含 8 张新卡），且不含任何敌方卡', String(FL.FLEET_ALL.length));
 
   // m01~m04 各自建场（敌方血量/池按 bossId 查表）
   for (const b of bossIds) {
@@ -708,6 +708,57 @@ const eq = (a, b) => J(a) === J(b);
     check(!!st && done.eventLog[0].detail.includes(`永久损失 3 艘（${RW.lostShipsText(['q1', 'q3', 'q3'])}）`),
       '事件 detail 里含同一串「永久损失 3 艘（…）」', J(done.eventLog[0].detail));
   }
+  // ---------- ⑲ p8 醒觉 / u9 声呐 行为断言 ----------
+  console.log('\n[19] p8 thaw（2/1/0 艘）+ u9 潜航两分支 + 8 张新卡可建造');
+  {
+    const E2 = await import('@/lib/battle/engine');
+    const S2 = await import('@/lib/battle/shipyard');
+    const mk = (seed) => E2.createBattle({ seed, bossId: 'm05', playerFirst: true });
+    const put = (st, side, id, slot) => { const u = E2.spawnUnit(st, side, id); E2.placeUnit(st, side, u, slot); u.sick = false; return u; };
+    // deploy 要求卡在该阵营的池里：测试前把目标卡塞进池子（实际对局里它本来就在 FLEET_ALL 内）
+    const dep = (st, side, id, slot) => { if (st[side].pool.indexOf(id) < 0) st[side].pool.unshift(id); return E2.deploy(st, side, id, slot); };
+    const b = mk(71);
+    const f1 = put(b, 'player', 'h1', 0); f1.frozen = 1;
+    const f2 = put(b, 'player', 'c1', 1); f2.frozen = 2;
+    b.active = 'player'; b.player.cur = 10;
+    const r = dep(b, 'player', 'p8', 2);
+    const pd = b.pending;
+    check(!!r.ok && !!pd && pd.kind === 'thaw' && pd.cands.length === 2 && pd.need === 2,
+      'p8：己方 2 艘被冻 → thaw pending，候选 2 艘、need 2', J(pd && { kind: pd.kind, n: pd.cands.length, need: pd.need }));
+    const firstUid = pd.cands[0].slice();
+    E2.resolvePending(b, pd.cands[0]);
+    E2.resolvePending(b, pd.cands[1]);
+    check(f1.frozen === 0 && f2.frozen === 0, 'p8：解析后两艘 frozen 全清', J([f1.frozen, f2.frozen]));
+    const b1 = mk(72);
+    const g1 = put(b1, 'player', 'h1', 0); g1.frozen = 1;
+    b1.active = 'player'; b1.player.cur = 10;
+    dep(b1, 'player', 'p8', 1);
+    check(b1.pending && b1.pending.need === 1, 'p8：只有 1 艘被冻 → need 1（不是 2，不卡手）', J(b1.pending && b1.pending.need));
+    const b0 = mk(73);
+    b0.active = 'player'; b0.player.cur = 10;
+    const r0 = dep(b0, 'player', 'p8', 0);
+    check(!!r0.ok && b0.pending === null, 'p8：0 艘被冻 → 不发 pending，卡正常上场');
+    const bu = mk(74);
+    const sub = put(bu, 'boss', 'y3', 1);   // ⚠ m05 开场 1 艘 t_grunt 占着 slot 0，目标必须放 slot 1
+    bu.active = 'player'; bu.player.cur = 10;
+    const beforeSub = sub.shield + sub.structure;
+    const ru = dep(bu, 'player', 'u9', 1);
+    check(sub.shield + sub.structure === beforeSub - 3, 'u9：敌方有潜航 → 该潜航单位总血量 -3',
+      J({ before: beforeSub, after: sub.shield + sub.structure, ok: ru && ru.ok, msg: ru && ru.msg }));
+    const bn = mk(75);
+    const tgt = put(bn, 'boss', 'q2', 1);   // 同上：slot 0 被 m05 的开场杂兵占了
+    bn.active = 'player'; bn.player.cur = 10;
+    const sumBoss = () => E2.unitsOf(bn, 'boss').reduce((n, x) => n + x.shield + x.structure, 0);
+    const beforeT = sumBoss();   // ⚠ randomEnemy 可能抽到 m05 开场那艘杂兵 → 量**全场总血量**
+    const rn = dep(bn, 'player', 'u9', 1);
+    check(sumBoss() === beforeT - 1, 'u9：无潜航 → 随机敌军总血量 -1',
+      J({ before: beforeT, after: sumBoss(), ok: rn && rn.ok }));
+    const ids = ['i8', 'i9', 'h8', 'u7', 'u8', 'g7', 'p8', 'u9'];
+    const bad = ids.filter((id) => S2.isEnemySeries(E2.CARDS[id]));
+    check(bad.length === 0, '8 张新卡都不在 ENEMY_SERIES（可建造的第一关）', J(bad));
+    check(!!firstUid, 'p8 pending 的候选是场上单位的 uid（非卡 id）');
+  }
+
   // ---------- 结果 ----------
   console.log('\n=== 雇佣兵协会（数据 + 批次 + 接单/出击/结算）验收结果 ===');
   if (fails.length === 0) {
@@ -721,6 +772,16 @@ const eq = (a, b) => J(a) === J(b);
   console.error('脚本异常：', e);
   process.exitCode = 1;
 });
+
+
+
+
+
+
+
+
+
+
 
 
 

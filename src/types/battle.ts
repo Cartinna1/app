@@ -109,7 +109,7 @@ export type BattleAction =
   | { type: 'autoTurn' };
 
 /** 需要玩家指定目标的入场效果（悬停/点选提示用） */
-export type PendingKind = 'copy' | 'smite' | 'freeze' | 'revive' | 'steal';
+export type PendingKind = 'copy' | 'smite' | 'freeze' | 'revive' | 'steal' | 'thaw';
 
 // ---------------- 运行期（战斗引擎 lib/battle/engine.ts 用） ----------------
 // 只描述 DEMO 运行期实际用到的形状；数值与文案仍由 data/battle/*.ts 提供。
@@ -122,7 +122,8 @@ export interface CardKeywords {
   pierce?: boolean;
   /** 破甲：攻击无视护盾 */
   brk?: boolean;
-  /** 潜航：不能被选为目标、不参与锁链判定 */
+  /** 潜航：不能被选为目标（攻击 / 冻结 / 复制 / 控制都不行）、不参与锁链判定；
+   *  只有「受到伤害」或「主动攻击」才解除，回合开始不解除（2026-10 用户口径） */
   subm?: boolean;
   /** 伏击：部署当回合即可攻击 */
   rush?: boolean;
@@ -177,7 +178,7 @@ export interface BattleUnit {
   kw: CardKeywords;
   /** 召唤失调：刚部署，本回合不能攻击 */
   sick: boolean;
-  /** 潜航状态（回合开始解除） */
+  /** 潜航状态（受到伤害或主动攻击时解除；回合开始不解除） */
   subm: boolean;
   /** 剩余冻结回合数 */
   frozen: number;
@@ -373,6 +374,8 @@ export interface BattleApi {
   beginChoose: (kind: PendingKind, need: number, scope: PendingScope) => PendingChoice | null;
   /** 控制：候选 = 攻击 ≤maxAtk 的敌舰 */
   beginSteal: (maxAtk: number) => PendingChoice | null;
+  /** 醒觉：候选 = **己方**被冻结的战舰（数量自适应，0 艘时落空不发 pending） */
+  beginThaw: (max: number) => PendingChoice | null;
 }
 
 /** 卡牌运行期行为（数据在 data/battle/*.ts，行为在本文件描述的接口上） */

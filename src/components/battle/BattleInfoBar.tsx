@@ -52,7 +52,15 @@ function BattleInfoBarBase({ info, flash, defaultHint }: BattleInfoBarProps) {
             {info.hint ? (
               <>
                 <br />
-                <span className="text-[11.5px] text-slate-500">{info.hint}</span>
+                <span
+                  className={
+                    info.kind === 'pending'
+                      ? 'whitespace-normal break-words text-[12px] font-bold leading-relaxed text-amber-400'
+                      : 'whitespace-normal break-words text-[11.5px] leading-relaxed text-slate-500'
+                  }
+                >
+                  {info.hint}
+                </span>
               </>
             ) : null}
           </>

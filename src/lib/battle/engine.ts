@@ -175,6 +175,29 @@ const BEHAVIOR: Record<string, CardBehavior> = {
   v4: { kw: { taunt: true }, fx: { turnEnd(u, api) { api.adjacent(u).forEach(a => api.repair(a, 1)); } } },
   v5: { kw: { pierce: true }, fx: { play(_u, api) { const e = api.randomEnemy(); if (e) api.damage(e, 2); } } },
   v6: { kw: { pierce: true, recoil: 1 }, fx: { death(u, api) { api.enemies(u).forEach(e => api.damage(e, 2)); } } },
+
+  // —— 2026-10 第 0 批：6 张新卡（逐字搬自 DEMO 的 def(...)）——
+  i8: { kw: {}, fx: { play(_u, api) { for (let i = 0; i < 2; i++) { const e = api.randomEnemy(); if (e) api.damage(e, 1); } } } },
+  i9: { kw: { brk: true } },
+  h8: { kw: {}, fx: { play(u, api) { api.enemies(u).forEach(e => api.damage(e, 2)); } } },
+  u7: { kw: {}, fx: { play(u) { u.sick = false; } } },
+  u8: { kw: {} },
+  g7: { kw: {}, fx: { death(_u, api) { api.carryMana(2); } } },
+
+  // —— 2026-10 引擎批：p8 醒觉 / u9 声呐（逐字搬自 DEMO）——
+  p8: { kw: {}, fx: { play(_u, api) { api.beginThaw(2); } } },
+  u9: { kw: {}, fx: { play(u, api) {
+    // 只在**这张卡的效果里**绕过潜航过滤：潜航单位不在合法目标里，但可按 unitsOf 遍历出来
+    const subs = api.enemies(u).filter(e => e.subm);
+    if (subs.length) {
+      const t = subs[Math.floor(api.st.rnd() * subs.length)];
+      api.damage(t, 3);
+      log(api.st, `  【声呐】锁定潜航中的 ${t.name}，造成 3 点伤害`);
+    } else {
+      const e = api.randomEnemy();
+      if (e) { api.damage(e, 1); log(api.st, `  【声呐】没有潜航目标，改打 ${e.name} 1 点`); }
+    }
+  } } },
 };
 
 /** 空关键词（数据层没有 kw，运行期按空对象处理——与 DEMO def() 的默认值一致） */
@@ -350,6 +373,9 @@ export function attackReason(st: BattleState, side: BattleSide, u: BattleUnit | 
 // ---------------- 伤害 ----------------
 export function damageUnit(_st: BattleState, u: BattleUnit, amount: number, ignoreShield?: boolean): DamageResult {
   if (amount <= 0) return { dealt: 0, overflow: 0, destroyed: false };
+  // 【2026-10 用户口径】受到任何伤害即解除潜航（随机伤害 / AOE / 反噬都算；
+  //   普通攻击本来就不能以潜航单位为目标，见 legalTargets 的 `!u.subm`）。
+  u.subm = false;
   // 【2026-10 方案 B】结构 ≤0 即击毁（见下方下场判据）——原来那条「无视护盾打零结构直接击毁」
   // 的特例已删除：规则本身覆盖它，且体 0 的卡已经全部改成体 1。
   let left = amount, dealt = 0;
@@ -444,6 +470,8 @@ export function attack(st: BattleState, attackerUid: string, targetRef: string):
   const power = effAtk(attacker);
   const retal = target ? effAtk(target) : 0;
   attacker.attacksUsed++;
+  // 【2026-10 用户口径】主动攻击即解除潜航（攻击后不再潜航，也没有重新潜航的入口）
+  attacker.subm = false;
   const targetName = isBody ? label(other(side)) + '本体' : (target ? target.name : '');
   log(st, `${label(side)} ${attacker.name}(${power} 攻) → ${targetName}${kwOn(attacker.kw.brk) ? '【破甲】' : ''}`);
   let res: DamageResult = { dealt: 0, destroyed: false, overflow: 0 };
@@ -513,10 +541,12 @@ export function startTurn(st: BattleState, side: BattleSide): void {
     if (!u) continue;
     if (u.maxShield > 0 && u.shield < u.maxShield) u.shield = Math.min(u.maxShield, u.shield + 1);
   }
-  // 召唤失调解除 / 潜航解除 / 冻结结算
+  // 召唤失调解除 / 冻结结算
+  // ⚠ 潜航**不在这里解除**（2026-10 用户口径）：潜航只由「主动攻击」或「受到伤害」解除，
+  //   不随回合自动消失；解除后也没有重新潜航的入口（除非将来加技能）。
   for (const u of s.board) {
     if (!u) continue;
-    u.sick = false; u.subm = false; u.attacksUsed = 0; u.extra = 0;
+    u.sick = false; u.attacksUsed = 0; u.extra = 0;
     if (u.frozen > 0) { u.frozen--; u.skip = true; log(st, `  ${u.name} 被冻结，跳过本次攻击`); }
     else u.skip = false;
   }
@@ -761,18 +791,31 @@ export function api(st: BattleState, side: BattleSide): BattleApi {
       log(st, `  【召回】等待选择要召回的友舰（${uniq.length} 艘，墓地）…`);
       return st.pending;
     },
+    // 【2026-10】解锁：候选 = **己方**被冻结的战舰（不套 beginChoose 的 !subm 过滤；
+    //   潜航是「不能被选中」，与本功能无关）。数量自适应：n = min(max, 冻结数)；冻结数 0 → 落空不发 pending。
+    beginThaw(max) {
+      const pool = unitsOf(st, side).filter(x => x.frozen > 0);
+      if (!pool.length) { log(st, '  【醒觉】己方没有被冻结的战舰，效果落空'); return null; }
+      const n = Math.min(max, pool.length);
+      st.pending = { side, kind: 'thaw', cands: pool.map(x => x.uid), need: n, picked: [] };
+      log(st, `  【醒觉】等待选择目标（${n} 艘，己方被冻结的战舰）…`);
+      return st.pending;
+    },
     // 需要玩家指定目标的入场效果：挂一个「待选择」，交给玩家点（AI 与「未选就结束回合」都有兜底）
+    // 【2026-10 用户口径】潜航单位不能被任何「选中」类技能指定（冻结 / 复制 / 控制），
+    //   所以候选池统一过滤 `!u.subm`；没有候选时按老规矩打「效果落空」而不是挂空 pending。
     beginChoose(kind, need, scope) {
-      const pool = scope === 'enemy' ? unitsOf(st, foe) : unitsOf(st, 'player').concat(unitsOf(st, 'boss'));
+      const pool = (scope === 'enemy' ? unitsOf(st, foe) : unitsOf(st, 'player').concat(unitsOf(st, 'boss')))
+        .filter(x => !x.subm);
       if (!pool.length) { log(st, `  【${PENDING_LABEL[kind]}】没有可选目标，效果落空`); return null; }
       const n = Math.min(need, pool.length);
       st.pending = { side, kind, cands: pool.map(x => x.uid), need: n, picked: [] };
       log(st, `  【${PENDING_LABEL[kind]}】等待选择目标（${n} 艘，${PENDING_HINT[kind]}）…`);
       return st.pending;
     },
-    // 控制：把「抢哪一艘」交给玩家（候选 = 攻击 ≤maxAtk 的敌舰）
+    // 控制：把「抢哪一艘」交给玩家（候选 = 攻击 ≤maxAtk 的敌舰；潜航中不可选）
     beginSteal(maxAtk) {
-      const cands = unitsOf(st, foe).filter(u => effAtk(u) <= maxAtk);
+      const cands = unitsOf(st, foe).filter(u => !u.subm && effAtk(u) <= maxAtk);
       if (!cands.length) { log(st, `  （对方没有攻击 ≤${maxAtk} 的战舰可控制）`); return null; }
       st.pending = { side, kind: 'steal', cands: cands.map(x => x.uid), need: 1, picked: [] };
       log(st, `  【控制】等待选择要夺取的敌方战舰（${cands.length} 艘）…`);
@@ -783,8 +826,8 @@ export function api(st: BattleState, side: BattleSide): BattleApi {
 }
 
 // ---------------- 待选择效果（玩家指定目标） ----------------
-export const PENDING_LABEL: Record<string, string> = { copy: '记忆掠夺者', smite: '神罚', freeze: '冻结', revive: '召回', steal: '控制' };
-export const PENDING_HINT: Record<string, string> = { copy: '双方场上都可以', smite: '敌方场上', freeze: '敌方场上', revive: '点下方墓地里的友舰', steal: '敌方场上' };
+export const PENDING_LABEL: Record<string, string> = { copy: '记忆掠夺者', smite: '神罚', freeze: '冻结', revive: '召回', steal: '控制', thaw: '醒觉' };
+export const PENDING_HINT: Record<string, string> = { copy: '双方场上都可以', smite: '敌方场上', freeze: '敌方场上', revive: '点下方墓地里的友舰', steal: '敌方场上', thaw: '己方被冻结的战舰' };
 
 /** 完成「待选择」的一次点击：need>1 时要收满才结算 */
 export function resolvePending(st: BattleState, uid: string): BattleResult {
@@ -807,6 +850,11 @@ export function resolvePending(st: BattleState, uid: string): BattleResult {
     picks.forEach(id => {
       const t = findUnit(st, id);
       if (t) { t.frozen = Math.max(t.frozen, 1); log(st, `  【冻结】${t.name}`); }
+    });
+  } else if (kind === 'thaw') {
+    picks.forEach(id => {
+      const t = findUnit(st, id);
+      if (t) { t.frozen = 0; log(st, `  【醒觉】解锁 ${t.name}`); }
     });
   } else if (kind === 'revive') {
     const cardId = picks[0];

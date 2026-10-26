@@ -18,9 +18,11 @@ import FleetPool from './FleetPool';
 import GraveBar from './GraveBar';
 import BattleInfoBar from './BattleInfoBar';
 
+/** 无待选择时的空数组（模块级常量：保持 `memo` 的引用稳定） */
+const EMPTY_PICKED: readonly string[] = [];
+
 // ============================================================================
-// 整屏战斗编排（DEMO 的顶栏 + BOSS 面板 + 玩家面板 + 舰队池 + 信息条）
-// 五段布局与 carddemo/index.html 对齐；所有可判定的展示来自 lib/battle/view.ts（纯函数）。
+// 整屏战斗编排（DEMO 的顶栏 + BOSS 面板 + 玩家面板 + 舰队池 + 信息条）// 五段布局与 carddemo/index.html 对齐；所有可判定的展示来自 lib/battle/view.ts（纯函数）。
 //
 // 时序（对齐 DEMO 的 scheduleBoss）：
 //   · 轮到 BOSS → 自动延时 500ms 调 `autoTurn`（BOSS 的回合不需要玩家点任何东西）
@@ -101,6 +103,8 @@ function BattleScreenBase({ battle, seed, enemyName, context, onAction, onEnd }:
   const playerSlots = boardView(battle, 'player', selUnit, selCard);
   const cards = poolView(battle);
   const info = infoBarView(battle, selCard, selUnit, selFoe);
+  // 待选择**已选中**的单位（唯一来源 = `battle.pending.picked`；UI 不自己计数）
+  const pickedUids: readonly string[] = battle.pending ? battle.pending.picked : EMPTY_PICKED;
   const grave = graveView(battle);
   /**
    * 「此刻谁在操作」的**唯一真值**（lib/battle/view.ts → manualActionView）。
@@ -343,6 +347,7 @@ function BattleScreenBase({ battle, seed, enemyName, context, onAction, onEnd }:
           slots={bossSlots}
           selUnit={selUnit}
           selFoe={selFoe}
+          pickedUids={pickedUids}
           onPlayerSlot={onPlayerSlot}
           onBossTarget={onBossTarget}
         />
@@ -371,6 +376,7 @@ function BattleScreenBase({ battle, seed, enemyName, context, onAction, onEnd }:
           slots={playerSlots}
           selUnit={selUnit}
           selFoe={selFoe}
+          pickedUids={pickedUids}
           onPlayerSlot={onPlayerSlot}
           onBossTarget={onBossTarget}
         />

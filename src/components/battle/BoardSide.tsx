@@ -123,11 +123,13 @@ interface BoardSideProps {
   selUnit: string | null;
   /** 被点开看信息的**敌方**单位（高亮用；点敌方看技能，与"攻击目标"是两件事） */
   selFoe: string | null;
+  /** 待选择效果**已选中**的单位（读 `battle.pending.picked`，唯一来源；UI 不自己计数） */
+  pickedUids: readonly string[];
   onPlayerSlot: (i: number) => void;
   onBossTarget: (uid: string) => void;
 }
 
-function BoardSideBase({ side, slots, selUnit, selFoe, onPlayerSlot, onBossTarget }: BoardSideProps) {
+function BoardSideBase({ side, slots, selUnit, selFoe, pickedUids, onPlayerSlot, onBossTarget }: BoardSideProps) {
   return (
     /* 手机（<`sm`）：**3 列 × 2 行**（用户 2026-08：「好像是太高了，改成 3 列 × 2 行试试」）——
        格子 ≈111px ⇒ 图位 2:1 ≈109×55、零裁切；两侧棋盘合计 ≈460px（"1 条 × 6 行"那版是 ≈756px）。
@@ -145,12 +147,20 @@ function BoardSideBase({ side, slots, selUnit, selFoe, onPlayerSlot, onBossTarge
           className={`flex min-h-[46px] min-w-0 items-center justify-center rounded-lg sm:min-h-[156px] ${slotClass(s.tone)}`}
         >
           {s.unit ? (
-            /* 占用格：编号**不是**绝对定位的小角标（那会压住名字），而是交给卡面、排在名字前面（见 UnitCard） */
-            <UnitCard
-              u={s.unit}
-              slotNo={s.i + 1}
-              selected={side === 'boss' ? !!selFoe && selFoe === s.unit.uid : !!selUnit && selUnit === s.unit.uid}
-            />
+            /* 占用格：编号**不是**绝对定位的小角标（那会压住名字），而是交给卡面、排在名字前面（见 UnitCard）
+               ⚠ 待选择已选中的单位：外层再套一圈翡翠绿 + 右上角 ✓（**不改 UnitCard**，避免压住血条/攻击力）。 */
+            <div className={`relative min-w-0 ${pickedUids.indexOf(s.unit.uid) >= 0 ? 'rounded-lg ring-2 ring-emerald-400/80' : ''}`}>
+              <UnitCard
+                u={s.unit}
+                slotNo={s.i + 1}
+                selected={side === 'boss' ? !!selFoe && selFoe === s.unit.uid : !!selUnit && selUnit === s.unit.uid}
+              />
+              {pickedUids.indexOf(s.unit.uid) >= 0 ? (
+                <span className="pointer-events-none absolute -right-1 -top-1 flex h-4 w-4 items-center justify-center rounded-full bg-emerald-500 text-[10px] font-bold leading-none text-[#0d1424]">
+                  ✓
+                </span>
+              ) : null}
+            </div>
           ) : (
             /* 空位编号：**按槽位下标 0→5 显示 1→6**（= 引擎 `adjacent` 用的那个下标 ±1）
                —— 手机 3 列 × 2 行时"2 与 3 相邻"看起来跨了排，编号让规则自洽（规则本身没改）。 */

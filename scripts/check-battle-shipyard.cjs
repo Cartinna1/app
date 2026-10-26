@@ -1,4 +1,4 @@
-'use strict';
+﻿'use strict';
 /* ============================================================================
    P8 验收：船坞与造舰（V1.5 §8 / §9）
    用法：node --import ./scripts/register-ts.mjs scripts/check-battle-shipyard.cjs
@@ -244,7 +244,7 @@ const eq = (a, b) => JSON.stringify(a) === JSON.stringify(b);
   // ---------- ⑩ shipyardView 遍历完整数组 ----------
   console.log('\n[10] 面板渲染模型（完整数组 + 队列视图）');
   const view = SY.shipyardView(docked(1));
-  check(view.cards.length === 33, '可造卡列表 = 33 型（50 张卡 − 10 张海盗 − 7 张衍生单位）', String(view.cards.length));
+  check(view.cards.length === 41, '可造卡列表 = 41 型（58 张玩家卡 + 8 张新卡 − 10 张海盗 − 7 张衍生单位）', String(view.cards.length));
   check(view.cards.every((c) => c.reason !== undefined || c.ok), '每张不能造的卡都有中文原因');
   check(view.built.length === 3, '三级船坞状态都有（含没建的）');
   check(view.dockLevel === 1, 'dockLevel = 1');
@@ -402,3 +402,5 @@ const eq = (a, b) => JSON.stringify(a) === JSON.stringify(b);
   console.error('验收脚本自身出错：', e && e.stack ? e.stack.split('\n').slice(0, 12).join('\n') : e);
   process.exitCode = 2;
 });
+
+
