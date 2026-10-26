@@ -38,7 +38,7 @@ import type { GameState, Mothership } from '@/types/game';
 import type { Colony } from '@/types/colony';
 import type { BattleRarity, ShipCardDef, ShipCardId } from '@/types/battle';
 import { BATTLE_CARD_IDS } from '@/data/battle/cards';
-import { ALL_CARDS } from './cardIndex';
+import { ALL_CARDS, compareCardOrder } from './cardIndex';
 import { getBuildingDef } from '@/data/colony/buildings';
 import { getTechById } from '@/data/colony/techs';
 import { RESOURCE_LABELS } from '@/data/colony/expeditions';
@@ -874,6 +874,11 @@ export function shipyardView(state: GameState): ShipyardView {
       lockReason: gate.unlocked ? undefined : gate.reason,
     });
   }
+
+  // 展示顺序的**唯一真值** = `cardIndex.compareCardOrder`（系列 → 稀有度 → 费用 → id）
+  // ⚠ 2026-10 用户报「涤罪炮舰（紫·5 费）排在圣光方舟（橙·6 费）后面」——船坞此前沿用
+  //   `BATTLE_CARD_IDS` 的 id 顺序（新卡被追加到系列末尾），必须与机库共用同一套排序。
+  cards.sort(compareCardOrder);
 
   const unlockedCards = cards.filter((c) => c.unlocked);
   const lockedCards = cards.filter((c) => !c.unlocked);

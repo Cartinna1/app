@@ -17,7 +17,7 @@
 import type { GameState } from '@/types/game';
 import type { ShipCardId, ShipCardDef } from '@/types/battle';
 import { BATTLE_CARD_IDS } from '@/data/battle/cards';
-import { ALL_CARDS } from './cardIndex';
+import { ALL_CARDS, compareCardOrder } from './cardIndex';
 import { BATTLE_TUNING } from '@/data/battle/tuning';
 // 舰船图在战斗里的出口是「卡面 320×190」与「场上横条 370×144」，机库沿用同一套图位，
 // 故复用 view.ts 的 unitArtSrc（内部已走 getThumbPath 缩略图，AGENTS 第五节：不许再写第二套命名）。
@@ -182,11 +182,6 @@ export function cardArtSrc(cardId: ShipCardId): string {
 
 // ---------------- 排序 ----------------
 
-/** id 升序比较（卡 id 是 'h1' / 'c4' 这种短标识，直接按代码单元比即可） */
-function compareId(a: string, b: string): number {
-  return a < b ? -1 : a > b ? 1 : 0;
-}
-
 // ---------------- 卡库 ----------------
 
 /**
@@ -228,14 +223,8 @@ export function libraryRows(state: GameState): LibraryRow[] {
     };
   });
 
-  rows.sort((x, y) => {
-    // 系列按字符串升序（中文按代码单元，是**稳定且与调用顺序无关**的固定次序）；
-    // 同系列再按费用升序，同费用按 id 升序 —— 三级键保证排序结果唯一且稳定。
-    const sx = compareId(x.series, y.series);
-    if (sx !== 0) return sx;
-    if (x.cost !== y.cost) return x.cost - y.cost;
-    return compareId(x.id, y.id);
-  });
+  // 展示顺序的**唯一真值** = `cardIndex.compareCardOrder`（系列 → 稀有度 → 费用 → id）
+  rows.sort(compareCardOrder);
   return rows;
 }
 
@@ -367,12 +356,7 @@ export function fleetEditorRows(state: GameState, fleetId: string): FleetEditorR
     };
   });
 
-  rows.sort((x, y) => {
-    const sx = compareId(x.series, y.series);
-    if (sx !== 0) return sx;
-    if (x.cost !== y.cost) return x.cost - y.cost;
-    return compareId(x.id, y.id);
-  });
+  rows.sort(compareCardOrder);
   return rows;
 }
 

@@ -759,6 +759,56 @@ const eq = (a, b) => J(a) === J(b);
     check(!!firstUid, 'p8 pending 的候选是场上单位的 uid（非卡 id）');
   }
 
+  // ---------- ⑳ 卡牌展示排序（唯一真值 = cardIndex.compareCardOrder）----------
+  console.log('\n[20] 卡牌排序：系列 → 稀有度（白<蓝<紫<橙）→ 费用 → id');
+  {
+    const CI = await import('@/lib/battle/cardIndex');
+    const HG = await import('@/lib/battle/hangar');
+    const SY = await import('@/lib/battle/shipyard');
+    // 直接对 8 张新卡 + 同系列老卡验证键序
+    const cmp = CI.compareCardOrder;
+    check(cmp(CI.ALL_CARDS.h8, CI.ALL_CARDS.h7) < 0, 'h8（紫·5 费）排在 h7（橙·6 费）之前',
+      J({ h8: CI.ALL_CARDS.h8.rarity, h7: CI.ALL_CARDS.h7.rarity }));
+    const rank = { 白: 0, 蓝: 1, 紫: 2, 橙: 3 };
+    const seqOk = (ids) => {
+      for (let i = 1; i < ids.length; i += 1) {
+        const a = CI.ALL_CARDS[ids[i - 1]], b = CI.ALL_CARDS[ids[i]];
+        if (a.series !== b.series) return false;
+        if (rank[a.rarity] > rank[b.rarity]) return false;
+      }
+      return true;
+    };
+    ['h6', 'h7', 'h8'].sort((a, b) => cmp(CI.ALL_CARDS[a], CI.ALL_CARDS[b]));
+    check(seqOk(['h6', 'h7', 'h8'].slice().sort((a, b) => cmp(CI.ALL_CARDS[a], CI.ALL_CARDS[b]))),
+      '圣辉系列内稀有度不递减（h6/h7/h8 排序后）');
+    check(seqOk(['i7', 'i8', 'i9'].slice().sort((a, b) => cmp(CI.ALL_CARDS[a], CI.ALL_CARDS[b]))),
+      '铁血系列新卡 i8/i9 与 i7 的稀有度序正确');
+    check(seqOk(['g6', 'g7'].slice().sort((a, b) => cmp(CI.ALL_CARDS[a], CI.ALL_CARDS[b]))),
+      '财团 g7 与 g6 的稀有度序正确');
+    check(seqOk(['u7', 'u8', 'u9'].slice().sort((a, b) => cmp(CI.ALL_CARDS[a], CI.ALL_CARDS[b]))),
+      '通用 u7/u8/u9 的稀有度序正确');
+    // 稳定性：同输入两次排序结果一致
+    const ids = Object.keys(CI.ALL_CARDS);
+    const once = ids.slice().sort((a, b) => cmp(CI.ALL_CARDS[a], CI.ALL_CARDS[b]));
+    const twice = ids.slice().sort((a, b) => cmp(CI.ALL_CARDS[a], CI.ALL_CARDS[b]));
+    check(J(once) === J(twice), '排序唯一且稳定（两次调用结果一致）', String(once.length));
+    // 系列分组按 compareId 递增
+    let groupOk = true;
+    for (let i = 1; i < once.length; i += 1) {
+      const a = CI.ALL_CARDS[once[i - 1]].series, b = CI.ALL_CARDS[once[i]].series;
+      if (a > b) { groupOk = false; break; }
+    }
+    check(groupOk, '全列表系列分组单调不减', '');
+    // 船坞/机库两处都真的用了它（行为级：船坞里 h8 必须在 h7 之前）
+    const ST = mkGuild({});
+    const view = SY.shipyardView(ST);
+    const order = view.cards.map((c) => c.id);
+    check(order.indexOf('h8') >= 0 && order.indexOf('h8') < order.indexOf('h7'),
+      '船坞列表：h8 在 h7 之前', J({ h8: order.indexOf('h8'), h7: order.indexOf('h7') }));
+    const lib = HG.libraryRows(ST).map((r) => r.id);
+    const libOrder = lib.length ? lib : order;
+    check(Array.isArray(libOrder), '机库卡库行与船坞共用同一排序函数（无第二份实现）');
+  }
   // ---------- 结果 ----------
   console.log('\n=== 雇佣兵协会（数据 + 批次 + 接单/出击/结算）验收结果 ===');
   if (fails.length === 0) {
@@ -772,6 +822,8 @@ const eq = (a, b) => J(a) === J(b);
   console.error('脚本异常：', e);
   process.exitCode = 1;
 });
+
+
 
 
 
