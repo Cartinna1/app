@@ -418,10 +418,10 @@ function BattleScreenBase({ battle, seed, enemyName, context, onAction, onEnd }:
           你：本体 {Math.max(0, battle.player.body)}/{battle.player.bodyMax}，被击毁 {battle.player.lost.length} 艘（永久损失），池内剩 {battle.player.pool.length} 艘
           <br />
           BOSS：本体 {Math.max(0, battle.boss.body)}/{battle.boss.bodyMax}，被击毁 {battle.boss.lost.length} 艘
-          {/* ⚠ 结算画面上**没有**"掠夺战利品 / 被抢了什么"那一块：用户 2026-08 最终口径把那个出口
-              定为**事件记录**（「直接放事件记录好了哇，打赢也一样」）—— 打赢 =「掠夺战果｜击退海盗：缴获 …」，
-              打输/被抢 =「殖民地被掠夺｜损失 金币 20000、硅片 100…」，都在事件面板底部的「事件记录」里。
-              这里只留 lib 给的战果旁注（"还有下一支" / "这场没顶住…"）。 */}
+          {/* 结算的显示出口（2026-10 起为**两处**）：① 事件记录（持久那份）——打赢 =「掠夺战果｜击退海盗：缴获 …」，
+              打输/被抢 =「殖民地被掠夺｜损失 金币 20000、硅片 100…」；② 下方「本场得失」面板
+              （battle.settlement，挂在 battle 上、不进存档、随战斗一起消失）。
+              本组件不硬编码任何明细：结算面板渲染 settlement 的字段，这里只留 lib 给的战果旁注（outcomeText）。 */}
           {context.outcomeText ? (
             <p className="mt-1.5 text-[12px] font-bold text-amber-300">{context.outcomeText}</p>
           ) : null}

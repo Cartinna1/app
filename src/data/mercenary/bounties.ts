@@ -151,8 +151,9 @@ export const BOUNTY_DEFS: readonly BountyDef[] = [
   },
 
   // ==================== 3.3 悬赏头目（kind: 'elite'，敌方 = m01~m04，可重复刷）====================
-  // ⚠ 这 4 条是**模板**：头目打赢后进 10 回合冷却（`bounties.bossCooldown`），冷却期内不进候选池。
-  // ⚠ `m01`~`m04` 的敌人定义（hp / 技能 / 编成池）在阶段 2/3 加入，见 `data/mercenary/bosses.ts` 头注释。
+  // ⚠ 打赢任意一条悬赏 → **全局休息** 6 回合（BOUNTY_REST_TURNS，唯一数值在 lib/turn/bounties.ts）——
+  //   每头目 10 回合冷却已退役（用户 2026-10 裁定，`bounties.bossCooldown` 字段已删）。
+  // ⚠ `m01`~`m04` 的敌人定义已就位（data/battle/pirates.ts 的 PIRATE_BOSSES，经 bosses.ts 视图取用）。
   {
     id: 'bty_e1',
     kind: 'elite',

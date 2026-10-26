@@ -495,8 +495,8 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
       //   · 出征战结束 → 这场出征结束（打赢可再次出征；输了未被击毁的舰带回），**不动掠夺状态**
       //   · 掠夺战结束 → 收掉掠夺倒计时并给免疫（打赢还给随机奖励），**不动在途的出征**
       //     （V1.5 §10.1：出征期间殖民地被掠夺，只能靠留守的防守舰队接战）
-      // ⚠ **悬赏战的判据必须排在掠夺战之前**：头目档这一版用 `ELITE_PLACEHOLDER_BOSS = 'raid'` 占位，
-      //   若先判 `bossId === 'raid'`，悬赏战会被当成"殖民地防守战"收尾（发掠夺奖励 + 给 20 回合免疫），
+      // ⚠ **悬赏战的判据必须排在掠夺战之前**：截击档（bty_r1~r5）的敌人**就是** 'raid'，
+      //   若先判 `bossId === 'raid'`，截击悬赏会被当成"殖民地防守战"收尾（发掠夺奖励 + 给 20 回合免疫），
       //   那是错的。判据只看 `bountyBattleId`（运行期字段，进战斗时写入、收尾时清空）。
       const bountyId = state.bountyBattleId ?? null;
       const isBountyBattle = !!bountyId;
@@ -528,12 +528,12 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
           ? rollBossDrop(bountyEnemyId(def), Math.random(), Math.random())
           : [];
         const nextLibrary = mergeDrops(base.cardLibrary, drops);
-        // 头目档打赢 → 写冷却（键 = **该条的敌方 id**，不是占位常量 'raid'）
-        // 打赢**任意档**悬赏 → 全局休息 6 回合（用户 2026-10 裁定：每头目冷却退役）；
+        // 打赢**任意档**悬赏 → 全局休息 6 回合（用户 2026-10 裁定：每头目冷却退役，
+        //   `bounties.restUntilTurn` 是唯一冷却载体）；
         // 失败 / 放弃 / 过期**都不写**（否则连输三次会被锁 18 回合）。
         const bounties = won ? withBountyRest(bountiesAfter, state.turn) : bountiesAfter;
         const dropText = bossDropText(drops);
-        // 掉落按同型合并成 qty（面板逐行显示「获得战舰：噬星幼虫 ×1」）
+        // 掉落按同型合并成 qty（面板逐行显示「获得战舰：孢子浮囊 ×1」）
         const dropCards = [...new Set(drops)].map((id) => ({
           id,
           name: BATTLE_CARDS[id] ? BATTLE_CARDS[id].name : id,
@@ -558,7 +558,7 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
             })
           ),
           bountyBattleId: null,
-          // 显示出口 = 事件记录（与掠夺同一条口径：战斗页签不放结算行）
+          // 显示出口 = 事件记录 + 结算面板「本场得失」（battle.settlement；2026-10 起两处都显示）
           eventLog: [
             { id: createUid('bounty'), turn: state.turn, event: won ? '悬赏完成' : '悬赏失败', detail },
             ...state.eventLog,
@@ -613,7 +613,7 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
               })
             ),
             raid: raidOver,
-            // **显示出口 = 事件记录**（用户 2026-08 最终口径："直接放事件记录好了哇，打赢也一样"）：
+            // **显示出口 = 事件记录 + 结算面板「本场得失」**（2026-10 起两处都显示；事件记录是持久那份）：
             // 这条 detail 逐项列出**实际扣到**的资源与数量（扣 0 的项不列），与扣减/流水同源。
             eventLog: [
               { id: createUid('raid'), turn: state.turn, event: RAID_LOOT_EVENT, detail: `${prefix}${detail}` },
@@ -646,7 +646,7 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
             makeSettlement(base.ships[0], ships[0], battle.player.lost, { summary: reward.text })
           ),
           raid: raidOver,
-          // **显示出口 = 事件记录**（同上）：`detail` 就是奖励路径的原话（`rollRaidReward().text`，
+          // **显示出口 = 事件记录 + 结算面板**（同上）：`detail` 就是奖励路径的原话（`rollRaidReward().text`，
           // 唯一文案产出口）—— 四类各自写明"类型 + 数量"（`缴获 20000 金币` / `缴获 10 星尘` /
           // `缴获 <原料名> ×40` / `与「<势力名>」的声望 +5`），且每次只给抽中的那一类。
           eventLog: [

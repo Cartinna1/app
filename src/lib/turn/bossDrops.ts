@@ -82,7 +82,7 @@ export function mergeDrops(cardLibrary: readonly ShipCardId[], drops: readonly S
   return [...cardLibrary, ...drops];
 }
 
-/** 掉落文案（**唯一产出口**）：`获得敌方战利品：裂壳虫 ×1、掘进虫 ×1（不可建造）` */
+/** 掉落文案（**唯一产出口**）：`获得敌方战利品：孢子浮囊 ×1、甲壳冲角虫 ×1（不可建造）` */
 export function bossDropText(drops: readonly ShipCardId[]): string {
   if (drops.length === 0) return '';
   const names = new Map<ShipCardId, number>();

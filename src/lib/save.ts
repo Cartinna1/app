@@ -45,7 +45,7 @@ export const BGM_MUTED_KEY = 'bgm_muted';
  *       结构与语义，也不影响游戏进度）。刻意**不**回退版本号：回退会让"已在用户机器上的 v8 档"
  *       看起来比 `SAVE_VERSION` 还新，反而给读档加不必要的歧义。
  *  9：银河雇佣兵协会（`docs/03-雇佣兵协会.md`）的**存档地基**：新增 `bounties`（悬赏板：本批榜单 /
- *     进行中 / 头目冷却）与 `lairClearedTurn`（每个老巢**最近一次**被清剿的回合，用于"同一老巢
+ *     进行中 / 全局休息）与 `lairClearedTurn`（每个老巢**最近一次**被清剿的回合，用于"同一老巢
  *     10 回合冷却"）。
  *     ⚠ 同样**只新增字段、不改任何既有字段的结构与语义** → **无需 v8→v9 结构迁移**：
  *       老档缺这两项由 stateFromSave **字段级**兜底成空板 / 空对象（= 没有悬赏、没有清剿记录，
@@ -198,7 +198,7 @@ export function stateFromSave(d: Record<string, any>): GameState {
     // ===== 银河雇佣兵协会（v9 新增；`bossCooldown` 已退役 → `restUntilTurn`，属 v9 内的形状调整）=====
     // ⚠ 旧 v9 档里残留的 `bossCooldown` 键**被忽略**（不迁移、不报错）；缺 `restUntilTurn` 时兜底 0。
     // 字段级兜底在此**唯一一处**（老档没有这两项）。字面量四个键都给全：
-    // 空批次（batchTurn 0 = 还没生成过）+ 空榜单 + 空进行中 + 空冷却表。
+    // 空批次（batchTurn 0 = 还没生成过）+ 空榜单 + 空进行中 + 全局休息 0（restUntilTurn = 0）。
     // ⚠ 兜底值必须与 gameReducer.createInitialGameState 的初值**逐一一致**，但**不能共享同一个对象**
     //   （那里每次调用都新建字面量，这里也新建，避免"读档后的空板"与"新开局的空板"是同一引用）。
     bounties: d.bounties || { batchTurn: 0, offered: [], active: [], restUntilTurn: 0 },

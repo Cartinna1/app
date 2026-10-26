@@ -208,8 +208,6 @@ function MercenaryBoardBase({ state, fleets, onAccept, onAbandon, onStart }: Mer
               </div>
             )}
 
-            {/* 头目档冷却提示（只在冷却中显示；冷却不影响已接的那条，只影响再接） */}
-            {null}
           </div>
         );
       })}
@@ -237,12 +235,12 @@ function MercenaryBoardBase({ state, fleets, onAccept, onAbandon, onStart }: Mer
   );
 }
 
-/** 敌方显示名：本版四支头目都还没有敌人定义（m01~m04 待阶段 2/3），
- *  所以这里只给**类别名**，不编造具体敌人名。 */
+/** 敌方显示名：头目档显示四支**势力名**（与旗帜显示名同源 = enemyFlag.enemyFlagLabel 唯一映射：
+ *  噬星虫群 / 残响智械 / 忆潮灵能者 / 旧律军团）；截击/清剿档显示类别名。 */
 function bountyTargetLabel(defId: string): string {
   const def = getBountyDef(defId);
   if (!def) return '未知';
-  if (def.kind === 'elite') return '势力头目';
+  if (def.kind === 'elite') return enemyFlagLabel(def.enemyId) || '势力头目';
   const enemy = bountyEnemyId(def);
   return enemy === 'raid' ? '海盗掠夺队' : '海盗杂兵队';
 }

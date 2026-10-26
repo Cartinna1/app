@@ -2,6 +2,8 @@
 // 本文件由 scripts/export-battle-data.cjs 从 carddemo/engine.js 生成 —— **请勿手改**。
 // 改卡牌数据请改 DEMO 引擎（或 V1.5 后同步 DEMO），然后重跑：
 //   node scripts/export-battle-data.cjs && node scripts/verify-battle-data.cjs
+// ⚠ **2026-10 起本文件已手改、与 DEMO 有意分叉**（用户授权）：h5/p3 衍生单位身材对齐实值（体 0 清理）、
+//   g3/g5/r5 文案对齐实装（指挥度结转 / 费用减免）。重跑导出脚本会**覆盖回滚**这批修复。
 
 import type { ShipCardDef } from '@/types/battle';
 
@@ -11,7 +13,7 @@ export const BATTLE_CARDS: Record<string, ShipCardDef> = {
   "h2": { id: "h2", name: "诵经护卫舰", cost: 2, atk: 2, shield: 3, structure: 1, series: "圣辉", rarity: "白", text: "入场：本体回复 1 点结构值" },
   "h3": { id: "h3", name: "审判巡洋舰", cost: 3, atk: 3, shield: 4, structure: 1, series: "圣辉", rarity: "蓝", text: "入场（神罚）：选择一个敌方战舰，造成 2 点伤害（无视护盾）" },
   "h4": { id: "h4", name: "圣龛战列舰", cost: 4, atk: 4, shield: 6, structure: 2, series: "圣辉", rarity: "蓝", text: "锁链；回合结束：己方所有战舰 +1 护盾" },
-  "h5": { id: "h5", name: "苦修者母舰", cost: 4, atk: 3, shield: 5, structure: 2, series: "圣辉", rarity: "紫", text: "入场：召唤 2 个 1/1/0 的修士舰" },
+  "h5": { id: "h5", name: "苦修者母舰", cost: 4, atk: 3, shield: 5, structure: 2, series: "圣辉", rarity: "紫", text: "入场：召唤 2 个 1/0/1 的修士舰" },
   "h6": { id: "h6", name: "大主教座舰", cost: 5, atk: 5, shield: 6, structure: 3, series: "圣辉", rarity: "紫", text: "入场：召回（重新部署）一个已被击毁的 3 费以下友舰" },
   "h7": { id: "h7", name: "圣光方舟", cost: 6, atk: 6, shield: 8, structure: 3, series: "圣辉", rarity: "橙", text: "回合开始：本体 +2 结构值，其余友舰回复 2 护盾；亡语：本体 +5 结构值" },
   "i1": { id: "i1", name: "炮灰鱼雷艇", cost: 1, atk: 2, shield: 0, structure: 1, series: "铁血", rarity: "白", text: "亡语：随机一艘友舰攻击 +1" },
@@ -23,16 +25,16 @@ export const BATTLE_CARDS: Record<string, ShipCardDef> = {
   "i7": { id: "i7", name: "灭绝级无畏舰", cost: 6, atk: 7, shield: 7, structure: 3, series: "铁血", rarity: "橙", text: "贯穿；攻击后自身受到 2 点反噬伤害" },
   "p1": { id: "p1", name: "灵媒侦察艇", cost: 1, atk: 1, shield: 2, structure: 1, series: "灵能", rarity: "白", text: "入场：选择冻结一艘敌方战舰" },
   "p2": { id: "p2", name: "心灵干扰舰", cost: 2, atk: 2, shield: 3, structure: 1, series: "灵能", rarity: "白", text: "入场：选择冻结 2 个敌方战舰" },
-  "p3": { id: "p3", name: "幻象巡洋舰", cost: 3, atk: 3, shield: 3, structure: 1, series: "灵能", rarity: "蓝", text: "潜航；亡语：召唤一个 3 攻/2 盾/0 的幻象分身" },
+  "p3": { id: "p3", name: "幻象巡洋舰", cost: 3, atk: 3, shield: 3, structure: 1, series: "灵能", rarity: "蓝", text: "潜航；亡语：召唤一个 3 攻/1 盾/1 的幻象分身" },
   "p4": { id: "p4", name: "深渊凝望者", cost: 4, atk: 4, shield: 5, structure: 2, series: "灵能", rarity: "蓝", text: "回合结束：随机一艘敌方战舰攻击 -2（最低 0）" },
   "p5": { id: "p5", name: "记忆掠夺者", cost: 4, atk: 3, shield: 4, structure: 2, series: "灵能", rarity: "紫", text: "入场：自行选择一艘场上已有战舰，复制它（身材与关键词）" },
   "p6": { id: "p6", name: "主星祭司舰", cost: 5, atk: 5, shield: 6, structure: 3, series: "灵能", rarity: "紫", text: "入场：己方所有战舰攻击 +2、护盾 +2" },
   "p7": { id: "p7", name: "心灵风暴母舰", cost: 6, atk: 6, shield: 7, structure: 3, series: "灵能", rarity: "橙", text: "入场：控制一艘攻击 ≤3 的敌方战舰（归你方场上）" },
   "g1": { id: "g1", name: "金鳞运输艇", cost: 1, atk: 1, shield: 3, structure: 1, series: "财团", rarity: "白", text: "亡语：本回合指挥度 +1" },
   "g2": { id: "g2", name: "雇佣兵炮舰", cost: 2, atk: 3, shield: 2, structure: 1, series: "财团", rarity: "白", text: "入场：若你出牌前指挥度 ≥4，攻击 +1" },
-  "g3": { id: "g3", name: "贸易货轮", cost: 3, atk: 1, shield: 5, structure: 2, series: "财团", rarity: "蓝", text: "回合结束：本回合指挥度 +1" },
+  "g3": { id: "g3", name: "贸易货轮", cost: 3, atk: 1, shield: 5, structure: 2, series: "财团", rarity: "蓝", text: "回合结束：下回合指挥度 +1" },
   "g4": { id: "g4", name: "铸币工厂舰", cost: 4, atk: 3, shield: 6, structure: 2, series: "财团", rarity: "紫", text: "入场：本局指挥度上限永久 +1" },
-  "g5": { id: "g5", name: "财团主席舰", cost: 5, atk: 4, shield: 7, structure: 3, series: "财团", rarity: "紫", text: "入场：你所有舰船的指挥度 -1（最低为 1）" },
+  "g5": { id: "g5", name: "财团主席舰", cost: 5, atk: 4, shield: 7, structure: 3, series: "财团", rarity: "紫", text: "入场：本局内你部署舰船的费用 -1（最低为 1）" },
   "g6": { id: "g6", name: "黄金泰坦", cost: 6, atk: 8, shield: 8, structure: 3, series: "财团", rarity: "橙", text: "过载 2；入场时你每控制一艘友舰，费用 -1（最低 0）" },
   "c1": { id: "c1", name: "民用改装艇", cost: 1, atk: 1, shield: 2, structure: 1, series: "通用", rarity: "白", text: "—" },
   "c2": { id: "c2", name: "哨戒无人机", cost: 2, atk: 2, shield: 2, structure: 1, series: "通用", rarity: "白", text: "锁链" },
@@ -44,7 +46,7 @@ export const BATTLE_CARDS: Record<string, ShipCardDef> = {
   "r2": { id: "r2", name: "钩爪登陆艇", cost: 1, atk: 1, shield: 1, structure: 1, series: "海盗", rarity: "白", text: "—" },
   "r3": { id: "r3", name: "烟幕投放艇", cost: 2, atk: 2, shield: 1, structure: 1, series: "海盗", rarity: "蓝", text: "入场：相邻友舰获得「伏击」" },
   "r4": { id: "r4", name: "海盗巡逻艇", cost: 2, atk: 2, shield: 1, structure: 1, series: "海盗", rarity: "白", text: "入场：获得伏击（部署当回合即可攻击）" },
-  "r5": { id: "r5", name: "黑市走私艇", cost: 3, atk: 2, shield: 4, structure: 1, series: "海盗", rarity: "蓝", text: "入场：双方各获得 1 点指挥度" },
+  "r5": { id: "r5", name: "黑市走私艇", cost: 3, atk: 2, shield: 4, structure: 1, series: "海盗", rarity: "蓝", text: "入场：双方各获得 1 点指挥度（对方的存至其下回合）" },
   "r6": { id: "r6", name: "破盾鱼雷舰", cost: 3, atk: 4, shield: 1, structure: 1, series: "海盗", rarity: "蓝", text: "破甲（攻击无视护盾）" },
   "r7": { id: "r7", name: "双桅劫掠舰", cost: 4, atk: 4, shield: 5, structure: 2, series: "海盗", rarity: "蓝", text: "掠夺 2：命中对方本体时获得 2 点指挥度" },
   "r8": { id: "r8", name: "海盗头目舰", cost: 4, atk: 5, shield: 4, structure: 2, series: "海盗", rarity: "紫", text: "入场：从池外召唤 2 艘钩爪登陆艇（不占池）" },

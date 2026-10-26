@@ -8,7 +8,7 @@
 import type { ShipCardDef, ShipCardId } from '@/types/battle';
 import { BATTLE_CARDS } from '@/data/battle/cards';
 
-/** 全部卡牌定义（玩家 43 张 + 雇佣兵敌人 24 张 = 74 张） */
+/** 全部卡牌定义（74 张 = 玩家 33 + 海盗 10 + 雇佣兵 24 + 衍生 7） */
 export const ALL_CARDS: Readonly<Record<string, ShipCardDef>> = BATTLE_CARDS;
 
 /** 按 id 取卡定义；未知 id 返回 undefined（调用方兜底，不抛） */

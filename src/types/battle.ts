@@ -27,7 +27,8 @@ export interface ShipCardDef {
   atk: number;
   /** 护盾（被打伤且未击毁时，下回合起每回合 +1，不超此值） */
   shield: number;
-  /** 结构值（永不回复；与护盾同时 ≤0 才下场） */
+  /** 结构值（永不回复；**≤0 即击毁**——2026-10 方案 B：护盾只吸收普通伤害，
+   *  破甲/神罚打穿结构直接下场，不再要求"盾与体同时 ≤0"） */
   structure: number;
   series: BattleSeries;
   rarity: BattleRarity;
@@ -37,9 +38,9 @@ export interface ShipCardDef {
 }
 
 /** 敌人 id：5 个老巢 BOSS + 掠夺队（无头目技能、20 血）+ 雇佣兵协会的敌人。
- *  ⚠ `m01`~`m05` 属于雇佣兵协会（数据在 `data/mercenary/bosses.ts`）：本步只落 `m05`
- *    （弱海盗杂兵头目），`m01`~`m04` 的敌人定义留到阶段 2/3；**类型先放开**，因为
- *    悬赏数据表（`data/mercenary/bounties.ts`）的 `enemyId` 已经引用了它们。
+ *  ⚠ `m01`~`m05` 属于雇佣兵协会（数据在 `data/battle/pirates.ts` 的 `PIRATE_BOSSES`，
+ *    `data/mercenary/bosses.ts` 只是从中挑出这五个的视图）：敌人定义与技能分支**均已就位**。
+ *    2026-10 显示名统一为势力名（噬星虫群 / 残响智械 / 忆潮灵能者 / 旧律军团 / 海盗杂兵头目）。
  *  ⚠ 它们**不是老巢**：不在 `LAIR_BOSS_IDS` 里，所以 `battleRewards` 的白名单不会给它们发老巢战利品。 */
 export type PirateBossId = 'b1' | 'b2' | 'b3' | 'b4' | 'b5' | 'raid' | 'm01' | 'm02' | 'm03' | 'm04' | 'm05';
 
@@ -222,10 +223,14 @@ export interface BattleSideState {
   costReduce: number;
   /** 下回合指挥度扣减（过载） */
   overloadNext: number;
-  /** 头目「跌破阈值一次性加成」是否已用掉（b3 深海阎王 ≤25 时全体 +4 攻，只加一次） */
+  /** 头目「跌破阈值一次性加成」是否已用掉（b3 深海阎王**首次 ≤22** 时全体 +4 攻，只加一次——2026-10 方案 A 阈值） */
   bossBuffed: boolean;
   /** 出牌前的指挥度快照（deploy 期间临时写入；manaBefore() 读它） */
   manaB?: number;
+  /** 指挥度结转（「下回合 +N」类效果先记账）：下个 startTurn 时 `cur = cap + manaCarry`，随即清零。
+   *  为什么需要它：回合末 / 给对方的 +N 若直接加在 cur 上，会被下回合开局的 `cur = cap`
+   *  全量重置抹掉（g3 贸易货轮旧实现因此整卡空转、r5 给对方的那份永远花不出去——2026-10 实装修复）。 */
+  manaCarry: number;
   /** 该方已行动过的回合数 */
   ownTurns: number;
   /** 已部署艘数 */
@@ -352,6 +357,10 @@ export interface BattleApi {
   gainMana: (n: number) => void;
   /** 对方本回合指挥度 +n */
   gainManaFoe: (n: number) => void;
+  /** 己方**下回合**指挥度 +n（结转，见 BattleSideState.manaCarry——2026-10 实装修复） */
+  carryMana: (n: number) => void;
+  /** 对方**下回合**指挥度 +n（结转） */
+  carryManaFoe: (n: number) => void;
   /** 本局指挥度上限永久 +n */
   capUp: (n: number) => void;
   /** 己方费用永久 -n */

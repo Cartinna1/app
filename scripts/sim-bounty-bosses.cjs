@@ -35,10 +35,10 @@ const N = Number(process.argv[2] || 200);
     { key: 'full30', label: '满编 30 艘（全集按性价比取前 30）', ships: pickBest(30) },
   ];
   const ENEMIES = [
-    { id: 'm01', label: 'm01 噬星母巢' },
-    { id: 'm02', label: 'm02 残响总控' },
-    { id: 'm03', label: 'm03 忆潮主祭' },
-    { id: 'm04', label: 'm04 旧律裁决官' },
+    { id: 'm01', label: 'm01 噬星虫群' },
+    { id: 'm02', label: 'm02 残响智械' },
+    { id: 'm03', label: 'm03 忆潮灵能者' },
+    { id: 'm04', label: 'm04 旧律军团' },
     { id: 'm05', label: 'm05 弱海盗（对照）' },
     { id: 'b1', label: 'b1 红胡子（老巢基准）' },
   ];

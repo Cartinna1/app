@@ -358,8 +358,6 @@ export interface BountyState {
   offered: string[];
   /** 进行中（"同时最多 3 条"由业务层保证，类型不表达上限） */
   active: BountyProgress[];
-  /** 每个头目最近一次被打赢的回合（bossId → turn），用于 10 回合冷却；缺失 = 从未打赢过。
-   *  ⚠ 它是 `bounties` 的**子字段**，不是独立的存档字段（存档清单仍只有 bounties / lairClearedTurn 两项）。 */
   /** 全局休息的结束回合（0 = 不在休息）：**打赢任意一条悬赏**后 = 当前回合 + BOUNTY_REST_TURNS（6）。
    *  ⚠ 旧的每头目冷却 `bossCooldown` 已整体退役（两个计时器并存必然打架，用户 2026-10 裁定）。
    *    旧 v9 档里残留的 `bossCooldown` 在 stateFromSave 里**被忽略**；缺本字段时兜底 0；
@@ -409,10 +407,10 @@ export interface GameState {
    *  ⚠ **不影响掠夺的触发**：掠夺队永远存在（用户 2026-08 裁定，覆盖 §10.2「全部打败后不再有掠夺」）。
    *  存档字段（v6 引入，旧档兜底 = 空数组 = 一个都没打败）。 */
   defeatedLairs: PirateBossId[];
-  // ⚠ 掠夺结算的显示出口 = **事件记录**（`eventLog`，用户 2026-08 最终口径："直接放事件记录好了哇，
-  //   打赢也一样"）—— 原先那个"最近一次掠夺收尾"快照字段 `lastRaidSettlement` **已整个删除**：
-  //   事件记录本身就是持久化的那条结算展示（打赢 = 「掠夺战果｜击退海盗：缴获 10 星尘」，
-  //   打输/被抢 = 「殖民地被掠夺｜损失 金币 20000、硅片 100…」），另存一份快照纯属重复。
+  // ⚠ 掠夺结算的**持久**显示出口 = 事件记录（`eventLog`，用户 2026-08 口径："直接放事件记录好了哇，
+  //   打赢也一样"）—— 原先那个"最近一次掠夺收尾"快照字段 `lastRaidSettlement` **已整个删除**。
+  //   2026-10 起**另有一份**运行期明细「本场得失」（`battle.settlement`，挂在 battle 上、不进存档、
+  //   随战斗一起消失）→ **两处出口并存**：事件记录是持久那份，结算面板是当次那份。
   battle: BattleState | null;             // 进行中的战斗。⚠ **不进存档**（读档一律为 null）
   // ===== 船坞与科技（V1.5 §8.2 造船建筑 / §8.3 生产规则 / §9 科技树）=====
   /** 造船队列（同时建造 2 艘 + 排队无限，§11 #5）。完工由 useTurn 每回合调
@@ -421,7 +419,7 @@ export interface GameState {
    *  `bounties` / `lairClearedTurn`），加/改它照 AGENTS 第四节四处同步。 */
   buildQueue: BuildQueueItem[];
   // ===== 银河雇佣兵协会（saveVersion 9，与本段一起升级；本版只是字段地基）=====
-  /** 悬赏板状态（本批榜单 + 进行中 + 头目冷却）。
+  /** 悬赏板状态（本批榜单 + 进行中 + 全局休息）。
    *  旧档兜底 = 空板 `{ batchTurn: 0, offered: [], active: [], restUntilTurn: 0 }`（lib/save.stateFromSave）。 */
   bounties: BountyState;
   /** 每个老巢**最近一次被清剿**的回合（bossId → turn），用于"同一老巢 10 回合冷却"。

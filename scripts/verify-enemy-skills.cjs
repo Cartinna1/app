@@ -53,7 +53,7 @@ const NT = (obj, kind, ev) => rows.push({ obj, kind, ok: null, ev });
     S(b, 'boss').board = new Array(6).fill(null);
     toBossEnd(b, 3);
     const after = unitsOf(b, 'boss').length;
-    T('m01 噬星母巢', '头目技能', open.length === 1 && open[0].cardId === 'q1' && after === 1,
+    T('m01 噬星虫群', '头目技能', open.length === 1 && open[0].cardId === 'q1' && after === 1,
       '开场 ' + open.length + ' 艘(' + open.map((u) => u.cardId) + ') → 清场后 BOSS 回合末补 ' + after + ' 艘');
   }
   {
@@ -62,7 +62,7 @@ const NT = (obj, kind, ev) => rows.push({ obj, kind, ok: null, ev });
     const base = u.atk;
     const seq = [];
     for (let r = 1; r <= 4; r += 1) { toBossStart(b, r); seq.push(unitsOf(b, 'boss')[0].atk); }
-    T('m02 残响总控', '头目技能',
+    T('m02 残响智械', '头目技能',
       seq[0] === base + 1 && seq[1] === base + 2 && seq[2] === base + 3 && seq[3] === base + 3,
       '攻 ' + base + '→' + seq.join('→') + '（期望 +1/+2/+3/+3）');
   }
@@ -71,7 +71,7 @@ const NT = (obj, kind, ev) => rows.push({ obj, kind, ok: null, ev });
     placed(b, 'player', 'h1', 0); placed(b, 'player', 'c1', 1);
     toBossStart(b, 2);
     const n = unitsOf(b, 'player').filter((u) => u.frozen > 0).length;
-    T('m03 忆潮主祭', '头目技能', n === 1, '玩家 2 艘 → 被冻 ' + n + ' 艘');
+    T('m03 忆潮灵能者', '头目技能', n === 1, '玩家 2 艘 → 被冻 ' + n + ' 艘');
   }
   {
     const b = createBattle({ seed: 9, bossId: 'm04', playerFirst: true });
@@ -79,7 +79,7 @@ const NT = (obj, kind, ev) => rows.push({ obj, kind, ok: null, ev });
     const base = u.shield;
     const trace = [];
     for (let r = 1; r <= 5; r += 1) { toBossStart(b, r); trace.push(unitsOf(b, 'boss')[0].shield); }
-    T('m04 旧律裁决官', '头目技能', trace[0] === base + 2 && trace.every((x) => x === base + 2),
+    T('m04 旧律军团', '头目技能', trace[0] === base + 2 && trace.every((x) => x === base + 2),
       '基础盾 ' + base + ' → 第1~5回合 ' + trace.join('/') + '（开场一次性 +2）');
   }
 

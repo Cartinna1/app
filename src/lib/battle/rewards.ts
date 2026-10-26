@@ -5,7 +5,8 @@
 //   · 掠夺战（bossId === 'raid'）赢 → **随机获得星尘 / 原料 / 金币 / 某势力声望**（§10.2）
 //     → rollRaidReward / grantRaidReward（**本文件下半部分**；battleRewards 对它恒返回 0/0，语义不变）
 //   · 打输 → 不给任何奖励（永久损失由 gameReducer 的 END_BATTLE 按 P3 规则写回，不在本文件）
-//   · 既不是掠夺队、也不在老巢白名单里的 id（将来的悬赏头目等）→ **0 奖励 + console.warn**，
+//   · 既不是掠夺队、也不在老巢白名单里的 id → **0 奖励 + console.warn**，
+//     （悬赏头目 m01~m05 的收益走 grantBountyRewards，不在这里——③ 只剩"数据漏配"一种可能）
 //     **绝不抛异常**（战斗必须能正常收尾；白名单外绝不许发老巢战利品）
 // ⚠ 本文件只做纯计算：不 mutate 传入对象，不读随机数（随机数由调用方传进来），不 dispatch。
 // ⚠ 金币收益**必须**过 lib/turn/shipTurn.ts 的 famineHalveGold（AGENTS-附录.md 10.2：新增金币收益都要问饥荒减半），
@@ -20,6 +21,8 @@ import { FACTIONS } from '@/data/factions';
 import { getKnownFactionIds } from '@/lib/galaxy/knowledge';
 // 老巢白名单（唯一真值：从星图 `pirateLair` 派生，见该文件顶部"为什么不是从 raid.ts 取"）
 import { LAIR_BOSS_IDS_FROM_NODES } from './lairIds';
+// 老巢展示名（金币流水的 reason 用它，与事件记录同源——不泄漏 b1/b2 这类内部代号）
+import { lairDisplayName } from './expedition';
 import { BATTLE_CARDS } from '@/data/battle/cards';
 
 /** 老巢战利品（§〇 / §10.2）：固定 100000 金币 + 40 星尘 */
@@ -31,7 +34,7 @@ export const LAIR_REWARD_STARDUST = 40;
  *   ① `bossId === 'raid'` → 掠夺队：恒 0/0（随机四类走 rollRaidReward / grantRaidReward，§10.2）；
  *   ② `bossId` 在**老巢白名单**里（`lairIds.LAIR_BOSS_IDS_FROM_NODES` = 星图上带 `pirateLair`
  *      的节点，**数据驱动、不硬编码 b1~b5**）→ 老巢战利品 100000 金币 + 40 星尘（§〇 / §10.2）；
- *   ③ 其它任何 id（打输 / 还没配奖励的新头目，例如下一步要加的悬赏 m01~m05）
+ *   ③ 其它任何 id（打输 / 数据漏配的新头目——悬赏头目的收益走 grantBountyRewards，不在本函数）
  *      → 全 0 + console.warn，**绝不抛异常**（战斗必须能正常收尾）。
  * ⚠ 旧写法是"`bossId === 'raid'` 之外**一律**给老巢战利品"：只有 5 个老巢时看不出来，
  *   一加悬赏头目就会"打赢一场悬赏白送 10 万金"。**别再改回三目分支**。
@@ -72,7 +75,7 @@ export function grantBattleRewards(ship: Mothership, battle: BattleState, turn: 
     ship,
     expectedBattleGold(ship.food, battle),
     battleRewards(battle).stardust,
-    `出征战利品：${battle.bossId} 老巢`,
+    `出征战利品：${lairDisplayName(battle.bossId)}`,
     turn
   );
 }
@@ -129,7 +132,7 @@ export function expectedRepeatLairGold(food: number): number {
  */
 export function grantRepeatLairRewards(ship: Mothership, bossId: PirateBossId, turn: number): Mothership {
   const { stardust } = repeatLairRewards();
-  return applyGoldStardust(ship, expectedRepeatLairGold(ship.food), stardust, `重复清剿：${bossId} 老巢`, turn);
+  return applyGoldStardust(ship, expectedRepeatLairGold(ship.food), stardust, `重复清剿：${lairDisplayName(bossId)}`, turn);
 }
 
 // ==================== 掠夺战利品（V1.5 §10.2：打败海盗后随机获得） ====================

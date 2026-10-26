@@ -25,7 +25,9 @@ export const BATTLE_TUNING: BattleTuning = {
   raidHp: 20,
 };
 
-/** 关键词清单（§1.3；实现见 lib/battle/keywords.ts） */
+/** 关键词清单（V1.5 §1.3 的设计清单）。⚠ 目前**无消费方**，保留作设计对照——运行期实际显示的
+ *  关键词行在 lib/battle/view.kwLine（那里还含 神罚/嗜血/反噬 三个行为关键词，不在本清单）；
+ *  `lib/battle/keywords.ts` 这个文件并不存在（旧注释误引，已更正）。 */
 export const BATTLE_KEYWORDS = [
   '锁链', '入场', '亡语', '回合开始', '回合结束', '潜航', '贯穿',
   '狂怒', '过载', '冻结', '掠夺', '伏击', '亡命', '破甲',

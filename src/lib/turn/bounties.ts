@@ -30,14 +30,16 @@ export const BOUNTY_REFRESH_TURNS = 10;
 /** **全局休息**：打赢任意一条悬赏后，接下来几回合不能接、也不能打（唯一数值位置） */
 export const BOUNTY_REST_TURNS = 6;
 
-/** 每批的构成：清剿 1 条 + 截击 1 条 + 头目 1 条（头目不足时见 buildBountyBatch 的兜底） */
+/** 每批的构成：清剿 1 条 + 截击 1 条 + 头目 1 条（头目候选恒 4 条；notice 兜底见 BOUNTY_ALL_COOLING_NOTICE） */
 export const BOUNTY_BATCH_QUOTA: Readonly<Record<BountyKind, number>> = {
   pirate: 1,
   raid: 1,
   elite: 1,
 };
 
-/** 四支头目都在冷却时的那句提示（本批只有 2 条） */
+/** 「四支头目都在冷却」的提示（本批只有 2 条）。
+ *  ⚠ 每头目冷却退役（2026-10）后**不可达**：elite 候选不再按冷却过滤、恒 4 条，pickOne 不会返回 null。
+ *    保留作防御性兜底（若将来恢复某种过滤，notice 通道还在）。 */
 export const BOUNTY_ALL_COOLING_NOTICE = '四支敌对势力都在冷却，下一批再来';
 
 /** 三类各自的随机盐（让同一批里三个档次的抽样互不相关；改它会改变既有批次的抽法） */
@@ -62,7 +64,7 @@ export function getBountyDef(id: string): BountyDef | undefined {
   return BOUNTY_BY_ID.get(id);
 }
 
-// ---------------- 头目冷却 ----------------
+// ---------------- 全局休息（打赢任意一条悬赏后的 6 回合） ----------------
 
 /**
  * 全局休息还剩几回合（0 = 不在休息，可以接/可以打）。
@@ -131,7 +133,8 @@ export function shouldRefreshBounties(bounties: BountyState, turn: number): bool
  * 1. 不到刷新点 → 原样返回 `bounties.offered`（榜单一旦生成就不再变，避免"刷新界面换榜"）；
  * 2. 到刷新点 → 以**当前回合**为 `batchTurn`，按 `batchIndex = floor(turn / BOUNTY_REFRESH_TURNS)`
  *    派生确定性随机：清剿抽 1 条、截击抽 1 条、头目在**未冷却**的候选里抽 1 条；
- * 3. 头目全在冷却 → 本批只有 2 条，`notice` = 「四支敌对势力都在冷却，下一批再来」。
+ * 3. （防御性）头目抽取返回 null 时本批只有 2 条、`notice` 给一句提示——
+ *    每头目冷却退役后 elite 候选恒 4 条，正常到不了这里。
  */
 export function buildBountyBatch(state: GameState): BountyBatch {
   const { bounties } = state;
@@ -151,7 +154,7 @@ export function buildBountyBatch(state: GameState): BountyBatch {
       if (hit) offered.push(hit.id);
     }
   }
-  // 头目：先按冷却过滤（冷却 > 0 的一律不进候选池）
+  // 头目：候选 = 全部 elite 条目（每头目冷却已退役，不做过滤；全局休息只拦"接/打"，不影响榜单构成）
   const elitePool = BOUNTY_DEFS.filter(
     (d) => d.kind === 'elite'
   );

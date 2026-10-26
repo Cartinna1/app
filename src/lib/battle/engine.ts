@@ -6,6 +6,9 @@
 //   敌人数据在 data/battle/pirates.ts，数值锚点在 data/battle/tuning.ts。
 //   本文件只保留「按卡 id 索引的行为表」（kw / fx / dynamicCost）与全部规则逻辑。
 // ⚠ 判定顺序、数值、随机数消耗次数必须与 DEMO 完全一致；不要"顺手优化"。
+// ⚠ 2026-10 起与 DEMO **有意分叉**（用户授权绕过 carddemo 直接改）：b1 冻结改随机、
+//   m01~m04 显示名统一为势力名、g2/g3/r5/y4 实装修复、新增指挥度结转（manaCarry）。
+//   重跑 export-battle-data / verify-battle-data / parity-battle-engine 会红——预期内，勿据此回滚。
 // ============================================================================
 
 import { BATTLE_CARDS } from '@/data/battle/cards';
@@ -32,7 +35,8 @@ import type {
 import { makeRng } from './rng';
 import type { Rng } from './rng';
 // ⚠ 依赖面：`data/battle/*`（脚本从 DEMO 生成）+ 本文件自身。
-//   唯一的例外是 `data/mercenary/pools.ts` 的四个 30 张敌池 —— DEMO 里那四个池是 `createBattle`
+//   唯一的例外是 `data/mercenary/pools.ts` 的四个势力专属敌池（2026-10 方案 A 口径：
+//   m01/m04 = 12 张、m02/m03 = 18 张）—— DEMO 里那四个池是 `createBattle`
 //   内部的局部常量（`MERC_POOLS`），导出脚本不产出它们；而"按 bossId 选池"必须留在引擎里，
 //   所以池子只能从 app 侧数据文件读（池内容与 DEMO 逐字节一致，由 check-mercenary 断言）。
 import { MERCENARY_POOLS } from '@/data/mercenary/pools';
@@ -90,8 +94,12 @@ const BEHAVIOR: Record<string, CardBehavior> = {
   p7: { kw: {}, fx: { play(_u, api) { api.beginSteal(3); } } },
   // —— 黄金财团 ——
   g1: { kw: {}, fx: { death(_u, api) { api.gainMana(1); } } },
-  g2: { kw: {}, fx: { play(u, api) { if (api.mana() >= 4) api.buffAtk(u, 1); } } },
-  g3: { kw: {}, fx: { turnEnd(_u, api) { api.gainMana(1); } } },
+  // 【2026-10 实装】判「出牌前 ≥4」（文案口径）：读 manaBefore（deploy 扣费前的快照）。
+  //   旧实现读扣费后的 mana() = 实际要求出牌前 ≥6，触发条件被抬高了一档（管道建了、行为表没切）。
+  g2: { kw: {}, fx: { play(u, api) { if (api.manaBefore() >= 4) api.buffAtk(u, 1); } } },
+  // 【2026-10 实装】「下回合指挥度 +1」走结转（carryMana）：回合末的 +1 若直接加在 cur 上，
+  //   会被下回合开局的 cur = cap 全量重置抹掉（旧实现因此整卡空转）。记到 manaCarry、下回合开局发放。
+  g3: { kw: {}, fx: { turnEnd(_u, api) { api.carryMana(1); } } },
   g4: { kw: {}, fx: { play(_u, api) { api.capUp(1); } } },
   g5: { kw: {}, fx: { play(_u, api) { api.costReduce(1); } } },
   g6: {
@@ -110,7 +118,9 @@ const BEHAVIOR: Record<string, CardBehavior> = {
   r2: { kw: {} },
   r3: { kw: {}, fx: { play(u, api) { api.adjacent(u).forEach(a => { a.sick = false; }); } } },
   r4: { kw: {}, fx: { play(u, _api) { u.kw.rush = true; } } },
-  r5: { kw: {}, fx: { play(_u, api) { api.gainMana(1); api.gainManaFoe(1); } } },
+  // 【2026-10 实装】给对方的那份走结转（carryManaFoe）：对方此刻不在自己回合，直接加 cur
+  //   会在对方下个 startTurn 被重置、永远花不出去。己方的 +1 当回合即可用（gainMana 不变）。
+  r5: { kw: {}, fx: { play(_u, api) { api.gainMana(1); api.carryManaFoe(1); } } },
   r6: { kw: { brk: true } },
   r7: { kw: { plunder: 2 } },
   r8: { kw: {}, fx: { play(_u, api) { api.summon('t_claw'); api.summon('t_claw'); } } },
@@ -144,7 +154,18 @@ const BEHAVIOR: Record<string, CardBehavior> = {
   y1: { kw: {}, fx: { play(_u, api) { const e = api.randomEnemy(); if (e) api.freeze(e, 1); } } },
   y2: { kw: { taunt: true } },
   y3: { kw: { subm: true }, fx: { death(u, api) { api.allies(u).forEach(a => api.buffShield(a, 1)); } } },
-  y4: { kw: {}, fx: { play(_u, api) { for (let i = 0; i < 2; i++) { const e = api.randomEnemy(); if (e) api.freeze(e, 1); } } } },
+  // 【2026-10 修复】「随机冻结两艘」：两次独立随机会撞同一艘（冻结不叠加 → 实冻 1 艘）；
+  //   第二次从「未选中」的目标里抽，保证两艘不同；不足两艘时冻到几艘算几艘。
+  y4: { kw: {}, fx: { play(_u, api) {
+    const picked: string[] = [];
+    for (let i = 0; i < 2; i++) {
+      const cands = api.enemies(null).filter((e) => picked.indexOf(e.uid) < 0);
+      if (!cands.length) break;
+      const t = cands[Math.floor(api.st.rnd() * cands.length)];
+      picked.push(t.uid);
+      api.freeze(t, 1);
+    }
+  } } },
   y5: { kw: {}, fx: { play(u, api) { api.allies(u).forEach(a => api.buffShield(a, 2)); } } },
   y6: { kw: {}, fx: { play(_u, api) { api.beginSteal(2); } } },
   // 旧律军团
@@ -206,7 +227,7 @@ function makeSide(id: BattleSide, pool: readonly ShipCardId[], bodyHp: number, s
     lost: [],                    // 已永久损失的舰船
     grave: [],                   // 墓地（供「召回」使用）
     board: new Array(BOARD_SIZE).fill(null),
-    cap: startCap, cur: 0, capBonus: 0, costReduce: 0, overloadNext: 0, bossBuffed: false,
+    cap: startCap, cur: 0, capBonus: 0, costReduce: 0, overloadNext: 0, manaCarry: 0, bossBuffed: false,
     ownTurns: 0, deployed: 0, kills: 0,
   };
 }
@@ -220,7 +241,8 @@ export function createBattle(opts?: CreateBattleOptions): BattleState {
   // 掠夺队（raid）用自己的 15 张低阶池（RAID_POOL）；5 个老巢用 30 张的 PIRATE_POOL。
   // 这一行是**逐字搬自 DEMO** 的同一处分支（用户 2026-08 裁定：掠夺队卡组与 BOSS 区分、更弱、减半）。
   // 敌池三档（判据只在这里）：
-  //   ① 雇佣兵协会的 m01~m04 → `MERCENARY_POOLS[bossId]`（各自的 30 张势力专属池）；
+  //   ① 雇佣兵协会的 m01~m04 → `MERCENARY_POOLS[bossId]`（各自的势力专属池：m01/m04 = 12 张、
+//      m02/m03 = 18 张，2026-10 方案 A 口径）；
   //   ② 掠夺队（raid）→ 15 张低阶池 RAID_POOL（用户 2026-08 裁定：更弱、减半）；
   //   ③ 其余（5 个老巢 + m05 弱海盗）→ 30 张的 PIRATE_POOL。
   // ⚠ 前两档之一必须排在"其余"之前；`m05` 故意落在 PIRATE_POOL（它是海盗杂兵，不是四支势力）。
@@ -246,15 +268,15 @@ export function createBattle(opts?: CreateBattleOptions): BattleState {
   if (bossId === 'b1') {
     const u = spawnUnit(st, 'boss', 't_grunt');
     placeUnit(st, 'boss', u, firstEmpty(st.boss.board));
-    log(st, `【头目技能】红胡子开场自带 1 艘海盗杂兵 1/2/0`);
+    log(st, `【头目技能】红胡子开场自带 1 艘海盗杂兵 1/1/1`);
   }
-  // 【雇佣兵协会】头目开场（m01 召唤幼虫 / m05 召唤海盗杂兵）
+  // 【雇佣兵协会】头目开场（m01 召唤孢子浮囊 / m05 召唤海盗杂兵）
   if (bossId === 'm01') {
     for (let i = 0; i < 1; i++) {
       const u0 = spawnUnit(st, 'boss', 'q1');
       placeUnit(st, 'boss', u0, firstEmpty(st.boss.board));
     }
-    log(st, '【头目技能】噬星母巢开场自带 1 艘噬星幼虫');
+    log(st, '【头目技能】噬星虫群开场自带 1 艘孢子浮囊');
   }
   if (bossId === 'm05') {
     const u5 = spawnUnit(st, 'boss', 't_grunt');
@@ -481,7 +503,10 @@ export function startTurn(st: BattleState, side: BattleSide): void {
   s.cap = Math.min(MANA_CAP, base) + s.capBonus - s.overloadNext;
   s.overloadNext = 0;
   if (s.cap < 0) s.cap = 0;
-  s.cur = s.cap;
+  // 指挥度结转（g3 贸易货轮 / r5 给对方的那份）：下回合开局在 cap 之上叠加，随即清零
+  //（cur 可能暂时超过 cap，花掉第一点就回到 cap 以内——与 capBonus 的显示口径同类）。
+  s.cur = s.cap + s.manaCarry;
+  s.manaCarry = 0;
   log(st, `—— 第 ${st.round} 回合 · ${label(side)}行动（指挥度 ${s.cur}/${s.cap}） ——`);
   // 护盾回充（V1.5：受伤未击毁的舰，下回合起每回合回 1，不超原始护盾值；无护盾的舰不回）
   for (const u of s.board) {
@@ -508,10 +533,17 @@ export function startTurn(st: BattleState, side: BattleSide): void {
 function bossTurnStart(st: BattleState, side: BattleSide): void {
   if (side !== 'boss') return;
   if (st.bossId === 'b1') {
+    // 【2026-10 用户裁定】冻结目标按「随机」处理（对齐技能文案）：数量仍五五开掷 1~2 艘，
+    // 目标从玩家场上**随机不重复**抽取——不再按攻击力排序取最高（旧 topEnemies 实为"点名最痛的"）。
     const n = st.rnd() < 0.5 ? 1 : 2;
-    const t = api(st, 'boss').topEnemies(n);
-    t.forEach(u => api(st, 'boss').freeze(u, 1));
-    if (t.length) log(st, `  【头目技能】红胡子冻结 ${t.map(u => u.name).join('、')}`);
+    const pool = unitsOf(st, 'player').slice();
+    const picked: BattleUnit[] = [];
+    for (let i = 0; i < n && pool.length > 0; i++) {
+      const idx = Math.floor(st.rnd() * pool.length);
+      picked.push(pool.splice(idx, 1)[0]);
+    }
+    picked.forEach(u => api(st, 'boss').freeze(u, 1));
+    if (picked.length) log(st, `  【头目技能】红胡子冻结 ${picked.map(u => u.name).join('、')}`);
   }
   // 【2026-10 方案 A】阈值 25 → 22；「本体 -1」从每回合改成**每 3 个 BOSS 回合**一次
   //   +4 攻仍是"只加一次的状态"（不叠加、不加后来者）；改动只为把胜率拉到 70~80
@@ -533,16 +565,16 @@ function bossTurnStart(st: BattleState, side: BattleSide): void {
     // 【2026-10 方案 A】层数 3 → 2（第 1 层仍落在 BOSS 首次铺场之前，实际生效 +1）
     if (st.round <= 2) {
       api(st, 'boss').allies(null).forEach(a => { a.atk += 1; });
-      log(st, `  【头目技能】残响总控：己方全体攻击 +1（第 ${st.round}/2 层，上限 +2）`);
+      log(st, `  【头目技能】残响智械：己方全体攻击 +1（第 ${st.round}/2 层，上限 +2）`);
     }
     const units2 = api(st, 'boss').allies(null);
     if (units2.length) {
       const low = units2.reduce((a, b) => (a.structure <= b.structure ? a : b));
       low.shield += 1;
-      log(st, `  【头目技能】残响总控：${low.name} 补 1 护盾`);
+      log(st, `  【头目技能】残响智械：${low.name} 补 1 护盾`);
     }
   }
-  // 【雇佣兵协会】m03：每回合开始随机冻结玩家 2 艘战舰（各 1 回合；写法照 b1 的冻结）
+  // 【雇佣兵协会】m03：每回合开始随机冻结玩家 1 艘战舰（1 回合）
   if (st.bossId === 'm03') {
     const picked: BattleUnit[] = [];
     for (let i = 0; i < 1; i++) {
@@ -552,18 +584,18 @@ function bossTurnStart(st: BattleState, side: BattleSide): void {
       picked.push(cand);
     }
     if (picked.length === 0) {
-      log(st, '  【头目技能】忆潮主祭：你场上没有战舰，冻结落空');
+      log(st, '  【头目技能】忆潮灵能者：你场上没有战舰，冻结落空');
     } else {
       picked.forEach(u => api(st, 'boss').freeze(u, 1));
       const suffix = picked.length === 1 ? '（1 回合）' : '（各 1 回合）';
-      log(st, `  【头目技能】忆潮主祭：冻结 ${picked.map(u => u.name).join('、')}${suffix}`);
+      log(st, `  【头目技能】忆潮灵能者：冻结 ${picked.map(u => u.name).join('、')}${suffix}`);
     }
   }
   // 【雇佣兵协会】m04：**开场一次性**己方全体 +2 护盾（落在 BOSS 的第 2 个回合开始 ——
   // 第 1 个回合开始时场上还没有单位，原来的 `round <= 1` 实际是空转；改判 ownTurns === 2 才对得上"首回合铺的那批"）
   if (st.bossId === 'm04' && S(st, 'boss').ownTurns === 2) {
     api(st, 'boss').allies(null).forEach(a => { a.shield += 2; });
-    log(st, '  【头目技能】旧律裁决官：开场己方全体 +2 护盾（仅一次）');
+    log(st, '  【头目技能】旧律军团：开场己方全体 +2 护盾（仅一次）');
   }
 }
 export function endTurn(st: BattleState): void {
@@ -581,12 +613,12 @@ export function endTurn(st: BattleState): void {
   for (const u of s.board) if (u && u.tempAtk) { u.atk = Math.max(0, u.atk - u.tempAtk); u.tempAtk = 0; }
   // 头目回合结束技能
   if (side === 'boss') {
-    // 【雇佣兵协会】m01：不足 2 艘时回合末补 1 艘噬星幼虫
+    // 【雇佣兵协会】m01：不足 2 艘时回合末补 1 艘孢子浮囊
     if (st.bossId === 'm01') {
       if (s.board.filter(Boolean).length < 2) {
         const u1 = spawnUnit(st, 'boss', 'q1');
         placeUnit(st, 'boss', u1, firstEmpty(s.board));
-        log(st, '  【头目技能】噬星母巢：召唤 1 艘噬星幼虫');
+        log(st, '  【头目技能】噬星虫群：召唤 1 艘孢子浮囊');
       }
     }
     // 【雇佣兵协会】m05：不足 2 艘时回合末补 1 艘海盗杂兵
@@ -599,7 +631,7 @@ export function endTurn(st: BattleState): void {
     }
     if (st.bossId === 'b2') {
       // 【定稿·方案⑪】回合结束：若场上不足 3 艘则补到 3 艘（钩爪登陆艇）；然后全体己方 +1 护盾（每艘最多比原始高 2）
-      // 为什么是这两条：原案「召唤 1 艘」实测是自伤（1/2/0 每回合占位，挡住她自己的强卡），
+      // 为什么是这两条：原案「召唤 1 艘」实测是自伤（钩爪艇 1/1/1 每回合占位，挡住她自己的强卡），
       // 单纯加数量完全无效（补到 3 艘实测玩家胜率仍是 100%）；真正有效的是让她的场站得住。
       const need = Math.max(0, 3 - s.board.filter(Boolean).length);
       for (let i = 0; i < need; i++) {
@@ -706,6 +738,10 @@ export function api(st: BattleState, side: BattleSide): BattleApi {
     freeze(u, n) { if (u) u.frozen = Math.max(u.frozen, n); },
     gainMana(n) { S(st, side).cur += n; },
     gainManaFoe(n) { S(st, foe).cur += n; },
+    // 【2026-10 实装修复】指挥度结转：+N 记到「下回合开局」再发（受益方 startTurn 时 cur = cap + manaCarry）。
+    //   回合末 / 给对方的 +N 直接加 cur 会被下个 startTurn 的 cur = cap 全量重置抹掉。
+    carryMana(n) { S(st, side).manaCarry += n; },
+    carryManaFoe(n) { S(st, foe).manaCarry += n; },
     capUp(n) { S(st, side).capBonus += n; },
     costReduce(n) { S(st, side).costReduce += n; },
     summon(cardId) {

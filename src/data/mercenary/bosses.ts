@@ -18,7 +18,6 @@ export const MERCENARY_BOSSES: Readonly<Record<string, PirateBossDef>> = Object.
   MERCENARY_BOSS_IDS.filter((id) => !!PIRATE_BOSSES[id]).map((id) => [id, PIRATE_BOSSES[id]])
 );
 
-// TODO(A2 续)：m01~m05 的头目技能分支**尚未实现**（DEMO 与移植版都只有数据条目）。
-//   落地顺序：先加进 `carddemo/engine.js` 的按 id 分支（bossTurnStart / endTurn / startBattle 各处），
-//   再逐字搬进 `lib/battle/engine.ts`，然后用 `check-mercenary.cjs` 加定点断言。
-//   ⚠ 在那之前，技能文案描述的效果**不生效**——别写成"已实现"。
+// m01~m05 的头目技能分支**已全部落地**（lib/battle/engine.ts 的 startBattle / bossTurnStart /
+//   endTurn 按 id 分支），行为断言见 scripts/check-mercenary.cjs 与 scripts/verify-enemy-skills.cjs。
+//   ⚠ 2026-10 显示名统一为势力名：噬星虫群 / 残响智械 / 忆潮灵能者 / 旧律军团（海盗杂兵头目不变）。
