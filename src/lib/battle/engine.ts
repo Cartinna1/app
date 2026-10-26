@@ -64,7 +64,7 @@ export { FLEET_ALL, FLEET_STARTER, PIRATE_BOSSES, PIRATE_POOL, RAID_POOL };
 const BEHAVIOR: Record<string, CardBehavior> = {
   // —— 圣辉圣堂 ——
   h1: { kw: {}, fx: { turnEnd(u, api) { api.adjacent(u).forEach(a => api.repair(a, 1)); } } },
-  h2: { kw: {}, fx: { play(_u, api) { api.healBody(1); } } },
+  h2: { kw: {}, fx: { play(_u, api) { api.healBody(3); } } },
   h3: { kw: {}, fx: { play(_u, api) { api.beginChoose('smite', 1, 'enemy'); } } },
   h4: { kw: { taunt: true }, fx: { turnEnd(u, api) { api.allies(u).forEach(a => api.buffShield(a, 1)); } } },
   h5: { kw: {}, fx: { play(_u, api) { api.summon('t_monk'); api.summon('t_monk'); } } },
@@ -91,7 +91,7 @@ const BEHAVIOR: Record<string, CardBehavior> = {
   p4: { kw: {}, fx: { turnEnd(_u, api) { const e = api.randomEnemy(); if (e) api.buffAtk(e, -2); } } },
   p5: { kw: {}, fx: { play(_u, api) { api.beginChoose('copy', 1, 'any'); } } },
   p6: { kw: {}, fx: { play(u, api) { api.allies(u).forEach(a => { api.buffAtk(a, 2); api.buffShield(a, 2); }); } } },
-  p7: { kw: {}, fx: { play(_u, api) { api.beginSteal(3); } } },
+  p7: { kw: {}, fx: { play(_u, api) { api.beginSteal(4); } } },
   // —— 黄金财团 ——
   g1: { kw: {}, fx: { death(_u, api) { api.gainMana(1); } } },
   // 【2026-10 实装】判「出牌前 ≥4」（文案口径）：读 manaBefore（deploy 扣费前的快照）。

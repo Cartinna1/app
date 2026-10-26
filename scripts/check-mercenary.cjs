@@ -809,6 +809,35 @@ const eq = (a, b) => J(a) === J(b);
     const libOrder = lib.length ? lib : order;
     check(Array.isArray(libOrder), '机库卡库行与船坞共用同一排序函数（无第二份实现）');
   }
+  // ---------- ㉑ p7 心灵风暴母舰：攻击 ≤4 的敌舰可夺取 ----------
+  console.log('\n[21] p7：4 攻单位可被夺取（上限 3 → 4）');
+  {
+    const E3 = await import('@/lib/battle/engine');
+    const b = E3.createBattle({ seed: 91, bossId: 'm05', playerFirst: true });
+    const q3 = E3.spawnUnit(b, 'boss', 'q3');
+    E3.placeUnit(b, 'boss', q3, 1);   // m05 开场占 slot 0
+    q3.sick = false;
+    b.active = 'player';
+    b.player.cur = 10;
+    if (b.player.pool.indexOf('p7') < 0) b.player.pool.unshift('p7');
+    const r = E3.deploy(b, 'player', 'p7', 0);
+    const pd = b.pending;
+    check(!!r.ok && !!pd && pd.kind === 'steal' && pd.cands.indexOf(q3.uid) >= 0,
+      'p7：4 攻的 q3 出现在夺取候选里（上限 4）', J({ ok: r.ok, kind: pd && pd.kind, n: pd && pd.cands.length, 含: pd && pd.cands.indexOf(q3.uid) >= 0 }));
+    E3.resolvePending(b, q3.uid);
+    check(q3.side === 'player', 'p7：解析后该舰归玩家方', J(q3.side));
+    // 反向：5 攻单位不能被夺取（仍守上限 4）
+    const b2 = E3.createBattle({ seed: 92, bossId: 'm05', playerFirst: true });
+    const big = E3.spawnUnit(b2, 'boss', 'q5');
+    E3.placeUnit(b2, 'boss', big, 1);
+    big.atk = 5;
+    b2.active = 'player';
+    b2.player.cur = 10;
+    if (b2.player.pool.indexOf('p7') < 0) b2.player.pool.unshift('p7');
+    E3.deploy(b2, 'player', 'p7', 0);
+    const pd2 = b2.pending;
+    check(!pd2 || pd2.cands.indexOf(big.uid) < 0, 'p7：5 攻单位不在候选里（上限确实是 4 不是无限）', J(pd2 && pd2.cands.length));
+  }
   // ---------- 结果 ----------
   console.log('\n=== 雇佣兵协会（数据 + 批次 + 接单/出击/结算）验收结果 ===');
   if (fails.length === 0) {
@@ -822,6 +851,7 @@ const eq = (a, b) => J(a) === J(b);
   console.error('脚本异常：', e);
   process.exitCode = 1;
 });
+
 
 
 

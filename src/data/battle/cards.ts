@@ -8,7 +8,7 @@ import type { ShipCardDef } from '@/types/battle';
 /** 全部卡牌（含衍生单位；token = true 的不进卡库） */
 export const BATTLE_CARDS: Record<string, ShipCardDef> = {
   "h1": { id: "h1", name: "圣火巡逻艇", cost: 1, atk: 1, shield: 2, structure: 1, series: "圣辉", rarity: "白", text: "回合结束：相邻友舰回复 1 护盾" },
-  "h2": { id: "h2", name: "诵经护卫舰", cost: 2, atk: 2, shield: 3, structure: 1, series: "圣辉", rarity: "白", text: "入场：本体回复 1 点结构值" },
+  "h2": { id: "h2", name: "诵经护卫舰", cost: 2, atk: 2, shield: 3, structure: 1, series: "圣辉", rarity: "白", text: "入场：本体回复 3 点结构值" },
   "h3": { id: "h3", name: "审判巡洋舰", cost: 3, atk: 3, shield: 4, structure: 1, series: "圣辉", rarity: "蓝", text: "入场（神罚）：选择一个敌方战舰，造成 2 点伤害（无视护盾）" },
   "h4": { id: "h4", name: "圣龛战列舰", cost: 4, atk: 4, shield: 6, structure: 2, series: "圣辉", rarity: "蓝", text: "锁链；回合结束：己方所有战舰 +1 护盾" },
   "h5": { id: "h5", name: "苦修者母舰", cost: 4, atk: 3, shield: 5, structure: 2, series: "圣辉", rarity: "紫", text: "入场：召唤 2 个 1/1/1 的修士舰" },
@@ -27,7 +27,7 @@ export const BATTLE_CARDS: Record<string, ShipCardDef> = {
   "p4": { id: "p4", name: "深渊凝望者", cost: 4, atk: 4, shield: 5, structure: 2, series: "灵能", rarity: "蓝", text: "回合结束：随机一艘敌方战舰攻击 -2（最低 0）" },
   "p5": { id: "p5", name: "记忆掠夺者", cost: 4, atk: 3, shield: 4, structure: 2, series: "灵能", rarity: "紫", text: "入场：自行选择一艘场上已有战舰，复制它（身材与关键词）" },
   "p6": { id: "p6", name: "主星祭司舰", cost: 5, atk: 5, shield: 6, structure: 3, series: "灵能", rarity: "紫", text: "入场：己方所有战舰攻击 +2、护盾 +2" },
-  "p7": { id: "p7", name: "心灵风暴母舰", cost: 6, atk: 6, shield: 7, structure: 3, series: "灵能", rarity: "橙", text: "入场：控制一艘攻击 ≤3 的敌方战舰（归你方场上）" },
+  "p7": { id: "p7", name: "心灵风暴母舰", cost: 6, atk: 6, shield: 7, structure: 3, series: "灵能", rarity: "橙", text: "入场：控制一艘攻击 ≤4 的敌方战舰（归你方场上）" },
   "g1": { id: "g1", name: "金鳞运输艇", cost: 1, atk: 1, shield: 3, structure: 1, series: "财团", rarity: "白", text: "亡语：下回合指挥度 +1" },
   "g2": { id: "g2", name: "雇佣兵炮舰", cost: 2, atk: 3, shield: 2, structure: 1, series: "财团", rarity: "白", text: "入场：若你出牌前指挥度 ≥4，攻击 +1" },
   "g3": { id: "g3", name: "贸易货轮", cost: 3, atk: 1, shield: 5, structure: 2, series: "财团", rarity: "蓝", text: "回合结束：下回合指挥度 +1" },
@@ -38,7 +38,7 @@ export const BATTLE_CARDS: Record<string, ShipCardDef> = {
   "c2": { id: "c2", name: "哨戒无人机", cost: 2, atk: 2, shield: 2, structure: 1, series: "通用", rarity: "白", text: "锁链" },
   "c3": { id: "c3", name: "突击巡洋舰", cost: 3, atk: 3, shield: 4, structure: 2, series: "通用", rarity: "白", text: "—" },
   "c4": { id: "c4", name: "维修工程舰", cost: 3, atk: 2, shield: 5, structure: 2, series: "通用", rarity: "蓝", text: "回合结束：修复相邻友舰 2 点护盾" },
-  "c5": { id: "c5", name: "重型战列舰", cost: 5, atk: 6, shield: 6, structure: 3, series: "通用", rarity: "白", text: "—" },
+  "c5": { id: "c5", name: "重型战列舰", cost: 5, atk: 6, shield: 6, structure: 2, series: "通用", rarity: "白", text: "—" },
   "c6": { id: "c6", name: "轨道炮旗舰", cost: 6, atk: 7, shield: 7, structure: 3, series: "通用", rarity: "蓝", text: "入场：对随机一艘敌方战舰造成 3 点伤害" },
   "r1": { id: "r1", name: "掠夺者快艇", cost: 1, atk: 2, shield: 0, structure: 1, series: "海盗", rarity: "白", text: "—" },
   "r2": { id: "r2", name: "钩爪登陆艇", cost: 1, atk: 1, shield: 1, structure: 1, series: "海盗", rarity: "白", text: "—" },
