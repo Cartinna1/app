@@ -3,6 +3,7 @@ import type { LibraryRow } from '@/lib/battle/hangar';
 import { defaultSeriesFilter, filterBySeries, pickSeriesFilter, resolveSeriesFilter, seriesGroups } from '@/lib/battle/seriesFilter';
 import ShipCard, { SHIP_CARD_GRID_ITEM } from '@/components/ship/ShipCard';
 import SeriesChipRow from './SeriesChipRow';
+import SkillLine from './SkillLine';
 
 // ============================================================================
 // 机库 · 卡库标签
@@ -71,7 +72,7 @@ function LibraryPanelBase({ rows, selectedId, onSelect }: LibraryPanelProps) {
            卡面本身（图在上、占满卡宽、2:1）见 `components/ship/ShipCard`（卡库/船坞/战斗池共用那一个）。 */
         <div className="mt-1.5 flex flex-wrap gap-1.5">
           {visibleRows.map((r) => (
-            <div key={r.id} className={SHIP_CARD_GRID_ITEM}>
+            <div key={r.id} className={`${SHIP_CARD_GRID_ITEM} min-w-0`}>
               <ShipCard
                 id={r.id}
                 name={r.name}
@@ -90,6 +91,8 @@ function LibraryPanelBase({ rows, selectedId, onSelect }: LibraryPanelProps) {
                 ]}
                 onSelect={onSelect}
               />
+              {/* 行内技能（用户 2026-10：往下翻着点卡时不用滚回顶部看详情）；与编队行共用 SkillLine */}
+              <SkillLine text={r.skill} />
             </div>
           ))}
         </div>

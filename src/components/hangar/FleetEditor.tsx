@@ -2,6 +2,7 @@ import { memo, useCallback, useMemo, useState } from 'react';
 import type { FleetEditorRow, FleetRow } from '@/lib/battle/hangar';
 import { defaultSeriesFilter, filterBySeries, pickSeriesFilter, resolveSeriesFilter, seriesGroups } from '@/lib/battle/seriesFilter';
 import SeriesChipRow from './SeriesChipRow';
+import SkillLine from './SkillLine';
 
 // ============================================================================
 // 机库 · 编成界面（选中某队后逐型加减）
@@ -85,6 +86,8 @@ function FleetEditorBase({ fleet, rows, onAdd, onRemove }: FleetEditorProps) {
                       本队已编 {r.inFleet} / 卡库 {r.owned}
                       {r.canStillAdd > 0 ? ` · 还能再编 ${r.canStillAdd} 份` : ' · 卡库已全部编入'}
                     </span>
+                    {/* 技能直显（用户 2026-10：编队里不点开也要看得到）；与卡库共用 SkillLine */}
+                    <SkillLine text={r.skill} />
                   </span>
 
                   <div className="flex flex-none items-center gap-1">

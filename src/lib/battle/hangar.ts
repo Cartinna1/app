@@ -51,6 +51,8 @@ export interface LibraryRow {
   structure: number;
   /** 技能全文（卡面不放技能；机库固定区域的技能详情读它） */
   text: string;
+  /** 行内直显用的技能串（= `skillText(def)`；空串表示无技能，UI 不渲染） */
+  skill: string;
   /** 卡面图位（已走缩略图） */
   artSrc: string;
   /** 卡库持有份数 */
@@ -99,6 +101,8 @@ export interface FleetEditorRow {
   series: string;
   rarity: string;
   cost: number;
+  /** 技能全文（唯一来源 = `getCardDef(id).text`；卡面无技能时为空串，由 UI 决定不渲染） */
+  skill: string;
   artSrc: string;
   /** 卡库持有份数 */
   owned: number;
@@ -182,6 +186,13 @@ export function cardArtSrc(cardId: ShipCardId): string {
 
 // ---------------- 排序 ----------------
 
+/** 行内直显的技能串（唯一取值规则：`text` 为空或占位 `—` → 空串）。
+ *  `LibraryRow.skill` 与 `FleetEditorRow.skill` **都调它**（用户 2026-10：卡库/编队都要行内看到技能）。 */
+export function skillText(def: { text?: string } | undefined | null): string {
+  const t = def && def.text ? def.text : '';
+  return t === '—' ? '' : t;
+}
+
 // ---------------- 卡库 ----------------
 
 /**
@@ -216,6 +227,8 @@ export function libraryRows(state: GameState): LibraryRow[] {
       shield: d ? d.shield : 0,
       structure: d ? d.structure : 0,
       text: d ? d.text : '（未知卡型：数据里找不到这张卡）',
+      // 行内直显（与编队行同一取值函数）
+      skill: skillText(d),
       artSrc: cardArtSrc(id),
       owned: o,
       assigned: a,
@@ -345,6 +358,8 @@ export function fleetEditorRows(state: GameState, fleetId: string): FleetEditorR
       series: d ? d.series : '未知',
       rarity: d ? d.rarity : '白',
       cost: d ? d.cost : 0,
+      // 技能文本唯一来源（用户 2026-10：编队标签里要能直接看到技能，不用点开）
+      skill: skillText(d),
       artSrc: cardArtSrc(id),
       owned: countInCardLibrary(state.cardLibrary, id),
       inFleet,

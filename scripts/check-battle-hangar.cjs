@@ -538,10 +538,39 @@ const J = (v) => JSON.stringify(v);
   }
 
   console.log('\n=== P6 验收结果 ===');
+  // ---------- 行内技能（SkillLine / skillText，用户 2026-10）----------
+  {
+    const H = await import('@/lib/battle/hangar');
+    const lib = {
+      cardLibrary: ['h8', 'i9', 'u8'].concat(new Array(20).fill('h1')),
+      fleets: [{ id: 'f1', name: 'F1', shipIds: ['h1'], defending: false }],
+    };
+    const base = build(lib.cardLibrary, [['h1']]);
+    const fid = base.fleets[0].id;
+    const rows = H.fleetEditorRows(base, fid);
+    const libRows = H.libraryRows(base);
+    const r8 = rows.find((r) => r.id === 'h8');
+    check(!!r8 && r8.skill.includes('所有敌方战舰'), '编队行 h8.skill 含「所有敌方战舰」', J(r8 && r8.skill));
+    check(!!rows.find((r) => r.id === 'u8') && rows.find((r) => r.id === 'u8').skill === '',
+      '编队行 u8.skill 为空串（无技能不渲染）');
+    const pick = ['h8', 'i9', 'u8'];
+    const bad = pick.filter((id) => {
+      const a = rows.find((r) => r.id === id);
+      const b = libRows.find((r) => r.id === id);
+      return !a || !b || a.skill !== b.skill;
+    });
+    check(bad.length === 0, '卡库行 skill === 编队行 skill（抽查 h8/i9/u8，同一 skillText）', J(bad));
+    check(H.skillText({ text: '—' }) === '' && H.skillText(undefined) === '' && H.skillText({ text: '破甲' }) === '破甲',
+      'skillText：占位「—」/缺省 → 空串，正常文案原样返回');
+  }
   if (fails.length === 0) console.log('  全部通过 ✓');
   else { console.log('  ' + fails.length + ' 条失败 ✗'); process.exitCode = 1; }
 })().catch((e) => {
   console.error('验收脚本自身出错：', e && e.stack ? e.stack.split('\n').slice(0, 10).join('\n') : e);
   process.exitCode = 2;
 });
+
+
+
+
 
