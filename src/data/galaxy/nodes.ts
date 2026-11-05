@@ -9,7 +9,7 @@ import type { GalaxyNode, GalaxyState } from '@/types/galaxy';
 export const GALAXY_NODES: GalaxyNode[] = [
   // ==================== 10 势力（核心区） ====================
   // 坐标经一次"最短路贴近旧 DISTANCE_MATRIX"的优化：平均偏差 1.53 回合。
-  // 当前势力间最短路区间 2~9 回合、均值 ≈5.87（再改任何坐标都要重跑该对比表与 validateGalaxy）
+  // 势力间真实最短路区间 2~11 回合、均值 ≈5.9（2026-11 起跃迁/出征不再钳制；文档/旧表里的「2~9、均值 5.87」是**贸易锚口径** getTradeDistance）。再改任何坐标都要重跑该对比表与 validateGalaxy()
   { id: 'f01', type: 'faction', name: '银河人类联邦', x: 172, y: 129, factionId: 'f01' },
   { id: 'f02', type: 'faction', name: '齐戈尔统一集群', x: 75, y: 333, factionId: 'f02' },
   { id: 'f03', type: 'faction', name: '泰拉钢铁王座', x: 565, y: 248, factionId: 'f03' },

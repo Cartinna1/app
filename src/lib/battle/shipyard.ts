@@ -645,15 +645,22 @@ export function buildRefund(item: BuildQueueItem): { gold: number; alloy: number
  *     开工后的第一个回合末才减 1，`turnsLeft` 正好等于"还剩几回合"；
  *   · 完工项**从队列移除**，卡 id 收进 `completed`（由调用方写进 `cardLibrary` —— 卡库才是
  *     "玩家拥有什么"的唯一真值）；
- *   · `dockLv` 只用于"还能不能继续开工"的判定：0 级（拆了船坞 / 旧档）时**已开工的照常完工**，
- *     但**不再开新工**（否则可以拆掉船坞白嫖剩余产能）。
- *     ⚠ 入驻（`dockStaffGate`）**只拦"下单"**：已经在队列里的项照常推进 —— 与"拆了船坞已开工照常
- *       完工"同一个口径（中途把人调走的代价不该是队列凭空失效，取消排队另有 canCancelBuild 的返还）。
+ *   · **`dockLv === 0` → 队列里的一切（在造 + 排队）一律作废**：从队列移除并塞进 `cancelled`，
+ *     由调用方按**现有的取消返还**（`buildRefund` → `refundFromPaid`，与 CANCEL_BUILD 同一份）退料
+ *     —— 2026-10 用户裁定：拆光船坞后在建订单**不许照常完工**（否则拆坞等于白嫖剩余产能）。
+ *   · **入驻（`dockStaffed`）只拦"补位开工"**：没人入驻时不新开工、排队项原地等（`turnsLeft` 不动）；
+ *     已在造的项**照常推进**（人口调动频繁，追溯作废过重 —— 用户只对"拆坞"要求作废）。
  */
 export function advanceQueue(
   queue: BuildQueueItem[],
   dockLv: number,
-): { queue: BuildQueueItem[]; completed: ShipCardId[] } {
+  staffed = true,
+): { queue: BuildQueueItem[]; completed: ShipCardId[]; cancelled: BuildQueueItem[] } {
+  // ① 船坞没了 → 全部作废（退料交给调用方，复用 buildRefund，不在这里算比例）
+  if (dockLv <= 0) {
+    return { queue: [], completed: [], cancelled: queue.slice() };
+  }
+
   const completed: ShipCardId[] = [];
   const afterTick: BuildQueueItem[] = [];
   for (const item of queue) {
@@ -666,8 +673,8 @@ export function advanceQueue(
     else afterTick.push({ ...item, turnsLeft });
   }
 
-  // 补位：同时位空出且船坞还在，就把最前面的排队项依次开工（本回合只开工、不走工期）
-  const canStart = dockLv > 0;
+  // ② 补位：同时位空出、船坞在、且**有人入驻**，才把最前面的排队项依次开工（本回合只开工、不走工期）
+  const canStart = dockLv > 0 && staffed;
   let slots = Math.max(0, MAX_CONCURRENT_BUILDS - activeBuildCount(afterTick));
   const next = afterTick.map((item) => {
     if (canStart && !item.active && slots > 0) {
@@ -677,7 +684,7 @@ export function advanceQueue(
     return item;
   });
 
-  return { queue: next, completed };
+  return { queue: next, completed, cancelled: [] };
 }
 
 // ---------------- 渲染模型 ----------------

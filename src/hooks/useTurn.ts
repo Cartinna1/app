@@ -12,7 +12,9 @@ import { EVENT_LOG_LIMIT } from '@/data/gameData';
 import { createUid } from '@/lib/id';
 import { canEndGameTurn } from '@/lib/battle/expedition';
 import { raidSquadCount, shouldStartRaid } from '@/lib/battle/raid';
-import { advanceQueue, dockLevel } from '@/lib/battle/shipyard';
+import { advanceQueue, buildRefund, dockLevel, dockStaffed } from '@/lib/battle/shipyard';
+import { pushGoldLog } from '@/lib/turn/goldLog';
+import type { Mothership } from '@/types/game';
 import { BATTLE_CARDS } from '@/data/battle/cards';
 import { planBattleTurn } from './battleTurnPlan';
 
@@ -157,31 +159,60 @@ export function useTurn(
         // 而 `dockLevel` 只认**已建成**的船坞 —— 放在它后面才能吃到"本回合刚建成船坞"这一个状态。
         // 用结算后的 ships（不是 prev）算等级，保证与面板显示同源。
         const afterColony: GameState = { ...prev, ships };
-        const shipyardResult = advanceQueue(afterColony.buildQueue, dockLevel(afterColony));
+        // 入驻判定走唯一真值 dockStaffed（= dockStaffGate().ok）；无船坞时直接 false（没人可入驻）
+        const dockLv = dockLevel(afterColony);
+        const shipyardResult = advanceQueue(
+          afterColony.buildQueue,
+          dockLv,
+          dockLv > 0 ? dockStaffed(afterColony, dockLv) : false,
+        );
+        // ② 拆坞作废：按**现有取消返还**（buildRefund → refundFromPaid）退料 + 金币流水 + 事件记录
+        let shipsAfterYard = ships;
+        const buildCancelLogs: { id: string; turn: number; event: string; detail: string }[] = [];
+        if (shipyardResult.cancelled.length > 0) {
+          const head: Mothership = { ...ships[0], materials: { ...(ships[0].materials || {}) } };
+          for (const item of shipyardResult.cancelled) {
+            const refund = buildRefund(item);
+            for (const [matId, amount] of Object.entries(refund.materials)) {
+              head.materials[matId] = (head.materials[matId] || 0) + amount;
+            }
+            head.alloy += refund.alloy;
+            head.gold += refund.gold;
+            // ⚠ pushGoldLog 必须在金币改完之后调（它读当前金币当 balanceAfter）
+            if (refund.gold) pushGoldLog(head, prev.turn, refund.gold, `取消建造（${shipBuildName(item.cardId)}）`);
+            buildCancelLogs.push({
+              id: createUid('build'),
+              turn: prev.turn,
+              event: '建造取消',
+              detail: `战舰「${shipBuildName(item.cardId)}」建造取消：船坞已拆除（已按实付成本退料）`,
+            });
+          }
+          shipsAfterYard = [head, ...ships.slice(1)];
+        }
         // 完工的卡进 `cardLibrary` —— 卡库才是"玩家拥有什么"的唯一真值（不另存"已造列表"）。
         const cardLibrary = shipyardResult.completed.length > 0
           ? [...afterColony.cardLibrary, ...shipyardResult.completed]
           : afterColony.cardLibrary;
 
         // 贸易政策 / 势力价格 / 市场库存需求 / buff 清理 / 星尘集市
-        const currentFid = getCurrentFactionId(ships[0]) || FACTIONS[0].id;
+        const currentFid = getCurrentFactionId(shipsAfterYard[0]) || FACTIONS[0].id;
         const market = computeFactionTurn(prev, currentFid);
 
         // 游戏结束检测
-        const gameOverReason = getGameOverReason(ships[0]);
+        const gameOverReason = getGameOverReason(shipsAfterYard[0]);
         if (gameOverReason) {
-          return { ...prev, ships, phase: 'ended' as const, eventLog: [{ id: createUid('gameover'), turn: prev.turn, event: '游戏结束', detail: gameOverReason }, ...prev.eventLog].slice(0, EVENT_LOG_LIMIT) };
+          return { ...prev, ships: shipsAfterYard, phase: 'ended' as const, eventLog: [{ id: createUid('gameover'), turn: prev.turn, event: '游戏结束', detail: gameOverReason }, ...prev.eventLog].slice(0, EVENT_LOG_LIMIT) };
         }
 
         // 合同生成
         const factionContracts = generateContracts(prev);
 
-        // 被动收入结算
-        applyPassiveIncome(prev, ships);
+        // 被动收入结算（在"拆坞退料"之后结算，与最终写回的 ships 同源）
+        applyPassiveIncome(prev, shipsAfterYard);
 
         return {
           ...prev,
-          ships,
+          ships: shipsAfterYard,
           turn: prev.turn + 1,
           factionRepLog: {},
           factionContracts,
@@ -191,8 +222,8 @@ export function useTurn(
           // 造船队列（本回合推进后的队列 + 完工入库的卡库）
           buildQueue: shipyardResult.queue,
           cardLibrary,
-          // 考古日志 + 造舰完工日志（每回合最多几条，挂到事件日志尾部）；与 ADD_EVENT_LOG 共用同一上限
-          eventLog: (archaeologyLogs.length > 0 || shipyardResult.completed.length > 0)
+          // 考古日志 + 造舰完工日志 + 拆坞作废日志；与 ADD_EVENT_LOG 共用同一上限
+          eventLog: (archaeologyLogs.length > 0 || shipyardResult.completed.length > 0 || buildCancelLogs.length > 0)
             ? [
                 ...shipyardResult.completed.map((cardId) => ({
                   id: createUid('build'),
@@ -200,6 +231,7 @@ export function useTurn(
                   event: '造舰完工',
                   detail: `战舰「${shipBuildName(cardId)}」建造完成，已进入卡库`,
                 })),
+                ...buildCancelLogs,
                 ...archaeologyLogs.map((detail) => ({ id: createUid('arch'), turn: prev.turn, event: '考古', detail })),
                 ...prev.eventLog,
               ].slice(0, EVENT_LOG_LIMIT)

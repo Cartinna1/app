@@ -49,7 +49,7 @@ export function lairDisplayName(bossId: PirateBossId): string {
 /**
  * 「航行 N 回合」文案（**未出发**时的预览口径，唯一真值）。
  * ⚠ 只有出征列表（舰队还没出发）用它；在途时读 `state.expedition.turnsRemaining`，见 expeditionEtaText。
- * 耗时走 expeditionTurns（= getGalaxyTurns，与跃迁/贸易同源，含 MAX_ROUTE_TURNS 钳制），UI 不许自己算。
+ * 耗时走 expeditionTurns（= getGalaxyTurns 的**真实**距离，无钳制；贸易折价另有 TRADE_DISTANCE_ANCHOR），UI 不许自己算。
  * 没有殖民地 / 航线被封锁（turns 为 null）时返回「航线不通」。
  */
 export function travelTurnsText(state: GameState, bossId: PirateBossId): string {
@@ -96,13 +96,10 @@ export function colonyNodeId(state: GameState): string | null {
  * 出征耗时 = 殖民地节点 → 老巢节点的星图跃迁回合数（复用 getGalaxyTurns，被封锁势力影响，与贸易同源）。
  * 没有殖民地 / 该 bossId 不是老巢 / 路线不可达（宿敌封锁）时返回 null（调用方据此禁用出征）。
  *
- * ⚠ 口径已定（2026-08）：出征耗时就用 `getGalaxyTurns` 的**钳制后**值（上限 `MAX_ROUTE_TURNS=9`），
- *   与跃迁回合数、贸易距离折价同源 —— 出征本来就是一次真实跃迁，不另开一套不封顶的算法。
- *   实测（10 个殖民地取平均）：b4 6.6 / b3 6.9 / b1 6.8 / b5 8.2 / b2 8.2 回合。
- *   注意 V1.5 §7.1 那张表登记的 7.4 / 8.0 / 9.0 / 11.4 / 11.6 是**未钳制的原始最短路**均值
- *   （已用独立算法逐位复现）：b5/b2 有 8/10 个殖民地到老巢的原始距离 > 9，钳成 9 之后
- *   文档那两个 11.x 在游戏里不会出现。**这是有意的**（否则会出现"星图说 9 回合、出征说 16 回合"），
- *   不要再为了对齐文档去改这张图或 `MAX_ROUTE_TURNS`。
+ * ⚠ 口径（2026-11 用户裁定，推翻 2026-08 的"用钳后值"）：出征耗时 = **真实距离**，无上限。
+ *   理由：距离要真实，走太远是玩家自己的选择，不必替他担忧；贸易折价仍按 `TRADE_DISTANCE_ANCHOR=9`
+ *   单独计算（玩家感知不到），两条口径从此解耦。
+ *   实测（10 个殖民地取平均）：均值 ≈9.5 回合、最大 17 回合（改前钳 9 时均值 7.3 / 最大 9）。
  */
 export function expeditionTurns(state: GameState, bossId: PirateBossId): number | null {
   const from = colonyNodeId(state);

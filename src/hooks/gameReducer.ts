@@ -10,6 +10,7 @@ function lostSuffix(lost: readonly ShipCardId[]): string {
   return text ? `；永久损失 ${lost.length} 艘（${text}）` : '';
 }
 import { BATTLE_CARDS } from '@/data/battle/cards';
+import { getCardDef } from '@/lib/battle/cardIndex';
 import { FACTIONS, POLICY_EFFECTS, refreshFactionPrices, calculateSellMultipliers } from '@/data/factions';
 import { createMotherships, createStocks, createMaterials, createProducts, EVENT_LOG_LIMIT } from '@/data/gameData';
 import { BLACK_MARKET_DEFAULT } from '@/data/exchangeRates';
@@ -843,7 +844,11 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
       const next: Mothership = { ...ship, materials: { ...(ship.materials || {}) } };
       const cost = flattenCost(buildCost(action.cardId));
       payCost(next, ship.colony, cost);
-      if (cost.gold) pushGoldLog(next, state.turn, -cost.gold, `建造战舰（${action.cardId}）`);
+      // 金币流水里写**卡名**（内部 cardId 不许露给玩家；走统一查询口 getCardDef）
+      if (cost.gold) {
+        const cardName = getCardDef(action.cardId)?.name || action.cardId;
+        pushGoldLog(next, state.turn, -cost.gold, `建造战舰（${cardName}）`);
+      }
       // ③ 入队：同时建造位有空则直接开工，否则排队（enqueueBuild 决定，判定不在这里重算）
       const { queue } = enqueueBuild(state, state.buildQueue, action.cardId);
       return { ...state, ships: [next, ...state.ships.slice(1)], buildQueue: queue };

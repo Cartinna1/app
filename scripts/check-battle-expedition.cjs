@@ -1,4 +1,4 @@
-'use strict';
+﻿'use strict';
 /* ============================================================================
    P5 验收：出征闭环（老巢数据 / 出征耗时对文档 / 探明门槛 / 全流程 / 战利品 / 回合守卫）
    用法：node --import ./scripts/register-ts.mjs scripts/check-battle-expedition.cjs
@@ -80,8 +80,8 @@ const check = (ok, label, detail) => {
   //    （已用独立算法逐位复现，见 expedition.ts 注释）：b5/b2 有 8/10 个殖民地到老巢的原始距离 > 9，
   //    钳成 9 之后文档那两个 11.x 在游戏里不会出现 —— **这是有意接受的**，不改图也不改锚点。
   //    故本节的期望值 = 钳制后均值（文档原表留在注释里，供后续复核）。
-  console.log('\n[2] 出征耗时 × 10 个殖民地取平均（口径 = getGalaxyTurns，含 MAX_ROUTE_TURNS=9 钳制）');
-  const DOC_AVG = { b4: 6.6, b3: 6.9, b1: 6.8, b5: 8.2, b2: 8.2 };   // 已定口径：钳制后均值
+  console.log('\n[2] 出征耗时 × 10 个殖民地取平均（口径 = getGalaxyTurns 的**真实**距离，2026-11 起无钳制）');
+  const DOC_AVG = { b4: 7.4, b3: 8.0, b1: 9.0, b5: 11.4, b2: 11.6 };   // 真实最短路均值（2026-11 口径）
   const RAW_AVG = { b4: 7.4, b3: 8.0, b1: 9.0, b5: 11.4, b2: 11.6 }; // 未钳制原始最短路均值（V1.5 §7.1 旧表数值）
   let cappedPairs = 0, cappedReport = [];
   const colonyNodes = all.filter((n) => n.type === 'colony');
@@ -94,12 +94,12 @@ const check = (ok, label, detail) => {
     }
     const avg = n ? Math.round((sum / n) * 10) / 10 : NaN;
     check(Math.abs(avg - DOC_AVG[bid]) <= 0.2, `${bid}(${nid}) 平均出征耗时 ${avg} ≈ 文档 ${DOC_AVG[bid]}`);
-      for (const c of colonyNodes) { const r = graph.shortestRoute(c.id, nid); if (r && r.capped) cappedPairs++; }
+      for (const c of colonyNodes) { const t = graph.getGalaxyTurns(c.id, nid); if (typeof t === 'number' && t > 9) cappedPairs++; }
       cappedReport.push(`${bid}:${avg}`);
   }
 
   // 钳制必须真的在生效：否则说明有人改了 MAX_ROUTE_TURNS/坐标，上面那组期望值就失效了
-  check(cappedPairs > 0, '钳制确实生效（有殖民地→老巢的原始最短路被 MAX_ROUTE_TURNS=9 截断）', '被截断的殖民地×老巢 共 ' + cappedPairs + ' 对');
+  check(cappedPairs > 0, '真实距离确实超过贸易锚 9（证明不再有钳制）', '超 9 的殖民地×老巢 共 ' + cappedPairs + ' 对');
   console.log('    在役平均出征耗时一览：' + cappedReport.join('  '));
 
   // ---------- ③ 殖民地节点反查 + 探明门槛 ----------
@@ -699,5 +699,6 @@ const check = (ok, label, detail) => {
   console.error('验收脚本自身出错：', e && e.stack ? e.stack.split('\n').slice(0, 10).join('\n') : e);
   process.exitCode = 2;
 });
+
 
 

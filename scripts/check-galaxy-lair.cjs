@@ -1,4 +1,4 @@
-'use strict';
+﻿'use strict';
 /* ============================================================================
    星图：海盗老巢配色 + **迷雾复核**（用户 2026-08 的第 1 条 UI 调整）
    用法：node --import ./scripts/register-ts.mjs scripts/check-galaxy-lair.cjs
@@ -169,6 +169,40 @@ const J = (v) => JSON.stringify(v);
       'isAtGuildNode：停在协会 true / 停在空星系 false');
   }
 
+  // ---------- 距离口径 2026-11：走路真实 / 贸易锚 9 / 防呆 20 ----------
+  {
+    const G = await import('@/lib/galaxy/graph');
+    // ① 走路真实值（用户实测）
+    check(G.getGalaxyTurns('c_ocean', 'e12') === 17, 'c_ocean→e12 真实 17 回合', String(G.getGalaxyTurns('c_ocean', 'e12')));
+    check(G.getGalaxyTurns('f01', 'f08') === 11, 'f01→f08 真实 11 回合', String(G.getGalaxyTurns('f01', 'f08')));
+    check(G.getGalaxyTurns('ruin_cradle', 'ruin_steles') === 19, 'ruin_cradle→ruin_steles 真实 19 回合',
+      String(G.getGalaxyTurns('ruin_cradle', 'ruin_steles')));
+    // ② 贸易逐对不变：45 个无序势力对，getTradeDistance 必须仍等于「真实值钳 9」（= 改前钳 9 的同一结果）
+    const NODES2 = (await import('@/data/galaxy/nodes')).GALAXY_NODES;
+    const fids = NODES2.filter((n) => n.type === 'faction').map((n) => n.id);
+    let pairs = 0; const bad = [];
+    for (let i = 0; i < fids.length; i += 1) {
+      for (let j = i + 1; j < fids.length; j += 1) {
+        pairs += 1;
+        const raw = G.getGalaxyTurns(fids[i], fids[j]);
+        const want = Math.min(raw, 9);
+        if (G.getTradeDistance(fids[i], fids[j]) !== want) bad.push(fids[i] + '~' + fids[j]);
+      }
+    }
+    check(pairs === 45 && bad.length === 0, '贸易距离对 45 个势力对逐值等于 min(真实,9)（改前后完全一致）',
+      JSON.stringify({ pairs, bad: bad.slice(0, 5) }));
+    // ③ validateGalaxy：防呆 20 不报错；观测 stats 符合实测
+    const v = G.validateGalaxy();
+    check(v.errors.length === 0, 'validateGalaxy 零错误（防呆阈值 20 不误报）', JSON.stringify(v.errors.slice(0, 3)));
+    check(v.stats.overTradeAnchorPairs === 7, '统计：超贸易锚 9 的势力对 = 7',
+      String(v.stats.overTradeAnchorPairs));
+    check(v.stats.maxAnyTurns === 19 && v.stats.maxAnyPair.join('~') === 'ruin_cradle~ruin_steles',
+      '统计：全图最大真实回合 19（ruin_cradle~ruin_steles）',
+      JSON.stringify(v.stats.maxAnyPair) + '=' + v.stats.maxAnyTurns);
+    check(v.stats.maxPairTurns === 11, '统计：势力对最大真实回合 11', String(v.stats.maxPairTurns));
+  }
   console.log('\n=== 星图老巢配色 / 迷雾复核 ' + (fails.length ? '未通过 ✗' : '全部通过 ✓') + ' ===');
   if (fails.length) { console.log('失败项：\n - ' + fails.join('\n - ')); process.exitCode = 1; }
 })();
+
+

@@ -910,7 +910,7 @@ function ColonyPanel(props: ColonyPanelProps) {
                 <h4 className="font-bold text-slate-200 mb-2">招募领袖 ({recruitRollCost}星尘/次)</h4>
                 <p className="text-sm text-slate-400 mb-3">当前: {colony.leaders.length}/{colony.leaderCap}</p>
                 {!colony.recruitPool ? (
-                  <button onClick={() => { console.log('开始招募 clicked'); onRollAndRecruit(); }}
+                  <button onClick={() => { onRollAndRecruit(); }}
                     disabled={ship.stardust < recruitRollCost || colony.leaders.length >= colony.leaderCap}
                     className="px-4 py-2 bg-purple-700 hover:bg-purple-600 disabled:bg-slate-700 rounded-lg text-sm font-bold text-white">
                     {colony.leaders.length >= colony.leaderCap ? '已满' : '开始招募'}

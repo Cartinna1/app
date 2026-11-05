@@ -7,13 +7,18 @@ import type { GalaxyNode } from '@/types/galaxy';
 import { GALAXY_NODES, GALAXY_NODE_MAP, getGalaxyNode } from '@/data/galaxy/nodes';
 import { GALAXY_LANES } from '@/data/galaxy/lanes';
 
-/** 每 80 坐标单位 = 1 回合（唯一真值；量级对齐已删除的旧 DISTANCE_MATRIX，当前势力间最短路 2~9、均值 ≈5.87） */
+/** 每 80 坐标单位 = 1 回合（唯一真值；量级对齐已删除的旧 DISTANCE_MATRIX）
+ *  ⚠ 势力间**真实**最短路现在是 2~11、均值 ≈5.9（2026-11 起跃迁距离不再钳制）；
+ *     文档/旧表里写的「2~9、均值 5.87」是**贸易锚口径**（见 `TRADE_DISTANCE_ANCHOR`）。 */
 export const TURN_UNIT = 80;
 /** 单条航道回合数区间 */
 export const MIN_LANE_TURNS = 1;
 export const MAX_LANE_TURNS = 9;
-/** 全程最短路回合数上限（与原 DISTANCE_MATRIX 的最大值 9 对齐，防止多跳把贸易折价推高） */
-export const MAX_ROUTE_TURNS = 9;
+/** 贸易折价的距离锚：特产价格体系按「最远 9」标定，**只用于贸易**，与走路距离解耦（2026-11 用户裁定） */
+export const TRADE_DISTANCE_ANCHOR = 9;
+/** 防呆阈值（**不是**钳制上限）：任何两个势力之间的真实最短路超过它才算配置错误。
+ *  走路距离不再有上限 —— 用户 2026-11 裁定「距离要真实，走太远是玩家自己的选择」。 */
+export const SANITY_MAX_ROUTE_TURNS = 20;
 /** 未知节点 id 的兜底距离（与原 getDistance 的兜底值一致） */
 export const FALLBACK_DISTANCE = 5;
 
@@ -44,12 +49,10 @@ const ADJACENCY: Record<string, GalaxyEdge[]> = (() => {
 })();
 
 export interface GalaxyRoute {
-  /** 跃迁回合数（已按 MAX_ROUTE_TURNS 钳制） */
+  /** 跃迁回合数（**真实距离，无上限**；贸易折价另有 `TRADE_DISTANCE_ANCHOR`） */
   turns: number;
   /** 途经节点（含起点与终点） */
   path: string[];
-  /** 是否为钳制后的值（真实最短和大于上限） */
-  capped: boolean;
 }
 
 function normalizeBlocked(blocked?: Iterable<string>): Set<string> {
@@ -62,7 +65,7 @@ function normalizeBlocked(blocked?: Iterable<string>): Set<string> {
  */
 export function shortestRoute(from: string, to: string, blocked?: Iterable<string>): GalaxyRoute | null {
   if (!ADJACENCY[from] || !ADJACENCY[to]) return null;
-  if (from === to) return { turns: 0, path: [from], capped: false };
+  if (from === to) return { turns: 0, path: [from] };
   const banned = normalizeBlocked(blocked);
   if (banned.has(to)) return null;
 
@@ -103,7 +106,8 @@ export function shortestRoute(from: string, to: string, blocked?: Iterable<strin
     path.unshift(cursor);
     cursor = prev[cursor] ?? null;
   }
-  return { turns: Math.min(raw, MAX_ROUTE_TURNS), path, capped: raw > MAX_ROUTE_TURNS };
+  // 真实距离，不钳制（用户 2026-11：走太远是玩家自己的选择；贸易折价另有 TRADE_DISTANCE_ANCHOR）
+  return { turns: raw, path };
 }
 
 /** 节点之间的跃迁回合数；不可达返回 null */
@@ -113,12 +117,14 @@ export function getGalaxyTurns(from: string, to: string, blocked?: Iterable<stri
 }
 
 /**
- * 贸易距离口径：与旧 DISTANCE_MATRIX 同量级（3~9）。
+ * 贸易距离口径：与旧 DISTANCE_MATRIX 同量级（3~9），按 `TRADE_DISTANCE_ANCHOR` 钳到 9
+ * —— **只用于特产价格体系**，与跃迁/出征的**真实**距离解耦（2026-11 用户裁定：
+ * 贸易仍按 9 的函数算，玩家感知不到；走路距离不再被压扁）。
  * 未知 id 走 FALLBACK_DISTANCE；被封锁导致不可达时同样返回兜底值，避免买卖价崩坏。
  */
 export function getTradeDistance(from: string, to: string, blocked?: Iterable<string>): number {
   const turns = getGalaxyTurns(from, to, blocked);
-  return turns === null ? FALLBACK_DISTANCE : turns;
+  return turns === null ? FALLBACK_DISTANCE : Math.min(turns, TRADE_DISTANCE_ANCHOR);
 }
 
 // ==================== 布局自检 ====================
@@ -135,6 +141,12 @@ export interface GalaxyValidationResult {
     unreachable: number;
     minPairTurns: number;
     maxPairTurns: number;
+    /** 超过贸易锚（`TRADE_DISTANCE_ANCHOR`）的势力对数量（有向对） */
+    overTradeAnchorPairs: number;
+    /** 全图任意两点对的最大真实回合数 */
+    maxAnyTurns: number;
+    /** 上面那个最大值的所属节点对 */
+    maxAnyPair: [string, string];
   };
 }
 
@@ -208,8 +220,27 @@ export function validateGalaxy(): GalaxyValidationResult {
       maxPairTurns = Math.max(maxPairTurns, turns);
     }
   }
-  if (factionIds.length > 1 && maxPairTurns > MAX_ROUTE_TURNS) {
-    errors.push(`势力间距离越界（${minPairTurns}~${maxPairTurns}），上限 ${MAX_ROUTE_TURNS}`);
+  if (factionIds.length > 1 && maxPairTurns > SANITY_MAX_ROUTE_TURNS) {
+    errors.push(`势力间距离越界（${minPairTurns}~${maxPairTurns}），防呆上限 ${SANITY_MAX_ROUTE_TURNS}`);
+  }
+
+  // 观测（不报错）：超过贸易锚的**势力对**（无序，i<j）、全图最大真实回合数及其所属的一对
+  let overTradeAnchorPairs = 0;
+  for (let i = 0; i < factionIds.length; i += 1) {
+    for (let j = i + 1; j < factionIds.length; j += 1) {
+      const turns = getGalaxyTurns(factionIds[i], factionIds[j]);
+      if (turns !== null && turns > TRADE_DISTANCE_ANCHOR) overTradeAnchorPairs += 1;
+    }
+  }
+  let maxAnyTurns = 0;
+  let maxAnyPair: [string, string] = ['', ''];
+  for (const a of ids) {
+    for (const b of ids) {
+      if (a === b) continue;
+      const turns = getGalaxyTurns(a, b);
+      if (turns === null) continue;
+      if (turns > maxAnyTurns) { maxAnyTurns = turns; maxAnyPair = [a, b]; }
+    }
   }
 
   const degrees = ids.map((id) => (ADJACENCY[id] || []).length);
@@ -225,6 +256,11 @@ export function validateGalaxy(): GalaxyValidationResult {
       unreachable: unreachable.length,
       minPairTurns: Number.isFinite(minPairTurns) ? minPairTurns : 0,
       maxPairTurns,
+      /** 超过贸易锚（9）的**势力对**数量（有向对，同原始遍历口径） */
+      overTradeAnchorPairs,
+      /** 全图任意两点对的最大真实回合数，及那一对 */
+      maxAnyTurns,
+      maxAnyPair,
     },
   };
 }

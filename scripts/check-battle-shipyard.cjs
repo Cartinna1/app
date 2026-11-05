@@ -157,10 +157,36 @@ const eq = (a, b) => JSON.stringify(a) === JSON.stringify(b);
   // 再推进一次 → 又完工 2 艘
   adv = SY.advanceQueue(adv.queue, 3);
   check(adv.completed.length === 2, '第 2 回合再完工 2 艘', String(adv.completed.length));
-  // 拆掉船坞（dockLv=0）：不再开新工，但已开工的照常完工
+  // 拆掉船坞（dockLv=0）：**队列整体作废**（2026-10 用户裁定：不许照常完工），全部进 cancelled 等调用方退料
+  const queueBeforeCancel = adv.queue.slice();
   const adv0 = SY.advanceQueue(adv.queue, 0);
-  check(adv0.completed.length === 2, '船坞没了（dockLv=0）：已开工的照常完工', String(adv0.completed.length));
-  check(SY.activeBuildCount(adv0.queue) === 0, '船坞没了：不再开新工', String(SY.activeBuildCount(adv0.queue)));
+  check(adv0.completed.length === 0, '船坞没了：不再有任何完工（作废，不产出战舰）', String(adv0.completed.length));
+  check(adv0.cancelled.length === queueBeforeCancel.length, '船坞没了：在造 + 排队全部作废并进 cancelled',
+    JSON.stringify({ before: queueBeforeCancel.length, cancelled: adv0.cancelled.length }));
+  check(adv0.queue.length === 0, '船坞没了：队列清空', String(adv0.queue.length));
+  // 作废退料复用 buildRefund（与 CANCEL_BUILD 同一份口径：金币 ×0.4、合金与原料 ×0.7）
+  {
+    const sample = queueBeforeCancel.find((it) => it.active) || queueBeforeCancel[0];
+    const refund = SY.buildRefund(sample);
+    check(refund.gold > 0 || refund.alloy > 0, 'cancelled 项能按 buildRefund 退料（同一份实现）',
+      JSON.stringify({ gold: refund.gold, alloy: refund.alloy }));
+  }
+  // 没人入驻（staffed=false）：在造项照常推进、排队项原地不动（turnsLeft 不变）
+  {
+    const qStaff = SY.enqueueBuild(st3, SY.enqueueBuild(st3, SY.enqueueBuild(st3, [], 'h3').queue, 'h3').queue, 'h3').queue;
+    const before = qStaff.map((it) => ({ active: it.active, turnsLeft: it.turnsLeft }));
+    const noStaff = SY.advanceQueue(qStaff, 3, false);
+    const activeBefore = before.filter((it) => it.active).length;
+    const activeAfter = noStaff.queue.filter((it) => it.active).length;
+    check(activeAfter === activeBefore, '无入驻：不新开工（开工数不变）', JSON.stringify({ activeBefore, activeAfter }));
+    const waitingBefore = before.filter((it) => !it.active).length;
+    const waitingAfter = noStaff.queue.filter((it) => !it.active).map((it) => it.turnsLeft);
+    const waitingBeforeTurns = before.filter((it) => !it.active).map((it) => it.turnsLeft);
+    check(waitingAfter.length === waitingBefore && JSON.stringify(waitingAfter) === JSON.stringify(waitingBeforeTurns),
+      '无入驻：排队项原地等（turnsLeft 不动）', JSON.stringify({ waitingBeforeTurns, waitingAfter }));
+    check(noStaff.queue.some((it, i) => it.active && before[i] && before[i].active && it.turnsLeft < before[i].turnsLeft),
+      '无入驻：已在建的照常推进（turnsLeft 已减 1）');
+  }
   // 蓝卡 2 回合：开工后要推进两次才完工
   let q2 = SY.enqueueBuild(st3, [], 'h3').queue;
   check(SY.advanceQueue(q2, 2).completed.length === 0, '蓝卡开工后第 1 次推进不完工');
@@ -396,11 +422,24 @@ const eq = (a, b) => JSON.stringify(a) === JSON.stringify(b);
   check(panelSrc.indexOf('export default memo(') >= 0, '组件仍是 memo(...)');
 
   console.log('\n=== P8 船坞验收结果 ===');
+  // ---------- ⑨ 建造金币流水写卡名（B1）----------
+  // ⚠ 这里只做**源码级**断言：本文件的夹具没有"可建造的殖民地状态"，跑不通 BUILD_SHIP 的正向路径；
+  //   行为级断言需要 colony+dock 夹具（下一轮补）。两条都钉住"不许把内部 cardId 写进玩家可见文案"。
+  {
+    const fs2 = await import('node:fs');
+    const path2 = await import('node:path');
+    const srcReducer = fs2.readFileSync(path2.resolve(__dirname, '../src/hooks/gameReducer.ts'), 'utf8');
+    check(/建造战舰（\$\{cardName\}）/.test(srcReducer), '金币流水 reason 用 cardName（不是 action.cardId）');
+    check(/getCardDef\(action\.cardId\)\?\.name \|\| action\.cardId/.test(srcReducer), '卡名走统一查询口 getCardDef');
+  }
   if (fails.length === 0) console.log('  全部通过 ✓');
   else { console.log('  ' + fails.length + ' 条失败 ✗'); process.exitCode = 1; }
 })().catch((e) => {
   console.error('验收脚本自身出错：', e && e.stack ? e.stack.split('\n').slice(0, 12).join('\n') : e);
   process.exitCode = 2;
 });
+
+
+
 
 
