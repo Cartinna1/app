@@ -164,7 +164,7 @@ export function useTurn(
         const shipyardResult = advanceQueue(
           afterColony.buildQueue,
           dockLv,
-          dockLv > 0 ? dockStaffed(afterColony, dockLv) : false,
+          dockLv === 0 ? false : dockStaffed(afterColony, dockLv),
         );
         // ② 拆坞作废：按**现有取消返还**（buildRefund → refundFromPaid）退料 + 金币流水 + 事件记录
         let shipsAfterYard = ships;
